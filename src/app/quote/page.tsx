@@ -92,7 +92,6 @@ export default function QuotePage() {
       const formattedNotes = `Type: ${signType}. Dimensions: ${width}ft x ${height}ft. Wall Type: ${wallType}. Lighting: ${lightOption}. Remarks: ${additionalRemarks || "None"}`;
       
       const payload = {
-        company_id: "11111111-1111-1111-1111-111111111111", // default main company
         lead_name: name,
         phone: phone,
         whatsapp: finalWhatsapp || phone,

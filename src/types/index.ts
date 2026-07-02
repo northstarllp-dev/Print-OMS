@@ -236,6 +236,7 @@ export interface Enquiry {
   id: string;
   dateReceived: string; // ISO format
   leadName: string;
+  businessName?: string;
   phone: string;
   whatsapp: string;
   email: string;

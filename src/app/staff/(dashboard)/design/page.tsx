@@ -31,7 +31,7 @@ export default async function StaffDesignPage() {
     requirements: o.requirements,
     assignedEmployees: o.assigned_employees || [],
     dateCreated: o.date_created,
-    customerName: o.customer_name || "",
+    customerName: o.business_name || "",
     orderCode: o.order_id || o.id,
     orderId: o.order_id || o.id
   }));

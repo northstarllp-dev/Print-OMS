@@ -12,7 +12,7 @@ export default async function AdminDashboardPage() {
     id: o.id,
     projectName: o.project_name,
     customerId: o.customer_id,
-    customerName: o.customer_name || "",
+    customerName: o.business_name || "",
     stage: o.stage,
     health: o.health || "Active",
     dateCreated: o.date_created,

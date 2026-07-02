@@ -35,8 +35,16 @@ export async function getCustomers() {
 
 export async function createCustomer(formData: any) {
   const supabase = await getSupabase();
+  const { data: { user } } = await supabase.auth.getUser();
+  let companyId = "11111111-1111-1111-1111-111111111111"; // default fallback
+  if (user) {
+    const { data: profile } = await supabase.from("users").select("company_id").eq("id", user.id).single();
+    if (profile && profile.company_id) {
+      companyId = profile.company_id;
+    }
+  }
   const customerWithDefaults = {
-    company_id: "11111111-1111-1111-1111-111111111111",
+    company_id: companyId,
     ...formData
   };
   const { data, error } = await supabase.from("customers").insert([customerWithDefaults]).select();

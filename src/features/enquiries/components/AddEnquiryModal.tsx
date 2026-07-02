@@ -10,6 +10,7 @@ interface AddEnquiryModalProps {
 }
 
 export interface EnquiryFormData {
+  businessName: string;
   leadName: string;
   phone: string;
   whatsappNumber: string;
@@ -57,6 +58,7 @@ const validateEmail = (email: string): boolean => {
 
 export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalProps) {
   const [formData, setFormData] = useState<EnquiryFormData>({
+    businessName: "",
     leadName: "",
     phone: "",
     whatsappNumber: "",
@@ -112,6 +114,10 @@ export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalPr
     // Validate form
     const newErrors: { [key: string]: string } = {};
     
+    if (!formData.businessName.trim()) {
+      newErrors.businessName = "Business name is required";
+    }
+
     if (!formData.leadName.trim()) {
       newErrors.leadName = "Lead name is required";
     }
@@ -136,6 +142,7 @@ export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalPr
     
     setIsSubmitting(false);
     setFormData({
+      businessName: "",
       leadName: "",
       phone: "",
       whatsappNumber: "",
@@ -228,8 +235,41 @@ export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalPr
         <form onSubmit={handleSubmit} style={{ padding: "24px" }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
             
+            {/* Business Name */}
+            <div>
+              <label style={{ display: "block", fontSize: "12px", fontWeight: "700", color: "#0f172a", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                Business Name *
+              </label>
+              <input
+                type="text"
+                name="businessName"
+                value={formData.businessName}
+                onChange={handleChange}
+                required
+                placeholder="e.g. Gourmet Cafe"
+                style={{
+                  width: "100%",
+                  padding: "10px 14px",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "8px",
+                  fontSize: "14px",
+                  boxSizing: "border-box",
+                  fontFamily: "inherit",
+                  transition: "all 0.2s",
+                  background: "#f8fafc"
+                }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = "#018F10"; e.currentTarget.style.background = "white"; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = "#cbd5e1"; e.currentTarget.style.background = "#f8fafc"; }}
+              />
+              {errors.businessName && (
+                <p style={{ fontSize: "12px", color: "#ef4444", marginTop: "4px", marginBottom: 0 }}>
+                  {errors.businessName}
+                </p>
+              )}
+            </div>
+
             {/* Lead Name */}
-            <div style={{ gridColumn: "1 / -1" }}>
+            <div>
               <label style={{ display: "block", fontSize: "12px", fontWeight: "700", color: "#0f172a", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.03em" }}>
                 Lead Name *
               </label>

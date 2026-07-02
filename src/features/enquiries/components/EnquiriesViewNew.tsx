@@ -115,7 +115,7 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
   const [convertModalOpen, setConvertModalOpen] = useState(false);
   const [assignTeamModalOpen, setAssignTeamModalOpen] = useState(false);
   const [assignedOrderId, setAssignedOrderId] = useState("");
-  const [selectedEnquiry, setSelectedEnquiry] = useState<{id: string, leadName: string, notes?: string} | null>(null);
+  const [selectedEnquiry, setSelectedEnquiry] = useState<{id: string, businessName: string, leadName: string, notes?: string} | null>(null);
 
   // Welcome message states
   const [welcomeModalOpen, setWelcomeModalOpen] = useState(false);
@@ -128,8 +128,8 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
   const handleAddEnquiry = async (data: EnquiryFormData) => {
     try {
       const newEnq = {
-        company_id: "11111111-1111-1111-1111-111111111111",
         lead_name: data.leadName,
+        business_name: data.businessName,
         phone: data.phone.replace(/\s+/g, ""),
         whatsapp: data.whatsappNumber.replace(/\s+/g, ""),
         email: data.email,
@@ -145,6 +145,7 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
           id: result[0].id,
           dateReceived: result[0].date_received,
           leadName: result[0].lead_name,
+          businessName: result[0].business_name || result[0].lead_name,
           phone: result[0].phone,
           whatsapp: result[0].whatsapp,
           email: result[0].email,
@@ -160,7 +161,7 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
         setIsAddModalOpen(false);
         setSuccessModalData({
           title: "Enquiry Created Successfully!",
-          message: `Enquiry for ${data.leadName} has been added to the system. (Enquiry ID: ${mapped.enquireId || mapped.id})`
+          message: `Enquiry for ${data.businessName} has been added to the system. (Enquiry ID: ${mapped.enquireId || mapped.id})`
         });
         setSuccessModalOpen(true);
       }
@@ -426,7 +427,7 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
               <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
                 <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>ENQUIRY ID</th>
                 <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>DATE</th>
-                <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>LEAD NAME</th>
+                <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>BUSINESS / LEAD NAME</th>
                 <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>PHONE</th>
                 <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>SOURCE</th>
                 <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>REQ NOTES</th>
@@ -437,7 +438,7 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
             </thead>
             <tbody>
               {enquiries.filter(e => {
-                const matchesSearch = e.leadName.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) || e.phone.includes(debouncedSearchTerm);
+                const matchesSearch = (e.businessName || "").toLowerCase().includes(debouncedSearchTerm.toLowerCase()) || (e.leadName || "").toLowerCase().includes(debouncedSearchTerm.toLowerCase()) || e.phone.includes(debouncedSearchTerm);
                 const matchesSource = sourceFilter === "All" || e.source === sourceFilter;
                 const matchesAddedBy = addedByFilter === "All" || (e.addedBy || "Admin") === addedByFilter;
 
@@ -469,7 +470,10 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
                   <tr key={enq.id} style={{ borderBottom: "1px solid #e2e8f0", transition: "background 0.2s" }} onMouseEnter={(e) => { e.currentTarget.style.background = "#f8fafc"; }} onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
                     <td style={{ padding: "16px 20px", fontSize: "13px", color: "#0f172a", fontWeight: "700" }}>{enq.enquireId || enq.id.substring(0, 8)}</td>
                     <td style={{ padding: "16px 20px", fontSize: "13px", color: "#64748b", fontWeight: "500" }}>{new Date(enq.dateReceived).toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" })}</td>
-                    <td style={{ padding: "16px 20px", fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>{enq.leadName}</td>
+                    <td style={{ padding: "16px 20px", fontSize: "13px", color: "#0f172a" }}>
+                      <div style={{ fontWeight: "700" }}>{enq.businessName}</div>
+                      <div style={{ fontSize: "11px", color: "#64748b" }}>{enq.leadName}</div>
+                    </td>
                     <td style={{ padding: "16px 20px", fontSize: "13px", color: "#0f172a" }}>{enq.phone}</td>
                     <td style={{ padding: "16px 20px", fontSize: "12px", color: "#64748b" }}>{enq.source}</td>
                     <td style={{ padding: "16px 20px", fontSize: "13px", color: "#0f172a", maxWidth: "200px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={enq.notes || "No notes"}>
@@ -520,7 +524,7 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
                         {enq.status !== "Converted" ? (
                           <button 
                             onClick={() => {
-                              setSelectedEnquiry({ id: enq.id, leadName: enq.leadName, notes: enq.notes });
+                              setSelectedEnquiry({ id: enq.id, businessName: enq.businessName || enq.leadName, leadName: enq.leadName, notes: enq.notes });
                               setConvertModalOpen(true);
                             }}
                             style={{ padding: "6px 12px", background: "var(--color-primary)", border: "none", borderRadius: "6px", fontSize: "12px", fontWeight: "600", color: "white", cursor: "pointer", transition: "all 0.2s" }}
@@ -564,7 +568,7 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
             setConvertModalOpen(false);
             setSelectedEnquiry(null);
           }}
-          defaultProjectName={`New Project for ${selectedEnquiry.leadName}`}
+          defaultProjectName={`New Project for ${selectedEnquiry.businessName}`}
           defaultRequirements={selectedEnquiry.notes || ""}
           onSubmit={async (projectName, productType, requirements) => {
             const enq = enquiries.find(e => e.id === selectedEnquiry.id);
@@ -574,7 +578,7 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
             if (res && res.success) {
               setWelcomeCustomerInfo({
                 customerId: res.customerId,
-                customerName: enq?.leadName || "Customer",
+                customerName: enq?.businessName || enq?.leadName || "Customer",
                 phone: enq?.phone || "",
                 email: enq?.email || "",
                 orderId: res.orderId

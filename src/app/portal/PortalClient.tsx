@@ -300,21 +300,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
     }
   };
 
-  const handleScheduleInstallation = async () => {
-    if (!installationDate || !installationTime) {
-      alert("Please select both a date and a time.");
-      return;
-    }
-    setSchedulingInstallation(true);
-    try {
-      await scheduleInstallationAction(activeOrderId, { scheduledDate: installationDate, scheduledTime: installationTime });
-      alert("Installation scheduled successfully!");
-    } catch (err: any) {
-      alert("Error: " + err.message);
-    } finally {
-      setSchedulingInstallation(false);
-    }
-  };
+
 
   const currentStep = activeOrder ? getStepIndex(activeOrder.stage, activeOrder.workflow_type) : 0;
   

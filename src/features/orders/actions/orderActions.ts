@@ -123,8 +123,17 @@ export async function getOrderById(id: string) {
 export async function createOrder(formData: any) {
   const supabase = await getSupabase();
   
+  const { data: { user } } = await supabase.auth.getUser();
+  let companyId = "11111111-1111-1111-1111-111111111111"; // default fallback
+  if (user) {
+    const { data: profile } = await supabase.from("users").select("company_id").eq("id", user.id).single();
+    if (profile && profile.company_id) {
+      companyId = profile.company_id;
+    }
+  }
+
   const orderWithDefaults = {
-    company_id: "11111111-1111-1111-1111-111111111111",
+    company_id: companyId,
     ...formData,
     health: formData.health || "Active",
   };
@@ -666,7 +675,7 @@ export async function scheduleSiteVisitAction(orderId: string, scheduleData: any
   
   const { data: order, error: fetchError } = await supabase
     .from("orders")
-    .select("company_id, order_id, customer_id, customer_name")
+    .select("company_id, order_id, customer_id, business_name")
     .eq("id", orderUuid)
     .single();
     

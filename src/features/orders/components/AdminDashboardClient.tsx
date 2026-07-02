@@ -384,7 +384,7 @@ export function AdminDashboardClient({ orders, enquiries }: AdminDashboardClient
                     onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
                   >
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: "13px", fontWeight: "700", color: "#0F172A" }}>{enq.lead_name || enq.leadName}</div>
+                      <div style={{ fontSize: "13px", fontWeight: "700", color: "#0F172A" }}>{enq.business_name || enq.businessName || enq.lead_name || enq.leadName}</div>
                       <div style={{ fontSize: "12px", color: "#64748B", marginTop: "2px" }}>{enq.phone} • {enq.source}</div>
                     </div>
                     <span style={{
@@ -588,6 +588,7 @@ export function AdminDashboardClient({ orders, enquiries }: AdminDashboardClient
           try {
             const newEnq = {
               lead_name: data.leadName,
+              business_name: data.businessName,
               phone: data.phone,
               whatsapp: data.whatsappNumber,
               email: data.email,

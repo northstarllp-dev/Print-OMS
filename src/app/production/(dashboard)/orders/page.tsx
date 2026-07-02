@@ -23,7 +23,7 @@ export default async function ProductionOrdersPage() {
     id: o.id,
     projectName: o.project_name,
     customerId: o.customer_id,
-    customerName: o.customer_name || "",
+    customerName: o.business_name || "",
     stage: o.stage,
     dateCreated: o.date_created,
     orderId: o.order_id || o.id,

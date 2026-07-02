@@ -9,15 +9,15 @@ VALUES
 ON CONFLICT DO NOTHING;
 
 -- 2. Create Mock Enquiries
-INSERT INTO public.enquiries (id, company_id, lead_name, phone, whatsapp, email, source, status, notes, primary_communication_mode, location, date_received)
+INSERT INTO public.enquiries (id, company_id, business_name, lead_name, phone, whatsapp, email, source, status, notes, primary_communication_mode, location, date_received)
 VALUES
-(gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Tech Startup', '9911223344', '9911223344', 'contact@startup.com', 'Website', 'Pending', 'Wants 3D LED logo for front desk', 'MAIL', 'Koramangala', now() - interval '2 days'),
-(gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Local Supermarket', '9988112233', '9988112233', 'admin@supermarket.in', 'Phone Call', 'Pending', 'Need urgent ACP board replacement', 'WHATSAPP', 'Indiranagar', now() - interval '5 hours')
+(gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Tech Startup', 'Aravind Sharma', '9911223344', '9911223344', 'contact@startup.com', 'Website', 'Pending', 'Wants 3D LED logo for front desk', 'MAIL', 'Koramangala', now() - interval '2 days'),
+(gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Local Supermarket', 'Sunil Dev', '9988112233', '9988112233', 'admin@supermarket.in', 'Phone Call', 'Pending', 'Need urgent ACP board replacement', 'WHATSAPP', 'Indiranagar', now() - interval '5 hours')
 ON CONFLICT DO NOTHING;
 
 -- 3. Create Mock Orders (Linking to Customers and Employees)
 -- Note: '502d6bb1...' is Akshay Kumar (Designer), 'e9730e5e...' is Vikram Malhotra (Marketer)
-INSERT INTO public.orders (id, company_id, project_name, customer_id, stage, dimensions, notes, budget, deposit_paid, assigned_employees, customer_name, stage_status, date_created)
+INSERT INTO public.orders (id, company_id, project_name, customer_id, stage, dimensions, notes, budget, deposit_paid, assigned_employees, business_name, stage_status, date_created)
 VALUES
 (gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Neon Window Signage', '33333333-3333-3333-3333-333333333333', 'Quotation In Progress', '48 x 24 inches', 'Requires high voltage transformers', 45000, 15000, ARRAY['502d6bb1-a51f-4025-83da-2e1ce8caf446']::uuid[], 'Gourmet Delights Cafe', 'Normal', now() - interval '3 days'),
 

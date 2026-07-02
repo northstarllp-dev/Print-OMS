@@ -10,6 +10,7 @@ export default async function EnquirePage() {
     id: e.id,
     dateReceived: e.date_received,
     leadName: e.lead_name,
+    businessName: e.business_name || e.lead_name,
     phone: e.phone,
     whatsapp: e.whatsapp,
     email: e.email,

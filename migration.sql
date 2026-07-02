@@ -85,7 +85,7 @@ CREATE TABLE IF NOT EXISTS public.orders (
     budget numeric DEFAULT 0,
     deposit_paid numeric DEFAULT 0,
     stage_admin_notes text,
-    customer_name text
+    business_name text
 );
 ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Enable all access for authenticated users" ON public.orders FOR ALL TO authenticated USING (true) WITH CHECK (true);

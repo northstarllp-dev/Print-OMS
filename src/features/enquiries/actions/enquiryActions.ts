@@ -61,15 +61,25 @@ export async function createEnquiry(formData: any) {
 
   const { data: { user } } = await supabase.auth.getUser();
   let addedBy = "System";
+  let companyId = "11111111-1111-1111-1111-111111111111"; // default fallback
   if (user) {
-    const { data: profile } = await supabase.from("users").select("name").eq("id", user.id).single();
-    if (profile && profile.name) {
-      addedBy = profile.name;
+    const { data: profile } = await supabase.from("users").select("name, company_id").eq("id", user.id).single();
+    if (profile) {
+      if (profile.name) addedBy = profile.name;
+      if (profile.company_id) companyId = profile.company_id;
     } else {
       addedBy = user.email || "Admin";
     }
+  } else {
+    const { data: cos } = await supabase.from("companies").select("id").limit(1);
+    if (cos && cos.length > 0) {
+      companyId = cos[0].id;
+    }
   }
   formData.added_by = addedBy;
+  if (!formData.company_id) {
+    formData.company_id = companyId;
+  }
 
   const { data, error } = await supabase.from("enquiries").insert([formData]).select();
   if (error) throw new Error(error.message);
@@ -123,6 +133,16 @@ export async function convertEnquiryToOrderAction(enquiryId: string, projectName
   let customerEmail = enq.email;
   let isNewCustomer = false;
 
+  // 2b. Retrieve logged-in user's company ID dynamically
+  const { data: { user: authUser } } = await supabase.auth.getUser();
+  let companyId = "11111111-1111-1111-1111-111111111111"; // default fallback
+  if (authUser) {
+    const { data: profile } = await supabase.from("users").select("company_id").eq("id", authUser.id).single();
+    if (profile && profile.company_id) {
+      companyId = profile.company_id;
+    }
+  }
+
   if (existingCust && existingCust.length > 0) {
     customerId = existingCust[0].id;
     customerName = existingCust[0].name;
@@ -132,8 +152,8 @@ export async function convertEnquiryToOrderAction(enquiryId: string, projectName
     const { data: newCust, error: insertCustErr } = await supabase
       .from("customers")
       .insert([{
-        company_id: "11111111-1111-1111-1111-111111111111",
-        name: enq.lead_name,
+        company_id: companyId,
+        name: enq.business_name || enq.lead_name,
         phone: enq.phone,
         whatsapp: enq.whatsapp,
         email: enq.email,
@@ -156,10 +176,10 @@ export async function convertEnquiryToOrderAction(enquiryId: string, projectName
   const { data: newOrder, error: insertOrderErr } = await supabase
     .from("orders")
     .insert([{
-      company_id: "11111111-1111-1111-1111-111111111111",
+      company_id: companyId,
       project_name: projectName,
       customer_id: customerId,
-      customer_name: customerName,
+      business_name: customerName,
       stage: "Site Visit Pending",
       health: "Active",
       product_type: productType || "",

@@ -173,7 +173,7 @@ export default async function OrderDetailPage({
     id: orderData.id,
     projectName: orderData.project_name,
     customerId: orderData.customer_id,
-    customerName: orderData.customer_name,
+    customerName: orderData.business_name,
     stage: orderData.stage,
     productType: orderData.product_type,
     requirements: orderData.requirements,

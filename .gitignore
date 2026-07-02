@@ -44,5 +44,6 @@ next-env.d.ts
 supabase/.temp/
 CLAUDE.md
 .CLAUDE
+.agents\skills
 
 __pycache__/

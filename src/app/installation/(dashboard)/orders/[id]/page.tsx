@@ -43,7 +43,7 @@ export default async function InstallationOrderDetailPage({ params }: { params: 
     imageMockup: order.image_mockup,
     siteVisitDetails: order.siteVisitDetails,
     designDetails: order.design_details,
-    customerName: order.customer_name || "",
+    customerName: order.business_name || "",
     orderCode: order.order_id || order.id,
     orderId: order.order_id || order.id
   };

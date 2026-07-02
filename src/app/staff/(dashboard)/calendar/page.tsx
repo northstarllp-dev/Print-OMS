@@ -31,7 +31,7 @@ export default async function StaffCalendarPage() {
     requirements: o.requirements,
     assignedEmployees: o.assigned_employees || [],
     dateCreated: o.date_created,
-    customerName: o.customer_name || "",
+    customerName: o.business_name || "",
         versionHistory: o.version_history || [],
     chatHistory: o.chat_history || [],
     orderCode: o.order_id || o.id,

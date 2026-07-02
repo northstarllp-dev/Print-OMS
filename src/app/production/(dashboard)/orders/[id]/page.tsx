@@ -56,7 +56,7 @@ export default async function ProductionOrderDetailPage({ params }: { params: Pr
     installationDetails: order.installationDetails,
     stageStatus: order.stage_status,
     stageAdminNotes: order.stage_admin_notes,
-    customerName: order.customer_name || "",
+    customerName: order.business_name || "",
     orderCode: order.order_id || order.id,
     orderId: order.order_id || order.id
   };

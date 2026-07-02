@@ -43,12 +43,12 @@ async function generateQuotationId(supabase: any): Promise<string> {
 async function resolveOrderId(supabase: any, orderId: string): Promise<{ uuid: string; friendly: string; customerId?: string; customerName?: string; companyId?: string }> {
   const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   if (!uuidPattern.test(orderId)) {
-    const { data: o } = await supabase.from("orders").select("id, order_id, customer_id, customer_name, company_id").eq("order_id", orderId).maybeSingle();
-    if (o) return { uuid: o.id, friendly: o.order_id || o.id, customerId: o.customer_id, customerName: o.customer_name, companyId: o.company_id };
+    const { data: o } = await supabase.from("orders").select("id, order_id, customer_id, business_name, company_id").eq("order_id", orderId).maybeSingle();
+    if (o) return { uuid: o.id, friendly: o.order_id || o.id, customerId: o.customer_id, customerName: o.business_name, companyId: o.company_id };
     return { uuid: orderId, friendly: orderId };
   } else {
-    const { data: o } = await supabase.from("orders").select("order_id, customer_id, customer_name, company_id").eq("id", orderId).maybeSingle();
-    return { uuid: orderId, friendly: o?.order_id || orderId, customerId: o?.customer_id, customerName: o?.customer_name, companyId: o?.company_id };
+    const { data: o } = await supabase.from("orders").select("order_id, customer_id, business_name, company_id").eq("id", orderId).maybeSingle();
+    return { uuid: orderId, friendly: o?.order_id || orderId, customerId: o?.customer_id, customerName: o?.business_name, companyId: o?.company_id };
   }
 }
 
