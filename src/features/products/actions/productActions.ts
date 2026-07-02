@@ -40,6 +40,7 @@ export type Product = {
   price_per_running_ft?: number | null;
   images?: string[];
   is_active: boolean;
+  final_prdt?: boolean;
   created_at?: string;
 };
 
@@ -55,6 +56,7 @@ export type CreateProductPayload = {
   price_per_running_ft?: number | null;
   images?: string[];
   is_active?: boolean;
+  final_prdt?: boolean;
 };
 
 export async function getProducts(): Promise<Product[]> {
@@ -108,12 +110,21 @@ export async function createProduct(formData: CreateProductPayload) {
   // Retry if product_id collides
   if (error && error.code === "23505" && error.message.includes("products_product_id_key")) {
     const { data: existing } = await supabase.from("products").select("product_id");
-    const maxNum = (existing || []).reduce((max, p) => {
-      const match = p.product_id?.match(/^PRD-(\d+)$/);
-      if (match) return Math.max(max, parseInt(match[1], 10));
-      return max;
-    }, 0);
-    payload.product_id = `PRD-${String(maxNum + 1).padStart(3, "0")}`;
+    if (payload.final_prdt) {
+      const maxNum = (existing || []).reduce((max, p) => {
+        const match = p.product_id?.match(/^FP(\d+)$/);
+        if (match) return Math.max(max, parseInt(match[1], 10));
+        return max;
+      }, 0);
+      payload.product_id = `FP${String(maxNum + 1).padStart(3, "0")}`;
+    } else {
+      const maxNum = (existing || []).reduce((max, p) => {
+        const match = p.product_id?.match(/^PRD-(\d+)$/);
+        if (match) return Math.max(max, parseInt(match[1], 10));
+        return max;
+      }, 0);
+      payload.product_id = `PRD-${String(maxNum + 1).padStart(3, "0")}`;
+    }
     
     const retry = await supabase.from("products").insert([payload]).select();
     data = retry.data;

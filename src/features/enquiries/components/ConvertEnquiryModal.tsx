@@ -21,7 +21,8 @@ export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultProjectN
   useEffect(() => {
     if (isOpen) {
       getActiveProducts().then((data) => {
-        setProducts(data.map((p) => ({ id: p.id, name: p.name })));
+        const finalProducts = data.filter((p) => p.final_prdt === true);
+        setProducts(finalProducts.map((p) => ({ id: p.id, name: p.name })));
       }).catch(console.error);
     }
   }, [isOpen]);

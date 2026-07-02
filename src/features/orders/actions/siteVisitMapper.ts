@@ -19,6 +19,23 @@ export function mapSiteVisitFromDb(sv: any): SiteVisitDetails | null {
 
     reviewStatus: sv.review_status,
 
+    // Installation Requirements
+    scaffoldingRequired: sv.scaffolding_required ?? false,
+    craneRequired: sv.crane_required ?? false,
+    overnightInstallation: sv.overnight_installation ?? false,
+
+    // Fabrication Requirements
+    extraAnglesRequired: sv.extra_angles_required ?? false,
+    extraAnglesLength: sv.extra_angles_length ?? "",
+    extraAcpSheetRequired: sv.extra_acp_sheet_required ?? false,
+    oldBoardRemovalRequired: sv.old_board_removal_required ?? false,
+    extraWireRequired: sv.extra_wire_required ?? false,
+
+    // Design Inputs
+    designBriefAvailable: sv.design_brief_available ?? undefined,
+    fabricationRequired: sv.fabrication_required ?? false,
+    civilWorkRequired: sv.civil_work_required ?? false,
+
     locations: (sv.site_visit_measurements || []).map((m: any) => ({
       id: m.id,
       name: m.name,
@@ -63,5 +80,22 @@ export function mapSiteVisitToDb(orderId: string, companyId: string, details: Pa
     internal_notes: details.internalNotes,
 
     review_status: details.reviewStatus,
+
+    // Installation Requirements
+    scaffolding_required: details.scaffoldingRequired,
+    crane_required: details.craneRequired,
+    overnight_installation: details.overnightInstallation,
+
+    // Fabrication Requirements
+    extra_angles_required: details.extraAnglesRequired,
+    extra_angles_length: details.extraAnglesLength,
+    extra_acp_sheet_required: details.extraAcpSheetRequired,
+    old_board_removal_required: details.oldBoardRemovalRequired,
+    extra_wire_required: details.extraWireRequired,
+
+    // Design Inputs
+    design_brief_available: details.designBriefAvailable,
+    fabrication_required: details.fabricationRequired,
+    civil_work_required: details.civilWorkRequired,
   };
 }

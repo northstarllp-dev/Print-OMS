@@ -977,6 +977,81 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                             </div>
                           </div>
                         )}
+
+                        {/* ── Installation Requirements ── */}
+                        {(sv.scaffoldingRequired || sv.craneRequired || sv.overnightInstallation !== undefined) && (
+                          <div className="space-y-3">
+                            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-2">
+                              🏗️ Installation Requirements
+                            </h3>
+                            <div className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-wrap gap-2">
+                              {sv.scaffoldingRequired && (
+                                <span className="text-[11px] font-bold px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">Scaffolding Required</span>
+                              )}
+                              {sv.craneRequired && (
+                                <span className="text-[11px] font-bold px-3 py-1.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">Crane Required</span>
+                              )}
+                              {sv.overnightInstallation !== undefined && (
+                                <span className={`text-[11px] font-bold px-3 py-1.5 rounded-full border ${sv.overnightInstallation ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-slate-50 text-slate-500 border-slate-200"}`}>
+                                  🌙 Overnight Installation: {sv.overnightInstallation ? "Yes" : "No"}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* ── Fabrication Requirements ── */}
+                        {(sv.extraAnglesRequired !== undefined || sv.extraAcpSheetRequired !== undefined || sv.oldBoardRemovalRequired !== undefined || sv.extraWireRequired !== undefined) && (
+                          <div className="space-y-3">
+                            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-2">
+                              🔧 Fabrication Requirements
+                            </h3>
+                            <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+                              {[
+                                { label: "Extra Angles Required", value: sv.extraAnglesRequired, note: sv.extraAnglesRequired && sv.extraAnglesLength ? ` — ${sv.extraAnglesLength}` : "" },
+                                { label: "Extra ACP Sheet to Cover Gap", value: sv.extraAcpSheetRequired },
+                                { label: "Old Board Removal Required", value: sv.oldBoardRemovalRequired },
+                                { label: "Extra Wire Required", value: sv.extraWireRequired },
+                              ].filter(item => item.value !== undefined).map((item, i, arr) => (
+                                <div key={item.label} className={`flex items-center justify-between px-4 py-3 text-sm ${i < arr.length - 1 ? "border-b border-slate-100" : ""}`}>
+                                  <span className="text-slate-700 font-medium">
+                                    {item.label}{"note" in item ? <span className="text-slate-400 font-normal">{item.note}</span> : null}
+                                  </span>
+                                  <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full border ${item.value ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-50 text-slate-500 border-slate-200"}`}>
+                                    {item.value ? "Yes" : "No"}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* ── Design Inputs ── */}
+                        {(sv.designBriefAvailable || sv.fabricationRequired !== undefined || sv.civilWorkRequired !== undefined) && (
+                          <div className="space-y-3">
+                            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-2">
+                              🎨 Design Inputs
+                            </h3>
+                            <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+                              {[
+                                ...(sv.designBriefAvailable ? [{ label: "Design Brief Available", value: sv.designBriefAvailable, isText: true }] : []),
+                                ...(sv.fabricationRequired !== undefined ? [{ label: "Fabrication Required", value: sv.fabricationRequired }] : []),
+                                ...(sv.civilWorkRequired !== undefined ? [{ label: "Civil Work Required", value: sv.civilWorkRequired }] : []),
+                              ].map((item, i, arr) => (
+                                <div key={item.label} className={`flex items-center justify-between px-4 py-3 text-sm ${i < arr.length - 1 ? "border-b border-slate-100" : ""}`}>
+                                  <span className="text-slate-700 font-medium">{item.label}</span>
+                                  {"isText" in item && item.isText ? (
+                                    <span className="text-[11px] font-bold px-2.5 py-1 rounded-full border bg-indigo-50 text-indigo-700 border-indigo-200">{item.value as string}</span>
+                                  ) : (
+                                    <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full border ${item.value ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-50 text-slate-500 border-slate-200"}`}>
+                                      {item.value ? "Yes" : "No"}
+                                    </span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </>

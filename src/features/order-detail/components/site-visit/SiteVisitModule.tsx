@@ -111,7 +111,10 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
     sitePhotos: true,
     electrical: true,
     structural: true,
-    internalNotes: true
+    internalNotes: true,
+    installationReqs: true,
+    fabricationReqs: true,
+    designInputs: true,
   });
   
   // State for expanded sign locations
@@ -907,6 +910,239 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
           {/* ── INTERNAL NOTES REMOVED ── */}
         </>
       )}
+
+      {/* ── INSTALLATION REQUIREMENTS ── */}
+      <SectionCard
+        title="Installation Requirements"
+        icon="🏗️"
+        isCollapsed={collapsed.installationReqs}
+        onToggle={() => toggleSection("installationReqs")}
+      >
+        <fieldset disabled={isFrozen} className="space-y-5 pt-4">
+          {/* Scaffolding & Crane */}
+          <div>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Installation Type</label>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <label className={`flex items-center gap-2.5 px-4 py-2.5 border rounded-xl transition-all flex-1 ${isFrozen ? "cursor-not-allowed opacity-70" : "cursor-pointer"} ${
+                siteVisit.scaffoldingRequired ? "border-[var(--color-secondary)] bg-[var(--color-secondary)]/5 font-bold text-[var(--color-secondary)]" : "border-slate-200 text-slate-650 hover:bg-slate-50 font-medium"
+              }`}>
+                <input
+                  type="checkbox"
+                  checked={siteVisit.scaffoldingRequired ?? false}
+                  onChange={e => updateRootFields({ scaffoldingRequired: e.target.checked })}
+                  className="accent-[var(--color-secondary)] disabled:cursor-not-allowed"
+                />
+                <span className="text-xs">Scaffolding Required</span>
+              </label>
+              <label className={`flex items-center gap-2.5 px-4 py-2.5 border rounded-xl transition-all flex-1 ${isFrozen ? "cursor-not-allowed opacity-70" : "cursor-pointer"} ${
+                siteVisit.craneRequired ? "border-[var(--color-secondary)] bg-[var(--color-secondary)]/5 font-bold text-[var(--color-secondary)]" : "border-slate-200 text-slate-650 hover:bg-slate-50 font-medium"
+              }`}>
+                <input
+                  type="checkbox"
+                  checked={siteVisit.craneRequired ?? false}
+                  onChange={e => updateRootFields({ craneRequired: e.target.checked })}
+                  className="accent-[var(--color-secondary)] disabled:cursor-not-allowed"
+                />
+                <span className="text-xs">Crane Required</span>
+              </label>
+            </div>
+          </div>
+
+          {/* Overnight Installation */}
+          <div>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Overnight Installation</label>
+            <div className="flex flex-col sm:flex-row gap-3">
+              {[true, false].map(option => (
+                <label
+                  key={String(option)}
+                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border rounded-xl transition-all ${isFrozen ? "cursor-not-allowed opacity-70" : "cursor-pointer"} ${
+                    siteVisit.overnightInstallation === option
+                      ? "border-[var(--color-secondary)] bg-[var(--color-secondary)]/5 text-[var(--color-secondary)] font-bold shadow-xs"
+                      : "border-slate-200 text-slate-650 hover:bg-slate-50 font-medium"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="overnightInstallation"
+                    checked={siteVisit.overnightInstallation === option}
+                    onChange={() => updateRootFields({ overnightInstallation: option })}
+                    className="accent-[var(--color-secondary)] disabled:cursor-not-allowed"
+                  />
+                  <span className="text-xs">{option ? "Yes" : "No"}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </fieldset>
+      </SectionCard>
+
+      {/* ── FABRICATION REQUIREMENTS ── */}
+      <SectionCard
+        title="Fabrication Requirements"
+        icon="🔧"
+        isCollapsed={collapsed.fabricationReqs}
+        onToggle={() => toggleSection("fabricationReqs")}
+      >
+        <fieldset disabled={isFrozen} className="space-y-5 pt-4">
+          {/* Extra Angles */}
+          <div>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Extra Angles Required</label>
+            <div className="flex flex-col sm:flex-row gap-3 mb-3">
+              {[true, false].map(option => (
+                <label
+                  key={String(option)}
+                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border rounded-xl transition-all ${isFrozen ? "cursor-not-allowed opacity-70" : "cursor-pointer"} ${
+                    siteVisit.extraAnglesRequired === option
+                      ? "border-[var(--color-secondary)] bg-[var(--color-secondary)]/5 text-[var(--color-secondary)] font-bold shadow-xs"
+                      : "border-slate-200 text-slate-650 hover:bg-slate-50 font-medium"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="extraAnglesRequired"
+                    checked={siteVisit.extraAnglesRequired === option}
+                    onChange={() => updateRootFields({ extraAnglesRequired: option })}
+                    className="accent-[var(--color-secondary)] disabled:cursor-not-allowed"
+                  />
+                  <span className="text-xs">{option ? "Yes" : "No"}</span>
+                </label>
+              ))}
+            </div>
+            {siteVisit.extraAnglesRequired && (
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Length</label>
+                <input
+                  type="text"
+                  value={siteVisit.extraAnglesLength ?? ""}
+                  onChange={e => updateRootFields({ extraAnglesLength: e.target.value })}
+                  placeholder="e.g. 10 ft"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]/20 focus:border-[var(--color-secondary)] bg-white transition-all disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Yes/No toggles */}
+          {([
+            { key: "extraAcpSheetRequired", label: "Extra ACP Sheet Required to Cover Gap" },
+            { key: "oldBoardRemovalRequired", label: "Old Board Removal Required" },
+            { key: "extraWireRequired", label: "Extra Wire Required" },
+          ] as { key: keyof typeof siteVisit; label: string }[]).map(({ key, label }) => (
+            <div key={key}>
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">{label}</label>
+              <div className="flex flex-col sm:flex-row gap-3">
+                {[true, false].map(option => (
+                  <label
+                    key={String(option)}
+                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border rounded-xl transition-all ${isFrozen ? "cursor-not-allowed opacity-70" : "cursor-pointer"} ${
+                      siteVisit[key] === option
+                        ? "border-[var(--color-secondary)] bg-[var(--color-secondary)]/5 text-[var(--color-secondary)] font-bold shadow-xs"
+                        : "border-slate-200 text-slate-650 hover:bg-slate-50 font-medium"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name={key as string}
+                      checked={siteVisit[key] === option}
+                      onChange={() => updateRootFields({ [key]: option })}
+                      className="accent-[var(--color-secondary)] disabled:cursor-not-allowed"
+                    />
+                    <span className="text-xs">{option ? "Yes" : "No"}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          ))}
+        </fieldset>
+      </SectionCard>
+
+      {/* ── DESIGN INPUTS ── */}
+      <SectionCard
+        title="Design Inputs"
+        icon="🎨"
+        isCollapsed={collapsed.designInputs}
+        onToggle={() => toggleSection("designInputs")}
+      >
+        <fieldset disabled={isFrozen} className="space-y-5 pt-4">
+          {/* Design Brief */}
+          <div>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Design Brief Available?</label>
+            <div className="flex flex-col sm:flex-row gap-3">
+              {(["Yes", "No", "Later"] as const).map(option => (
+                <label
+                  key={option}
+                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border rounded-xl transition-all ${isFrozen ? "cursor-not-allowed opacity-70" : "cursor-pointer"} ${
+                    siteVisit.designBriefAvailable === option
+                      ? "border-[var(--color-secondary)] bg-[var(--color-secondary)]/5 text-[var(--color-secondary)] font-bold shadow-xs"
+                      : "border-slate-200 text-slate-650 hover:bg-slate-50 font-medium"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="designBriefAvailable"
+                    checked={siteVisit.designBriefAvailable === option}
+                    onChange={() => updateRootFields({ designBriefAvailable: option })}
+                    className="accent-[var(--color-secondary)] disabled:cursor-not-allowed"
+                  />
+                  <span className="text-xs">{option}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Fabrication Required */}
+          <div>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Fabrication Required</label>
+            <div className="flex flex-col sm:flex-row gap-3">
+              {[true, false].map(option => (
+                <label
+                  key={String(option)}
+                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border rounded-xl transition-all ${isFrozen ? "cursor-not-allowed opacity-70" : "cursor-pointer"} ${
+                    siteVisit.fabricationRequired === option
+                      ? "border-[var(--color-secondary)] bg-[var(--color-secondary)]/5 text-[var(--color-secondary)] font-bold shadow-xs"
+                      : "border-slate-200 text-slate-650 hover:bg-slate-50 font-medium"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="fabricationRequired"
+                    checked={siteVisit.fabricationRequired === option}
+                    onChange={() => updateRootFields({ fabricationRequired: option })}
+                    className="accent-[var(--color-secondary)] disabled:cursor-not-allowed"
+                  />
+                  <span className="text-xs">{option ? "Yes" : "No"}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Civil Work Required */}
+          <div>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Civil Work Required</label>
+            <div className="flex flex-col sm:flex-row gap-3">
+              {[true, false].map(option => (
+                <label
+                  key={String(option)}
+                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border rounded-xl transition-all ${isFrozen ? "cursor-not-allowed opacity-70" : "cursor-pointer"} ${
+                    siteVisit.civilWorkRequired === option
+                      ? "border-[var(--color-secondary)] bg-[var(--color-secondary)]/5 text-[var(--color-secondary)] font-bold shadow-xs"
+                      : "border-slate-200 text-slate-650 hover:bg-slate-50 font-medium"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="civilWorkRequired"
+                    checked={siteVisit.civilWorkRequired === option}
+                    onChange={() => updateRootFields({ civilWorkRequired: option })}
+                    className="accent-[var(--color-secondary)] disabled:cursor-not-allowed"
+                  />
+                  <span className="text-xs">{option ? "Yes" : "No"}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </fieldset>
+      </SectionCard>
 
       {/* ── PHOTO VIEWER MODAL ── */}
       {viewerIndex !== null && viewerPhotos.length > 0 && (

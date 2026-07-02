@@ -22,6 +22,15 @@ function generateProductId(existing: Product[]): string {
   return `PRD-${String(maxNum + 1).padStart(3, "0")}`;
 }
 
+function generateFinalProductId(existing: Product[]): string {
+  const maxNum = existing.reduce((max, p) => {
+    const match = p.product_id?.match(/^FP(\d+)$/);
+    if (match) return Math.max(max, parseInt(match[1], 10));
+    return max;
+  }, 0);
+  return `FP${String(maxNum + 1).padStart(3, "0")}`;
+}
+
 const inputStyle: React.CSSProperties = {
   width: "100%", padding: "9px 12px", border: "1px solid #e2e8f0",
   borderRadius: "8px", fontSize: "13px", fontFamily: "inherit",
@@ -210,22 +219,27 @@ function ProductFormModal({
   const [uploadedImagesThisSession, setUploadedImagesThisSession] = useState<string[]>([]);
   const [imagesToDeleteOnSave, setImagesToDeleteOnSave] = useState<string[]>([]);
 
-  const [form, setForm] = useState<Partial<CreateProductPayload>>(() => ({
-    product_id: product?.product_id ?? generateProductId(allProducts),
-    name: product?.name ?? "",
-    description: product?.description ?? "",
-    category: product?.category ?? "",
-    pricing_type: product?.pricing_type ? (
-      product.pricing_type === "per_unit" ? "Per Unit" :
-      product.pricing_type === "per_sqft" ? "Per Sq.Ft" :
-      product.pricing_type
-    ) : "",
-    price_per_sqft: product?.price_per_sqft ?? null,
-    price_per_unit: product?.price_per_unit ?? null,
-    price_per_running_ft: product?.price_per_running_ft ?? null,
-    images: product?.images ?? [],
-    is_active: product?.is_active ?? true,
-  }));
+  const [form, setForm] = useState<Partial<CreateProductPayload>>(() => {
+    const final_prdt = product?.final_prdt ?? false;
+    const defaultId = final_prdt ? generateFinalProductId(allProducts) : generateProductId(allProducts);
+    return {
+      product_id: product?.product_id ?? defaultId,
+      name: product?.name ?? "",
+      description: product?.description ?? "",
+      category: product?.category ?? "",
+      pricing_type: product?.pricing_type ? (
+        product.pricing_type === "per_unit" ? "Per Unit" :
+        product.pricing_type === "per_sqft" ? "Per Sq.Ft" :
+        product.pricing_type
+      ) : "",
+      price_per_sqft: product?.price_per_sqft ?? null,
+      price_per_unit: product?.price_per_unit ?? null,
+      price_per_running_ft: product?.price_per_running_ft ?? null,
+      images: product?.images ?? [],
+      is_active: product?.is_active ?? true,
+      final_prdt,
+    };
+  });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -234,9 +248,17 @@ function ProductFormModal({
     startTransition(async () => {
       try {
         const payloadToSave = { ...form };
-        if (payloadToSave.pricing_type === "Per Unit") payloadToSave.pricing_type = "per_unit";
-        else if (payloadToSave.pricing_type === "Per Sq.Ft") payloadToSave.pricing_type = "per_sqft";
-        else if (payloadToSave.pricing_type === "Per Running Ft") payloadToSave.pricing_type = "per_running_ft";
+        if (payloadToSave.final_prdt) {
+          payloadToSave.category = "";
+          payloadToSave.pricing_type = null;
+          payloadToSave.price_per_sqft = null;
+          payloadToSave.price_per_unit = null;
+          payloadToSave.price_per_running_ft = null;
+        } else {
+          if (payloadToSave.pricing_type === "Per Unit") payloadToSave.pricing_type = "per_unit";
+          else if (payloadToSave.pricing_type === "Per Sq.Ft") payloadToSave.pricing_type = "per_sqft";
+          else if (payloadToSave.pricing_type === "Per Running Ft") payloadToSave.pricing_type = "per_running_ft";
+        }
 
         if (isEdit) {
           const res = await updateProduct(product!.id, payloadToSave);
@@ -291,8 +313,29 @@ function ProductFormModal({
               <label style={labelStyle}>Product ID</label>
               <input type="text" readOnly value={form.product_id} style={{ ...inputStyle, background: "#f8fafc", color: "#64748b", fontFamily: "monospace", fontSize: 12 }} />
             </div>
-            <div>
-              <label style={labelStyle}>Product Name *</label>
+             <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                <label style={{ ...labelStyle, marginBottom: 0 }}>Product Name *</label>
+                <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", fontWeight: "700", color: "#374151", textTransform: "uppercase", letterSpacing: "0.04em", cursor: "pointer", userSelect: "none" }}>
+                  <input
+                    type="checkbox"
+                    checked={form.final_prdt ?? false}
+                    onChange={e => {
+                      const checked = e.target.checked;
+                      setForm(f => {
+                        const updated = {
+                          ...f,
+                          final_prdt: checked,
+                          product_id: isEdit ? f.product_id : (checked ? generateFinalProductId(allProducts) : generateProductId(allProducts))
+                        };
+                        return updated;
+                      });
+                    }}
+                    style={{ cursor: "pointer" }}
+                  />
+                  Final Prdt
+                </label>
+              </div>
               <input
                 type="text" required placeholder="e.g. SS Letters 3D" autoFocus
                 value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
@@ -301,47 +344,48 @@ function ProductFormModal({
             </div>
           </div>
 
-          {/* Row 2: Category + Unit Type */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <div>
-              <label style={labelStyle}>Category</label>
-              <select value={form.category ?? ""} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} style={{ ...inputStyle, appearance: "none" }}>
-                <option value="">Select category...</option>
-                {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-              </select>
+          {!form.final_prdt && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div>
+                <label style={labelStyle}>Category</label>
+                <select value={form.category ?? ""} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} style={{ ...inputStyle, appearance: "none" }}>
+                  <option value="">Select category...</option>
+                  {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={labelStyle}>Pricing Type</label>
+                <select
+                  value={form.pricing_type ?? ""}
+                  onChange={e => {
+                    const nextPricingType = e.target.value;
+                    setForm(f => {
+                      const next = { ...f, pricing_type: nextPricingType };
+                      if (nextPricingType === "Per Sq.Ft") {
+                        next.price_per_unit = null;
+                        next.price_per_running_ft = null;
+                      } else if (nextPricingType === "Per Unit") {
+                        next.price_per_sqft = null;
+                        next.price_per_running_ft = null;
+                      } else if (nextPricingType === "Per Running Ft") {
+                        next.price_per_sqft = null;
+                        next.price_per_unit = null;
+                      } else if (!nextPricingType) {
+                        next.price_per_sqft = null;
+                        next.price_per_unit = null;
+                        next.price_per_running_ft = null;
+                      }
+                      return next;
+                    });
+                  }}
+                  style={{ ...inputStyle, appearance: "none" }}
+                >
+                  <option value="">Select pricing type...</option>
+                  {PRICING_TYPES.map(u => <option key={u} value={u}>{u}</option>)}
+                </select>
+              </div>
             </div>
-            <div>
-              <label style={labelStyle}>Pricing Type</label>
-              <select
-                value={form.pricing_type ?? ""}
-                onChange={e => {
-                  const nextPricingType = e.target.value;
-                  setForm(f => {
-                    const next = { ...f, pricing_type: nextPricingType };
-                    if (nextPricingType === "Per Sq.Ft") {
-                      next.price_per_unit = null;
-                      next.price_per_running_ft = null;
-                    } else if (nextPricingType === "Per Unit") {
-                      next.price_per_sqft = null;
-                      next.price_per_running_ft = null;
-                    } else if (nextPricingType === "Per Running Ft") {
-                      next.price_per_sqft = null;
-                      next.price_per_unit = null;
-                    } else if (!nextPricingType) {
-                      next.price_per_sqft = null;
-                      next.price_per_unit = null;
-                      next.price_per_running_ft = null;
-                    }
-                    return next;
-                  });
-                }}
-                style={{ ...inputStyle, appearance: "none" }}
-              >
-                <option value="">Select pricing type...</option>
-                {PRICING_TYPES.map(u => <option key={u} value={u}>{u}</option>)}
-              </select>
-            </div>
-          </div>
+          )}
 
           {/* Description */}
           <div>
@@ -355,7 +399,7 @@ function ProductFormModal({
           </div>
 
           {/* Pricing Section */}
-          <PricingSection form={form} setForm={setForm} />
+          {!form.final_prdt && <PricingSection form={form} setForm={setForm} />}
 
           {/* Image Upload */}
           <ProductImageUpload

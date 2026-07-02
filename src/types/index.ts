@@ -103,11 +103,27 @@ export interface SiteVisitDetails {
 
   locations?: SignLocation[]; // Updated to use new SignLocation type
 
-
   // Stage 5: Review & Statuses
   reviewStatus?: "Approved" | "Revisit" | "MoreInfo" | "Pending" | "Pending Admin Approval" | "Draft" | "Needs Revision" | "Rejected" | "Staff Approved";
   
   internalNotes?: string;
+
+  // Installation Requirements
+  scaffoldingRequired?: boolean;
+  craneRequired?: boolean;
+  overnightInstallation?: boolean;
+
+  // Fabrication Requirements
+  extraAnglesRequired?: boolean;
+  extraAnglesLength?: string;
+  extraAcpSheetRequired?: boolean;
+  oldBoardRemovalRequired?: boolean;
+  extraWireRequired?: boolean;
+
+  // Design Inputs
+  designBriefAvailable?: "Yes" | "No" | "Later";
+  fabricationRequired?: boolean;
+  civilWorkRequired?: boolean;
 }
 
 export interface QuoteItem {

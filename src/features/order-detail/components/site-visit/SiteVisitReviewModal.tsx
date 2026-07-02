@@ -332,6 +332,91 @@ export const SiteVisitReviewModal: React.FC<SiteVisitReviewModalProps> = ({
               </p>
             </div>
           )}
+
+          {/* ── Installation Requirements ── */}
+          {(siteVisit.scaffoldingRequired || siteVisit.craneRequired || siteVisit.overnightInstallation !== undefined) && (
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">
+                Installation Requirements
+              </p>
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-wrap gap-2">
+                {siteVisit.scaffoldingRequired && (
+                  <span className="inline-flex items-center text-[11px] font-bold px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                    🏗️ Scaffolding Required
+                  </span>
+                )}
+                {siteVisit.craneRequired && (
+                  <span className="inline-flex items-center text-[11px] font-bold px-2.5 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
+                    🏗️ Crane Required
+                  </span>
+                )}
+                {siteVisit.overnightInstallation !== undefined && (
+                  <span className={`inline-flex items-center text-[11px] font-bold px-2.5 py-1 rounded-full border ${siteVisit.overnightInstallation ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-slate-100 text-slate-600 border-slate-200"}`}>
+                    🌙 Overnight: {siteVisit.overnightInstallation ? "Yes" : "No"}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── Fabrication Requirements ── */}
+          {(siteVisit.extraAnglesRequired !== undefined || siteVisit.extraAcpSheetRequired !== undefined || siteVisit.oldBoardRemovalRequired !== undefined || siteVisit.extraWireRequired !== undefined) && (
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">
+                Fabrication Requirements
+              </p>
+              <div className="bg-orange-50 border border-orange-100 rounded-xl p-4 space-y-2">
+                {[
+                  { label: "Extra Angles Required", value: siteVisit.extraAnglesRequired, extra: siteVisit.extraAnglesRequired && siteVisit.extraAnglesLength ? ` (${siteVisit.extraAnglesLength})` : "" },
+                  { label: "Extra ACP Sheet to Cover Gap", value: siteVisit.extraAcpSheetRequired },
+                  { label: "Old Board Removal", value: siteVisit.oldBoardRemovalRequired },
+                  { label: "Extra Wire Required", value: siteVisit.extraWireRequired },
+                ].filter(item => item.value !== undefined).map(item => (
+                  <div key={item.label} className="flex items-center justify-between text-xs">
+                    <span className="font-medium text-orange-800">{item.label}{"extra" in item ? item.extra : ""}</span>
+                    <span className={`font-bold px-2 py-0.5 rounded-full border text-[10px] ${item.value ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-500 border-slate-200"}`}>
+                      {item.value ? "Yes" : "No"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── Design Inputs ── */}
+          {(siteVisit.designBriefAvailable || siteVisit.fabricationRequired !== undefined || siteVisit.civilWorkRequired !== undefined) && (
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">
+                Design Inputs
+              </p>
+              <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 space-y-2">
+                {siteVisit.designBriefAvailable && (
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-medium text-indigo-800">Design Brief Available</span>
+                    <span className="font-bold px-2 py-0.5 rounded-full border text-[10px] bg-indigo-100 text-indigo-700 border-indigo-200">
+                      {siteVisit.designBriefAvailable}
+                    </span>
+                  </div>
+                )}
+                {siteVisit.fabricationRequired !== undefined && (
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-medium text-indigo-800">Fabrication Required</span>
+                    <span className={`font-bold px-2 py-0.5 rounded-full border text-[10px] ${siteVisit.fabricationRequired ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-500 border-slate-200"}`}>
+                      {siteVisit.fabricationRequired ? "Yes" : "No"}
+                    </span>
+                  </div>
+                )}
+                {siteVisit.civilWorkRequired !== undefined && (
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-medium text-indigo-800">Civil Work Required</span>
+                    <span className={`font-bold px-2 py-0.5 rounded-full border text-[10px] ${siteVisit.civilWorkRequired ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-500 border-slate-200"}`}>
+                      {siteVisit.civilWorkRequired ? "Yes" : "No"}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ── Sticky Footer ── */}

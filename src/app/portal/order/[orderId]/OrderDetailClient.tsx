@@ -799,6 +799,75 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
                     </div>
                   )}
                 </div>
+
+                {/* ── Installation Requirements ── */}
+                {(sv.scaffoldingRequired || sv.craneRequired || sv.overnightInstallation !== undefined) && (
+                  <div className="bg-white border border-gray-200 rounded-xl p-4">
+                    <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-3">Installation Requirements</p>
+                    <div className="flex flex-wrap gap-2">
+                      {sv.scaffoldingRequired && (
+                        <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">🏗️ Scaffolding Required</span>
+                      )}
+                      {sv.craneRequired && (
+                        <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-200">🏗️ Crane Required</span>
+                      )}
+                      {sv.overnightInstallation !== undefined && (
+                        <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full border ${sv.overnightInstallation ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-gray-100 text-gray-500 border-gray-200"}`}>
+                          🌙 Overnight: {sv.overnightInstallation ? "Yes" : "No"}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* ── Fabrication Requirements ── */}
+                {(sv.extraAnglesRequired !== undefined || sv.extraAcpSheetRequired !== undefined || sv.oldBoardRemovalRequired !== undefined || sv.extraWireRequired !== undefined) && (
+                  <div className="bg-white border border-gray-200 rounded-xl p-4">
+                    <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-3">Fabrication Requirements</p>
+                    <div className="space-y-2">
+                      {[
+                        { label: "Extra Angles Required", value: sv.extraAnglesRequired, note: sv.extraAnglesRequired && sv.extraAnglesLength ? ` — ${sv.extraAnglesLength}` : "" },
+                        { label: "Extra ACP Sheet to Cover Gap", value: sv.extraAcpSheetRequired },
+                        { label: "Old Board Removal", value: sv.oldBoardRemovalRequired },
+                        { label: "Extra Wire Required", value: sv.extraWireRequired },
+                      ].filter(item => item.value !== undefined).map(item => (
+                        <div key={item.label} className="flex items-center justify-between text-xs">
+                          <span className="text-gray-700 font-medium">{item.label}{"note" in item ? item.note : ""}</span>
+                          <span className={`font-bold px-2 py-0.5 rounded-full border text-[10px] ${item.value ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-gray-100 text-gray-500 border-gray-200"}`}>
+                            {item.value ? "Yes" : "No"}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* ── Design Inputs ── */}
+                {(sv.designBriefAvailable || sv.fabricationRequired !== undefined || sv.civilWorkRequired !== undefined) && (
+                  <div className="bg-white border border-gray-200 rounded-xl p-4">
+                    <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-3">Design Inputs</p>
+                    <div className="space-y-2">
+                      {sv.designBriefAvailable && (
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-gray-700 font-medium">Design Brief Available</span>
+                          <span className="font-bold px-2 py-0.5 rounded-full border text-[10px] bg-indigo-50 text-indigo-700 border-indigo-200">{sv.designBriefAvailable}</span>
+                        </div>
+                      )}
+                      {sv.fabricationRequired !== undefined && (
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-gray-700 font-medium">Fabrication Required</span>
+                          <span className={`font-bold px-2 py-0.5 rounded-full border text-[10px] ${sv.fabricationRequired ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-gray-100 text-gray-500 border-gray-200"}`}>{sv.fabricationRequired ? "Yes" : "No"}</span>
+                        </div>
+                      )}
+                      {sv.civilWorkRequired !== undefined && (
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-gray-700 font-medium">Civil Work Required</span>
+                          <span className={`font-bold px-2 py-0.5 rounded-full border text-[10px] ${sv.civilWorkRequired ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-gray-100 text-gray-500 border-gray-200"}`}>{sv.civilWorkRequired ? "Yes" : "No"}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
