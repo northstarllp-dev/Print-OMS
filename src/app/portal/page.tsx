@@ -9,6 +9,7 @@ import { PortalClient } from "./PortalClient";
 import React from "react";
 import { ShieldAlert, LogOut, Share2, ClipboardList, AlertCircle, FileText } from "lucide-react";
 import { mapSiteVisitFromDb } from "@/features/orders/actions/siteVisitMapper";
+import { mapDesignFromDb } from "@/features/designs/actions/designMapper";
 
 export const dynamic = "force-dynamic";
 
@@ -90,7 +91,7 @@ export default async function PortalPage({
 
   const { data: ordersData, error: ordersError } = await supabase
     .from("orders")
-    .select("*, site_visits(*, site_visit_measurements(*)), installations(*), productions(*)")
+    .select("*, site_visits(*, site_visit_measurements(*)), installations(*), productions(*), designs(*)")
     .eq("customer_id", customerData.id)
     .order("date_created", { ascending: false });
 
@@ -225,7 +226,7 @@ export default async function PortalPage({
         terms: q.terms,
         advancePaid: Boolean(q.advance_paid),
       } : null,
-      designDetails: o.design_details || null,
+      design: (Array.isArray(o.designs) && o.designs.length > 0 ? mapDesignFromDb(o.designs[0]) : o.designs ? mapDesignFromDb(o.designs) : null),
       productionDetails: Array.isArray(o.productions) && o.productions.length > 0 ? o.productions[0] : (o.productions || null),
       installationDetails: Array.isArray(o.installations) && o.installations.length > 0 ? o.installations[0] : (o.installations || null),
       stageStatus: o.stage_status || null,

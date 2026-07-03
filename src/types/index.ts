@@ -200,6 +200,16 @@ export interface DesignDetails {
   paymentVerified?: boolean;
 }
 
+export interface DesignRecord {
+  id: string;
+  order_id: string;
+  resources: DesignResource[];
+  items: DesignItem[];
+  payment_verified: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ProductionDetails {
   procurementOfMaterials: boolean;
   acpAndAcrylicCutting: boolean;
@@ -233,7 +243,7 @@ export interface Order {
   versionHistory: VersionItem[];
   chatHistory: ChatMessage[];
   siteVisitDetails?: SiteVisitDetails;
-  designDetails?: DesignDetails;
+  design?: DesignRecord;
   productionDetails?: ProductionDetails;
   installationDetails?: InstallationDetails;
   stageStatus?: "Normal" | "Pending Admin Approval: Site Visit Completed" | "Pending Admin Approval: Quote Stage" | "Pending Admin Approval: Quote Approval" | "Pending Admin Approval: Design Approval" | "Pending Admin Approval: Production Ready" | "Pending Admin Approval: Job Done";

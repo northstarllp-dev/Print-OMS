@@ -14,6 +14,8 @@ import {
   Download
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
+import { DesignRecord } from "@/types";
+import { updateDesignDetailsAction } from "@/features/designs/actions/designActions";
 
 interface Customer {
   id: string;
@@ -32,7 +34,7 @@ interface Customer {
 interface Order {
   id: string;
   orderId?: string;
-  designDetails?: any;
+  design?: DesignRecord;
   [key: string]: any;
 }
 
@@ -43,14 +45,11 @@ export interface DesignTabProps {
 }
 
 export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabProps) {
-  const dd = order.designDetails || { resources: [], versions: [], currentVersion: 0 };
+  const dd = order.design || { resources: [], items: [], payment_verified: false };
   const [zoomLevel, setZoomLevel] = useState(100);
   
   const itemsList = React.useMemo(() => {
     let items = dd.items ? [...dd.items] : [];
-    if (items.length === 0 && dd.versions && dd.versions.length > 0) {
-       items = [{ id: "general", name: "General Design", versions: dd.versions, currentVersion: dd.currentVersion || 0 }];
-    }
     if (siteVisitItems.length > 0) {
       siteVisitItems.forEach(svi => {
         if (!items.find(i => i.id === svi.id)) {
@@ -61,7 +60,7 @@ export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabPro
       items = [{ id: "general", name: "General Design", versions: [], currentVersion: 0 }];
     }
     return items;
-  }, [dd.items, dd.versions, dd.currentVersion, siteVisitItems]);
+  }, [dd.items, siteVisitItems]);
 
   const [selectedItemId, setSelectedItemId] = useState<string>(itemsList[0]?.id || "general");
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
@@ -91,14 +90,12 @@ export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabPro
       }
       return item;
     });
-    const legacyUpdates = (selectedItemId === "general" && siteVisitItems.length === 0) 
-      ? { versions: newVersions, currentVersion: newVersions.length > 0 ? newVersions[newVersions.length - 1].versionNumber : 0 }
-      : {};
-    
-    const updatedDetails = { ...dd, items: updatedItems, ...legacyUpdates };
-    const payload: any = { design_details: updatedDetails };
-    if (updateStage) payload.stage = updateStage;
-    await supabase.from("orders").update(payload).eq("id", order.id);
+
+    await updateDesignDetailsAction(order.id, { items: updatedItems });
+
+    if (updateStage) {
+      await supabase.from("orders").update({ stage: updateStage }).eq("id", order.id);
+    }
   };
 
   const handleResourceUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -119,15 +116,15 @@ export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabPro
           id: (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36),
           url: data.publicUrl,
           name: file.name,
-          type: "file",
-          uploadedBy: "Customer",
+          type: "file" as const,
+          uploadedBy: "Customer" as const,
           createdAt: new Date().toISOString()
         });
       }
       
-      const updatedDetails = { ...dd, resources: [...(dd.resources || []), ...newResources] };
-      const { error: updateError } = await supabase.from("orders").update({ design_details: updatedDetails }).eq("id", order.id);
-      if (updateError) throw updateError;
+      await updateDesignDetailsAction(order.id, {
+        resources: [...(dd.resources || []), ...newResources]
+      });
     } catch (err: any) {
       console.error("Upload error:", err);
       alert("Upload failed: " + (err.message || JSON.stringify(err)));
@@ -141,11 +138,8 @@ export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabPro
     if (!confirm("Are you sure you want to delete this file?")) return;
     try {
       const updatedResources = (dd.resources || []).filter((r: any) => r.id !== resourceId);
-      const updatedDetails = { ...dd, resources: updatedResources };
-      
-      const { error: updateError } = await supabase.from("orders").update({ design_details: updatedDetails }).eq("id", order.id);
-      if (updateError) throw updateError;
-      
+      await updateDesignDetailsAction(order.id, { resources: updatedResources });
+
       const pathPart = resourceUrl.split("/public/site-visit-photos/")[1];
       if (pathPart) {
         await supabase.storage.from("site-visit-photos").remove([pathPart]);

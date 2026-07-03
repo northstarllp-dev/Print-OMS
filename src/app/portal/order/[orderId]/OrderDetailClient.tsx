@@ -28,6 +28,7 @@ import {
 import { createClient } from "@/utils/supabase/client";
 import { scheduleSiteVisitAction } from "@/features/orders/actions/orderActions";
 import { mapSiteVisitFromDb } from "@/features/orders/actions/siteVisitMapper";
+import { mapDesignFromDb } from "@/features/designs/actions/designMapper";
 import { GoogleMap, useJsApiLoader, Marker, Autocomplete } from "@react-google-maps/api";
 import { DesignTab } from "../../components/DesignTab";
 
@@ -70,7 +71,7 @@ interface Order {
   chatHistory: any[];
   siteVisitDetails?: any;
   quoteDetails?: any;
-  designDetails?: any;
+  design?: any;
   productionDetails?: any;
   installationDetails?: any;
   stageStatus?: string;
@@ -272,7 +273,7 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
   const currentStageIndex = stages.indexOf(mappedStage) !== -1 ? stages.indexOf(mappedStage) : 0;
   const sv = order.siteVisitDetails || {};
   const qd = order.quoteDetails || {};
-  const dd = order.designDetails || {};
+  const dd = order.design || {};
 
   // Sync site visit details
   useEffect(() => {
@@ -305,7 +306,6 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
                 stage: updatedOrder.stage,
                 depositPaid: Number(updatedOrder.deposit_paid) || 0,
 
-                designDetails: updatedOrder.design_details,
                 // productionDetails & installationDetails aren't on the orders table anymore,
                 // so we don't update them from this realtime event.
                 stageStatus: updatedOrder.stage_status,
@@ -333,6 +333,26 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
                   ...mapped,
                   locations: mapped.locations && mapped.locations.length > 0 ? mapped.locations : (prev.siteVisitDetails?.locations || [])
                 }
+              }));
+            }
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "designs", filter: `order_id=eq.${order.id}` },
+        (payload) => {
+          if (payload.eventType === "DELETE") {
+            setOrder(prev => ({
+              ...prev,
+              design: undefined
+            }));
+          } else {
+            const mapped = mapDesignFromDb(payload.new);
+            if (mapped) {
+              setOrder(prev => ({
+                ...prev,
+                design: mapped
               }));
             }
           }

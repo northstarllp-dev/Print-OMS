@@ -30,6 +30,8 @@ import { mapSiteVisitFromDb } from "@/features/orders/actions/siteVisitMapper";
 import { provideInstallationLocationAction, scheduleInstallationAction } from "@/features/installations/actions/installationActions";
 import { InstallationScheduleModule } from "@/features/installations/components/InstallationScheduleModule";
 import { DesignTab } from "./components/DesignTab";
+import { approveAllDesignItemsAction, updateDesignDetailsAction } from "@/features/designs/actions/designActions";
+import { mapDesignFromDb } from "@/features/designs/actions/designMapper";
 
 interface Customer {
   id: string;
@@ -64,7 +66,7 @@ interface Order {
   chatHistory: any[];
   siteVisitDetails?: any;
   quoteDetails?: any;
-  designDetails?: any;
+  design?: any;
   productionDetails?: any;
   installationDetails?: any;
   stageStatus?: string;
@@ -370,7 +372,6 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                 depositPaid: Number(updatedOrder.deposit_paid) || 0,
 
                 siteVisitDetails: o.siteVisitDetails,
-                designDetails: updatedOrder.design_details,
                 productionDetails: updatedOrder.productionDetails,
                 installationDetails: updatedOrder.installationDetails,
                 stageStatus: updatedOrder.stage_status,
@@ -398,6 +399,26 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                   ...mapped,
                   locations: mapped.locations && mapped.locations.length > 0 ? mapped.locations : (o.siteVisitDetails?.locations || [])
                 }
+              } : o));
+            }
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "designs", filter: `order_id=eq.${activeOrder.id}` },
+        (payload) => {
+          if (payload.eventType === "DELETE") {
+            setOrders(prev => prev.map(o => o.id === activeOrder.id ? {
+              ...o,
+              design: undefined
+            } : o));
+          } else {
+            const mapped = mapDesignFromDb(payload.new);
+            if (mapped) {
+              setOrders(prev => prev.map(o => o.id === activeOrder.id ? {
+                ...o,
+                design: mapped
               } : o));
             }
           }
@@ -493,22 +514,28 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
   const handleApproveDesign = async () => {
     if (!activeOrder) return;
     setUpdatingStatus("design-approve");
+    const updated = await approveAllDesignItemsAction(activeOrder.id);
+    setOrders(prev => prev.map(o => o.id === activeOrder.id ? { ...o, stage: "Design Approved", design: updated } : o));
     const supabase = createClient();
-    const updatedDesign = { ...activeOrder.designDetails, status: "Approved" };
-    setOrders(prev => prev.map(o => o.id === activeOrder.id ? { ...o, stage: "Design Approved", designDetails: updatedDesign } : o));
     await supabase.from("order_activity").insert({ order_id: activeOrder.orderId || activeOrder.id, activity_type: "timeline", actor_name: "System", actor_role: "System", content: "Client approved the design proof layout.", metadata: { action: "design_approved_by_customer" } });
-    await supabase.from("orders").update({ stage: "Design Approved", design_details: updatedDesign }).eq("id", activeOrder.id);
     setUpdatingStatus(null);
   };
 
   const handleDeclineDesign = async () => {
     if (!activeOrder || !designFeedback.trim()) return;
     setUpdatingStatus("design-decline");
+    const design = activeOrder.design || { items: [] };
+    const items = (design.items || []).map((item: any) => {
+      const versions = item.versions || [];
+      if (versions.length === 0) return item;
+      const latest = versions[versions.length - 1];
+      return { ...item, versions: versions.map((v: any) => v.id === latest.id ? { ...v, status: "Draft" as const } : v) };
+    });
+    const updated = await updateDesignDetailsAction(activeOrder.id, { items });
+    setOrders(prev => prev.map(o => o.id === activeOrder.id ? { ...o, stage: "Design In Progress", design: updated } : o));
     const supabase = createClient();
-    const updatedDesign = { ...activeOrder.designDetails, status: "Draft" };
-    setOrders(prev => prev.map(o => o.id === activeOrder.id ? { ...o, stage: "Design In Progress", designDetails: updatedDesign } : o));
     await supabase.from("order_activity").insert({ order_id: activeOrder.orderId || activeOrder.id, activity_type: "customer", actor_name: customer.name, actor_role: "Customer", content: `Design Revision Requested. Notes: ${designFeedback}`, metadata: { action: "design_revision_requested" } });
-    await supabase.from("orders").update({ stage: "Design In Progress", design_details: updatedDesign }).eq("id", activeOrder.id);
+    await supabase.from("orders").update({ stage: "Design In Progress" }).eq("id", activeOrder.id);
     setDesignFeedback(""); setShowDesignDeclineInput(false); setUpdatingStatus(null);
   };
 
@@ -526,7 +553,6 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
   }, [sv]);
 
   const qd = activeOrder?.quoteDetails || {};
-  const dd = activeOrder?.designDetails || {};
   const pd = activeOrder?.productionDetails || {};
   const inst = activeOrder?.installationDetails || {};
 

@@ -51,7 +51,7 @@ export default async function ProductionOrderDetailPage({ params }: { params: Pr
     versionHistory: order.version_history || [],
     chatHistory: order.chat_history || [],
     siteVisitDetails: order.siteVisitDetails,
-    designDetails: order.design_details,
+    design: order.design,
     productionDetails: order.productionDetails,
     installationDetails: order.installationDetails,
     stageStatus: order.stage_status,

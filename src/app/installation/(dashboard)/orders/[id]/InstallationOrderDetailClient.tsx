@@ -27,7 +27,7 @@ export function InstallationOrderDetailClient({
   const svDetails = order.siteVisitDetails || {};
   const locations = svDetails.locations || [];
   
-  const dd = order.designDetails || { proofUrl: "", status: "Draft" };
+  const dd = order.design || { proofUrl: "", status: "Draft" };
   const designImage = order.imageMockup || dd.proofUrl;
   
   const installationDetails = installation || {};

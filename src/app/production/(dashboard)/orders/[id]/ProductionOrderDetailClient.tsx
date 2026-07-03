@@ -83,7 +83,7 @@ export function ProductionOrderDetailClient({
   const svDetails = order.siteVisitDetails || {};
   const locations: LocationMeasurement[] = svDetails.locations || [];
   
-  const dd = order.designDetails || { proofUrl: "", status: "Draft" };
+  const dd = order.design || { proofUrl: "", status: "Draft" };
   const mockImage = order.imageMockup || dd.proofUrl;
 
   const handleCheckboxChange = async (key: "procurementOfMaterials" | "acpAndAcrylicCutting" | "lightingAndWiring" | "qualityCheck") => {

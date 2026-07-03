@@ -194,6 +194,14 @@ export async function convertEnquiryToOrderAction(enquiryId: string, projectName
   const orderId = newOrder[0].id;
   const friendlyOrderId = newOrder[0].order_id;
 
+  // 4c. Create an empty designs record for the new order
+  await supabase.from("designs").insert({
+    order_id: orderId,
+    resources: [],
+    items: [],
+    payment_verified: false
+  });
+
   // 4b. Log order creation to activity timeline
   await supabase.from("order_activity").insert([
     {

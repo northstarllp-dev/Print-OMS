@@ -7,6 +7,7 @@ import {
 import { checkRateLimit } from "@/utils/rate-limiter";
 import { Info, Clock, CheckCircle, Check, Loader2, PlayCircle, MapPin, Search } from "lucide-react";
 import { mapSiteVisitFromDb } from "@/features/orders/actions/siteVisitMapper";
+import { mapDesignFromDb } from "@/features/designs/actions/designMapper";
 import { OrderDetailClient } from "./OrderDetailClient";
 import React from "react";
 
@@ -94,7 +95,7 @@ export default async function OrderDetailPage({
   // Fetch the specific order
   const { data: orderData, error: orderError } = await supabase
     .from("orders")
-    .select("*, site_visits(*, site_visit_measurements(*)), installations(*), productions(*)")
+    .select("*, site_visits(*, site_visit_measurements(*)), installations(*), productions(*), designs(*)")
     .eq("id", payload.orderId)
     .single();
 
@@ -188,7 +189,7 @@ export default async function OrderDetailPage({
         : (orderData.site_visits || null)
     ),
     quoteDetails,
-    designDetails: orderData.design_details || null,
+    design: (Array.isArray(orderData.designs) && orderData.designs.length > 0 ? mapDesignFromDb(orderData.designs[0]) : orderData.designs ? mapDesignFromDb(orderData.designs) : null),
     productionDetails: Array.isArray(orderData.productions) && orderData.productions.length > 0 ? orderData.productions[0] : (orderData.productions || null),
     installationDetails: Array.isArray(orderData.installations) && orderData.installations.length > 0 ? orderData.installations[0] : (orderData.installations || null),
     stageStatus: orderData.stage_status || null,

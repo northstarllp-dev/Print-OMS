@@ -2,14 +2,14 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { FileText, ZoomIn, ZoomOut, UploadCloud, MessageSquare, CheckCircle, Upload, X, Trash, RefreshCw, Download, Maximize, RotateCw } from "lucide-react";
-import { Order, DesignDetails, DesignVersion, DesignComment, DesignResource } from "@/types";
+import { Order, DesignRecord, DesignVersion, DesignComment, DesignResource } from "@/types";
 import { createClient } from "@/utils/supabase/client";
-import { updateOrderStageAction } from "@/features/orders/actions/orderActions";
+import { updateDesignDetailsAction, markDesignPaymentVerifiedAction } from "@/features/designs/actions/designActions";
 
 interface DesignModuleProps {
   order: Order;
   isEmployee: boolean;
-  updateDesignDetails: (orderId: string, details: Partial<DesignDetails>) => Promise<void>;
+  updateDesignDetails?: (orderId: string, details: Partial<DesignRecord>) => Promise<void>;
   siteVisitItems?: Array<{ id: string; name: string }>;
 }
 
@@ -20,11 +20,14 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
   siteVisitItems = [],
 }) => {
   const supabase = createClient();
-  const dd: DesignDetails = order.designDetails || {
+  const dd: DesignRecord = order.design || {
+    id: "",
+    order_id: order.id,
     resources: [],
-    versions: [],
-    currentVersion: 0,
-    paymentVerified: false,
+    items: [],
+    payment_verified: false,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
   };
 
   const [zoomLevel, setZoomLevel] = useState(100);
@@ -37,9 +40,6 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
 
   const itemsList = React.useMemo(() => {
     let items = dd.items ? [...dd.items] : [];
-    if (items.length === 0 && dd.versions && dd.versions.length > 0) {
-       items = [{ id: "general", name: "General Design", versions: dd.versions, currentVersion: dd.currentVersion || 0 }];
-    }
     if (siteVisitItems.length > 0) {
       siteVisitItems.forEach(svi => {
         if (!items.find(i => i.id === svi.id)) {
@@ -50,7 +50,7 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
       items = [{ id: "general", name: "General Design", versions: [], currentVersion: 0 }];
     }
     return items;
-  }, [dd.items, dd.versions, dd.currentVersion, siteVisitItems]);
+  }, [dd.items, siteVisitItems]);
 
   const [selectedItemId, setSelectedItemId] = useState<string>(itemsList[0]?.id || "general");
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
@@ -72,10 +72,12 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
       }
       return item;
     });
-    const legacyUpdates = (selectedItemId === "general" && siteVisitItems.length === 0) 
-      ? { versions: newVersions, currentVersion: newVersions.length > 0 ? newVersions[newVersions.length - 1].versionNumber : 0 }
-      : {};
-    await updateDesignDetails(order.id, { items: updatedItems, ...legacyUpdates });
+    const details: Partial<DesignRecord> = { items: updatedItems };
+    if (updateDesignDetails) {
+      await updateDesignDetails(order.id, details);
+    } else {
+      await updateDesignDetailsAction(order.id, details);
+    }
   };
 
   const handleZoomIn = () => setZoomLevel((prev) => Math.min(prev + 20, 200));
@@ -238,7 +240,12 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
         }
         return item;
       });
-      await updateDesignDetails(order.id, { items: newItems });
+      const details: Partial<DesignRecord> = { items: newItems };
+      if (updateDesignDetails) {
+        await updateDesignDetails(order.id, details);
+      } else {
+        await updateDesignDetailsAction(order.id, details);
+      }
     } catch (err: any) {
       alert("Upload failed: " + err.message);
     } finally {
@@ -256,7 +263,12 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
         }
         return item;
       });
-      await updateDesignDetails(order.id, { items: newItems });
+      const details: Partial<DesignRecord> = { items: newItems };
+      if (updateDesignDetails) {
+        await updateDesignDetails(order.id, details);
+      } else {
+        await updateDesignDetailsAction(order.id, details);
+      }
     } catch (err: any) {
       alert("Delete failed: " + err.message);
     }
@@ -304,8 +316,7 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
   const handlePaymentReceived = async () => {
     setMovingToProduction(true);
     try {
-      await updateDesignDetails(order.id, { paymentVerified: true });
-      await updateOrderStageAction(order.id, "Production");
+      await markDesignPaymentVerifiedAction(order.id);
       window.location.reload();
     } catch (error) {
       console.error(error);
@@ -338,7 +349,7 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
     return latestV && latestV.status === "Approved";
   });
 
-  const hasProductionFiles = (dd.productionFiles || []).length > 0;
+  const hasProductionFiles = itemsList.some((item: any) => item.productionFiles && item.productionFiles.length > 0);
 
   return (
     <div className="space-y-6">

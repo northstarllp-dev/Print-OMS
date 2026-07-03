@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 
 import { mapSiteVisitFromDb, mapSiteVisitToDb } from "./siteVisitMapper";
+import { mapDesignFromDb } from "@/features/designs/actions/designMapper";
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -44,7 +45,8 @@ export async function getOrders() {
       employee_id
     ),
     installations(*),
-    productions(*)
+    productions(*),
+    designs(*)
   `).order("date_created", { ascending: false });
   if (error) throw new Error(error.message);
   
@@ -53,10 +55,14 @@ export async function getOrders() {
       ? (order.site_visits.length > 0 ? order.site_visits[0] : null)
       : (order.site_visits || null);
     const assignedEmployees = (order.order_assignments || []).map((a: any) => a.employee_id);
+    const designRow = Array.isArray(order.designs)
+      ? (order.designs.length > 0 ? order.designs[0] : null)
+      : (order.designs || null);
     return {
       ...order,
       assigned_employees: assignedEmployees,
       siteVisitDetails: mapSiteVisitFromDb(sv),
+      design: designRow ? mapDesignFromDb(designRow) : null,
       installationDetails: Array.isArray(order.installations) ? order.installations[0] : order.installations,
       productionDetails: Array.isArray(order.productions) ? order.productions[0] : order.productions
     };
@@ -74,7 +80,8 @@ export async function getOrderById(id: string) {
       site_visit_measurements(*)
     ),
     installations(*),
-    productions(*)
+    productions(*),
+    designs(*)
   `).eq("id", id).maybeSingle();
   
   // If not found, try by friendly order_id column
@@ -88,7 +95,8 @@ export async function getOrderById(id: string) {
           site_visit_measurements(*)
         ),
         installations(*),
-        productions(*)
+        productions(*),
+        designs(*)
       `)
       .eq("order_id", id)
       .maybeSingle();
@@ -104,6 +112,10 @@ export async function getOrderById(id: string) {
     ? (data.site_visits.length > 0 ? data.site_visits[0] : null)
     : (data.site_visits || null);
   
+  const designRow = Array.isArray(data.designs)
+    ? (data.designs.length > 0 ? data.designs[0] : null)
+    : (data.designs || null);
+  
   // Fetch assignments from new table
   const { data: assignData } = await supabase
     .from("order_assignments")
@@ -115,6 +127,7 @@ export async function getOrderById(id: string) {
     ...data,
     assigned_employees: assignedEmployees,
     siteVisitDetails: mapSiteVisitFromDb(sv),
+    design: designRow ? mapDesignFromDb(designRow) : null,
     installationDetails: Array.isArray(data.installations) && data.installations.length > 0 ? data.installations[0] : (data.installations || null),
     productionDetails: Array.isArray(data.productions) && data.productions.length > 0 ? data.productions[0] : (data.productions || null)
   };
@@ -142,6 +155,15 @@ export async function createOrder(formData: any) {
   if (error) throw new Error(error.message);
   
   const createdOrder = data[0];
+
+  // Create an empty designs record for the new order
+  await supabase.from("designs").insert({
+    order_id: createdOrder.id,
+    resources: [],
+    items: [],
+    payment_verified: false
+  });
+
   await supabase.from("order_activity").insert({
     order_id: createdOrder.order_id || createdOrder.id,
     activity_type: "timeline",
@@ -284,19 +306,6 @@ export async function updateSiteVisitDetailsAction(orderId: string, details: any
 }
 
 
-
-export async function updateDesignDetailsAction(orderId: string, details: any) {
-  const supabase = await getSupabase();
-  const { data: current, error: fetchError } = await supabase.from("orders").select("design_details").eq("id", orderId).single();
-  if (fetchError) throw new Error(fetchError.message);
-  
-  const updatedDetails = {
-    ...(current?.design_details || {}),
-    ...details
-  };
-  
-  return await updateOrder(orderId, { design_details: updatedDetails });
-}
 
 export async function updateProductionDetailsAction(orderId: string, details: any) {
   const supabase = await getSupabase();

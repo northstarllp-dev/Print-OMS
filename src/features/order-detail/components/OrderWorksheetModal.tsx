@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import {
   Order, PipelineStage, SiteVisitDetails,
-  DesignDetails, ProductionDetails, InstallationDetails, Customer, Employee,
+  DesignRecord, ProductionDetails, InstallationDetails, Customer, Employee,
 } from "@/types";
 import { SiteVisitModule } from "./site-visit/SiteVisitModule";
 import { SiteVisitReviewModal } from "./site-visit/SiteVisitReviewModal";
@@ -27,7 +27,6 @@ import { CustomerDetailsDrawer } from "./CustomerDetailsDrawer";
 import { WorkflowChoiceModal } from "./WorkflowChoiceModal";
 import {
   updateSiteVisitDetailsAction,
-  updateDesignDetailsAction,
   updateProductionDetailsAction,
   updateInstallationDetailsAction,
   requestStageAdvancementAction,
@@ -40,6 +39,11 @@ import {
   freezeSiteVisitAction,
   setWorkflowTypeAction,
 } from "@/features/orders/actions/orderActions";
+import {
+  updateDesignDetailsAction,
+  sendDesignToCustomerAction,
+} from "@/features/designs/actions/designActions";
+import { mapDesignFromDb } from "@/features/designs/actions/designMapper";
 import { mapSiteVisitFromDb } from "@/features/orders/actions/siteVisitMapper";
 
 /* ─── helpers ──────────────────────────────────────────────────── */
@@ -243,8 +247,28 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
             stageStatus: updated.stage_status,
             stageAdminNotes: updated.stage_admin_notes,
             chatHistory: updated.chat_history || prev.chatHistory,
-            designDetails: updated.design_details || prev.designDetails,
           }));
+        }
+      })
+      .on("postgres_changes", {
+        event: "*",
+        schema: "public",
+        table: "designs",
+        filter: `order_id=eq.${order.id}`
+      }, (payload) => {
+        if (payload.eventType === "DELETE") {
+          setOrder(prev => ({
+            ...prev,
+            design: undefined
+          }));
+        } else {
+          const mapped = mapDesignFromDb(payload.new);
+          if (mapped) {
+            setOrder(prev => ({
+              ...prev,
+              design: mapped
+            }));
+          }
         }
       })
       .on("postgres_changes", {
@@ -305,8 +329,9 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     setOrder((prev) => ({ ...prev, siteVisitDetails: { ...(prev.siteVisitDetails || {}), ...details } as SiteVisitDetails }));
   };
   // Quote details are now managed entirely by QuotationModule via quotationActions.
-  const updateDesignDetails = async (orderId: string, details: Partial<DesignDetails>) => {
-    setOrder((prev) => ({ ...prev, designDetails: { ...(prev.designDetails || {}), ...details } as DesignDetails }));
+  const updateDesignDetails = async (orderId: string, details: Partial<DesignRecord>) => {
+    const updated = await updateDesignDetailsAction(orderId, details);
+    setOrder((prev) => ({ ...prev, design: updated }));
   };
   const updateProductionDetails = async (orderId: string, details: Partial<ProductionDetails>) => {
     setOrder((prev) => ({ ...prev, productionDetails: { ...(prev.productionDetails || {}), ...details } as ProductionDetails }));
@@ -438,20 +463,9 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
         case quoteTab: // Quotation — saved directly from QuotationModule
           break;
         case designTab: // Design
-          if (order.designDetails) {
-            const updatedDd = { ...order.designDetails };
-            if (updatedDd.items) {
-              updatedDd.items = updatedDd.items.map(item => ({
-                ...item,
-                versions: item.versions.map(v => 
-                  v.status === "Draft" || v.status === "Changes Requested" 
-                    ? { ...v, status: "Sent to Customer" } 
-                    : v
-                )
-              }));
-            }
-            await updateDesignDetailsAction(order.id, updatedDd);
-            setOrder(prev => ({ ...prev, designDetails: updatedDd }));
+          if (order.design) {
+            const updated = await sendDesignToCustomerAction(order.id);
+            setOrder(prev => ({ ...prev, design: updated }));
           }
           break;
         case 3: // Production
@@ -477,7 +491,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
 
   /* ── Module fallbacks ── */
   const sv = order.siteVisitDetails || { width: 0, height: 0, depth: 0, auditDate: "", auditTime: "", sitePersonnel: "", photos: [], completed: false, notes: "", locations: [] };
-  const dd = (order.designDetails as DesignDetails) || { resources: [], versions: [], currentVersion: 0 };
+  const dd = (order.design as DesignRecord) || { resources: [], items: [], payment_verified: false };
   const pd = order.productionDetails || { procurementOfMaterials: false, acpAndAcrylicCutting: false, lightingAndWiring: false, qualityCheck: false };
   const inst = order.installationDetails || { photoUrl: "", customerSignature: "", paymentCode: "" };
 

@@ -42,7 +42,7 @@ export default async function InstallationOrderDetailPage({ params }: { params: 
     dateCreated: order.date_created,
     imageMockup: order.image_mockup,
     siteVisitDetails: order.siteVisitDetails,
-    designDetails: order.design_details,
+    design: order.design,
     customerName: order.business_name || "",
     orderCode: order.order_id || order.id,
     orderId: order.order_id || order.id
