@@ -269,8 +269,44 @@ export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabPro
     const updatedVersions = localVersions.map((v: any) => 
       v.id === activeVersion.id ? { ...v, status: "Approved" } : v
     );
-    await handleUpdateItemVersions(updatedVersions, "Design Approved");
-    await supabase.from("order_activity").insert({ order_id: order.orderId || order.id, activity_type: "timeline", actor_name: "System", actor_role: "System", content: "Client approved the design proof layout.", metadata: { action: "design_approved_by_customer" } });
+
+    const updatedItems = itemsList.map(item => {
+      if (item.id === selectedItemId) {
+        return { ...item, versions: updatedVersions };
+      }
+      return item;
+    });
+
+    const allApproved = updatedItems.length > 0 && updatedItems.every(item => {
+      const versions = item.versions || [];
+      if (versions.length === 0) return false;
+      const latestV = versions[versions.length - 1];
+      return latestV.status === "Approved";
+    });
+
+    const nextStage = allApproved ? "Design Approved" : undefined;
+    
+    await handleUpdateItemVersions(updatedVersions, nextStage);
+    
+    await supabase.from("order_activity").insert({ 
+      order_id: order.orderId || order.id, 
+      activity_type: "timeline", 
+      actor_name: "System", 
+      actor_role: "System", 
+      content: `Client approved the design proof for ${activeItem?.name || 'an item'}.`, 
+      metadata: { action: "design_approved_by_customer", itemId: selectedItemId } 
+    });
+
+    if (allApproved) {
+      await supabase.from("order_activity").insert({ 
+        order_id: order.orderId || order.id, 
+        activity_type: "timeline", 
+        actor_name: "System", 
+        actor_role: "System", 
+        content: "All design proofs approved by client.", 
+        metadata: { action: "all_designs_approved" } 
+      });
+    }
   };
 
   return (

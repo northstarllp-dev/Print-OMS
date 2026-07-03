@@ -159,28 +159,6 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
     setQuoteFeedback(""); setShowQuoteDeclineInput(false); setUpdatingStatus(null);
   };
 
-  const handleApproveDesign = async () => {
-    if (!order) return;
-    setUpdatingStatus("design-approve");
-    const supabase = createClient();
-    const updatedDesign = { ...order.designDetails, status: "Approved" };
-    setOrder(prev => ({ ...prev, stage: "Design Approved", designDetails: updatedDesign }));
-    await supabase.from("order_activity").insert({ order_id: order.orderId || order.id, activity_type: "timeline", actor_name: "System", actor_role: "System", content: "Client approved the design proof layout.", metadata: { action: "design_approved_by_customer" } });
-    await supabase.from("orders").update({ stage: "Design Approved", design_details: updatedDesign }).eq("id", order.id);
-    setUpdatingStatus(null);
-  };
-
-  const handleDeclineDesign = async () => {
-    if (!order || !designFeedback.trim()) return;
-    setUpdatingStatus("design-decline");
-    const supabase = createClient();
-    const updatedDesign = { ...order.designDetails, status: "Draft" };
-    setOrder(prev => ({ ...prev, stage: "Design In Progress", designDetails: updatedDesign }));
-    await supabase.from("order_activity").insert({ order_id: order.orderId || order.id, activity_type: "customer", actor_name: customer.name, actor_role: "Customer", content: `Design Revision Requested. Notes: ${designFeedback}`, metadata: { action: "design_revision_requested" } });
-    await supabase.from("orders").update({ stage: "Design In Progress", design_details: updatedDesign }).eq("id", order.id);
-    setDesignFeedback(""); setShowDesignDeclineInput(false); setUpdatingStatus(null);
-  };
-
   useEffect(() => {
     const supabase = createClient();
     async function loadProducts() {

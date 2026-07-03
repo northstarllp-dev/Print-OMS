@@ -94,7 +94,7 @@ export default async function OrderDetailPage({
   // Fetch the specific order
   const { data: orderData, error: orderError } = await supabase
     .from("orders")
-    .select("*, site_visits(*, site_visit_measurements(*))")
+    .select("*, site_visits(*, site_visit_measurements(*)), installations(*), productions(*)")
     .eq("id", payload.orderId)
     .single();
 
@@ -188,11 +188,11 @@ export default async function OrderDetailPage({
         : (orderData.site_visits || null)
     ),
     quoteDetails,
-    designDetails: orderData.design_details,
-    productionDetails: orderData.productionDetails,
-    installationDetails: orderData.installationDetails,
-    stageStatus: orderData.stage_status,
-    stageAdminNotes: orderData.stage_admin_notes,
+    designDetails: orderData.design_details || null,
+    productionDetails: Array.isArray(orderData.productions) && orderData.productions.length > 0 ? orderData.productions[0] : (orderData.productions || null),
+    installationDetails: Array.isArray(orderData.installations) && orderData.installations.length > 0 ? orderData.installations[0] : (orderData.installations || null),
+    stageStatus: orderData.stage_status || null,
+    stageAdminNotes: orderData.stage_admin_notes || null,
     orderCode: orderData.order_id || orderData.id,
     orderId: orderData.order_id || orderData.id,
   };

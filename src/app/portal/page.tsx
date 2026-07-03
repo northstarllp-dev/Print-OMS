@@ -90,7 +90,7 @@ export default async function PortalPage({
 
   const { data: ordersData, error: ordersError } = await supabase
     .from("orders")
-    .select("*, site_visits(*, site_visit_measurements(*)), installations(*)")
+    .select("*, site_visits(*, site_visit_measurements(*)), installations(*), productions(*)")
     .eq("customer_id", customerData.id)
     .order("date_created", { ascending: false });
 
@@ -225,11 +225,11 @@ export default async function PortalPage({
         terms: q.terms,
         advancePaid: Boolean(q.advance_paid),
       } : null,
-      designDetails: o.design_details,
-      productionDetails: o.productionDetails,
+      designDetails: o.design_details || null,
+      productionDetails: Array.isArray(o.productions) && o.productions.length > 0 ? o.productions[0] : (o.productions || null),
       installationDetails: Array.isArray(o.installations) && o.installations.length > 0 ? o.installations[0] : (o.installations || null),
-      stageStatus: o.stage_status,
-      stageAdminNotes: o.stage_admin_notes,
+      stageStatus: o.stage_status || null,
+      stageAdminNotes: o.stage_admin_notes || null,
       orderCode: o.order_id || o.id,
       orderId: o.order_id || o.id,
 

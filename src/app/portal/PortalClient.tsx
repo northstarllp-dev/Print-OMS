@@ -1065,7 +1065,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                       <h2 className="text-xl font-black text-[#0b1c30] mb-1">Quotation</h2>
                       <p className="text-sm text-slate-500">Review pricing options, set material preferences, and approve to proceed.</p>
                     </div>
-                    {(!qd.status || qd.status === "Draft" || qd.status === "Pending Approval") ? (
+                    {(!qd.status || qd.status === "Draft") ? (
                       <div className="flex flex-col items-center justify-center py-16 px-4 bg-slate-50 border border-slate-200 border-dashed rounded-2xl text-center">
                         <div className="w-16 h-16 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center mb-4">
                           <BarChart3 size={24} />
@@ -1279,9 +1279,9 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                       </div>
                     )}
 
-                    {qd.status !== "Approved" && (qd.status === "Sent" || qd.status === "Negotiation" || (qd.grandTotal > 0 && (activeOrder?.stage === "Quotation Sent" || activeOrder?.stage === "Quotation Negotiation"))) && (
-                      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
-                        <p className="text-xs font-bold text-[#1E40AF]">Approve this quotation to proceed to Design</p>
+                    {qd.status !== "Approved" && (qd.status === "Sent" || qd.status === "Pending Approval" || qd.status === "Negotiation" || (qd.grandTotal > 0 && (activeOrder?.stage === "Quotation Sent" || activeOrder?.stage === "Quotation Negotiation"))) && (
+                        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
+                          <p className="text-xs font-bold text-[#1E40AF]">{isDesignFirst ? "Approve this quotation to proceed to Production" : "Approve this quotation to proceed to Design"}</p>
                         {showQuoteDeclineInput ? (
                           <div className="space-y-2">
                             <textarea rows={3} value={quoteFeedback} onChange={e => setQuoteFeedback(e.target.value)} placeholder="Your revision feedback..." className="w-full p-2.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-red-500" />

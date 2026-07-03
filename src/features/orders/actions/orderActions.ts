@@ -115,8 +115,8 @@ export async function getOrderById(id: string) {
     ...data,
     assigned_employees: assignedEmployees,
     siteVisitDetails: mapSiteVisitFromDb(sv),
-    installationDetails: Array.isArray(data.installations) ? data.installations[0] : data.installations,
-    productionDetails: Array.isArray(data.productions) ? data.productions[0] : data.productions
+    installationDetails: Array.isArray(data.installations) && data.installations.length > 0 ? data.installations[0] : (data.installations || null),
+    productionDetails: Array.isArray(data.productions) && data.productions.length > 0 ? data.productions[0] : (data.productions || null)
   };
 }
 
