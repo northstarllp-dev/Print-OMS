@@ -325,7 +325,7 @@ export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabPro
           <label className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-xs font-bold cursor-pointer hover:bg-gray-100 flex items-center gap-2">
             {uploading ? <Loader2 size={14} className="animate-spin" /> : <UploadCloud size={14} />}
             {uploading ? "Uploading..." : "Upload File"}
-            <input type="file" multiple onChange={handleResourceUpload} className="hidden" disabled={uploading} />
+            <input type="file" multiple onChange={handleResourceUpload} accept=".png,.pdf,.jpg,.jpeg,.cdr,.ai,.psd,.svg" className="hidden" disabled={uploading} />
           </label>
         </div>
 

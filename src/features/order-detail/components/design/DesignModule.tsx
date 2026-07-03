@@ -513,13 +513,13 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="text-lg font-bold text-slate-800">Final Production Files for {activeItem.name}</h3>
-                    <p className="text-xs text-slate-500">Upload final printable files (.png, .jpg, .psd, .ai) for fabrication.</p>
+                    <p className="text-xs text-slate-500">Upload final production files (.cdr, .dxf, .plt, .pdf, .svg) for fabrication.</p>
                   </div>
                   {isEmployee && (
                     <label className="cursor-pointer bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all shadow-sm">
                       {uploading ? <RefreshCw size={14} className="animate-spin" /> : <Upload size={14} />}
                       {uploading ? "Uploading..." : "Upload File"}
-                      <input type="file" multiple onChange={handleProductionFileUpload} accept=".png,.jpg,.jpeg,.psd,.ai,.eps,.pdf" className="hidden" disabled={uploading} />
+                      <input type="file" multiple onChange={handleProductionFileUpload} accept=".cdr,.dxf,.plt,.pdf,.svg" className="hidden" disabled={uploading} />
                     </label>
                   )}
                 </div>
