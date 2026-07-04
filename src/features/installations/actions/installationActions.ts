@@ -3,6 +3,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { updateOrderStageAction } from "@/features/orders/actions/orderActions";
+import { dispatchWhatsAppNotification } from "@/features/notifications/actions/dispatchNotification";
+import { getRequestBaseUrl } from "@/features/notifications/whatsapp/requestBaseUrl";
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -166,6 +168,16 @@ export async function scheduleInstallationAction(orderId: string, payload: { sch
     actor_role: "System",
     content: `Installation scheduled for ${payload.scheduledDate} at ${payload.scheduledTime}.`,
     metadata: { action: "schedule_installation", ...payload }
+  });
+
+  const baseUrl = await getRequestBaseUrl();
+  await dispatchWhatsAppNotification(supabase, {
+    templateKey: "installation_scheduled",
+    orderUuid: orderId,
+    date: payload.scheduledDate,
+    time: payload.scheduledTime,
+    idempotencyKey: `installation_scheduled:${orderId}:${payload.scheduledDate}:${payload.scheduledTime}`,
+    baseUrl,
   });
 
   return { success: true };

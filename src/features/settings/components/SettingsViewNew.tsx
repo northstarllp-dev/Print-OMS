@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import { Save, MoreVertical, Bell, Lock, Palette } from "lucide-react";
+import Link from "next/link";
+import { Save, MoreVertical, Bell, Lock, Palette, MessageCircle } from "lucide-react";
 
 export function SettingsViewNew() {
   const [settings, setSettings] = useState({
@@ -60,6 +61,46 @@ export function SettingsViewNew() {
             Configure your account settings and preferences
           </p>
         </div>
+
+        <Link
+          href="/admin/settings/notifications"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            background: "white",
+            border: "1px solid #e2e8f0",
+            borderRadius: "12px",
+            padding: "20px 24px",
+            marginBottom: "20px",
+            textDecoration: "none",
+            color: "inherit",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <div
+              style={{
+                width: "40px",
+                height: "40px",
+                background: "#dcfce7",
+                borderRadius: "8px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#16a34a",
+              }}
+            >
+              <MessageCircle size={20} />
+            </div>
+            <div>
+              <div style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>WhatsApp API Test</div>
+              <div style={{ fontSize: "13px", color: "#64748b" }}>
+                Send hello_world to verify Meta credentials
+              </div>
+            </div>
+          </div>
+          <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-primary)" }}>Open →</span>
+        </Link>
 
         {/* Settings Sections */}
         {sections.map((section, idx) => (

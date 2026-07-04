@@ -4,6 +4,8 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { mapSiteVisitMeasurementFromDb } from "@/features/orders/actions/siteVisitMapper";
+import { dispatchWhatsAppNotification } from "@/features/notifications/actions/dispatchNotification";
+import { getRequestBaseUrl } from "@/features/notifications/whatsapp/requestBaseUrl";
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -175,8 +177,10 @@ export async function upsertQuotation(orderId: string, payload: QuotationPayload
 /** Admin approves quotation — marks it approved, moves order stage to Quotation Sent */
 export async function sendQuotationToCustomer(quotationId: string, adminName: string) {
   const supabase = await getSupabase();
-  const { data: qt, error: qErr } = await supabase.from("quotations").select("order_id, quotation_id").eq("id", quotationId).single();
+  const { data: qt, error: qErr } = await supabase.from("quotations").select("order_id, quotation_id, status").eq("id", quotationId).single();
   if (qErr || !qt) throw new Error("Quotation not found");
+
+  const wasSentBefore = qt.status === "Sent";
 
   const { error } = await supabase.from("quotations").update({
     status: "Sent",
@@ -193,6 +197,14 @@ export async function sendQuotationToCustomer(quotationId: string, adminName: st
     actor_role: "System",
     content: `Quotation ${qt.quotation_id} approved by ${adminName} and sent to the customer.`,
     metadata: { action: "quotation_sent", quotation_id: qt.quotation_id }
+  });
+
+  const baseUrl = await getRequestBaseUrl();
+  await dispatchWhatsAppNotification(supabase, {
+    templateKey: wasSentBefore ? "revised_quotation_ready" : "quotation_ready",
+    orderUuid: qt.order_id,
+    idempotencyKey: `${wasSentBefore ? "revised_quotation" : "quotation_ready"}:${quotationId}:${Date.now()}`,
+    baseUrl,
   });
 
   revalidatePath("/admin/orders");

@@ -6,6 +6,12 @@ import { revalidatePath } from "next/cache";
 
 import { mapSiteVisitFromDb, mapSiteVisitToDb } from "./siteVisitMapper";
 import { mapDesignFromDb } from "@/features/designs/actions/designMapper";
+import {
+  dispatchWhatsAppNotification,
+  dispatchWhatsAppForPipelineStage,
+  notifyOrderStageChange,
+} from "@/features/notifications/actions/dispatchNotification";
+import { getRequestBaseUrl } from "@/features/notifications/whatsapp/requestBaseUrl";
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -469,6 +475,10 @@ export async function adminApproveStageAction(orderId: string) {
     metadata: { action: "stage_approved", old: o.stage, new: nextStage }
   });
 
+  if (nextStage !== o.stage) {
+    await dispatchWhatsAppForPipelineStage(supabase, orderUuid, nextStage);
+  }
+
   return result;
 }
 
@@ -509,6 +519,8 @@ export async function setWorkflowTypeAction(
     metadata: { action: "workflow_type_set", workflow_type: workflowType, stage: firstStage }
   });
 
+  await dispatchWhatsAppForPipelineStage(supabase, orderUuid, firstStage);
+
   return result;
 }
 
@@ -535,6 +547,7 @@ export async function updateOrderStageAction(id: string, stage: string) {
       content: `Order stage manually changed from "${o.stage}" to "${stage}".`,
       metadata: { action: "stage_changed", old: o.stage, new: stage }
     });
+    await notifyOrderStageChange(supabase, orderUuid, stage, o.stage);
   }
 
   return result;
@@ -718,6 +731,16 @@ export async function scheduleSiteVisitAction(orderId: string, scheduleData: any
     metadata: { action: "site_visit_scheduled", date, time, address: scheduleData.customerAddress }
   });
 
+  const baseUrl = await getRequestBaseUrl();
+  await dispatchWhatsAppNotification(supabase, {
+    templateKey: "site_visit_scheduled",
+    orderUuid,
+    date: String(date),
+    time: String(time),
+    idempotencyKey: `site_visit_scheduled:${orderUuid}:${date}:${time}`,
+    baseUrl,
+  });
+
   revalidatePath("/admin/orders");
   revalidatePath("/staff/orders");
   revalidatePath(`/admin/orders/${order.order_id || orderId}`);
@@ -813,6 +836,14 @@ export async function freezeSiteVisitAction(orderId: string) {
     actor_role: "System",
     content: "Site visit data confirmed and locked. Pending admin review.",
     metadata: { action: "site_visit_frozen" }
+  });
+
+  const baseUrl = await getRequestBaseUrl();
+  await dispatchWhatsAppNotification(supabase, {
+    templateKey: "site_visit_completed",
+    orderUuid,
+    idempotencyKey: `site_visit_completed:${orderUuid}`,
+    baseUrl,
   });
 
   // 5. Revalidate all views

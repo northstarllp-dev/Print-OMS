@@ -6,6 +6,8 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { DesignRecord, DesignComment, DesignVersion } from "@/types";
 import { mapDesignFromDb } from "./designMapper";
+import { dispatchWhatsAppNotification } from "@/features/notifications/actions/dispatchNotification";
+import { getRequestBaseUrl } from "@/features/notifications/whatsapp/requestBaseUrl";
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -213,6 +215,10 @@ export async function sendDesignToCustomerAction(orderId: string): Promise<Desig
   const design = await getDesignByOrderId(orderId);
   if (!design) throw new Error("Design not found");
 
+  const hadChangesRequested = design.items.some((item) =>
+    item.versions.some((v) => v.status === "Changes Requested")
+  );
+
   const items = design.items.map((item) => ({
     ...item,
     versions: item.versions.map((v) =>
@@ -222,7 +228,21 @@ export async function sendDesignToCustomerAction(orderId: string): Promise<Desig
     )
   }));
 
-  return updateDesignDetailsAction(orderId, { items });
+  const result = await updateDesignDetailsAction(orderId, { items });
+
+  const supabase = await getSupabase();
+  const orderUuid = await resolveOrderUuid(supabase, orderId);
+  const baseUrl = await getRequestBaseUrl();
+  await dispatchWhatsAppNotification(supabase, {
+    templateKey: hadChangesRequested
+      ? "design_revision_uploaded"
+      : "design_ready_for_review",
+    orderUuid,
+    idempotencyKey: `${hadChangesRequested ? "design_revision" : "design_ready"}:${orderUuid}:${Date.now()}`,
+    baseUrl,
+  });
+
+  return result;
 }
 
 export async function approveAllDesignItemsAction(orderId: string): Promise<DesignRecord> {
@@ -247,6 +267,13 @@ export async function approveAllDesignItemsAction(orderId: string): Promise<Desi
     const supabase = await getSupabase();
     const orderUuid = await resolveOrderUuid(supabase, orderId);
     await updateOrderStage(supabase, orderUuid, "Design Approved");
+    const baseUrl = await getRequestBaseUrl();
+    await dispatchWhatsAppNotification(supabase, {
+      templateKey: "design_approved",
+      orderUuid,
+      idempotencyKey: `design_approved:${orderUuid}`,
+      baseUrl,
+    });
     revalidateDesignPaths(orderId);
   }
 
