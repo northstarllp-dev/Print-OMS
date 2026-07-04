@@ -4,6 +4,7 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { Payment, PaymentAmountType, PaymentStatus } from "@/types";
+import { assertAdminOnly } from "@/features/orders/workspace/shared/serverPermissions";
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -162,6 +163,7 @@ export async function createPayment(
   input: CreatePaymentInput
 ): Promise<Payment> {
   await requireStaffUser();
+  await assertAdminOnly();
   const supabase = await getSupabase();
   const orderUuid = await resolveOrderUuid(orderId);
 
@@ -217,6 +219,7 @@ export async function createPayment(
 
 export async function markPaymentReceived(paymentId: string): Promise<Payment> {
   await requireStaffUser();
+  await assertAdminOnly();
   const supabase = await getSupabase();
   const { data: current, error: fetchError } = await supabase
     .from("payments")
@@ -260,6 +263,7 @@ export async function markPaymentReceived(paymentId: string): Promise<Payment> {
 
 export async function markPaymentExpected(paymentId: string): Promise<Payment> {
   await requireStaffUser();
+  await assertAdminOnly();
   const supabase = await getSupabase();
   const { data: current, error: fetchError } = await supabase
     .from("payments")
@@ -285,6 +289,7 @@ export async function markPaymentExpected(paymentId: string): Promise<Payment> {
 
 export async function deletePayment(paymentId: string): Promise<void> {
   await requireStaffUser();
+  await assertAdminOnly();
   const supabase = await getSupabase();
   const { data: current } = await supabase
     .from("payments")
@@ -308,6 +313,7 @@ export async function updatePayment(
   }>
 ): Promise<Payment> {
   await requireStaffUser();
+  await assertAdminOnly();
   const supabase = await getSupabase();
   const { data: current, error: fetchError } = await supabase
     .from("payments")

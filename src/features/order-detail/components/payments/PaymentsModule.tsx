@@ -42,7 +42,7 @@ export const PaymentsModule: React.FC<PaymentsModuleProps> = ({
   currentUserRole,
   onPaymentsChanged,
 }) => {
-  const canEdit = currentUserRole === "Admin" || currentUserRole === "Employee";
+  const canEdit = currentUserRole === "Admin";
   const [payments, setPayments] = useState<Payment[]>([]);
   const [balance, setBalance] = useState<PaymentBalanceSummary | null>(null);
   const [loading, setLoading] = useState(true);

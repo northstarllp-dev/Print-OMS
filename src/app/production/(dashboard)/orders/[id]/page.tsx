@@ -3,12 +3,18 @@ import { redirect } from "next/navigation";
 import { getOrderById } from "@/features/orders/actions/orderActions";
 import { getCustomers } from "@/features/customers/actions/customerActions";
 import { getEmployees } from "@/features/employees/actions/employeeActions";
+import { getCurrentUser } from "@/features/auth/actions/authActions";
 import { getProducts } from "@/features/products/actions/productActions";
 import { getQuotationByOrderId, getSiteVisitMeasurementsForOrder } from "@/features/quotations/actions/quotationActions";
-import { ProductionOrderDetailClient } from "./ProductionOrderDetailClient";
+import { OrderDetailPageClient } from "@/app/admin/(dashboard)/orders/[id]/OrderDetailPageClient";
 
 export default async function ProductionOrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+
+  const profile = await getCurrentUser();
+  if (!profile) {
+    redirect("/production/login");
+  }
 
   const order = await getOrderById(id);
   if (!order) {
@@ -41,13 +47,10 @@ export default async function ProductionOrderDetailPage({ params }: { params: Pr
     projectName: order.project_name,
     customerId: order.customer_id,
     stage: order.stage,
-    budget: order.budget,
-    depositPaid: order.deposit_paid,
-    dimensions: order.dimensions,
-    notes: order.notes,
+    productType: order.product_type,
+    requirements: order.requirements,
     assignedEmployees: order.assigned_employees || [],
     dateCreated: order.date_created,
-    imageMockup: order.image_mockup,
     versionHistory: order.version_history || [],
     chatHistory: order.chat_history || [],
     siteVisitDetails: order.siteVisitDetails,
@@ -58,7 +61,10 @@ export default async function ProductionOrderDetailPage({ params }: { params: Pr
     stageAdminNotes: order.stage_admin_notes,
     customerName: order.business_name || "",
     orderCode: order.order_id || order.id,
-    orderId: order.order_id || order.id
+    orderId: order.order_id || order.id,
+    health: order.health || "Active",
+    lost_reason: order.lost_reason,
+    workflow_type: (order.workflow_type as "quote_first" | "design_first") || "quote_first",
   };
 
   const mappedCustomers = (customersData || []).map((c: any) => ({
@@ -85,14 +91,42 @@ export default async function ProductionOrderDetailPage({ params }: { params: Pr
     workload: Number(e.workload) || 0
   }));
 
+  const currentEmployee = profile.role === "admin" ? null : (mappedEmployees.find((e) => e.id === profile.id) || {
+    id: profile.id,
+    name: profile.name,
+    role: profile.staff_role || "Production",
+    phone: profile.phone || "",
+    email: profile.email || "",
+    status: profile.status || "Active",
+    rating: Number(profile.rating) || 5.0,
+    workload: Number(profile.workload) || 0
+  });
+
+  const mappedProducts = (productsData || []).map((p: any) => ({
+    id: p.id,
+    product_id: p.product_id,
+    name: p.name,
+    category: p.category ?? null,
+    pricing_type: p.pricing_type,
+    is_active: p.is_active,
+    price_per_sqft: p.price_per_sqft != null ? Number(p.price_per_sqft) : null,
+    price_per_unit: p.price_per_unit != null ? Number(p.price_per_unit) : null,
+    images: Array.isArray(p.images) ? p.images : [],
+  }));
+
   return (
-    <ProductionOrderDetailClient
+    <OrderDetailPageClient
       order={mappedOrder}
       customers={mappedCustomers}
       employees={mappedEmployees}
-      products={productsData || []}
-      quotation={quotationData}
+      allOrders={[]}
+      role={profile.role === "admin" ? "Admin" : "Employee"}
+      currentEmployee={currentEmployee}
+      products={mappedProducts}
+      initialQuotation={quotationData}
       siteVisitItems={siteVisitItemsData || []}
+      entryStage="production"
+      backHref="/production/orders"
     />
   );
 }

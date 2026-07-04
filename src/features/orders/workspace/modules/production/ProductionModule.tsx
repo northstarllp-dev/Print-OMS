@@ -1,25 +1,20 @@
 "use client";
 
 import React, { useState } from "react";
-import { useRouter } from "next/navigation";
-import { 
-  ArrowLeft, CheckSquare, FileText, MapPin, 
+import {
+  ArrowLeft, CheckSquare, FileText, MapPin,
   AlertOctagon, Check, Image as ImageIcon, Sparkles, Loader2, Save, Timer
 } from "lucide-react";
-import { updateProductionDetailsAction } from "@/features/orders/actions/orderActions";
-import { formatSiteMeasurementLabel } from "@/features/orders/actions/siteVisitMapper";
-import { getLineMeasurement, normalizePricingType } from "@/features/quotations/utils/lineAmount";
+import type { StageModuleProps } from "../../shared/types";
 
 interface LocationMeasurement {
   id: string;
   name: string;
-  width?: number | null;
-  widthUnit?: string | null;
-  height?: number | null;
-  heightUnit?: string | null;
-  depth?: number | null;
-  depthUnit?: string | null;
-  notes?: string | null;
+  width: string;
+  height: string;
+  depth: string;
+  ground_clearance?: string;
+  notes?: string;
   photos?: string[];
 }
 
@@ -35,7 +30,7 @@ interface QuoteItem {
   pricingType?: "per_unit" | "per_sqft";
 }
 
-interface ProductionOrderDetailClientProps {
+export interface ProductionModuleData {
   order: any;
   customers: any[];
   employees: any[];
@@ -43,6 +38,19 @@ interface ProductionOrderDetailClientProps {
   quotation: any;
   siteVisitItems?: any[];
 }
+
+export interface ProductionModuleCallbacks {
+  updateProductionDetails: (orderId: string, details: any) => Promise<any>;
+  onBack: () => void;
+}
+
+type ProductionModuleProps = StageModuleProps<
+  ProductionModuleData,
+  ProductionModuleCallbacks
+> & {
+  /** When true, hide portal chrome (back button) and fit inside order detail panel. */
+  embedded?: boolean;
+};
 
 function maskPhone(phone: string) {
   if (!phone) return "";
@@ -61,15 +69,16 @@ function maskEmail(email: string) {
   return `${name[0]}***${name[name.length - 1]}@${domain}`;
 }
 
-export function ProductionOrderDetailClient({
-  order: initialOrder,
-  customers,
-  employees,
-  products,
-  quotation,
-  siteVisitItems = []
-}: ProductionOrderDetailClientProps) {
-  const router = useRouter();
+export function ProductionModule({ data, permission, callbacks, embedded = false }: ProductionModuleProps) {
+  const {
+    order: initialOrder,
+    customers,
+    quotation,
+    siteVisitItems = []
+  } = data;
+  const { updateProductionDetails, onBack } = callbacks;
+  const canEdit = permission?.canEdit ?? true;
+
   const [order, setOrder] = useState(initialOrder);
   const [saving, setSaving] = useState(false);
   const [alert, setAlert] = useState<{ message: string; type: "success" | "error" } | null>(null);
@@ -86,11 +95,12 @@ export function ProductionOrderDetailClient({
 
   const svDetails = order.siteVisitDetails || {};
   const locations: LocationMeasurement[] = svDetails.locations || [];
-  
-  const dd = order.design || { proofUrl: "", status: "Draft" };
+
+  const dd = order.designDetails || order.design || { proofUrl: "", status: "Draft" };
   const mockImage = order.imageMockup || dd.proofUrl;
 
   const handleCheckboxChange = async (key: "procurementOfMaterials" | "acpAndAcrylicCutting" | "lightingAndWiring" | "qualityCheck") => {
+    if (!canEdit) return;
     setSaving(true);
     setAlert(null);
 
@@ -106,7 +116,7 @@ export function ProductionOrderDetailClient({
     }));
 
     try {
-      await updateProductionDetailsAction(order.id, updatedPd);
+      await updateProductionDetails(order.id, updatedPd);
       setAlert({ message: "Fabrication milestone updated successfully.", type: "success" });
     } catch (err: any) {
       console.error(err);
@@ -126,133 +136,174 @@ export function ProductionOrderDetailClient({
   const designItems = dd.items || [];
 
   return (
-    <div className="p-8 bg-slate-50/50 min-h-screen">
-      {/* Top Navigation */}
-      <div className="flex items-center gap-4 mb-6">
-        <button
-          onClick={() => router.push("/production/orders")}
-          className="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-slate-600 text-xs font-bold shadow-xs hover:bg-slate-50 transition-colors"
-        >
-          <ArrowLeft size={14} /> Back to Queue
-        </button>
-        <span className="text-slate-300">/</span>
-        <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">{order.orderCode}</span>
-      </div>
-
-      {/* Title block */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-        <div>
-          <div className="flex items-center gap-3 mb-1">
-            <h1 className="text-2xl font-black text-slate-900 tracking-tight">
-              {order.projectName}
-            </h1>
-
-          </div>
-          <p className="text-xs text-slate-500 font-semibold">
-            Status: <span className="text-blue-600 font-bold">{order.stage}</span>
-          </p>
+    <div className={embedded ? "space-y-6" : "p-8 bg-slate-50/50 min-h-screen"}>
+      {/* Top Navigation — portal only */}
+      {!embedded && (
+        <div className="flex items-center gap-4 mb-6">
+          <button
+            onClick={onBack}
+            className="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-slate-600 text-xs font-bold shadow-xs hover:bg-slate-50 transition-colors"
+          >
+            <ArrowLeft size={14} /> Back to Queue
+          </button>
+          <span className="text-slate-300">/</span>
+          <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">{order.orderCode}</span>
         </div>
+      )}
 
-        <div className="flex items-center gap-4">
-          {alert && (
-            <div className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${
-              alert.type === "success" 
-                ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
-                : "bg-rose-50 text-rose-700 border-rose-200"
-            }`}>
-              {alert.message}
+      {/* Embedded: only date started + deadline. Portal: full header + info cards. */}
+      {embedded ? (
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
+              Date Started
+            </div>
+            <div className="text-sm font-bold text-slate-800">
+              {order.dateCreated
+                ? new Date(order.dateCreated).toLocaleDateString("en-IN", {
+                    day: "numeric",
+                    month: "short",
+                    year: "numeric",
+                  })
+                : "TBD"}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4">
+            {alert && (
+              <div className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${
+                alert.type === "success"
+                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                  : "bg-rose-50 text-rose-700 border-rose-200"
+              }`}>
+                {alert.message}
+              </div>
+            )}
+            <div className="flex flex-col items-end">
+              <span className="text-[10px] font-black text-rose-500 uppercase tracking-widest mb-1.5 flex items-center gap-1">
+                Production Deadline
+              </span>
+              <div className="bg-gradient-to-r from-rose-500 to-rose-600 text-white px-4 py-2 rounded-xl text-xs font-black shadow-md flex items-center gap-2 border-b-2 border-rose-700">
+                <Timer size={16} className="text-rose-100 animate-pulse" />
+                24 Oct 2026
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+            <div>
+              <div className="flex items-center gap-3 mb-1">
+                <h1 className="text-2xl font-black text-slate-900 tracking-tight">
+                  {order.projectName}
+                </h1>
+              </div>
+              <p className="text-xs text-slate-500 font-semibold">
+                Status: <span className="text-blue-600 font-bold">{order.stage}</span>
+              </p>
+            </div>
+
+            <div className="flex items-center gap-4">
+              {alert && (
+                <div className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${
+                  alert.type === "success"
+                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                    : "bg-rose-50 text-rose-700 border-rose-200"
+                }`}>
+                  {alert.message}
+                </div>
+              )}
+
+              <div className="flex flex-col items-end">
+                <span className="text-[10px] font-black text-rose-500 uppercase tracking-widest mb-1.5 flex items-center gap-1">
+                  Production Deadline
+                </span>
+                <div className="bg-gradient-to-r from-rose-500 to-rose-600 text-white px-4 py-2 rounded-xl text-xs font-black shadow-md flex items-center gap-2 border-b-2 border-rose-700">
+                  <Timer size={16} className="text-rose-100 animate-pulse" />
+                  24 Oct 2026
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="mb-6 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
+            <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider mb-4 border-b border-slate-100 pb-3 flex items-center gap-2">
+              <FileText size={18} className="text-blue-600" /> Basic Information
+            </h2>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-6 text-xs">
+              <div>
+                <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Order No</div>
+                <div className="font-bold text-slate-800">{order.orderCode}</div>
+              </div>
+              <div>
+                <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Customer Name</div>
+                <div className="font-bold text-slate-800">{client?.name || order.customerName || "—"}</div>
+              </div>
+              <div>
+                <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Project Name</div>
+                <div className="font-bold text-slate-800">{order.projectName}</div>
+              </div>
+              <div>
+                <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Priority</div>
+                <div className="font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded inline-block">{order.priority || "High"}</div>
+              </div>
+              <div>
+                <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Expected Completion Date</div>
+                <div className="font-bold text-slate-800">{order.expected_completion_date ? new Date(order.expected_completion_date).toLocaleDateString("en-IN") : "TBD"}</div>
+              </div>
+            </div>
+          </div>
+
+          {client && (
+            <div className="mb-6 bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm">
+              <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
+                <Sparkles size={18} className="text-rose-600" />
+                <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider">
+                  Client Contact
+                </h2>
+              </div>
+              <div className="flex flex-wrap gap-8 text-xs">
+                <div>
+                  <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Client Name</div>
+                  <div className="font-bold text-slate-800">{client.name}</div>
+                </div>
+                {client.phone && (
+                  <div>
+                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Phone</div>
+                    <div className="font-semibold text-slate-700">📞 {maskPhone(client.phone)}</div>
+                  </div>
+                )}
+                {client.email && (
+                  <div>
+                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Email Address</div>
+                    <div className="font-semibold text-slate-700">{maskEmail(client.email)}</div>
+                  </div>
+                )}
+                {client.shippingAddress && (
+                  <div className="flex-1 min-w-[200px]">
+                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Installation Site Address</div>
+                    <div className="font-medium text-slate-600 leading-relaxed">{client.shippingAddress}</div>
+                  </div>
+                )}
+                {(order.notes || quotation?.notes) && (
+                  <div className="flex-1 min-w-[200px]">
+                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Requirements / Notes</div>
+                    <div className="font-medium text-slate-600 leading-relaxed">{order.notes || quotation?.notes}</div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
-
-          {/* DEADLINE PLACEHOLDER */}
-          <div className="flex flex-col items-end">
-            <span className="text-[10px] font-black text-rose-500 uppercase tracking-widest mb-1.5 flex items-center gap-1">
-              Production Deadline
-            </span>
-            <div className="bg-gradient-to-r from-rose-500 to-rose-600 text-white px-4 py-2 rounded-xl text-xs font-black shadow-md flex items-center gap-2 border-b-2 border-rose-700">
-              <Timer size={16} className="text-rose-100 animate-pulse" />
-              24 Oct 2026
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="mb-6 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
-        <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider mb-4 border-b border-slate-100 pb-3 flex items-center gap-2">
-          <FileText size={18} className="text-blue-600" /> Basic Information
-        </h2>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-6 text-xs">
-          <div>
-            <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Order No</div>
-            <div className="font-bold text-slate-800">{order.orderCode}</div>
-          </div>
-          <div>
-            <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Customer Name</div>
-            <div className="font-bold text-slate-800">{client?.name || order.customerName || "—"}</div>
-          </div>
-          <div>
-            <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Project Name</div>
-            <div className="font-bold text-slate-800">{order.projectName}</div>
-          </div>
-          <div>
-            <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Priority</div>
-            <div className="font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded inline-block">{order.priority || "High"}</div>
-          </div>
-          <div>
-            <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Expected Completion Date</div>
-            <div className="font-bold text-slate-800">{order.expected_completion_date ? new Date(order.expected_completion_date).toLocaleDateString("en-IN") : "TBD"}</div>
-          </div>
-        </div>
-      </div>
-
-      {/* CUSTOMER DETAIL CARD */}
-      {client && (
-        <div className="mb-6 bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm">
-          <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
-            <Sparkles size={18} className="text-rose-600" />
-            <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider">
-              Client Contact
-            </h2>
-          </div>
-          <div className="flex flex-wrap gap-8 text-xs">
-            <div>
-              <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Client Name</div>
-              <div className="font-bold text-slate-800">{client.name}</div>
-            </div>
-            {client.phone && (
-              <div>
-                <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Phone</div>
-                <div className="font-semibold text-slate-700">📞 {maskPhone(client.phone)}</div>
-              </div>
-            )}
-            {client.email && (
-              <div>
-                <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Email Address</div>
-                <div className="font-semibold text-slate-700">{maskEmail(client.email)}</div>
-              </div>
-            )}
-            {client.shippingAddress && (
-              <div className="flex-1 min-w-[200px]">
-                <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Installation Site Address</div>
-                <div className="font-medium text-slate-600 leading-relaxed">{client.shippingAddress}</div>
-              </div>
-            )}
-            {(order.notes || quotation?.notes) && (
-              <div className="flex-1 min-w-[200px]">
-                <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Requirements / Notes</div>
-                <div className="font-medium text-slate-600 leading-relaxed">{order.notes || quotation?.notes}</div>
-              </div>
-            )}
-          </div>
-        </div>
+        </>
       )}
 
       {/* Two Column Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-        
+
         {/* LEFT COLUMN: Stage Outputs & Details (2/3 width) */}
         <div className="lg:col-span-2 space-y-8">
-          
+
           {/* SITE VISIT DETAILS */}
           <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm">
             <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
@@ -279,13 +330,9 @@ export function ProductionOrderDetailClient({
                         <tr key={loc.id || idx}>
                           <td className="py-3 px-4 font-bold text-slate-800">{loc.name}</td>
                           <td className="py-3 px-4 font-medium text-slate-600">
-                            {loc.width != null || loc.height != null
-                              ? `${loc.width ?? "—"} ${loc.widthUnit || "ft"} × ${loc.height ?? "—"} ${loc.heightUnit || "ft"}`
-                              : "—"}
+                            {loc.width && loc.height ? `${loc.width}ft × ${loc.height}ft` : "—"}
                           </td>
-                          <td className="py-3 px-4 font-medium text-slate-600">
-                            {loc.depth != null ? `${loc.depth} ${loc.depthUnit || "ft"}` : "—"}
-                          </td>
+                          <td className="py-3 px-4 font-medium text-slate-600">{loc.depth ? `${loc.depth}in` : "—"}</td>
                           <td className="py-3 px-4 font-medium text-slate-600">{loc.notes || "—"}</td>
                         </tr>
                       ))}
@@ -316,18 +363,10 @@ export function ProductionOrderDetailClient({
                 <div className="overflow-x-auto space-y-6">
                   {signageOptions.map((section: any, sIdx: number) => {
                     const svItem = siteVisitItems.find(sv => sv.id === section.siteVisitItemId);
-                    const measurementLabel = formatSiteMeasurementLabel(svItem);
                     return (
                       <div key={sIdx} className="border border-slate-200 rounded-xl overflow-hidden">
-                        <div className="bg-slate-50 px-4 py-3 border-b border-slate-200">
-                          <div className="font-bold text-slate-800">
-                            {svItem ? svItem.name : section.itemLabel}
-                          </div>
-                          {measurementLabel && (
-                            <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">
-                              {measurementLabel}
-                            </div>
-                          )}
+                        <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 font-bold text-slate-800">
+                          {svItem ? svItem.name : section.itemLabel}
                         </div>
                         <table className="w-full text-left text-xs border-collapse">
                           <thead>
@@ -338,13 +377,12 @@ export function ProductionOrderDetailClient({
                           </thead>
                           <tbody className="divide-y divide-slate-100 bg-white">
                             {(section.lines || []).map((item: any, idx: number) => {
-                              const qty = getLineMeasurement(item);
-                              const pricingType = normalizePricingType(item.pricingType);
+                              const qty = item.pricingType === "per_sqft" ? (item.quantity * (item.totalSqFt || 1)) : item.quantity;
                               return (
                                 <tr key={item.id || idx}>
                                   <td className="py-3 px-4 font-bold text-slate-800">{item.description}</td>
                                   <td className="py-3 px-4 font-semibold text-slate-700">
-                                    {qty} {pricingType === "per_sqft" ? "Sq Ft" : item.unit || "Nos"}
+                                    {qty} {item.pricingType === "per_sqft" ? "Sq Ft" : item.unit || "Nos"}
                                   </td>
                                 </tr>
                               );
@@ -371,7 +409,7 @@ export function ProductionOrderDetailClient({
                 Design Files
               </h2>
             </div>
-            
+
             {designItems.filter((item: any) => item.productionFiles && item.productionFiles.length > 0).length > 0 ? (
               <div className="space-y-6">
                 {designItems.filter((item: any) => item.productionFiles && item.productionFiles.length > 0).map((item: any) => (
@@ -444,7 +482,7 @@ export function ProductionOrderDetailClient({
 
         {/* RIGHT COLUMN: Interactive Fabrication Checklist & Customer Info (1/3 width) */}
         <div className="space-y-8">
-          
+
           {/* WORKSHOP PRODUCTION QUEUE CHECKLIST */}
           <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm sticky top-6">
             <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
@@ -467,19 +505,21 @@ export function ProductionOrderDetailClient({
               ].map(step => {
                 const isChecked = !!pd[step.key as keyof typeof pd];
                 return (
-                  <div 
+                  <div
                     key={step.key}
-                    onClick={() => !saving && handleCheckboxChange(step.key as any)}
-                    className={`p-4 border rounded-xl flex items-start gap-3 cursor-pointer select-none transition-all duration-200 ${
-                      isChecked 
-                        ? "bg-emerald-50/50 border-emerald-200 text-emerald-950" 
+                    onClick={() => canEdit && !saving && handleCheckboxChange(step.key as any)}
+                    className={`p-4 border rounded-xl flex items-start gap-3 select-none transition-all duration-200 ${
+                      canEdit ? "cursor-pointer" : "cursor-not-allowed opacity-70"
+                    } ${
+                      isChecked
+                        ? "bg-emerald-50/50 border-emerald-200 text-emerald-950"
                         : "bg-white border-slate-200 hover:border-slate-300 text-slate-800"
                     }`}
                   >
                     <div className="mt-0.5">
                       <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all ${
-                        isChecked 
-                          ? "bg-emerald-600 border-emerald-600 text-white" 
+                        isChecked
+                          ? "bg-emerald-600 border-emerald-600 text-white"
                           : "border-slate-300 bg-white"
                       }`}>
                         {isChecked && <Check size={12} strokeWidth={3} />}

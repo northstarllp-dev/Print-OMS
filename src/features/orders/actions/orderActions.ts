@@ -12,6 +12,7 @@ import {
   notifyOrderStageChange,
 } from "@/features/notifications/actions/dispatchNotification";
 import { getRequestBaseUrl } from "@/features/notifications/whatsapp/requestBaseUrl";
+import { assertStageEditPermission } from "@/features/orders/workspace/shared/serverPermissions";
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -238,6 +239,7 @@ export async function deleteOrder(id: string) {
 }
 
 export async function updateSiteVisitDetailsAction(orderId: string, details: any) {
+  await assertStageEditPermission("site_visit");
   const supabase = await getSupabase();
   const orderUuid = await resolveOrderUuid(supabase, orderId);
 
@@ -313,6 +315,7 @@ export async function updateSiteVisitDetailsAction(orderId: string, details: any
 
 
 export async function updateProductionDetailsAction(orderId: string, details: any) {
+  await assertStageEditPermission("production");
   const supabase = await getSupabase();
   const orderUuid = await resolveOrderUuid(supabase, orderId);
 
@@ -345,6 +348,7 @@ export async function updateProductionDetailsAction(orderId: string, details: an
 }
 
 export async function updateInstallationDetailsAction(orderId: string, details: any) {
+  await assertStageEditPermission("installation");
   const supabase = await getSupabase();
   const orderUuid = await resolveOrderUuid(supabase, orderId);
 
@@ -750,6 +754,7 @@ export async function scheduleSiteVisitAction(orderId: string, scheduleData: any
 }
 
 export async function approveSiteVisitAction(orderId: string) {
+  await assertStageEditPermission("site_visit");
   const supabase = await getSupabase();
   const orderUuid = await resolveOrderUuid(supabase, orderId);
   
@@ -801,6 +806,7 @@ export async function approveSiteVisitAction(orderId: string) {
  * Admin sees it in AdminControlModule and can approve to advance the order.
  */
 export async function freezeSiteVisitAction(orderId: string) {
+  await assertStageEditPermission("site_visit");
   const supabase = await getSupabase();
   const orderUuid = await resolveOrderUuid(supabase, orderId);
 

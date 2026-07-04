@@ -1,24 +1,44 @@
 "use client";
 
 import React, { useState } from "react";
-import { useRouter } from "next/navigation";
 import { ArrowLeft, MapPin, Sparkles, Check, Loader2, CheckCircle, Save, UploadCloud, Calendar, Clock } from "lucide-react";
-import { updateInstallationDetails, markInstallationCompleted, requestInstallationLocationAction, scheduleInstallationAction } from "@/features/installations/actions/installationActions";
 import { InstallationScheduleModule } from "@/features/installations/components/InstallationScheduleModule";
 import { createClient } from "@/utils/supabase/client";
+import type { StageModuleProps } from "../../shared/types";
 
-interface InstallationOrderDetailClientProps {
+export interface InstallationModuleData {
   order: any;
   customers: any[];
   installation: any;
 }
 
-export function InstallationOrderDetailClient({
-  order,
-  customers,
-  installation,
-}: InstallationOrderDetailClientProps) {
-  const router = useRouter();
+export interface InstallationModuleCallbacks {
+  updateInstallationDetails: (orderId: string, details: any) => Promise<any>;
+  markInstallationCompleted: (orderId: string, checklist: any[], photos: any[], notes: string) => Promise<any>;
+  requestInstallationLocationAction: (orderId: string) => Promise<any>;
+  onBack: () => void;
+  onCompleted: () => void;
+}
+
+type InstallationModuleProps = StageModuleProps<
+  InstallationModuleData,
+  InstallationModuleCallbacks
+> & {
+  /** When true, hide portal chrome (back button) and fit inside order detail panel. */
+  embedded?: boolean;
+};
+
+export function InstallationModule({ data, permission, callbacks, embedded = false }: InstallationModuleProps) {
+  const { order, customers, installation } = data;
+  const {
+    updateInstallationDetails,
+    markInstallationCompleted,
+    requestInstallationLocationAction,
+    onBack,
+    onCompleted,
+  } = callbacks;
+  const canEdit = permission?.canEdit ?? true;
+
   const [saving, setSaving] = useState(false);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [alert, setAlert] = useState<{ message: string; type: "success" | "error" } | null>(null);
@@ -27,7 +47,7 @@ export function InstallationOrderDetailClient({
   const svDetails = order.siteVisitDetails || {};
   const locations = svDetails.locations || [];
   
-  const dd = order.design || { proofUrl: "", status: "Draft" };
+  const dd = order.designDetails || order.design || { proofUrl: "", status: "Draft" };
   const designImage = order.imageMockup || dd.proofUrl;
   
   const installationDetails = installation || {};
@@ -46,9 +66,12 @@ export function InstallationOrderDetailClient({
       
   const [checklist, setChecklist] = useState(initialChecklist);
   const [notes, setNotes] = useState(installation?.notes || "");
-  const [afterPhotos, setAfterPhotos] = useState<string[]>(installation?.photos || []);
+  const [afterPhotos, setAfterPhotos] = useState<string[]>(
+    installation?.photos || installation?.afterPhotos || []
+  );
 
   const handleToggleCheck = async (stepId: string) => {
+    if (!canEdit) return;
     const newChecklist = checklist.map((s: any) =>
       s.id === stepId ? { ...s, checked: !s.checked } : s
     );
@@ -73,6 +96,7 @@ export function InstallationOrderDetailClient({
   };
 
   const handlePhotoFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!canEdit) return;
     const files = e.target.files;
     if (!files || files.length === 0) return;
     setUploadingPhotos(true);
@@ -81,7 +105,7 @@ export function InstallationOrderDetailClient({
       const urls = await Promise.all(uploadPromises);
       const newUrls = [...afterPhotos, ...urls];
       setAfterPhotos(newUrls);
-      await updateInstallationDetails(order.id, { afterPhotos: newUrls });
+      await updateInstallationDetails(order.id, { afterPhotos: newUrls, photos: newUrls });
     } catch (err: any) {
       window.alert("Upload failed: " + (err?.message || "Unknown error"));
     } finally {
@@ -91,15 +115,17 @@ export function InstallationOrderDetailClient({
   };
 
   const removeInstallationPhoto = async (urlToRemove: string) => {
+    if (!canEdit) return;
     const supabase = createClient();
     const path = urlToRemove.split("/installation-photos/").pop();
     if (path) await supabase.storage.from("installation-photos").remove([path]);
     const newUrls = afterPhotos.filter(u => u !== urlToRemove);
     setAfterPhotos(newUrls);
-    await updateInstallationDetails(order.id, { afterPhotos: newUrls });
+    await updateInstallationDetails(order.id, { afterPhotos: newUrls, photos: newUrls });
   };
 
   const handleSaveNotes = async () => {
+    if (!canEdit) return;
     setSaving(true);
     try {
       await updateInstallationDetails(order.id, { notes });
@@ -113,6 +139,7 @@ export function InstallationOrderDetailClient({
   };
 
   const handleMarkCompleted = async () => {
+    if (!canEdit) return;
     if (!window.confirm("Are you sure you want to mark this installation as COMPLETED? This will update the main order status.")) return;
     
     setSaving(true);
@@ -120,7 +147,7 @@ export function InstallationOrderDetailClient({
       await markInstallationCompleted(order.id, checklist, afterPhotos, notes);
       setAlert({ message: "Installation successfully marked as completed!", type: "success" });
       setTimeout(() => {
-        router.push("/installation/orders");
+        onCompleted();
       }, 2000);
     } catch (err: any) {
       setAlert({ message: err.message, type: "error" });
@@ -131,6 +158,7 @@ export function InstallationOrderDetailClient({
   // Note: Handle location request functions remain unchanged
 
   const handleRequestLocation = async () => {
+    if (!canEdit) return;
     setSaving(true);
     try {
       await requestInstallationLocationAction(order.id);
@@ -144,56 +172,104 @@ export function InstallationOrderDetailClient({
   };
 
   const isCompleted = order.stage === "Completed" || order.stage === "Closed";
+  // RBAC (canEdit) + workflow (isCompleted): authority vs actionable
+  const canAct = canEdit && !isCompleted;
 
   return (
-    <div className="p-8 bg-slate-50/50 min-h-screen">
-      {/* Top Navigation */}
-      <div className="flex items-center gap-4 mb-6">
-        <button
-          onClick={() => router.push("/installation/orders")}
-          className="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-slate-600 text-xs font-bold shadow-xs hover:bg-slate-50 transition-colors"
-        >
-          <ArrowLeft size={14} /> Back to Queue
-        </button>
-        <span className="text-slate-300">/</span>
-        <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">{order.orderCode}</span>
-      </div>
-
-      {/* Title block */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-        <div>
-          <div className="flex items-center gap-3 mb-1">
-            <h1 className="text-2xl font-black text-slate-900 tracking-tight">
-              {order.projectName}
-            </h1>
-          </div>
-          <p className="text-xs text-slate-500 font-semibold">
-            Status: <span className="text-green-600 font-bold">{order.stage}</span>
-          </p>
+    <div className={embedded ? "space-y-6" : "p-8 bg-slate-50/50 min-h-screen"}>
+      {/* Top Navigation — portal only */}
+      {!embedded && (
+        <div className="flex items-center gap-4 mb-6">
+          <button
+            onClick={onBack}
+            className="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-slate-600 text-xs font-bold shadow-xs hover:bg-slate-50 transition-colors"
+          >
+            <ArrowLeft size={14} /> Back to Queue
+          </button>
+          <span className="text-slate-300">/</span>
+          <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">{order.orderCode}</span>
         </div>
+      )}
 
-        {alert && (
-          <div className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${
-            alert.type === "success" 
-              ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
-              : "bg-rose-50 text-rose-700 border-rose-200"
-          }`}>
-            {alert.message}
+      {/* Embedded: date started + scheduled only. Portal: full title/status. */}
+      {embedded ? (
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="flex flex-wrap gap-8">
+            <div>
+              <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
+                Date Started
+              </div>
+              <div className="text-sm font-bold text-slate-800">
+                {order.dateCreated
+                  ? new Date(order.dateCreated).toLocaleDateString("en-IN", {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                    })
+                  : "TBD"}
+              </div>
+            </div>
+            <div>
+              <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
+                Scheduled Install
+              </div>
+              <div className="text-sm font-bold text-slate-800">
+                {installationDetails.scheduledDate
+                  ? `${new Date(installationDetails.scheduledDate + "T00:00:00").toLocaleDateString("en-IN", {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                    })}${installationDetails.scheduledTime ? ` · ${installationDetails.scheduledTime}` : ""}`
+                  : "Not scheduled"}
+              </div>
+            </div>
           </div>
-        )}
-      </div>
+          {alert && (
+            <div className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${
+              alert.type === "success"
+                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                : "bg-rose-50 text-rose-700 border-rose-200"
+            }`}>
+              {alert.message}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+          <div>
+            <div className="flex items-center gap-3 mb-1">
+              <h1 className="text-2xl font-black text-slate-900 tracking-tight">
+                {order.projectName}
+              </h1>
+            </div>
+            <p className="text-xs text-slate-500 font-semibold">
+              Status: <span className="text-green-600 font-bold">{order.stage}</span>
+            </p>
+          </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-        
-        {/* LEFT COLUMN */}
-        <div className="lg:col-span-2 space-y-8">
+          {alert && (
+            <div className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${
+              alert.type === "success"
+                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                : "bg-rose-50 text-rose-700 border-rose-200"
+            }`}>
+              {alert.message}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className={embedded ? "space-y-8" : "grid grid-cols-1 lg:grid-cols-3 gap-8 items-start"}>
+
+        {/* Work column — full width when embedded */}
+        <div className={embedded ? "space-y-8" : "lg:col-span-2 space-y-8"}>
 
           {/* SCHEDULE INSTALLATION */}
           <InstallationScheduleModule 
             orderId={order.id}
             initialScheduledDate={installationDetails.scheduledDate}
             initialScheduledTime={installationDetails.scheduledTime}
-            isCompleted={isCompleted}
+            isCompleted={!canAct}
           />
           
           {/* CHECKLIST */}
@@ -211,9 +287,9 @@ export function InstallationOrderDetailClient({
               {checklist.map((step: any) => (
                 <div 
                   key={step.id}
-                  onClick={() => !isCompleted && handleToggleCheck(step.id)}
+                  onClick={() => canAct && handleToggleCheck(step.id)}
                   className={`p-4 border rounded-xl flex items-center gap-3 transition-all duration-200 ${
-                    isCompleted ? "opacity-70 cursor-not-allowed" : "cursor-pointer select-none"
+                    canAct ? "cursor-pointer select-none" : "opacity-70 cursor-not-allowed"
                   } ${
                     step.checked 
                       ? "bg-green-50/50 border-green-200 text-green-950" 
@@ -237,7 +313,7 @@ export function InstallationOrderDetailClient({
               <textarea 
                 value={notes}
                 onChange={e => setNotes(e.target.value)}
-                disabled={isCompleted}
+                disabled={!canAct}
                 placeholder="Add any notes about the installation (e.g. issues encountered, specific details...)"
                 className="w-full min-h-[100px] bg-slate-50 text-slate-800 text-sm p-3 border border-slate-200 rounded-xl focus:outline-none focus:border-green-500 focus:bg-white transition-all resize-y"
               />
@@ -245,8 +321,8 @@ export function InstallationOrderDetailClient({
                 <div className="mt-2 flex justify-end">
                   <button 
                     onClick={handleSaveNotes}
-                    disabled={saving}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 rounded-lg text-xs font-bold transition-all"
+                    disabled={saving || !canEdit}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 rounded-lg text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Save size={14} /> Save Notes
                   </button>
@@ -267,7 +343,8 @@ export function InstallationOrderDetailClient({
                           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                             <button
                               onClick={() => removeInstallationPhoto(photo)}
-                              className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-lg text-xs font-bold shadow-sm"
+                              disabled={!canEdit}
+                              className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-lg text-xs font-bold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               Remove
                             </button>
@@ -286,12 +363,12 @@ export function InstallationOrderDetailClient({
                       id="installation-photos-upload"
                       className="hidden"
                       onChange={handlePhotoFiles}
-                      disabled={uploadingPhotos}
+                      disabled={uploadingPhotos || !canEdit}
                     />
                     <label
                       htmlFor="installation-photos-upload"
                       className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                        uploadingPhotos 
+                        uploadingPhotos || !canEdit
                           ? "bg-slate-100 text-slate-400 cursor-not-allowed" 
                           : "bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"
                       }`}
@@ -311,8 +388,8 @@ export function InstallationOrderDetailClient({
               <div className="mt-8 pt-6 border-t border-slate-100 flex justify-end">
                 <button
                   onClick={handleMarkCompleted}
-                  disabled={saving}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white border border-green-700 rounded-xl text-sm font-bold shadow-sm transition-all"
+                  disabled={saving || !canEdit}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white border border-green-700 rounded-xl text-sm font-bold shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {saving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
                   Mark Installation as Completed
@@ -342,7 +419,7 @@ export function InstallationOrderDetailClient({
                     Location Requested...
                   </span>
                 ) : (
-                  <button onClick={handleRequestLocation} disabled={saving} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition-colors">
+                  <button onClick={handleRequestLocation} disabled={saving || !canEdit} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                     Request Exact Map Link
                   </button>
                 )}
@@ -437,55 +514,56 @@ export function InstallationOrderDetailClient({
 
         </div>
 
-        {/* RIGHT COLUMN */}
-        <div className="space-y-6 lg:sticky lg:top-24 transition-all duration-300">
-          {/* CUSTOMER DETAIL CARD */}
-          {client && (
-            <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm">
-              <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
-                <Sparkles size={18} className="text-rose-600" />
-                <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider">
-                  Client Contact
-                </h2>
-              </div>
-              <div className="space-y-4 text-xs">
-                <div>
-                  <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Client Name</div>
-                  <div className="font-bold text-slate-800 text-sm">{client.name}</div>
+        {/* RIGHT COLUMN — portal only (customer already in worksheet chrome) */}
+        {!embedded && (
+          <div className="space-y-6 lg:sticky lg:top-24 transition-all duration-300">
+            {client && (
+              <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm">
+                <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
+                  <Sparkles size={18} className="text-rose-600" />
+                  <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider">
+                    Client Contact
+                  </h2>
                 </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  {client.phone && (
-                    <div>
-                      <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Phone</div>
-                      <div className="font-semibold text-slate-700">📞 {client.phone}</div>
-                    </div>
-                  )}
-                  {client.whatsapp && (
-                    <div>
-                      <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">WhatsApp</div>
-                      <div className="font-semibold text-emerald-600">💬 {client.whatsapp}</div>
-                    </div>
-                  )}
-                </div>
-
-                {client.email && (
+                <div className="space-y-4 text-xs">
                   <div>
-                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Email</div>
-                    <div className="font-semibold text-slate-700">✉️ {client.email}</div>
+                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Client Name</div>
+                    <div className="font-bold text-slate-800 text-sm">{client.name}</div>
                   </div>
-                )}
 
-                {client.shippingAddress && (
-                  <div className="pt-2 border-t border-slate-100 mt-2">
-                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Installation / Shipping Address</div>
-                    <div className="font-medium text-slate-600 leading-relaxed p-2 bg-slate-50 rounded-lg border border-slate-100">{client.shippingAddress}</div>
+                  <div className="grid grid-cols-2 gap-4">
+                    {client.phone && (
+                      <div>
+                        <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Phone</div>
+                        <div className="font-semibold text-slate-700">📞 {client.phone}</div>
+                      </div>
+                    )}
+                    {client.whatsapp && (
+                      <div>
+                        <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">WhatsApp</div>
+                        <div className="font-semibold text-emerald-600">💬 {client.whatsapp}</div>
+                      </div>
+                    )}
                   </div>
-                )}
+
+                  {client.email && (
+                    <div>
+                      <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Email</div>
+                      <div className="font-semibold text-slate-700">✉️ {client.email}</div>
+                    </div>
+                  )}
+
+                  {client.shippingAddress && (
+                    <div className="pt-2 border-t border-slate-100 mt-2">
+                      <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Installation / Shipping Address</div>
+                      <div className="font-medium text-slate-600 leading-relaxed p-2 bg-slate-50 rounded-lg border border-slate-100">{client.shippingAddress}</div>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
 
       </div>
     </div>

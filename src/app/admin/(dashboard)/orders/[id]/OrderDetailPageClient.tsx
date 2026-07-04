@@ -4,6 +4,7 @@ import React from "react";
 import { useRouter } from "next/navigation";
 import { OrderWorksheetModal } from "@/features/order-detail/components/OrderWorksheetModal";
 import { Order, Customer, Employee } from "@/types";
+import type { OrderStage } from "@/features/orders/workspace/shared/types";
 
 interface Product {
   id: string;
@@ -36,6 +37,10 @@ interface OrderDetailPageClientProps {
   products?: Product[];
   initialQuotation?: any;
   siteVisitItems?: SiteVisitItem[];
+  /** Queue-scoped entry: when set, only this stage's timeline node is accessible for staff. */
+  entryStage?: OrderStage;
+  /** Where "Back" navigates to. Defaults to /admin/orders (Admin) or /staff/orders (Employee). */
+  backHref?: string;
 }
 
 export function OrderDetailPageClient({
@@ -48,6 +53,8 @@ export function OrderDetailPageClient({
   products = [],
   initialQuotation = null,
   siteVisitItems = [],
+  entryStage,
+  backHref,
 }: OrderDetailPageClientProps) {
   const router = useRouter();
 
@@ -56,7 +63,7 @@ export function OrderDetailPageClient({
       <OrderWorksheetModal
         isOpen={true}
         onClose={() => {
-          router.push(role === "Admin" ? "/admin/orders" : "/staff/orders");
+          router.push(backHref ?? (role === "Admin" ? "/admin/orders" : "/staff/orders"));
         }}
         order={order}
         customers={customers}
@@ -67,6 +74,7 @@ export function OrderDetailPageClient({
         products={products}
         initialQuotation={initialQuotation}
         siteVisitItems={siteVisitItems}
+        entryStage={entryStage}
       />
     </div>
   );

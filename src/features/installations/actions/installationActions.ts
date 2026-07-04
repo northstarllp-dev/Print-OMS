@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import { updateOrderStageAction } from "@/features/orders/actions/orderActions";
 import { dispatchWhatsAppNotification } from "@/features/notifications/actions/dispatchNotification";
 import { getRequestBaseUrl } from "@/features/notifications/whatsapp/requestBaseUrl";
+import { assertStageEditPermission } from "@/features/orders/workspace/shared/serverPermissions";
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -54,6 +55,7 @@ export async function getInstallationByOrderId(orderId: string) {
 }
 
 export async function updateInstallationDetails(orderId: string, details: any) {
+  await assertStageEditPermission("installation");
   const supabase = await getSupabase();
   
   // First ensure record exists
@@ -69,15 +71,17 @@ export async function updateInstallationDetails(orderId: string, details: any) {
 }
 
 export async function markInstallationCompleted(orderId: string, checklist: any[], photos: any[], notes: string) {
+  await assertStageEditPermission("installation");
   const supabase = await getSupabase();
   
-  // Update the installations table
+  // Update the installations table (write both photo columns — live DB has both)
   const { error } = await supabase
     .from("installations")
     .update({
       status: "Completed",
       checklist,
       photos,
+      afterPhotos: photos,
       notes
     })
     .eq("order_id", orderId);
@@ -91,6 +95,7 @@ export async function markInstallationCompleted(orderId: string, checklist: any[
 }
 
 export async function requestInstallationLocationAction(orderId: string) {
+  await assertStageEditPermission("installation");
   const supabase = await getSupabase();
   
   // Get current order for activity log

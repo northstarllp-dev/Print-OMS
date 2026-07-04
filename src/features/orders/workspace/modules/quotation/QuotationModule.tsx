@@ -1205,11 +1205,19 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
         const isDesignFirst = order.workflow_type === "design_first";
         const nextStageLabel = isDesignFirst ? "Production" : "Design";
         const quoteStage = order.stage || "";
+        const isQuotationStage = [
+          "Quotation In Progress",
+          "Quotation Sent",
+          "Quotation Negotiation",
+          "Quotation Approved",
+        ].includes(quoteStage);
+        // Admin can advance once the quote is sent/locked; staff only after customer approval.
         const canMoveToNextStage =
-          status === "Approved" &&
           !!onRequestAdvance &&
-          (isAdmin || currentUserRole === "Employee") &&
-          quoteStage === "Quotation Approved";
+          isQuotationStage &&
+          (isAdmin
+            ? status === "Sent" || status === "Approved"
+            : status === "Approved" && quoteStage === "Quotation Approved");
         
         const actionButtons = (
           <>

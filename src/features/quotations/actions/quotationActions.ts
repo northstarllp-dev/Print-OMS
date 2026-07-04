@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { mapSiteVisitMeasurementFromDb } from "@/features/orders/actions/siteVisitMapper";
 import { dispatchWhatsAppNotification } from "@/features/notifications/actions/dispatchNotification";
 import { getRequestBaseUrl } from "@/features/notifications/whatsapp/requestBaseUrl";
+import { assertStageEditPermission } from "@/features/orders/workspace/shared/serverPermissions";
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -114,6 +115,7 @@ export interface QuotationPayload {
 
 /** Upsert quotation — creates if not exists, updates if already there */
 export async function upsertQuotation(orderId: string, payload: QuotationPayload) {
+  await assertStageEditPermission("quotation");
   const supabase = await getSupabase();
   const resolved = await resolveOrderId(supabase, orderId);
 
@@ -176,6 +178,7 @@ export async function upsertQuotation(orderId: string, payload: QuotationPayload
 
 /** Admin approves quotation — marks it approved, moves order stage to Quotation Sent */
 export async function sendQuotationToCustomer(quotationId: string, adminName: string) {
+  await assertStageEditPermission("quotation");
   const supabase = await getSupabase();
   const { data: qt, error: qErr } = await supabase.from("quotations").select("order_id, quotation_id, status").eq("id", quotationId).single();
   if (qErr || !qt) throw new Error("Quotation not found");
@@ -213,6 +216,40 @@ export async function sendQuotationToCustomer(quotationId: string, adminName: st
 // ─────────────────────────────────────────────────────────────────────────────
 // WRITE — Customer Actions
 // ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Admin override: mark quotation Approved and set order to Quotation Approved
+ * so the order can advance to Design/Production without waiting on the customer.
+ */
+export async function adminMarkQuotationApprovedAction(orderId: string) {
+  await assertStageEditPermission("quotation");
+  const supabase = await getSupabase();
+  const { uuid, friendly } = await resolveOrderId(supabase, orderId);
+
+  const { error: qErr } = await supabase
+    .from("quotations")
+    .update({ status: "Approved", customer_response: "Admin" })
+    .eq("order_id", uuid);
+  if (qErr) throw new Error(qErr.message);
+
+  const { error: oErr } = await supabase
+    .from("orders")
+    .update({ stage: "Quotation Approved", stage_status: "Normal" })
+    .eq("id", uuid);
+  if (oErr) throw new Error(oErr.message);
+
+  await supabase.from("order_activity").insert({
+    order_id: uuid,
+    activity_type: "timeline",
+    actor_name: "System",
+    actor_role: "System",
+    content: "Admin marked the quotation as approved and ready to advance.",
+    metadata: { action: "quotation_approved_by_admin" },
+  });
+
+  revalidatePath(`/admin/orders/${friendly}`);
+  revalidatePath("/admin/orders");
+}
 
 /** Customer approves quotation → stage = Quotation Approved */
 export async function customerApproveQuotation(orderId: string, customerName: string) {

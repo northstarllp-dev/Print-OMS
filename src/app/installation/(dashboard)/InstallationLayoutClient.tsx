@@ -5,10 +5,11 @@ import {
   Bell, CheckCircle, AlertCircle, Info, LogOut,
   History, RotateCcw, Lock, Loader2, Key,
   ShoppingBag, LifeBuoy, Settings,
-  ChevronLeft, ChevronRight, Search, Hammer
+  ChevronLeft, ChevronRight, Search, Hammer, MapPin
 } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
 import { signOut, updateUserPassword } from "@/features/auth/actions/authActions";
+import { getEditableStages } from "@/features/orders/workspace/shared/stageGrants";
 
 interface InstallationLayoutClientProps {
   children: React.ReactNode;
@@ -67,8 +68,11 @@ export function InstallationLayoutClient({ children, profile }: InstallationLayo
     router.push("/installation/login");
   };
 
+  const canAccessSiteVisit = getEditableStages({ role: profile.role, staff_role: profile.staff_role }).includes("site_visit");
+
   const navItems = [
     { id: "/installation/orders", label: "Installation Queue", icon: Hammer },
+    ...(canAccessSiteVisit ? [{ id: "/installation/site-visit", label: "Site Visit", icon: MapPin }] : []),
     ...(profile.role === "admin" ? [{ id: "/admin/dashboard", label: "Back to Admin", icon: ChevronLeft }] : []),
   ] as const;
 
