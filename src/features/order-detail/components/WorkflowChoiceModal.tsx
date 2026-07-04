@@ -12,7 +12,7 @@ interface WorkflowChoiceModalProps {
 const PATH_QUOTE_FIRST = [
   { icon: "📍", label: "Site Visit" },
   { icon: "📄", label: "Quote" },
-  { icon: "🎨", label: "Design + Payment" },
+  { icon: "🎨", label: "Design" },
   { icon: "🏭", label: "Production" },
   { icon: "🔧", label: "Installation" },
 ];
@@ -20,7 +20,7 @@ const PATH_QUOTE_FIRST = [
 const PATH_DESIGN_FIRST = [
   { icon: "📍", label: "Site Visit" },
   { icon: "🎨", label: "Design" },
-  { icon: "📄", label: "Quote + Payment" },
+  { icon: "📄", label: "Quote" },
   { icon: "🏭", label: "Production" },
   { icon: "🔧", label: "Installation" },
 ];
@@ -105,14 +105,7 @@ export function WorkflowChoiceModal({ isOpen, onClose, onChoose }: WorkflowChoic
               {PATH_QUOTE_FIRST.map((step, i) => (
                 <div key={i} style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px" }}>
                   <span style={{ fontSize: "15px" }}>{step.icon}</span>
-                  <span style={{ color: "#334155", fontWeight: step.label.includes("Payment") ? "700" : "500" }}>
-                    {step.label}
-                    {step.label.includes("Payment") && (
-                      <span style={{ marginLeft: "6px", fontSize: "11px", background: "#FEF3C7", color: "#92400E", padding: "1px 6px", borderRadius: "4px", fontWeight: "700" }}>
-                        PAYMENT HERE
-                      </span>
-                    )}
-                  </span>
+                  <span style={{ color: "#334155", fontWeight: "500" }}>{step.label}</span>
                   {i < PATH_QUOTE_FIRST.length - 1 && (
                     <ArrowRight size={10} color="#CBD5E1" style={{ marginLeft: "auto" }} />
                   )}
@@ -153,14 +146,7 @@ export function WorkflowChoiceModal({ isOpen, onClose, onChoose }: WorkflowChoic
               {PATH_DESIGN_FIRST.map((step, i) => (
                 <div key={i} style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px" }}>
                   <span style={{ fontSize: "15px" }}>{step.icon}</span>
-                  <span style={{ color: "#334155", fontWeight: step.label.includes("Payment") ? "700" : "500" }}>
-                    {step.label}
-                    {step.label.includes("Payment") && (
-                      <span style={{ marginLeft: "6px", fontSize: "11px", background: "#FEF3C7", color: "#92400E", padding: "1px 6px", borderRadius: "4px", fontWeight: "700" }}>
-                        PAYMENT HERE
-                      </span>
-                    )}
-                  </span>
+                  <span style={{ color: "#334155", fontWeight: "500" }}>{step.label}</span>
                   {i < PATH_DESIGN_FIRST.length - 1 && (
                     <ArrowRight size={10} color="#CBD5E1" style={{ marginLeft: "auto" }} />
                   )}

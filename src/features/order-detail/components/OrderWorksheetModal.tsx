@@ -9,7 +9,7 @@ import {
   Check, Share2, Pencil, CheckCircle2,
   MapPin, FileText, LayoutDashboard, CheckSquare,
   ArrowLeft, MoreVertical, Lock, Save,
-  BarChart3, Palette, Package, Wrench, User,
+  BarChart3, Palette, Package, Wrench, User, CreditCard,
 } from "lucide-react";
 import {
   Order, PipelineStage, SiteVisitDetails,
@@ -23,6 +23,8 @@ import LoadingLines from "@/components/ui/loading-lines";
 import { ProductionModule } from "./production/ProductionModule";
 import { AdminControlModule } from "./admin/AdminControlModule";
 import { InstallationModule } from "./installation/InstallationModule";
+import { PaymentsModule } from "./payments/PaymentsModule";
+import { PaymentRequiredModal } from "./payments/PaymentRequiredModal";
 import { CustomerDetailsDrawer } from "./CustomerDetailsDrawer";
 import { WorkflowChoiceModal } from "./WorkflowChoiceModal";
 import {
@@ -38,6 +40,7 @@ import {
   approveSiteVisitAction,
   freezeSiteVisitAction,
   setWorkflowTypeAction,
+  setWorkflowTypeOnlyAction,
 } from "@/features/orders/actions/orderActions";
 import {
   updateDesignDetailsAction,
@@ -65,6 +68,10 @@ const STAGE_LABEL: Record<string, { label: string; color: string }> = {
 };
 
 
+
+/** Payments tab sits next to Admin Controls (not a pipeline stage). */
+const PAYMENTS_TAB = 98;
+const ADMIN_TAB = 99;
 
 const WORKFLOW_STEPS = [
   { label: "Enquiry", tab: -1, icon: "📋" },
@@ -137,7 +144,6 @@ interface Product {
   is_active: boolean;
   price_per_sqft?: number | null;
   price_per_unit?: number | null;
-  price_per_running_ft?: number | null;
   images?: string[];
 }
 
@@ -190,6 +196,9 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   const [activeRightPanel, setActiveRightPanel] = useState<"logs" | "chat" | null>(null);
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [isWorkflowChoiceOpen, setIsWorkflowChoiceOpen] = useState(false);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  /** When set, payment modal skip/create runs workflow choice then advance/lock. */
+  const [pendingWorkflowType, setPendingWorkflowType] = useState<"quote_first" | "design_first" | null>(null);
   const [adminOverrideUnlocked, setAdminOverrideUnlocked] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -340,32 +349,65 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     setOrder((prev) => ({ ...prev, installationDetails: { ...(prev.installationDetails || {}), ...details } as InstallationDetails }));
   };
 
+  const executeAdminApprove = async () => {
+    await adminApproveStageAction(order.id);
+    setOrder(prev => ({ ...prev, stageStatus: "Normal" }));
+    router.refresh();
+    triggerLocalAlert("Stage approved and advanced.", "success");
+  };
+
+  const openPaymentGate = (workflowType?: "quote_first" | "design_first" | null) => {
+    setPendingWorkflowType(workflowType ?? null);
+    setIsPaymentModalOpen(true);
+  };
+
   const handleAdminApprove = async () => {
     setIsProcessing(true);
     try {
       await handleSaveDraft();
-      // On Site Visit tab, open review modal first (for Staff), or workflow choice (for Admin after site visit completed).
+      // On Site Visit tab with normal status, open review modal first.
       if (activeStepTab === 0 && order.stageStatus === "Normal") {
         setIsReviewModalOpen(true);
         setIsProcessing(false);
         return;
       }
-      // If leaving any Site Visit stage with a pending approval, show workflow choice modal
+      // Leaving Site Visit with pending admin approval → choose workflow, then payment gate
       if (
         order.stage.startsWith("Site Visit") &&
         order.stageStatus &&
-        order.stageStatus !== "Normal"
+        order.stageStatus !== "Normal" &&
+        order.stageStatus !== "Pending Payment Verification"
       ) {
         setIsWorkflowChoiceOpen(true);
         setIsProcessing(false);
         return;
       }
-      await adminApproveStageAction(order.id);
-      setOrder(prev => ({ ...prev, stageStatus: "Normal" }));
-      router.refresh();
-      triggerLocalAlert("Stage approved and advanced.", "success");
-    } catch (err) { triggerLocalAlert("Failed to approve stage.", "error"); }
-    finally { setIsProcessing(false); }
+      // Payment lock: must verify/waive on Payments tab first
+      if (order.stageStatus === "Pending Payment Verification") {
+        triggerLocalAlert("Payment verification required before proceeding.", "warning");
+        setActiveStepTab(PAYMENTS_TAB);
+        setIsProcessing(false);
+        return;
+      }
+      // Admin-configured stages show the payment-required popup; others advance directly
+      const { isPaymentGateEnabledForStage } = await import(
+        "@/features/settings/actions/paymentGateSettingsActions"
+      );
+      const promptPayment = await isPaymentGateEnabledForStage(
+        order.stage,
+        order.id,
+        order.stageStatus
+      );
+      if (promptPayment) {
+        openPaymentGate(null);
+      } else {
+        await executeAdminApprove();
+      }
+      setIsProcessing(false);
+    } catch (err: any) {
+      triggerLocalAlert(err?.message || "Failed to approve stage.", "error");
+      setIsProcessing(false);
+    }
   };
 
   const handleUpdateOrderStage = async (orderId: string, stage: string) => {
@@ -375,9 +417,9 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
       setOrder(prev => ({ ...prev, stage: stage as PipelineStage }));
       router.refresh();
       triggerLocalAlert(`Stage changed to ${stage}`, "success");
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      triggerLocalAlert("Failed to change stage", "error");
+      triggerLocalAlert(err?.message || "Failed to change stage", "error");
     } finally { setIsProcessing(false); }
   };
   const handleRequestAdvancement = async () => {
@@ -626,7 +668,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
       4: <InstallationModule order={order} isEmployee={isStaffOrAdmin} updateInstallationDetails={updateInstallationDetails} isReadOnly={isMarketerOrDesigner} />,
     };
 
-    if (activeStepTab === 99) {
+    if (activeStepTab === ADMIN_TAB) {
       return (
         <AdminControlModule
           order={order}
@@ -634,19 +676,43 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           employees={employees}
           onAdminApprove={handleAdminApprove}
           onApproveWithWorkflowChoice={() => setIsWorkflowChoiceOpen(true)}
+          onOpenPayments={() => setActiveStepTab(PAYMENTS_TAB)}
           updateSiteVisitDetails={updateSiteVisitDetails}
           updateOrderStage={handleUpdateOrderStage}
         />
       );
     }
+
+    if (activeStepTab === PAYMENTS_TAB) {
+      return (
+        <PaymentsModule
+          orderId={order.id}
+          currentStage={order.stage}
+          currentUserRole={currentUserRole}
+          isEmployee={isStaffOrAdmin}
+          onPaymentsChanged={async () => {
+            const { getBlockingPayments } = await import(
+              "@/features/payments/actions/paymentActions"
+            );
+            const blocking = await getBlockingPayments(order.id);
+            setOrder((prev) => ({
+              ...prev,
+              stageStatus: blocking.length === 0 ? "Normal" : "Pending Payment Verification",
+            }));
+            router.refresh();
+          }}
+        />
+      );
+    }
+
     return tabToModule[activeStepTab] ?? null;
   };
 
-  /* ── Workflow steps for middle panel ── */
+  /* ── Workflow steps for middle panel (Payments is a header tab, not a pipeline step) ── */
   const workflowSteps = isDesignFirst
     ? [
         ...(isEmployee ? [] : [{ label: "Enquiries", tabIndex: -1, done: true, icon: FileText }]),
-        ...(isEmployee ? [] : [{ label: "Admin Controls", tabIndex: 99, done: false, icon: Lock }]),
+        ...(isEmployee ? [] : [{ label: "Admin Controls", tabIndex: ADMIN_TAB, done: false, icon: Lock }]),
         { label: "Site Visit", tabIndex: 0, done: currentStageIndex > 0, icon: MapPin },
         { label: "Design",    tabIndex: 1, done: currentStageIndex > 1, icon: Palette },
         { label: "Quote",     tabIndex: 2, done: currentStageIndex > 2, icon: BarChart3 },
@@ -655,7 +721,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
       ]
     : [
         ...(isEmployee ? [] : [{ label: "Enquiries", tabIndex: -1, done: true, icon: FileText }]),
-        ...(isEmployee ? [] : [{ label: "Admin Controls", tabIndex: 99, done: false, icon: Lock }]),
+        ...(isEmployee ? [] : [{ label: "Admin Controls", tabIndex: ADMIN_TAB, done: false, icon: Lock }]),
         { label: "Site Visit",  tabIndex: 0, done: currentStageIndex > 0, icon: MapPin },
         { label: "Quote",       tabIndex: 1, done: currentStageIndex > 1, icon: BarChart3 },
         { label: "Design",      tabIndex: 2, done: currentStageIndex > 2, icon: Palette },
@@ -664,7 +730,8 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
       ];
 
   const getModuleTitle = () => {
-    if (activeStepTab === 99) return "Admin Control Panel";
+    if (activeStepTab === ADMIN_TAB) return "Admin Control Panel";
+    if (activeStepTab === PAYMENTS_TAB) return "Payment Milestones";
     if (activeStepTab === 0) return "Site Visit Audit";
     if (isDesignFirst) {
       if (activeStepTab === 1) return "Design Proof";
@@ -844,40 +911,108 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                     <User size={14} /> Customer Details
                   </button>
                   {!isEmployee && (
-                    <>
-                      <button
-                        onClick={handleCopyMagicLink}
-                        style={{ background: "transparent", border: "1px solid #E2E8F0", color: "#475569", fontSize: "12px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px", padding: "6px 12px", borderRadius: "6px", transition: "all 0.15s" }}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = "#F8FAFC"; e.currentTarget.style.color = "#0F172A"; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#475569"; }}
-                      >
-                        <Share2 size={14} /> {copiedLink ? "Copied!" : "Portal"}
-                      </button>
-                      <button
-                        onClick={() => setActiveStepTab(99)}
-                        style={{ background: "#0F172A", border: "none", color: "white", fontSize: "12px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px", padding: "6px 12px", borderRadius: "6px", transition: "background-color 0.15s", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = "#334155"; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.background = "#0F172A"; }}
-                      >
-                        <Lock size={14} /> Admin Controls
-                        {order.stageStatus && order.stageStatus !== "Normal" && (
-                          <span className="flex items-center justify-center w-4 h-4 ml-1 text-[10px] font-bold text-white bg-red-500 rounded-full animate-pulse shadow-sm">
-                            1
-                          </span>
-                        )}
-                      </button>
-                    </>
+                    <button
+                      onClick={handleCopyMagicLink}
+                      style={{ background: "transparent", border: "1px solid #E2E8F0", color: "#475569", fontSize: "12px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px", padding: "6px 12px", borderRadius: "6px", transition: "all 0.15s" }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = "#F8FAFC"; e.currentTarget.style.color = "#0F172A"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#475569"; }}
+                    >
+                      <Share2 size={14} /> {copiedLink ? "Copied!" : "Portal"}
+                    </button>
                   )}
+                  {!isEmployee && (
+                    <button
+                      onClick={() => setActiveStepTab(ADMIN_TAB)}
+                      style={{
+                        background: activeStepTab === ADMIN_TAB ? "#0F172A" : "transparent",
+                        border: activeStepTab === ADMIN_TAB ? "none" : "1px solid #E2E8F0",
+                        color: activeStepTab === ADMIN_TAB ? "white" : "#475569",
+                        fontSize: "12px",
+                        fontWeight: "600",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        padding: "6px 12px",
+                        borderRadius: "6px",
+                        transition: "all 0.15s",
+                        boxShadow: activeStepTab === ADMIN_TAB ? "0 1px 2px rgba(0,0,0,0.05)" : "none",
+                      }}
+                      onMouseEnter={(e) => {
+                        if (activeStepTab !== ADMIN_TAB) {
+                          e.currentTarget.style.background = "#F8FAFC";
+                          e.currentTarget.style.color = "#0F172A";
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (activeStepTab !== ADMIN_TAB) {
+                          e.currentTarget.style.background = "transparent";
+                          e.currentTarget.style.color = "#475569";
+                        }
+                      }}
+                    >
+                      <Lock size={14} /> Admin Controls
+                      {order.stageStatus &&
+                        order.stageStatus !== "Normal" &&
+                        order.stageStatus !== "Pending Payment Verification" && (
+                        <span className="flex items-center justify-center w-4 h-4 ml-1 text-[10px] font-bold text-white bg-red-500 rounded-full animate-pulse shadow-sm">
+                          1
+                        </span>
+                      )}
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setActiveStepTab(PAYMENTS_TAB)}
+                    style={{
+                      background: activeStepTab === PAYMENTS_TAB ? "#0F172A" : "transparent",
+                      border: activeStepTab === PAYMENTS_TAB ? "none" : "1px solid #E2E8F0",
+                      color: activeStepTab === PAYMENTS_TAB ? "white" : "#475569",
+                      fontSize: "12px",
+                      fontWeight: "600",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      padding: "6px 12px",
+                      borderRadius: "6px",
+                      transition: "all 0.15s",
+                      boxShadow: activeStepTab === PAYMENTS_TAB ? "0 1px 2px rgba(0,0,0,0.05)" : "none",
+                    }}
+                    onMouseEnter={(e) => {
+                      if (activeStepTab !== PAYMENTS_TAB) {
+                        e.currentTarget.style.background = "#F8FAFC";
+                        e.currentTarget.style.color = "#0F172A";
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (activeStepTab !== PAYMENTS_TAB) {
+                        e.currentTarget.style.background = "transparent";
+                        e.currentTarget.style.color = "#475569";
+                      }
+                    }}
+                  >
+                    <CreditCard size={14} /> Payment
+                    {order.stageStatus === "Pending Payment Verification" && (
+                      <span className="flex items-center justify-center w-4 h-4 ml-1 text-[10px] font-bold text-white bg-red-500 rounded-full animate-pulse shadow-sm">
+                        1
+                      </span>
+                    )}
+                  </button>
                 </div>
               </div>
             </div>
 
             {/* Horizontal Timeline */}
-            {activeStepTab !== 99 && (() => {
-              const visibleSteps = workflowSteps.filter(s => s.tabIndex !== 99);
+            {activeStepTab !== ADMIN_TAB && activeStepTab !== PAYMENTS_TAB && (() => {
+              // Include Enquiries (tabIndex -1); exclude Admin Controls and Payment header tabs only
+              const visibleSteps = workflowSteps.filter(
+                (s) => s.tabIndex !== ADMIN_TAB && s.tabIndex !== PAYMENTS_TAB
+              );
               const activeIndex = visibleSteps.findIndex(s => s.tabIndex === activeStepTab);
+              // Progress starts after Enquiries (always complete for an open order)
+              const progressIndex = activeIndex < 0 ? 0 : activeIndex;
               const filledPct = visibleSteps.length > 1
-                ? (activeIndex / (visibleSteps.length - 1)) * 100
+                ? (progressIndex / (visibleSteps.length - 1)) * 100
                 : 0;
               const insetPct = visibleSteps.length > 0 ? 100 / (2 * visibleSteps.length) : 0;
               return (
@@ -951,9 +1086,9 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           </div>
 
           {/* Module Header (if not 99, we can still show a clean title) */}
-          <div style={{ padding: activeStepTab === 99 ? "24px 24px 0 24px" : "16px 24px 0 24px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+          <div style={{ padding: activeStepTab === ADMIN_TAB || activeStepTab === PAYMENTS_TAB ? "24px 24px 0 24px" : "16px 24px 0 24px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-              {activeStepTab === 99 && (
+              {(activeStepTab === ADMIN_TAB || activeStepTab === PAYMENTS_TAB) && (
                 <button
                   onClick={() => setActiveStepTab(stageToTabIndex(order.stage, order.workflow_type))}
                   style={{ display: "flex", alignItems: "center", gap: "6px", background: "white", border: "1px solid #E2E8F0", borderRadius: "8px", cursor: "pointer", color: "#475569", fontSize: "12px", fontWeight: "600", padding: "6px 12px", transition: "all 0.15s", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }}
@@ -974,21 +1109,65 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
 
 
-              {/* Stage approval status */}
-              {order.stageStatus && order.stageStatus !== "Normal" && (
+              {/* Stage / payment lock status */}
+              {order.stageStatus === "Pending Payment Verification" ? (
+                <button
+                  type="button"
+                  onClick={() => setActiveStepTab(PAYMENTS_TAB)}
+                  style={{ fontSize: "11px", fontWeight: "800", color: "#BE123C", background: "#FFF1F2", border: "1px solid #FECDD3", padding: "4px 12px", borderRadius: "6px", cursor: "pointer" }}
+                >
+                  Payment Verification Required
+                </button>
+              ) : order.stageStatus && order.stageStatus !== "Normal" ? (
                 <span style={{ fontSize: "11px", fontWeight: "800", color: "#EA580C", background: "#FFF7ED", border: "1px solid #FED7AA", padding: "4px 12px", borderRadius: "6px" }}>
                   Pending Approval
                 </span>
-              )}
-
-              {/* Action Buttons removed from header as per request */}
+              ) : null}
             </div>
           </div>
+
+          {order.stageStatus === "Pending Payment Verification" && activeStepTab !== PAYMENTS_TAB && (
+            <div
+              style={{
+                margin: "12px 24px 0",
+                padding: "10px 14px",
+                background: "#FFF1F2",
+                border: "1px solid #FECDD3",
+                borderRadius: "12px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "12px",
+                flexShrink: 0,
+              }}
+            >
+              <p style={{ margin: 0, fontSize: "12px", fontWeight: 600, color: "#9F1239" }}>
+                Stage is locked at <strong>{order.stage}</strong> until required payments are verified or waived.
+              </p>
+              <button
+                type="button"
+                onClick={() => setActiveStepTab(PAYMENTS_TAB)}
+                style={{
+                  padding: "6px 12px",
+                  background: "#E11D48",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "8px",
+                  fontSize: "11px",
+                  fontWeight: 800,
+                  cursor: "pointer",
+                  flexShrink: 0,
+                }}
+              >
+                Open Payments
+              </button>
+            </div>
+          )}
 
           {/* Module body (scrollable) */}
           <div style={{ flex: 1, overflowY: "auto", padding: "0 24px 24px 24px" }}>
 
-            <div style={{ background: "white", border: "1px solid #E2E8F0", borderTop: "none", borderBottomLeftRadius: "12px", borderBottomRightRadius: "12px", borderTopRightRadius: "12px", overflow: "visible", minHeight: "100%", borderTopLeftRadius: activeStepTab === 99 ? "12px" : "0px", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.05)" }}>
+            <div style={{ background: "white", border: "1px solid #E2E8F0", borderTop: "none", borderBottomLeftRadius: "12px", borderBottomRightRadius: "12px", borderTopRightRadius: "12px", overflow: "visible", minHeight: "100%", borderTopLeftRadius: activeStepTab === ADMIN_TAB || activeStepTab === PAYMENTS_TAB ? "12px" : "0px", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.05)" }}>
               <div style={{ padding: "24px" }}>
                 {renderModule()}
               </div>
@@ -1148,22 +1327,135 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           isOpen={isWorkflowChoiceOpen}
           onClose={() => setIsWorkflowChoiceOpen(false)}
           onChoose={async (workflowType) => {
+            setIsWorkflowChoiceOpen(false);
+            setIsProcessing(true);
             try {
-              await setWorkflowTypeAction(order.id, workflowType);
-              setOrder(prev => ({
-                ...prev,
-                workflow_type: workflowType,
-                stage: workflowType === "design_first" ? "Design In Progress" : "Quotation In Progress",
-                stageStatus: "Normal",
-              }));
-              setIsWorkflowChoiceOpen(false);
-              router.refresh();
-              triggerLocalAlert(
-                `Workflow set to "${workflowType === "design_first" ? "Design First" : "Quote First"}". Order advanced.`,
-                "success"
+              const { isPaymentGateEnabledForStage } = await import(
+                "@/features/settings/actions/paymentGateSettingsActions"
               );
-            } catch (err) {
-              triggerLocalAlert("Failed to set workflow. Try again.", "error");
+              const promptPayment = await isPaymentGateEnabledForStage(
+                order.stage,
+                order.id,
+                order.stageStatus
+              );
+              if (promptPayment) {
+                openPaymentGate(workflowType);
+              } else {
+                await setWorkflowTypeAction(order.id, workflowType);
+                setOrder((prev) => ({
+                  ...prev,
+                  workflow_type: workflowType,
+                  stage:
+                    workflowType === "design_first"
+                      ? "Design In Progress"
+                      : "Quotation In Progress",
+                  stageStatus: "Normal",
+                }));
+                router.refresh();
+                triggerLocalAlert(
+                  `Workflow set to "${workflowType === "design_first" ? "Design First" : "Quote First"}". Order advanced.`,
+                  "success"
+                );
+              }
+            } catch (err: any) {
+              triggerLocalAlert(err?.message || "Failed to set workflow.", "error");
+            } finally {
+              setIsProcessing(false);
+            }
+          }}
+        />
+      )}
+
+      {/* ── PAYMENT GATE MODAL (not a pipeline stage) ── */}
+      {isPaymentModalOpen && (
+        <PaymentRequiredModal
+          orderId={order.id}
+          currentStage={order.stage}
+          onClose={() => {
+            setIsPaymentModalOpen(false);
+            setPendingWorkflowType(null);
+          }}
+          onSkip={async () => {
+            setIsProcessing(true);
+            try {
+              if (pendingWorkflowType) {
+                await setWorkflowTypeAction(order.id, pendingWorkflowType);
+                setOrder((prev) => ({
+                  ...prev,
+                  workflow_type: pendingWorkflowType,
+                  stage:
+                    pendingWorkflowType === "design_first"
+                      ? "Design In Progress"
+                      : "Quotation In Progress",
+                  stageStatus: "Normal",
+                }));
+                triggerLocalAlert(
+                  `Workflow set to "${pendingWorkflowType === "design_first" ? "Design First" : "Quote First"}". Order advanced.`,
+                  "success"
+                );
+              } else {
+                await executeAdminApprove();
+              }
+              router.refresh();
+            } catch (err: any) {
+              triggerLocalAlert(err?.message || "Failed to approve stage.", "error");
+            } finally {
+              setPendingWorkflowType(null);
+              setIsProcessing(false);
+            }
+          }}
+          onCreated={async () => {
+            setIsProcessing(true);
+            try {
+              const { getBlockingPayments } = await import(
+                "@/features/payments/actions/paymentActions"
+              );
+              const blocking = await getBlockingPayments(order.id);
+
+              if (blocking.length > 0) {
+                // Required payment: lock stage, do not advance
+                if (pendingWorkflowType) {
+                  await setWorkflowTypeOnlyAction(order.id, pendingWorkflowType);
+                  setOrder((prev) => ({
+                    ...prev,
+                    workflow_type: pendingWorkflowType,
+                    stageStatus: "Pending Payment Verification",
+                  }));
+                } else {
+                  setOrder((prev) => ({
+                    ...prev,
+                    stageStatus: "Pending Payment Verification",
+                  }));
+                }
+                setActiveStepTab(PAYMENTS_TAB);
+                triggerLocalAlert(
+                  "Payment requirement created. Verify or waive it on the Payments tab before advancing.",
+                  "warning"
+                );
+              } else {
+                // Optional payment only: proceed to next stage
+                if (pendingWorkflowType) {
+                  await setWorkflowTypeAction(order.id, pendingWorkflowType);
+                  setOrder((prev) => ({
+                    ...prev,
+                    workflow_type: pendingWorkflowType,
+                    stage:
+                      pendingWorkflowType === "design_first"
+                        ? "Design In Progress"
+                        : "Quotation In Progress",
+                    stageStatus: "Normal",
+                  }));
+                } else {
+                  await executeAdminApprove();
+                }
+                triggerLocalAlert("Payment recorded. Order advanced.", "success");
+              }
+              router.refresh();
+            } catch (err: any) {
+              triggerLocalAlert(err?.message || "Payment created but stage update failed.", "error");
+            } finally {
+              setPendingWorkflowType(null);
+              setIsProcessing(false);
             }
           }}
         />

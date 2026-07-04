@@ -37,7 +37,6 @@ export type Product = {
   // New pricing fields
   price_per_sqft?: number | null;
   price_per_unit?: number | null;
-  price_per_running_ft?: number | null;
   images?: string[];
   is_active: boolean;
   final_prdt?: boolean;
@@ -53,7 +52,6 @@ export type CreateProductPayload = {
   // New
   price_per_sqft?: number | null;
   price_per_unit?: number | null;
-  price_per_running_ft?: number | null;
   images?: string[];
   is_active?: boolean;
   final_prdt?: boolean;

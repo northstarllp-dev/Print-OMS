@@ -3,6 +3,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { mapSiteVisitMeasurementFromDb } from "@/features/orders/actions/siteVisitMapper";
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -73,16 +74,20 @@ export async function getAllQuotations() {
 
 
 
-/** Get site visit measurements for an order (signage items) */
+/** Get site visit measurements for an order (signage items), mapped to UI camelCase with units. */
 export async function getSiteVisitMeasurementsForOrder(orderId: string) {
   const supabase = await getSupabase();
   const { uuid } = await resolveOrderId(supabase, orderId);
   // Find the site visit for this order
   const { data: sv } = await supabase.from("site_visits").select("id").eq("order_id", uuid).maybeSingle();
   if (!sv) return [];
-  const { data, error } = await supabase.from("site_visit_measurements").select("*").eq("site_visit_id", sv.id).order("created_at", { ascending: true });
+  const { data, error } = await supabase
+    .from("site_visit_measurements")
+    .select("id, name, width, width_unit, height, height_unit, depth, depth_unit, notes, ground_clearance, ground_clearance_unit")
+    .eq("site_visit_id", sv.id)
+    .order("created_at", { ascending: true });
   if (error) return [];
-  return data || [];
+  return (data || []).map(mapSiteVisitMeasurementFromDb);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

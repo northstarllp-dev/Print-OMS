@@ -100,17 +100,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
     is_active: p.is_active,
     price_per_sqft: p.price_per_sqft != null ? Number(p.price_per_sqft) : null,
     price_per_unit: p.price_per_unit != null ? Number(p.price_per_unit) : null,
-    price_per_running_ft: p.price_per_running_ft != null ? Number(p.price_per_running_ft) : null,
     images: Array.isArray(p.images) ? p.images : [],
-  }));
-
-  const mappedSiteVisitItems = (siteVisitItemsData || []).map((m: any) => ({
-    id: m.id,
-    name: m.name,
-    width: m.width ?? null,
-    height: m.height ?? null,
-    depth: m.depth ?? null,
-    notes: m.notes ?? null,
   }));
 
   return (
@@ -123,7 +113,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
       currentEmployee={null}
       products={mappedProducts}
       initialQuotation={quotationData}
-      siteVisitItems={mappedSiteVisitItems}
+      siteVisitItems={siteVisitItemsData || []}
     />
   );
 }

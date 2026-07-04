@@ -213,8 +213,8 @@ export async function updateOrder(id: string, updates: any) {
     revalidatePath(`/staff/orders/${orderIdFriendly}`);
     revalidatePath(`/staff/orders/${orderUuid}`);
     revalidatePath("/portal");
-    revalidatePath(`/portal/${orderIdFriendly}`);
-    revalidatePath(`/portal/${orderUuid}`);
+    revalidatePath(`/portal/order/${orderIdFriendly}`);
+    revalidatePath(`/portal/order/${orderUuid}`);
   }
   return data;
 }
@@ -295,11 +295,11 @@ export async function updateSiteVisitDetailsAction(orderId: string, details: any
   revalidatePath("/staff/orders");
   revalidatePath(`/staff/orders/${orderId}`);
   revalidatePath("/portal");
-  revalidatePath(`/portal/${orderId}`);
+  revalidatePath(`/portal/order/${orderId}`);
   if (orderCode) {
     revalidatePath(`/admin/orders/${orderCode}`);
     revalidatePath(`/staff/orders/${orderCode}`);
-    revalidatePath(`/portal/${orderCode}`);
+    revalidatePath(`/portal/order/${orderCode}`);
   }
 
   return { success: true };
@@ -333,8 +333,8 @@ export async function updateProductionDetailsAction(orderId: string, details: an
   revalidatePath(`/staff/orders/${orderId}`);
   revalidatePath(`/staff/orders/${orderUuid}`);
   revalidatePath("/portal");
-  revalidatePath(`/portal/${orderId}`);
-  revalidatePath(`/portal/${orderUuid}`);
+  revalidatePath(`/portal/order/${orderId}`);
+  revalidatePath(`/portal/order/${orderUuid}`);
   
   return { success: true };
 }
@@ -365,8 +365,8 @@ export async function updateInstallationDetailsAction(orderId: string, details: 
   revalidatePath(`/staff/orders/${orderId}`);
   revalidatePath(`/staff/orders/${orderUuid}`);
   revalidatePath("/portal");
-  revalidatePath(`/portal/${orderId}`);
-  revalidatePath(`/portal/${orderUuid}`);
+  revalidatePath(`/portal/order/${orderId}`);
+  revalidatePath(`/portal/order/${orderUuid}`);
   
   return { success: true };
 }
@@ -408,6 +408,11 @@ export async function requestStageAdvancementAction(orderId: string) {
 }
 
 export async function adminApproveStageAction(orderId: string) {
+  const { assertNoBlockingPayments } = await import(
+    "@/features/payments/actions/paymentActions"
+  );
+  await assertNoBlockingPayments(orderId);
+
   const supabase = await getSupabase();
   const orderUuid = await resolveOrderUuid(supabase, orderId);
   const { data: o, error: fetchError } = await supabase
@@ -477,10 +482,45 @@ export async function adminApproveStageAction(orderId: string) {
  * Called when Admin chooses a workflow path after approving Site Visit.
  * Persists the workflow_type and advances the stage to the first post-site-visit step.
  */
+/** Persist workflow path without advancing stage (used when a payment gate is created). */
+export async function setWorkflowTypeOnlyAction(
+  orderId: string,
+  workflowType: "quote_first" | "design_first"
+) {
+  const supabase = await getSupabase();
+  const orderUuid = await resolveOrderUuid(supabase, orderId);
+  const { data: o, error: fetchError } = await supabase
+    .from("orders")
+    .select("order_id")
+    .eq("id", orderUuid)
+    .single();
+  if (fetchError) throw new Error(fetchError.message);
+
+  const result = await updateOrder(orderUuid, {
+    workflow_type: workflowType,
+  });
+
+  await supabase.from("order_activity").insert({
+    order_id: o.order_id || orderId,
+    activity_type: "timeline",
+    actor_name: "System",
+    actor_role: "System",
+    content: `Workflow path set to "${workflowType === "design_first" ? "Design First" : "Quote First"}".`,
+    metadata: { action: "workflow_type_set", workflow_type: workflowType }
+  });
+
+  return result;
+}
+
 export async function setWorkflowTypeAction(
   orderId: string,
   workflowType: "quote_first" | "design_first"
 ) {
+  const { assertNoBlockingPayments } = await import(
+    "@/features/payments/actions/paymentActions"
+  );
+  await assertNoBlockingPayments(orderId);
+
   const supabase = await getSupabase();
   const orderUuid = await resolveOrderUuid(supabase, orderId);
   const { data: o, error: fetchError } = await supabase
@@ -525,6 +565,13 @@ export async function updateOrderStageAction(id: string, stage: string) {
   if (fetchError) throw new Error(fetchError.message);
 
   const isChanged = stage !== o.stage;
+  if (isChanged) {
+    const { assertNoBlockingPayments } = await import(
+      "@/features/payments/actions/paymentActions"
+    );
+    await assertNoBlockingPayments(orderUuid);
+  }
+
   const result = await updateOrder(orderUuid, { stage });
 
   if (isChanged) {

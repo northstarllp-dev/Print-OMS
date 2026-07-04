@@ -7,15 +7,19 @@ import {
   AlertOctagon, Check, Image as ImageIcon, Sparkles, Loader2, Save, Timer
 } from "lucide-react";
 import { updateProductionDetailsAction } from "@/features/orders/actions/orderActions";
+import { formatSiteMeasurementLabel } from "@/features/orders/actions/siteVisitMapper";
+import { getLineMeasurement, normalizePricingType } from "@/features/quotations/utils/lineAmount";
 
 interface LocationMeasurement {
   id: string;
   name: string;
-  width: string;
-  height: string;
-  depth: string;
-  ground_clearance?: string;
-  notes?: string;
+  width?: number | null;
+  widthUnit?: string | null;
+  height?: number | null;
+  heightUnit?: string | null;
+  depth?: number | null;
+  depthUnit?: string | null;
+  notes?: string | null;
   photos?: string[];
 }
 
@@ -275,9 +279,13 @@ export function ProductionOrderDetailClient({
                         <tr key={loc.id || idx}>
                           <td className="py-3 px-4 font-bold text-slate-800">{loc.name}</td>
                           <td className="py-3 px-4 font-medium text-slate-600">
-                            {loc.width && loc.height ? `${loc.width}ft × ${loc.height}ft` : "—"}
+                            {loc.width != null || loc.height != null
+                              ? `${loc.width ?? "—"} ${loc.widthUnit || "ft"} × ${loc.height ?? "—"} ${loc.heightUnit || "ft"}`
+                              : "—"}
                           </td>
-                          <td className="py-3 px-4 font-medium text-slate-600">{loc.depth ? `${loc.depth}in` : "—"}</td>
+                          <td className="py-3 px-4 font-medium text-slate-600">
+                            {loc.depth != null ? `${loc.depth} ${loc.depthUnit || "ft"}` : "—"}
+                          </td>
                           <td className="py-3 px-4 font-medium text-slate-600">{loc.notes || "—"}</td>
                         </tr>
                       ))}
@@ -308,10 +316,18 @@ export function ProductionOrderDetailClient({
                 <div className="overflow-x-auto space-y-6">
                   {signageOptions.map((section: any, sIdx: number) => {
                     const svItem = siteVisitItems.find(sv => sv.id === section.siteVisitItemId);
+                    const measurementLabel = formatSiteMeasurementLabel(svItem);
                     return (
                       <div key={sIdx} className="border border-slate-200 rounded-xl overflow-hidden">
-                        <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 font-bold text-slate-800">
-                          {svItem ? svItem.name : section.itemLabel}
+                        <div className="bg-slate-50 px-4 py-3 border-b border-slate-200">
+                          <div className="font-bold text-slate-800">
+                            {svItem ? svItem.name : section.itemLabel}
+                          </div>
+                          {measurementLabel && (
+                            <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">
+                              {measurementLabel}
+                            </div>
+                          )}
                         </div>
                         <table className="w-full text-left text-xs border-collapse">
                           <thead>
@@ -322,12 +338,13 @@ export function ProductionOrderDetailClient({
                           </thead>
                           <tbody className="divide-y divide-slate-100 bg-white">
                             {(section.lines || []).map((item: any, idx: number) => {
-                              const qty = item.pricingType === "per_sqft" ? (item.quantity * (item.totalSqFt || 1)) : item.quantity;
+                              const qty = getLineMeasurement(item);
+                              const pricingType = normalizePricingType(item.pricingType);
                               return (
                                 <tr key={item.id || idx}>
                                   <td className="py-3 px-4 font-bold text-slate-800">{item.description}</td>
                                   <td className="py-3 px-4 font-semibold text-slate-700">
-                                    {qty} {item.pricingType === "per_sqft" ? "Sq Ft" : item.unit || "Nos"}
+                                    {qty} {pricingType === "per_sqft" ? "Sq Ft" : item.unit || "Nos"}
                                   </td>
                                 </tr>
                               );

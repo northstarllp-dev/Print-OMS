@@ -1,5 +1,67 @@
 import { SiteVisitDetails, SignLocation } from "@/types";
 
+/** Map a site_visit_measurements row (snake_case or camelCase) to the UI shape. */
+export function mapSiteVisitMeasurementFromDb(m: any): SignLocation {
+  const num = (v: unknown): number | undefined => {
+    if (v == null || v === "") return undefined;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : undefined;
+  };
+  const unit = (...candidates: unknown[]) => {
+    for (const c of candidates) {
+      if (typeof c === "string" && c.trim()) return c.trim();
+    }
+    return "ft";
+  };
+
+  return {
+    id: m.id,
+    name: m.name,
+    width: num(m.width),
+    widthUnit: unit(m.width_unit, m.widthUnit),
+    height: num(m.height),
+    heightUnit: unit(m.height_unit, m.heightUnit),
+    depth: num(m.depth),
+    depthUnit: unit(m.depth_unit, m.depthUnit),
+    groundClearance: num(m.ground_clearance ?? m.groundClearance),
+    groundClearanceUnit: unit(m.ground_clearance_unit, m.groundClearanceUnit),
+    notes: m.notes ?? undefined,
+    photos: m.photos || [],
+    powerAvailable: m.power_available ?? m.powerAvailable,
+    distanceToPowerSource: num(m.distance_to_power_source ?? m.distanceToPowerSource),
+    distanceToPowerSourceUnit: m.distance_to_power_source_unit ?? m.distanceToPowerSourceUnit,
+    electricalNotes: m.electrical_notes ?? m.electricalNotes,
+    wallType: m.wall_type ?? m.wallType,
+    mountingMethod: m.mounting_method ?? m.mountingMethod,
+    surfaceCondition: m.surface_condition ?? m.surfaceCondition,
+    obstacles: m.obstacles || [],
+    structuralNotes: m.structural_notes ?? m.structuralNotes,
+  };
+}
+
+/** Label shown under signage items on quotation pages. */
+export function formatSiteMeasurementLabel(item: {
+  width?: number | null;
+  widthUnit?: string | null;
+  height?: number | null;
+  heightUnit?: string | null;
+  depth?: number | null;
+  depthUnit?: string | null;
+  width_unit?: string | null;
+  height_unit?: string | null;
+  depth_unit?: string | null;
+} | null | undefined): string | null {
+  if (!item || (item.width == null && item.height == null)) return null;
+  const wUnit = (item.widthUnit || item.width_unit || "ft").toUpperCase();
+  const hUnit = (item.heightUnit || item.height_unit || "ft").toUpperCase();
+  const dUnit = (item.depthUnit || item.depth_unit || "ft").toUpperCase();
+  let label = `Site Measurement: ${item.width ?? "—"} ${wUnit} × ${item.height ?? "—"} ${hUnit}`;
+  if (item.depth != null && item.depth !== 0) {
+    label += ` - Depth: ${item.depth} ${dUnit}`;
+  }
+  return label;
+}
+
 export function mapSiteVisitFromDb(sv: any): SiteVisitDetails | null {
   if (!sv) return null;
 
@@ -36,29 +98,7 @@ export function mapSiteVisitFromDb(sv: any): SiteVisitDetails | null {
     fabricationRequired: sv.fabrication_required ?? false,
     civilWorkRequired: sv.civil_work_required ?? false,
 
-    locations: (sv.site_visit_measurements || []).map((m: any) => ({
-      id: m.id,
-      name: m.name,
-      width: m.width,
-      widthUnit: m.width_unit || "ft",
-      height: m.height,
-      heightUnit: m.height_unit || "ft",
-      depth: m.depth,
-      depthUnit: m.depth_unit || "ft",
-      groundClearance: m.ground_clearance,
-      groundClearanceUnit: m.ground_clearance_unit || "ft",
-      notes: m.notes,
-      photos: m.photos || [],
-      powerAvailable: m.power_available,
-      distanceToPowerSource: m.distance_to_power_source,
-      distanceToPowerSourceUnit: m.distance_to_power_source_unit,
-      electricalNotes: m.electrical_notes,
-      wallType: m.wall_type,
-      mountingMethod: m.mounting_method,
-      surfaceCondition: m.surface_condition,
-      obstacles: m.obstacles || [],
-      structuralNotes: m.structural_notes
-    }))
+    locations: (sv.site_visit_measurements || []).map((m: any) => mapSiteVisitMeasurementFromDb(m))
   };
 }
 

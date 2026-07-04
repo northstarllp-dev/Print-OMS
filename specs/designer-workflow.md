@@ -14,7 +14,7 @@
 4. **Customer Feedback**: Customer views the design and can place pin-point comments directly on the image. They can either request changes or approve the design.
 5. **Iteration**: Designer uploads new versions based on customer feedback.
 6. **Approval**: Customer approves the design proof.
-7. **Production Handoff**: Designer or Admin uploads final production-ready vector files (e.g., CDR, DXF) linked to the approved item.
+7. **Production Handoff**: Designer or Admin uploads final production-ready files (e.g., CDR, DXF, PNG, JPG) linked to the approved item.
 8. **Next Stage**: Order transitions to the Production stage.
 
 ## Workflow States
@@ -33,7 +33,7 @@
 * Customers can upload Inspiration & Logos using specific formats: `.png, .pdf, .jpg, .jpeg, .cdr, .ai, .psd, .svg`.
 * Designers can upload multiple iterations (versions) for each item.
 * Comments are tied to specific coordinates (X, Y) on a specific design version.
-* Final production files must be in valid fabrication formats: `.cdr, .dxf, .plt, .pdf, .svg`.
+* Final production files must be in valid fabrication/image formats: `.cdr, .dxf, .plt, .pdf, .svg, .png, .jpg`.
 * A design cannot be approved if it is still in Draft status.
 
 ## User Roles
@@ -72,9 +72,20 @@ Permissions:
 
 ### Tables
 
-#### orders (JSONB designDetails column)
+#### designs (dedicated table, one row per order)
 
-The design information is stored as a JSONB object within the `orders` table under the `designDetails` column.
+Design data was extracted from the legacy `orders.design_details` JSONB column into `public.designs`. Frontend reads `order.design` (`DesignRecord`).
+
+| Column | Type | Notes |
+| ------ | ---- | ----- |
+| `id` | uuid PK | `gen_random_uuid()` |
+| `order_id` | uuid FK → `orders.id` | Unique, ON DELETE CASCADE |
+| `resources` | jsonb | Inspiration / logo uploads |
+| `items` | jsonb | Multi-item proofs, versions, comments, production files |
+| `payment_verified` | boolean | Legacy checklist flag; payment **gates** use `payments` table |
+| `created_at` / `updated_at` | timestamptz | `updated_at` via trigger |
+
+`items` / `resources` JSONB shape (unchanged from legacy):
 
 ```json
 {
@@ -126,7 +137,9 @@ The design information is stored as a JSONB object within the `orders` table und
 }
 ```
 
-*Note: Legacy support exists for top-level `versions`, `currentVersion`, and `productionFiles` for orders without multi-item support.*
+*Note: `mapDesignFromDb` still accepts legacy top-level `versions` / `currentVersion` and exposes them as a single "General Design" item. New orders auto-insert an empty `designs` row on create.*
+
+Server actions: `src/features/designs/actions/designActions.ts`, mapper: `designMapper.ts`.
 
 #### storage buckets
 
@@ -136,22 +149,24 @@ The design information is stored as a JSONB object within the `orders` table und
 
 ### Update Design Details
 
-Method: Server Action (Supabase RPC or direct update)
-Route: `updateDesignDetails(orderId, details)`
+Method: Server Action
+Route: `updateDesignDetailsAction(orderId, details)` in `src/features/designs/actions/designActions.ts`
 
 Request:
 ```json
 {
   "orderId": "uuid",
   "details": {
-    "items": "Partial<DesignItem>[]"
+    "items": "Partial<DesignItem>[]",
+    "resources": "Partial<DesignResource>[]"
   }
 }
 ```
 
 Validation Rules:
 * User must be authenticated.
-* Payload must conform to the `DesignDetails` interface.
+* Payload maps to `Partial<DesignRecord>` (`resources`, `items`, `payment_verified`).
+* Writes to `designs` via UPSERT on `order_id`.
 
 ### Upload File
 
@@ -216,7 +231,7 @@ Expected behavior:
 
 * Customers can only view and interact with their own orders via secure portal links.
 * Only Staff (Admin/Designer) can transition status from "Draft" and upload final production files.
-* Row Level Security (RLS) on `orders` and storage buckets ensure data isolation.
+* Row Level Security (RLS) on `designs` (authenticated full access) and storage buckets ensure data isolation.
 
 ## Edge Cases
 
@@ -236,3 +251,7 @@ Expected behavior:
 Version: 1.0
 Date: 2026-07-03
 Summary: Initial specification for the Design Workflow.
+
+Version: 1.1
+Date: 2026-07-04
+Summary: Design data moved from `orders.design_details` to dedicated `designs` table; frontend uses `order.design` / `designActions.ts`.

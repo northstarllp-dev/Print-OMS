@@ -132,9 +132,9 @@ export interface QuoteItem {
   description: string;
   quantity: number;
   pricingType?: "per_unit" | "per_sqft";
-  unit?: string;               // "nos" | "sq ft"
+  unit?: string;               // "nos" | "sqft"
   unitPrice: number;           // base rate from catalogue (editable)
-  totalSqFt?: number;          // only for per_sqft items
+  totalSqFt?: number;          // kept in sync with quantity (Qty/Measurement)
   gstRate: number;             // 0 | 5 | 12 | 18 | 28
 }
 
@@ -246,7 +246,7 @@ export interface Order {
   design?: DesignRecord;
   productionDetails?: ProductionDetails;
   installationDetails?: InstallationDetails;
-  stageStatus?: "Normal" | "Pending Admin Approval: Site Visit Completed" | "Pending Admin Approval: Quote Stage" | "Pending Admin Approval: Quote Approval" | "Pending Admin Approval: Design Approval" | "Pending Admin Approval: Production Ready" | "Pending Admin Approval: Job Done";
+  stageStatus?: "Normal" | "Pending Payment Verification" | "Pending Admin Approval: Site Visit Completed" | "Pending Admin Approval: Quote Stage" | "Pending Admin Approval: Quote Approval" | "Pending Admin Approval: Design Approval" | "Pending Admin Approval: Production Ready" | "Pending Admin Approval: Job Done" | string;
   stageAdminNotes?: string;
   orderCode?: string;
   health?: string;
@@ -254,6 +254,41 @@ export interface Order {
   orderId?: string;
   /** Determines whether Quote or Design comes first after Site Visit */
   workflow_type?: "quote_first" | "design_first";
+}
+
+/** Payment milestone statuses (business gates, not pipeline stages). */
+export type PaymentStatus =
+  | "pending"
+  | "requested"
+  | "paid"
+  | "verified"
+  | "waived";
+
+export type PaymentAmountType = "fixed" | "percentage";
+
+/** Stage at which the payment gate was created / applies. */
+export type PaymentTriggerStage = string;
+
+export interface Payment {
+  id: string;
+  order_id: string;
+  payment_name: string;
+  trigger_stage: PaymentTriggerStage;
+  amount_type: PaymentAmountType;
+  amount?: number | null;
+  percentage?: number | null;
+  calculated_amount?: number | null;
+  required_for_next_stage: boolean;
+  status: PaymentStatus;
+  payment_method?: string | null;
+  payment_reference?: string | null;
+  notes?: string | null;
+  requested_at?: string | null;
+  paid_at?: string | null;
+  verified_at?: string | null;
+  verified_by?: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export type EnquirySource = "Meta Ads" | "Referrals" | "Walk-ins" | "Google Enquiry (Ph Call)" | "Website";

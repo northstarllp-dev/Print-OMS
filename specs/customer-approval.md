@@ -17,10 +17,13 @@
    * Order reaches `Design In Progress` and design proofs are sent.
    * Customer reviews proofs, adds comments if necessary.
    * Customer clicks "Approve Design" for all items.
-   * System transitions order to the next phase (Production).
-3. **Payment Verification**:
-   * Following approval (usually Quotation), the customer may be required to pay an advance.
-   * Admin verifies the payment manually and checks the "Payment Verified" flag.
+   * System transitions order to the next phase (Production) when all items are approved.
+3. **Payment milestones** (business gates — not a pipeline stage):
+   * Admin may create one or more payment requirements when advancing a stage (fixed or percentage of quotation total).
+   * Required payments set `orders.stage_status` to `"Pending Payment Verification"` while keeping `orders.stage` unchanged.
+   * Customer submits payment reference on the portal **Payments** tab (`status = paid`).
+   * Admin verifies or waives on the staff **Payments** tab; stage unlocks when all required milestones are `verified` or `waived`.
+   * See `specs/payments.md` for full detail.
 
 ## Workflow States
 
@@ -28,7 +31,7 @@
 | ----- | ----------- | ------------------- |
 | Pending Quote Approval | Quote is in `Sent` status awaiting customer action | Quote Approved, Quote Rejected |
 | Pending Design Approval | Design is in `Sent to Customer` status | Design Approved, Changes Requested |
-| Payment Pending | Quote/Design approved but advance payment not cleared | Payment Verified |
+| Pending Payment Verification | Required payment milestone(s) outstanding (`orders.stage_status`) | Normal (after verify/waive) |
 
 ## Business Rules
 
@@ -36,7 +39,8 @@
 * If `workflow_type` is `quote_first`, Quotation approval moves the order to Design.
 * If `workflow_type` is `design_first`, Design approval moves the order to Quotation.
 * Customer can reject a quote or design by providing mandatory reason/notes.
-* Payment verification is a manual toggle by Admin/Finance to acknowledge receipt of bank transfer / UPI.
+* Payment gates use the `payments` table. Legacy flags (`quotations.advance_paid`, `designs.payment_verified`) remain for checklist compatibility but do not replace milestones.
+* Stage transitions are blocked while any payment has `required_for_next_stage = true` and status is not `verified` or `waived`.
 
 ## User Roles
 
@@ -46,19 +50,21 @@ Permissions:
 * Review `Sent` Quotations and `Sent to Customer` Designs.
 * Approve or Reject.
 * Submit rejection notes (which become timeline events).
+* View payment milestones; submit payment reference and mark as paid.
 
 ### Admin
 
 Permissions:
 * Override customer approval (force approval if customer confirmed via email/WhatsApp).
-* Toggle the "Payment Verified" flag.
-* Transition order to Production upon full approval.
+* Create, verify, or waive payment milestones.
+* Transition order stages when payment gates are clear.
 
 ### Staff
 
 Permissions:
-* View approval status.
-* Cannot force approval unless granted Admin rights.
+* View approval status and payments.
+* Record verified payments via quotation/design checklists (`recordVerifiedPayment`).
+* Cannot waive/verify unless granted Admin rights (server actions require authenticated staff).
 
 ## Database Design
 
@@ -67,77 +73,91 @@ Permissions:
 #### quotations
 * `status`: Transitions from `Sent` to `Approved` or `Rejected`.
 * `rejection_reason`: Populated if `Rejected`.
+* `advance_paid` / `advance_percent` / `advance_amount`: Legacy checklist fields.
+
+#### designs
+* One row per order (`order_id` unique).
+* `items[].versions[].status`: Transitions to `Approved` or `Changes Requested`.
+* `payment_verified`: Legacy boolean; gates use `payments`.
+
+#### payments
+* Flexible milestones: fixed/percentage, multiple per order, statuses `pending` | `requested` | `paid` | `verified` | `waived`.
+* See `specs/payments.md`.
 
 #### orders
-* `stage`: Transitions based on the `workflow_type`.
-* `designDetails.paymentVerified`: Boolean flag inside the JSONB.
-* `designDetails.items[].versions[].status`: Transitions to `Approved` or `Changes Requested`.
+* `stage`: Transitions based on `workflow_type`.
+* `stage_status`: Includes `"Pending Payment Verification"` for payment locks.
 
 #### order_activity
-Logs all approval/rejection events:
-* `"Customer approved the quotation."`
-* `"Customer rejected the quotation. Reason: [Notes]"`
-* `"Customer approved the design proof."`
+Logs approval/rejection and payment events.
 
 ## API Endpoints
 
 ### Handle Quotation Response
-Method: Server Action (e.g., `updateQuotationStatus(quotationId, "Approved")`)
-Logic: Updates quotation row, logs activity, automatically calls `updateOrderStageAction` to move order forward.
+Method: Portal client / server updates on `quotations`
+Logic: Updates quotation row, logs activity, advances order stage when appropriate.
 
 ### Handle Design Response
-Method: Server Action (e.g., `updateDesignItemStatus(orderId, itemId, versionId, "Approved")`)
-Logic: Modifies JSONB array, checks if *all* items are approved. If yes, logs activity and calls `updateOrderStageAction`.
+Method: Server Action (`updateDesignDetailsAction`, `approveAllDesignItemsAction`)
+Logic: Updates `designs.items` JSONB; when all items approved, advances stage (subject to payment gates).
+
+### Payments
+Method: `src/features/payments/actions/paymentActions.ts`
+See `specs/payments.md`.
 
 ## UI Components
 
-### Customer Portal (`app/portal/page.tsx`)
-Purpose: Provides distinct tabs (Quotation, Design) that unlock linearly based on the order stage. Action buttons at the bottom of the active tab.
+### Customer Portal
+* Quotation / Design tabs for approval.
+* **Payments** tab (`PaymentsTab.tsx`): amount, status, instructions, reference submit, Pay Online placeholder.
 
-### Staff Dashboard (`QuotationModule.tsx`, `DesignModule.tsx`)
-Purpose: Displays the current approval status. Contains an Admin-only "Mark Payment as Verified" checkbox.
+### Staff Dashboard
+* `QuotationModule`, `DesignModule` for work product.
+* **Payments** tab (`PaymentsModule.tsx`) and **PaymentRequiredModal** on stage advance.
 
 ## File Structure
 
-* `src/app/portal/page.tsx`
-* `src/app/portal/components/QuotationTab.tsx`
-* `src/app/portal/components/DesignTab.tsx`
+* `src/app/portal/page.tsx`, `PortalClient.tsx`
+* `src/app/portal/components/DesignTab.tsx`, `PaymentsTab.tsx`
+* `src/features/designs/actions/designActions.ts`
+* `src/features/payments/actions/paymentActions.ts`
 * `src/features/quotations/actions/quotationActions.ts`
 
 ## Data Flow
 
 Customer clicks Approve in Portal
-→ Server Action receives API call
-→ Database updates (`quotations` or `orders.designDetails`)
+→ Database updates (`quotations` or `designs`)
 → `order_activity` inserted
-→ Next.js `revalidatePath` refreshes the portal and staff dashboards in real-time.
+→ Stage may advance (blocked if payment gates outstanding)
+→ Next.js `revalidatePath` refreshes portal and staff dashboards
 
 ## Error Handling
 
 * Stale state: If a customer tries to approve an already approved document, the server action safely ignores or returns success.
 * Missing notes: Rejection buttons are disabled until text is typed into the notes box.
-
-## Notifications
-
-* The system automatically generates a timeline event in `order_activity`.
-* A banner appears on the staff dashboard indicating "Action Required: Customer Rejected Quote" or similar.
+* Payment gate: Stage transitions throw `"Payment verification required before proceeding."`
 
 ## Security Rules
 
 * Customer portal routes are protected by a unique token or login session tied to the `customer_id`.
-* Payment verification toggle is strictly disabled for non-Admin users.
+* Portal may read payments and update to `paid` only; create/verify/waive require authenticated staff.
 
 ## Edge Cases
 
 * Partial Design Approval: An order might have 3 design items. The customer can approve Item 1 and 2, but reject Item 3. The order stage does NOT move to Production until Item 3 is also approved.
+* Multiple payment milestones: All required milestones must be verified or waived before progression.
 
 ## Future Enhancements
 
-* Integrated Payment Gateway: Allow the customer to pay via Stripe/Razorpay directly on the Approval screen, automating the `Payment Verified` flag.
-* PDF Signatures: Implement digital e-signatures (DocuSign style) on the Quotation PDF.
+* Integrated Payment Gateway: Razorpay/PhonePe/Stripe via `payment_method` + `payment_reference` (no schema change).
+* PDF Signatures: Implement digital e-signatures on the Quotation PDF.
 
 ## Change Log
 
 Version: 1.0
 Date: 2026-07-03
 Summary: Initial specification for the Customer Approval Workflow.
+
+Version: 1.1
+Date: 2026-07-04
+Summary: Payment milestones via `payments` table and `Pending Payment Verification` lock; designs on `designs` table; portal Payments tab.

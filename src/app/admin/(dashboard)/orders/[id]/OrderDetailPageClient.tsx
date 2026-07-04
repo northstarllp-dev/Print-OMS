@@ -14,7 +14,6 @@ interface Product {
   is_active: boolean;
   price_per_sqft?: number | null;
   price_per_unit?: number | null;
-  price_per_running_ft?: number | null;
   images?: string[];
 }
 

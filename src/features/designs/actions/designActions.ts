@@ -54,7 +54,7 @@ function revalidateDesignPaths(orderId: string) {
   revalidatePath("/installation/orders");
   revalidatePath(`/installation/orders/${orderId}`);
   revalidatePath("/portal");
-  revalidatePath(`/portal/${orderId}`);
+  revalidatePath(`/portal/order/${orderId}`);
 }
 
 async function updateOrderStage(supabase: SupabaseClient, orderUuid: string, stage: string) {
@@ -67,6 +67,11 @@ async function updateOrderStage(supabase: SupabaseClient, orderUuid: string, sta
 
   const isChanged = stage !== o.stage;
   if (isChanged) {
+    const { assertNoBlockingPayments } = await import(
+      "@/features/payments/actions/paymentActions"
+    );
+    await assertNoBlockingPayments(orderUuid);
+
     const { error: updateError } = await supabase
       .from("orders")
       .update({ stage })
@@ -81,6 +86,7 @@ async function updateOrderStage(supabase: SupabaseClient, orderUuid: string, sta
       content: `Order stage changed from "${o.stage}" to "${stage}".`,
       metadata: { action: "stage_changed", old: o.stage, new: stage }
     });
+
   }
 }
 
@@ -227,6 +233,7 @@ export async function sendDesignToCustomerAction(orderId: string): Promise<Desig
   return updateDesignDetailsAction(orderId, { items });
 }
 
+/** @deprecated Payment gates use the `payments` table and Approve & Advance flow. */
 export async function markDesignPaymentVerifiedAction(orderId: string): Promise<void> {
   const supabase = await getSupabase();
   const orderUuid = await resolveOrderUuid(supabase, orderId);
@@ -235,8 +242,6 @@ export async function markDesignPaymentVerifiedAction(orderId: string): Promise<
     .update({ payment_verified: true })
     .eq("order_id", orderUuid);
   if (error) throw new Error(error.message);
-
-  await updateOrderStage(supabase, orderUuid, "Production");
   revalidateDesignPaths(orderId);
 }
 

@@ -6,7 +6,7 @@ import {
 } from "@/utils/portal-tokens";
 import { checkRateLimit } from "@/utils/rate-limiter";
 import { Info, Clock, CheckCircle, Check, Loader2, PlayCircle, MapPin, Search } from "lucide-react";
-import { mapSiteVisitFromDb } from "@/features/orders/actions/siteVisitMapper";
+import { mapSiteVisitFromDb, mapSiteVisitMeasurementFromDb } from "@/features/orders/actions/siteVisitMapper";
 import { mapDesignFromDb } from "@/features/designs/actions/designMapper";
 import { OrderDetailClient } from "./OrderDetailClient";
 import React from "react";
@@ -141,19 +141,23 @@ export default async function OrderDetailPage({
     advancePaid: Boolean(quotationData.advance_paid),
   } : null;
 
-  const { data: siteVisitItemsData } = await supabase
-    .from("quotation_site_visit_items")
-    .select("*")
-    .eq("order_id", orderData.id);
+  // Find the site visit for this order
+  const { data: sv } = await supabase
+    .from("site_visits")
+    .select("id")
+    .eq("order_id", orderData.id)
+    .maybeSingle();
+
+  // Fetch measurements from site_visit_measurements (include unit columns)
+  const { data: siteVisitItemsData } = sv
+    ? await supabase
+        .from("site_visit_measurements")
+        .select("id, name, width, width_unit, height, height_unit, depth, depth_unit, notes, ground_clearance, ground_clearance_unit")
+        .eq("site_visit_id", sv.id)
+        .order("created_at", { ascending: true })
+    : { data: null };
     
-  const siteVisitItems = (siteVisitItemsData || []).map((m: any) => ({
-    id: m.id,
-    name: m.item_name,
-    width: m.width,
-    height: m.height,
-    depth: m.depth,
-    notes: m.notes,
-  }));
+  const siteVisitItems = (siteVisitItemsData || []).map(mapSiteVisitMeasurementFromDb);
 
   // Map to camelCase
   const customer = {

@@ -11,7 +11,7 @@ import {
   createProductCategory, deleteProductCategory, type Product, type CreateProductPayload, type ProductCategory,
 } from "../actions/productActions";
 
-const PRICING_TYPES = ["Per Sq.Ft", "Per Unit", "Per Running Ft", "Multiple"];
+const PRICING_TYPES = ["Per Sq.Ft", "Per Unit", "Multiple"];
 
 function generateProductId(existing: Product[]): string {
   const maxNum = existing.reduce((max, p) => {
@@ -148,7 +148,6 @@ function isFieldDisabled(key: string, pricingType?: string | null): boolean {
   if (!pricingType || pricingType === "Multiple") return false;
   if (pricingType === "Per Sq.Ft" && key === "price_per_sqft") return false;
   if (pricingType === "Per Unit" && key === "price_per_unit") return false;
-  if (pricingType === "Per Running Ft" && key === "price_per_running_ft") return false;
   return true;
 }
 
@@ -162,13 +161,12 @@ function PricingSection({
   const pricingFields = [
     { key: "price_per_sqft", label: "Price / Sq.Ft", placeholder: "e.g. 120" },
     { key: "price_per_unit", label: "Price / Unit", placeholder: "e.g. 500" },
-    { key: "price_per_running_ft", label: "Price / Running Ft", placeholder: "e.g. 80" },
   ] as const;
 
   return (
     <div>
       <label style={labelStyle}>Pricing (fill whichever apply)</label>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", marginBottom: "12px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "12px" }}>
         {pricingFields.map(({ key, label, placeholder }) => {
           const disabled = isFieldDisabled(key, form.pricing_type);
           return (
@@ -230,11 +228,11 @@ function ProductFormModal({
       pricing_type: product?.pricing_type ? (
         product.pricing_type === "per_unit" ? "Per Unit" :
         product.pricing_type === "per_sqft" ? "Per Sq.Ft" :
+        product.pricing_type === "per_running_ft" ? "Per Unit" :
         product.pricing_type
       ) : "",
       price_per_sqft: product?.price_per_sqft ?? null,
       price_per_unit: product?.price_per_unit ?? null,
-      price_per_running_ft: product?.price_per_running_ft ?? null,
       images: product?.images ?? [],
       is_active: product?.is_active ?? true,
       final_prdt,
@@ -253,11 +251,9 @@ function ProductFormModal({
           payloadToSave.pricing_type = null;
           payloadToSave.price_per_sqft = null;
           payloadToSave.price_per_unit = null;
-          payloadToSave.price_per_running_ft = null;
         } else {
           if (payloadToSave.pricing_type === "Per Unit") payloadToSave.pricing_type = "per_unit";
           else if (payloadToSave.pricing_type === "Per Sq.Ft") payloadToSave.pricing_type = "per_sqft";
-          else if (payloadToSave.pricing_type === "Per Running Ft") payloadToSave.pricing_type = "per_running_ft";
         }
 
         if (isEdit) {
@@ -363,17 +359,11 @@ function ProductFormModal({
                       const next = { ...f, pricing_type: nextPricingType };
                       if (nextPricingType === "Per Sq.Ft") {
                         next.price_per_unit = null;
-                        next.price_per_running_ft = null;
                       } else if (nextPricingType === "Per Unit") {
                         next.price_per_sqft = null;
-                        next.price_per_running_ft = null;
-                      } else if (nextPricingType === "Per Running Ft") {
-                        next.price_per_sqft = null;
-                        next.price_per_unit = null;
                       } else if (!nextPricingType) {
                         next.price_per_sqft = null;
                         next.price_per_unit = null;
-                        next.price_per_running_ft = null;
                       }
                       return next;
                     });
@@ -472,7 +462,7 @@ function ProductCard({
     return () => clearInterval(interval);
   }, [images.length]);
 
-  const hasPricing = product.price_per_sqft || product.price_per_unit || product.price_per_running_ft;
+  const hasPricing = product.price_per_sqft || product.price_per_unit;
 
   return (
     <div style={{
@@ -555,7 +545,11 @@ function ProductCard({
 
         {product.pricing_type && (
           <span style={{ display: "inline-block", padding: "2px 8px", background: "#eff6ff", color: "#1e40af", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "1px solid #bfdbfe" }}>
-            {product.pricing_type === "per_unit" ? "Per Unit" : product.pricing_type === "per_sqft" ? "Per Sq.Ft" : product.pricing_type}
+            {product.pricing_type === "per_unit" || product.pricing_type === "per_running_ft"
+              ? "Per Unit"
+              : product.pricing_type === "per_sqft"
+                ? "Per Sq.Ft"
+                : product.pricing_type}
           </span>
         )}
 
@@ -564,7 +558,6 @@ function ProductCard({
           <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 8px", marginTop: 2 }}>
             {product.price_per_sqft && <span style={{ fontSize: 11, fontWeight: 700, color: "#0f172a" }}>₹{Number(product.price_per_sqft).toLocaleString("en-IN")}<span style={{ fontWeight: 500, color: "#64748b", fontSize: 9 }}>/sqft</span></span>}
             {product.price_per_unit && <span style={{ fontSize: 11, fontWeight: 700, color: "#0f172a" }}>₹{Number(product.price_per_unit).toLocaleString("en-IN")}<span style={{ fontWeight: 500, color: "#64748b", fontSize: 9 }}>/unit</span></span>}
-            {product.price_per_running_ft && <span style={{ fontSize: 11, fontWeight: 700, color: "#0f172a" }}>₹{Number(product.price_per_running_ft).toLocaleString("en-IN")}<span style={{ fontWeight: 500, color: "#64748b", fontSize: 9 }}>/rft</span></span>}
           </div>
         )}
 

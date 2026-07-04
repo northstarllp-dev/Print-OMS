@@ -20,13 +20,15 @@ import {
   MessageSquare, Send, ZoomIn, ZoomOut, Check, X, Info,
   AlertCircle, Calendar,
   ChevronLeft, ChevronRight, Phone,
-  Package, Wrench, Palette, BarChart3,
+  Package, Wrench, Palette, BarChart3, CreditCard,
   RefreshCw, AlertTriangle, Loader2, Maximize2, Minimize2, CheckCheck,
   Download
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { scheduleSiteVisitAction } from "@/features/orders/actions/orderActions";
-import { mapSiteVisitFromDb } from "@/features/orders/actions/siteVisitMapper";
+import { mapSiteVisitFromDb, formatSiteMeasurementLabel } from "@/features/orders/actions/siteVisitMapper";
+import { calcLineAmount, getLineMeasurement, normalizePricingType } from "@/features/quotations/utils/lineAmount";
+import { PaymentsTab } from "./components/PaymentsTab";
 import { provideInstallationLocationAction, scheduleInstallationAction } from "@/features/installations/actions/installationActions";
 import { InstallationScheduleModule } from "@/features/installations/components/InstallationScheduleModule";
 import { DesignTab } from "./components/DesignTab";
@@ -76,7 +78,17 @@ interface Order {
   workflow_type?: string;
   // New quotation workflow fields
 
-  siteVisitItems?: Array<{ id: string; name: string; width?: number | null; height?: number | null; depth?: number | null; notes?: string | null }>;
+  siteVisitItems?: Array<{
+    id: string;
+    name: string;
+    width?: number | null;
+    widthUnit?: string | null;
+    height?: number | null;
+    heightUnit?: string | null;
+    depth?: number | null;
+    depthUnit?: string | null;
+    notes?: string | null;
+  }>;
   materialPreferences?: any[];
 }
 
@@ -84,7 +96,6 @@ interface PortalClientProps {
   customer: any;
   orders: any[];
   quotations?: any[];
-  siteVisitItems?: any[];
   initialToken: string;
   initialActiveOrderId: string | null;
   token: string;
@@ -108,8 +119,12 @@ function getStepIndex(stage: string, workflowType: string = "quote_first"): numb
   return 0;
 }
 
-export function PortalClient({ customer, orders: initialOrders, quotations = [], siteVisitItems = [], initialActiveOrderId, token }: PortalClientProps) {
+export function PortalClient({ customer, orders: initialOrders, quotations = [], initialActiveOrderId, token }: PortalClientProps) {
   const [orders, setOrders] = useState<Order[]>(initialOrders);
+
+  useEffect(() => {
+    setOrders(initialOrders);
+  }, [initialOrders]);
 
   const initialOrder = initialOrders.find(
     o => o.id === initialActiveOrderId || o.orderId === initialActiveOrderId || o.orderCode === initialActiveOrderId
@@ -131,6 +146,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
         { key: "quotation", label: "Quotations", icon: BarChart3 },
         { key: "production", label: "Production", icon: Package },
         { key: "installation", label: "Installation", icon: Wrench },
+        { key: "payments", label: "Payments", icon: CreditCard },
       ]
     : [
         { key: "enquiry", label: "Enquiries", icon: FileText },
@@ -139,6 +155,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
         { key: "design", label: "Design", icon: Palette },
         { key: "production", label: "Production", icon: Package },
         { key: "installation", label: "Installation", icon: Wrench },
+        { key: "payments", label: "Payments", icon: CreditCard },
       ];
 
   // Step 4: Establish session cookie on first load (avoids keeping token in URL)
@@ -640,21 +657,24 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
             {/* Progress fill */}
             <div
               className="absolute top-[18px] left-0 h-[2px] bg-emerald-500 z-0 portal-stepper-line"
-              style={{ width: `${(currentStep / (STEPS.length - 1)) * 100}%` }}
+              style={{ width: `${(currentStep / Math.max(STEPS.filter(s => s.key !== "payments").length - 1, 1)) * 100}%` }}
             />
 
             {STEPS.map((step, idx) => {
               const Icon = step.icon;
-              const isCompleted = idx < currentStep;
-              const isActive = idx === currentStep;
-              const isLocked = idx > currentStep;
+              const isPaymentsTab = step.key === "payments";
+              const isCompleted = !isPaymentsTab && idx < currentStep;
+              const isActive = isPaymentsTab
+                ? viewedStep === idx
+                : (viewedStep !== null ? viewedStep === idx : idx === currentStep);
+              const canOpen = isCompleted || isActive || isPaymentsTab || idx === currentStep || idx < currentStep;
 
               return (
                 <div 
                   key={step.key} 
-                  className={`flex flex-col items-center text-center relative z-10 flex-1 ${isCompleted || isActive ? 'cursor-pointer hover:opacity-80' : ''}`}
+                  className={`flex flex-col items-center text-center relative z-10 flex-1 ${canOpen ? 'cursor-pointer hover:opacity-80' : ''}`}
                   onClick={() => {
-                    if (isCompleted || isActive) {
+                    if (canOpen) {
                       setViewedStep(idx);
                     }
                   }}
@@ -663,11 +683,13 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                     ? "bg-[#1E40AF] border-[#1E40AF] text-white shadow-[0_0_0_4px_rgba(30,64,175,0.12)]"
                     : isCompleted
                       ? "bg-emerald-500 border-emerald-500 text-white"
+                      : isPaymentsTab
+                        ? "bg-white border-blue-200 text-blue-500"
                       : "bg-white border-slate-200 text-slate-400"
                     }`}>
                     {isCompleted && !isActive ? <Check size={14} className="stroke-[3]" /> : <Icon size={14} />}
                   </div>
-                  <span className={`text-[11px] font-bold mt-2 block ${isActive ? "text-[#1E40AF]" : isCompleted ? "text-emerald-600" : "text-slate-400"
+                  <span className={`text-[11px] font-bold mt-2 block ${isActive ? "text-[#1E40AF]" : isCompleted ? "text-emerald-600" : isPaymentsTab ? "text-blue-500" : "text-slate-400"
                     }`}>
                     {step.label}
                   </span>
@@ -1114,38 +1136,41 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                             <span className="font-bold text-slate-800">{activeOrder.projectName}</span>
                           </div>
                           <div>
-                            <span className="text-[10px] text-slate-400 font-bold uppercase block">Status</span>
-                            <span className={`inline-block text-[9px] font-black uppercase px-2 py-0.5 rounded-md border ${
-                              qd.status === "Approved" ? "bg-emerald-50 border-emerald-200 text-emerald-700" :
-                              qd.status === "Sent" ? "bg-blue-50 border-blue-200 text-blue-700" :
-                              "bg-slate-100 border-slate-200 text-slate-600"
-                            }`}>
-                              {qd.status}
-                            </span>
-                          </div>
+                             <span className="text-[10px] text-slate-400 font-bold uppercase block">Status</span>
+                             <span className={`inline-block text-[9px] font-black uppercase px-2 py-0.5 rounded-md border ${
+                               qd.status === "Approved" ? "bg-emerald-50 border-emerald-200 text-emerald-700" :
+                               qd.status === "Rejected" || qd.status === "Negotiation" ? "bg-amber-50 border-amber-200 text-amber-700" :
+                               qd.status === "Sent" ? "bg-blue-50 border-blue-200 text-blue-700" :
+                               "bg-slate-100 border-slate-200 text-slate-600"
+                             }`}>
+                               {qd.status === "Rejected" || qd.status === "Negotiation" ? "Sent for Revision" : qd.status}
+                             </span>
+                           </div>
                         </div>
 
                         {/* Signage Sections */}
                         <div className="space-y-5">
                           {qd.signageOptions.map((section: any, sIdx: number) => {
                             const itemTotal = (section.lines || []).reduce((sum: number, line: any) => {
-                              const calcLineAmount = (item: any): number => {
-                                let base = 0;
-                                if (item.pricingType === "per_sqft" || item.pricingType === "per_running_ft") {
-                                  base = item.quantity * item.totalSqFt * item.unitPrice;
-                                } else {
-                                  base = item.quantity * item.unitPrice;
-                                }
-                                return base * (1 + (item.gstRate || 0) / 100);
-                              };
-                              return sum + calcLineAmount(line);
+                              return sum + calcLineAmount(line) * (1 + (line.gstRate || 0) / 100);
                             }, 0);
+                            const svItem = (activeOrder?.siteVisitItems || []).find(
+                              (sv: any) => sv.id === section.siteVisitItemId
+                            );
+                            const measurementLabel = formatSiteMeasurementLabel(svItem);
 
                             return (
                               <div key={sIdx} className="border border-slate-200 rounded-2xl bg-white overflow-hidden shadow-sm">
                                 {/* Section Header */}
                                 <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
-                                  <span className="text-xs font-black text-slate-800 uppercase tracking-wider">{section.itemLabel}</span>
+                                  <div className="flex flex-col gap-0.5">
+                                    <span className="text-xs font-black text-slate-800 uppercase tracking-wider">{section.itemLabel}</span>
+                                    {measurementLabel && (
+                                      <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                                        {measurementLabel}
+                                      </span>
+                                    )}
+                                  </div>
                                   <div className="flex items-center gap-1.5">
                                     <span className="text-[10px] text-slate-400 font-black uppercase">Total (incl. GST):</span>
                                     <span className="text-xs font-black text-blue-700 font-mono">
@@ -1160,9 +1185,8 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                                     <thead>
                                       <tr className="bg-slate-50/50 border-b border-slate-200 text-[10px] text-slate-400 font-black uppercase tracking-wider">
                                         <th className="px-4 py-2.5">Item Description</th>
-                                        <th className="text-center px-4 py-2.5">Qty</th>
                                         <th className="text-center px-4 py-2.5">Unit</th>
-                                        <th className="text-center px-4 py-2.5">Measure</th>
+                                        <th className="text-center px-4 py-2.5">Measurement/Qty</th>
                                         <th className="text-right px-4 py-2.5">Rate</th>
                                         <th className="text-center px-4 py-2.5">GST</th>
                                         <th className="text-right px-4 py-2.5">Amount</th>
@@ -1170,16 +1194,9 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                                     </thead>
                                     <tbody className="divide-y divide-slate-100 font-medium text-slate-600">
                                       {(section.lines || []).map((line: any, lIdx: number) => {
-                                        const lineAmt = (() => {
-                                          let base = 0;
-                                          if (line.pricingType === "per_sqft" || line.pricingType === "per_running_ft") {
-                                            base = line.quantity * line.totalSqFt * line.unitPrice;
-                                          } else {
-                                            base = line.quantity * line.unitPrice;
-                                          }
-                                          return base * (1 + (line.gstRate || 0) / 100);
-                                        })();
-                                        const isSqft = line.pricingType === "per_sqft" || line.pricingType === "per_running_ft";
+                                        const lineAmt = calcLineAmount(line) * (1 + (line.gstRate || 0) / 100);
+                                        const measurement = getLineMeasurement(line);
+                                        const pricingType = normalizePricingType(line.pricingType);
 
                                         return (
                                           <tr key={lIdx} className="hover:bg-slate-50/30">
@@ -1201,9 +1218,10 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                                                 )}
                                               </div>
                                             </td>
-                                            <td className="text-center px-4 py-3 font-mono">{line.quantity}</td>
-                                            <td className="text-center px-4 py-3 capitalize">{line.pricingType?.replace("per_", "")}</td>
-                                            <td className="text-center px-4 py-3 font-mono">{isSqft ? `${line.totalSqFt} ${line.unit || "ft"}` : "—"}</td>
+                                            <td className="text-center px-4 py-3 capitalize">{pricingType.replace("per_", "")}</td>
+                                            <td className="text-center px-4 py-3 font-mono">
+                                              {measurement} {pricingType === "per_sqft" ? (line.unit || "sqft") : (line.unit || "nos")}
+                                            </td>
                                             <td className="text-right px-4 py-3 font-mono">₹{line.unitPrice.toLocaleString("en-IN")}</td>
                                             <td className="text-center px-4 py-3 font-mono">{line.gstRate}%</td>
                                             <td className="text-right px-4 py-3 font-mono text-slate-800 font-bold">₹{lineAmt.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
@@ -1305,9 +1323,16 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                       </div>
                     )}
 
-                    {qd.status !== "Approved" && (qd.status === "Sent" || qd.status === "Pending Approval" || qd.status === "Negotiation" || (qd.grandTotal > 0 && (activeOrder?.stage === "Quotation Sent" || activeOrder?.stage === "Quotation Negotiation"))) && (
-                        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
-                          <p className="text-xs font-bold text-[#1E40AF]">{isDesignFirst ? "Approve this quotation to proceed to Production" : "Approve this quotation to proceed to Design"}</p>
+                    {(qd.status === "Rejected" || qd.status === "Negotiation") ? (
+                      <div className="mt-8 bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3">
+                        <div className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
+                        <div className="text-xs text-amber-850">
+                          <span className="font-bold">Sent for Revision:</span> We have received your feedback and are revising the quotation. We will notify you once the revised quotation is ready for your review.
+                        </div>
+                      </div>
+                    ) : qd.status === "Sent" && (
+                      <div className="mt-8 bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
+                        <p className="text-xs font-bold text-[#1E40AF]">{isDesignFirst ? "Approve this quotation to proceed to Production" : "Approve this quotation to proceed to Design"}</p>
                         {showQuoteDeclineInput ? (
                           <div className="space-y-2">
                             <textarea rows={3} value={quoteFeedback} onChange={e => setQuoteFeedback(e.target.value)} placeholder="Your revision feedback..." className="w-full p-2.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-red-500" />
@@ -1337,7 +1362,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
 
                 {/* ── DESIGN STAGE ── */}
                 {STEPS[activeStepToRender]?.key === "design" && (
-                  <DesignTab order={activeOrder as any} customer={customer} siteVisitItems={siteVisitItems} />
+                  <DesignTab order={activeOrder as any} customer={customer} siteVisitItems={activeOrder?.siteVisitItems || []} />
                 )}
 
                 {/* ── PRODUCTION STAGE ── */}
@@ -1434,6 +1459,12 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                     ) : (
                       <div className="p-8 bg-slate-50 border border-slate-200 rounded-xl text-center text-slate-400 text-sm">Installation records will appear here once complete.</div>
                     )}
+                  </div>
+                )}
+
+                {STEPS[activeStepToRender]?.key === "payments" && activeOrder && (
+                  <div className="p-6">
+                    <PaymentsTab orderId={activeOrder.id} />
                   </div>
                 )}
               </div>
@@ -2135,9 +2166,9 @@ function ProductInfoModal({ product, onClose }: { product: any; onClose: () => v
             <div>
               <span style={{ fontSize: "9px", color: "#94a3b8", fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.05em", display: "block" }}>Standard Rate</span>
               <span style={{ fontSize: "12px", fontWeight: 900, color: "#1d4ed8", fontFamily: "monospace", display: "block", marginTop: "2px" }}>
-                ₹{(product.price_per_unit || product.price_per_sqft || product.price_per_running_ft || 0).toLocaleString("en-IN")}
+                ₹{(product.price_per_unit || product.price_per_sqft || 0).toLocaleString("en-IN")}
                 <span style={{ fontSize: "10px", color: "#94a3b8", fontWeight: 500, fontFamily: "sans-serif" }}>
-                  /{product.pricing_type === "per_sqft" ? "sqft" : product.pricing_type === "per_running_ft" ? "rft" : "unit"}
+                  /{product.pricing_type === "per_sqft" ? "sqft" : "unit"}
                 </span>
               </span>
             </div>

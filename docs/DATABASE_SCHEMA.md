@@ -1,8 +1,8 @@
 # Printoms Database Schema
 
-> **Last Updated:** 2026-06-24
+> **Last Updated:** 2026-07-04
 > **Platform:** Supabase (PostgreSQL 17)
-> **Total Tables:** 15 (public) + 24 (auth) + 8 (storage) + 10 (realtime) + 1 (vault)
+> **Total Tables:** 18+ (public) including `designs`, `productions`, `installations`, `payments`
 
 ---
 
@@ -25,7 +25,9 @@
    - [products](#12-products)
    - [quotations](#13-quotations)
    - [quotation_material_preferences](#14-quotation_material_preferences)
-   - [audit_logs](#15-audit_logs)
+   - [audit_logs](#15-audit-logs)
+   - [designs](#16-designs)
+   - [payments](#17-payments)
 4. [Auth Schema](#auth-schema)
 5. [Storage & Realtime Schemas](#storage--realtime-schemas)
 6. [Database Functions](#database-functions)
@@ -165,14 +167,14 @@
 | `assigned_designers` | `uuid[]` | `'{}'` | Designer assignees |
 | `assigned_marketers` | `uuid[]` | `'{}'` | Marketer assignees |
 
-#### JSONB Stage Details
+#### Stage locks
 
-| Column | Type | Default | Purpose |
-|--------|------|---------|---------|
-| `quote_details` | `jsonb` | — | Quotation: items[], subtotal, tax, discount, grandTotal |
-| `design_details` | `jsonb` | — | Design stage artefacts |
-| `production_details` | `jsonb` | — | Production tracking |
-| `installation_details` | `jsonb` | — | Installation tracking |
+| Column | Type | Notes |
+|--------|------|-------|
+| `stage` | `text` | Pipeline phase (unchanged by payment gates) |
+| `stage_status` | `text` | `"Normal"`, `"Pending Admin Approval: …"`, or **`"Pending Payment Verification"`** |
+
+Design, production, installation, and payment data live in dedicated tables (`designs`, `productions`, `installations`, `payments`) — not JSONB columns on `orders`. Legacy `orders.design_details` was migrated and dropped.
 
 #### Activity Tracking
 
@@ -342,7 +344,13 @@ Incoming leads. Created from contact forms, WhatsApp, phone calls. When converte
 | `site_visit_id` | `uuid` | YES | — | FK → `site_visits.id` |
 | `name` | `text` | NO | — | |
 | `width` | `numeric` | YES | — | |
+| `width_unit` | `text` | YES | `'ft'` | `ft` / `m` / `inch` |
 | `height` | `numeric` | YES | — | |
+| `height_unit` | `text` | YES | `'ft'` | |
+| `depth` | `numeric` | YES | — | |
+| `depth_unit` | `text` | YES | `'ft'` | |
+| `ground_clearance` | `numeric` | YES | — | |
+| `ground_clearance_unit` | `text` | YES | `'ft'` | |
 | `photos` | `jsonb` | YES | — | |
 
 ### 12. products
@@ -352,7 +360,7 @@ Incoming leads. Created from contact forms, WhatsApp, phone calls. When converte
 | `product_id` | `text` | NO | — | |
 | `company_id` | `uuid` | YES | — | FK → `companies.id` |
 | `name` | `text` | NO | — | |
-| `pricing_type` | `text` | NO | `'per_unit'` | |
+| `pricing_type` | `text` | NO | `'per_unit'` | `per_unit` / `per_sqft` (running feet removed) |
 | `price_per_sqft` | `numeric` | YES | — | |
 | `price_per_unit` | `numeric` | YES | — | |
 
@@ -388,6 +396,51 @@ Incoming leads. Created from contact forms, WhatsApp, phone calls. When converte
 | `customer_id` | `uuid` | YES | — | FK → `customers.id` |
 | `description` | `text` | NO | — | |
 | `created_at` | `timestamptz` | YES | `now()` | |
+
+### 16. designs
+One row per order (extracted from legacy `orders.design_details`).
+
+| Column | Type | Nullable | Default | Notes |
+|--------|------|----------|---------|-------|
+| `id` | `uuid` | NO | `gen_random_uuid()` | Primary key |
+| `order_id` | `uuid` | NO | — | FK → `orders.id`, UNIQUE |
+| `resources` | `jsonb` | NO | `'[]'` | Inspiration / logos |
+| `items` | `jsonb` | NO | `'[]'` | Proofs, versions, comments, production files |
+| `payment_verified` | `boolean` | NO | `false` | Legacy checklist; gates use `payments` |
+| `created_at` | `timestamptz` | NO | `now()` | |
+| `updated_at` | `timestamptz` | NO | `now()` | Trigger-maintained |
+
+### 17. payments
+Payment milestones (business gates — not a pipeline stage).
+
+| Column | Type | Nullable | Default | Notes |
+|--------|------|----------|---------|-------|
+| `id` | `uuid` | NO | `gen_random_uuid()` | Primary key |
+| `order_id` | `uuid` | NO | — | FK → `orders.id` ON DELETE CASCADE |
+| `payment_name` | `text` | NO | — | |
+| `trigger_stage` | `text` | NO | — | Stage when gate was created |
+| `amount_type` | `text` | NO | — | `fixed` / `percentage` |
+| `amount` | `numeric` | YES | — | Fixed amount |
+| `percentage` | `numeric` | YES | — | % of quotation `grand_total` |
+| `calculated_amount` | `numeric` | YES | — | Resolved amount |
+| `required_for_next_stage` | `boolean` | NO | `true` | |
+| `status` | `text` | NO | `'pending'` | `pending` / `requested` / `paid` / `verified` / `waived` |
+| `payment_method` | `text` | YES | — | `manual` today; future gateways |
+| `payment_reference` | `text` | YES | — | UTR / gateway id |
+| `notes` | `text` | YES | — | |
+| `requested_at` | `timestamptz` | YES | — | |
+| `paid_at` | `timestamptz` | YES | — | |
+| `verified_at` | `timestamptz` | YES | — | |
+| `verified_by` | `uuid` | YES | — | |
+| `created_at` | `timestamptz` | NO | `now()` | |
+| `updated_at` | `timestamptz` | NO | `now()` | |
+
+Indexes: `order_id`, `status`, `trigger_stage`.
+
+When a required payment is created, `orders.stage_status` becomes `Pending Payment Verification` (stage unchanged).
+
+### 18. productions / installations
+Dedicated tables for workshop and field work (extracted from legacy order JSONB). See application code for full column lists.
 
 ---
 

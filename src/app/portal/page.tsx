@@ -8,7 +8,7 @@ import { checkRateLimit } from "@/utils/rate-limiter";
 import { PortalClient } from "./PortalClient";
 import React from "react";
 import { ShieldAlert, LogOut, Share2, ClipboardList, AlertCircle, FileText } from "lucide-react";
-import { mapSiteVisitFromDb } from "@/features/orders/actions/siteVisitMapper";
+import { mapSiteVisitFromDb, mapSiteVisitMeasurementFromDb } from "@/features/orders/actions/siteVisitMapper";
 import { mapDesignFromDb } from "@/features/designs/actions/designMapper";
 
 export const dynamic = "force-dynamic";
@@ -109,21 +109,21 @@ export default async function PortalPage({
   let quotationsData: any[] = [];
   let siteVisitsData: any[] = [];
   let siteVisitMeasurementsData: any[] = [];
-  let siteVisitItemsData: any[] = [];
 
   if (orderIds.length > 0) {
-    const [qtsRes, svsRes, sviRes] = await Promise.all([
+    const [qtsRes, svsRes] = await Promise.all([
       supabase.from("quotations").select("*").in("order_id", orderIds),
       supabase.from("site_visits").select("id, order_id").in("order_id", orderIds),
-      supabase.from("quotation_site_visit_items").select("*").in("order_id", orderIds),
     ]);
     if (!qtsRes.error && qtsRes.data) quotationsData = qtsRes.data;
     if (!svsRes.error && svsRes.data) siteVisitsData = svsRes.data;
-    if (!sviRes.error && sviRes.data) siteVisitItemsData = sviRes.data;
 
     if (siteVisitsData.length > 0) {
       const svIds = siteVisitsData.map((sv: any) => sv.id);
-      const { data: measData } = await supabase.from("site_visit_measurements").select("*").in("site_visit_id", svIds);
+      const { data: measData } = await supabase
+        .from("site_visit_measurements")
+        .select("id, site_visit_id, name, width, width_unit, height, height_unit, depth, depth_unit, notes, ground_clearance, ground_clearance_unit")
+        .in("site_visit_id", svIds);
       if (measData) siteVisitMeasurementsData = measData;
     }
   }
@@ -157,15 +157,6 @@ export default async function PortalPage({
     customerId: customerData.customer_id || customerData.id,
   };
 
-  const mappedSiteVisitItems = siteVisitItemsData.map((m: any) => ({
-    id: m.id,
-    name: m.item_name,
-    width: m.width,
-    height: m.height,
-    depth: m.depth,
-    notes: m.notes,
-  }));
-
   const mappedQuotations = quotationsData.map((q: any) => ({
     id: q.id,
     quotationId: q.quotation_id,
@@ -186,7 +177,11 @@ export default async function PortalPage({
   const orders = ordersData.map((o: any) => {
     const q = quotationsData.find((qt: any) => qt.order_id === o.id);
     const sv = siteVisitsData.find((sv: any) => sv.order_id === o.id);
-    const siteVisitItems = sv ? siteVisitMeasurementsData.filter((m: any) => m.site_visit_id === sv.id).map((m: any) => ({ id: m.id, name: m.name, width: m.width ?? null, height: m.height ?? null, depth: m.depth ?? null, notes: m.notes ?? null })) : [];
+    const siteVisitItems = sv
+      ? siteVisitMeasurementsData
+          .filter((m: any) => m.site_visit_id === sv.id)
+          .map(mapSiteVisitMeasurementFromDb)
+      : [];
 
     return {
       id: o.id,
@@ -244,7 +239,6 @@ export default async function PortalPage({
       customer={customer}
       orders={orders}
       quotations={mappedQuotations}
-      siteVisitItems={mappedSiteVisitItems}
       initialActiveOrderId={payload.orderId || null}
       initialToken={tokenParam}
       token={tokenParam}

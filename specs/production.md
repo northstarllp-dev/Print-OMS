@@ -9,7 +9,7 @@
 ## Workflow
 
 1. **Initialization**: Order transitions to `Production Pending` or `Production In Progress` once design and quotation are fully approved by the customer.
-2. **Accessing Final Files**: Production staff navigate to the Design Tab to download the final approved production files (CDR, DXF, etc.) uploaded by the Designer.
+2. **Accessing Final Files**: Production staff navigate to the Design Tab to download the final approved production files (CDR, DXF, PNG, JPG, etc.) uploaded by the Designer.
 3. **Tracking Milestones**: As fabrication proceeds, the workshop staff checks off the following milestones:
    * Procurement of Materials
    * ACP & Acrylic Cutting

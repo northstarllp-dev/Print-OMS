@@ -13,8 +13,9 @@
 3. **Dashboard View**: Customer is presented with `PortalClient`, which displays all active and past orders associated with their `customer_id`.
 4. **Order Tracking**: Customer selects an active order to view its timeline and progress bar.
 5. **Interactive Tabs**: Depending on the current stage of the order, specific tabs unlock:
-   * **Quotation Tab**: Read quotes, accept/reject, view PDF.
+   * **Quotation Tab**: Read quotes (with site measurement units under signage items), accept/reject.
    * **Design Tab**: View proofs, add feedback comments on the canvas, upload inspiration, approve proofs.
+   * **Payments Tab**: View payment milestones, submit UTR/reference, mark as paid (Pay Online placeholder for gateways). Always available; not a pipeline stage.
    * **Installation Tab**: View scheduled dates, and later see "After Photos" once completed.
 6. **Token Expiration**: The magic link expires naturally over time or can be actively revoked by the Admin.
 
@@ -33,7 +34,7 @@ The portal itself doesn't have "states" but visually reflects the states of the 
 * Access to the portal is completely password-less, relying on securely generated, short-lived (or manageable) tokens using HMAC.
 * A token can be instantly revoked in the database, locking the customer out on their next page load.
 * Rate limiting is enforced on the `/portal` route to prevent brute-forcing or denial of service attacks.
-* Customers can only modify specific nested states (like approving a quote or adding a design comment). They cannot edit the core order data.
+* Customers can only modify specific nested states (like approving a quote, adding a design comment, or submitting a payment reference). They cannot edit the core order data or verify/waive payments.
 
 ## User Roles
 
@@ -121,10 +122,14 @@ Request URL with `?token=...`
 
 * Push notifications (PWA) to alert the customer when the order stage changes.
 * Chat interface directly inside the portal to message the assigned sales rep.
-* Invoice and payment history tab.
+* Online payment (Razorpay / PhonePe / Stripe) on the Payments tab.
 
 ## Change Log
 
 Version: 1.0
 Date: 2026-07-03
 Summary: Initial specification for the Customer Portal architecture.
+
+Version: 1.1
+Date: 2026-07-04
+Summary: Payments tab for milestones; design data via `designs` join; site measurement units on quotations.

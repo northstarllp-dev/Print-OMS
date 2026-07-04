@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { FileText, ZoomIn, ZoomOut, UploadCloud, MessageSquare, CheckCircle, Upload, X, Trash, RefreshCw, Download, Maximize, RotateCw } from "lucide-react";
 import { Order, DesignRecord, DesignVersion, DesignComment, DesignResource } from "@/types";
 import { createClient } from "@/utils/supabase/client";
-import { updateDesignDetailsAction, markDesignPaymentVerifiedAction } from "@/features/designs/actions/designActions";
+import { updateDesignDetailsAction } from "@/features/designs/actions/designActions";
 
 interface DesignModuleProps {
   order: Order;
@@ -32,7 +32,6 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
 
   const [zoomLevel, setZoomLevel] = useState(100);
   const [uploading, setUploading] = useState(false);
-  const [movingToProduction, setMovingToProduction] = useState(false);
 
   const [pendingUploadFile, setPendingUploadFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -301,31 +300,6 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
     }
   };
 
-  const handlePushToAdminForProduction = async () => {
-    setMovingToProduction(true);
-    try {
-      await supabase.from("orders").update({ stage_status: "Pending Admin Approval: Production Ready" }).eq("id", order.id);
-      window.location.reload();
-    } catch (err) {
-      console.error(err);
-      alert("Failed to push to admin");
-      setMovingToProduction(false);
-    }
-  };
-
-  const handlePaymentReceived = async () => {
-    setMovingToProduction(true);
-    try {
-      await markDesignPaymentVerifiedAction(order.id);
-      window.location.reload();
-    } catch (error) {
-      console.error(error);
-      alert("Failed to update status");
-    } finally {
-      setMovingToProduction(false);
-    }
-  };
-
   const handleDownload = async (url: string, filename: string) => {
     try {
       const response = await fetch(url);
@@ -524,13 +498,13 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="text-lg font-bold text-slate-800">Final Production Files for {activeItem.name}</h3>
-                    <p className="text-xs text-slate-500">Upload final production files (.cdr, .dxf, .plt, .pdf, .svg) for fabrication.</p>
+                    <p className="text-xs text-slate-500">Upload final production files (.cdr, .dxf, .plt, .pdf, .svg, .png, .jpg) for fabrication.</p>
                   </div>
                   {isEmployee && (
                     <label className="cursor-pointer bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all shadow-sm">
                       {uploading ? <RefreshCw size={14} className="animate-spin" /> : <Upload size={14} />}
                       {uploading ? "Uploading..." : "Upload File"}
-                      <input type="file" multiple onChange={handleProductionFileUpload} accept=".cdr,.dxf,.plt,.pdf,.svg" className="hidden" disabled={uploading} />
+                      <input type="file" multiple onChange={handleProductionFileUpload} accept=".cdr,.dxf,.plt,.pdf,.svg,.png,.jpg,.jpeg" className="hidden" disabled={uploading} />
                     </label>
                   )}
                 </div>

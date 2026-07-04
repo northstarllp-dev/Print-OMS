@@ -4,14 +4,21 @@ import React, { useState, useEffect, useRef, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { 
   Plus, Trash2, Search, Check, ChevronDown, Info, X,
-  Sparkles, ShieldCheck, ClipboardList, IndianRupee, Loader2, AlertCircle, Package, Save
+  ClipboardList, IndianRupee, Loader2, AlertCircle, Package, Save, Sparkles
 } from "lucide-react";
 import { 
   upsertQuotation, 
   sendQuotationToCustomer
 } from "@/features/quotations/actions/quotationActions";
 import { createClient } from "@/utils/supabase/client";
-import { updateOrderStageAction } from "@/features/orders/actions/orderActions";
+import { formatSiteMeasurementLabel } from "@/features/orders/actions/siteVisitMapper";
+import {
+  calcLineAmount,
+  getLineMeasurement,
+  normalizeLineItem,
+  normalizePricingType,
+  type PricingType,
+} from "@/features/quotations/utils/lineAmount";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -26,7 +33,6 @@ interface Product {
   is_active: boolean;
   price_per_sqft?: number | null;
   price_per_unit?: number | null;
-  price_per_running_ft?: number | null;
   images?: string[];
 }
 
@@ -34,8 +40,11 @@ interface SiteVisitItem {
   id: string;
   name: string;
   width?: number | null;
+  widthUnit?: string | null;
   height?: number | null;
+  heightUnit?: string | null;
   depth?: number | null;
+  depthUnit?: string | null;
   notes?: string | null;
 }
 
@@ -44,7 +53,7 @@ interface LineItem {
   productId?: string;
   description: string;
   quantity: number;
-  pricingType: "per_unit" | "per_sqft" | "per_running_ft";
+  pricingType: PricingType;
   unit: string;
   unitPrice: number;
   totalSqFt: number;
@@ -74,6 +83,8 @@ interface Quotation {
   notes: string;
   terms: string;
   advance_paid?: boolean;
+  advance_percent?: number | null;
+  advance_amount?: number | null;
 }
 
 interface QuotationModuleProps {
@@ -85,6 +96,7 @@ interface QuotationModuleProps {
     customerName?: string;
     customerId?: string;
     stage?: string;
+    stageStatus?: string;
     workflow_type?: "quote_first" | "design_first";
   };
   isEmployee: boolean;
@@ -92,6 +104,8 @@ interface QuotationModuleProps {
   initialQuotation: Quotation | null;
   siteVisitItems?: SiteVisitItem[];
   currentUserRole?: string;
+  /** Advance to Design/Production (opens payment gate popup when configured). */
+  onRequestAdvance?: () => void;
 }
 
 const GST_OPTIONS = [0, 5, 12, 18, 28];
@@ -113,55 +127,35 @@ function newItem(gstRate: number = 18): LineItem {
   };
 }
 
-function calcLineAmount(item: LineItem): number {
-  if (item.pricingType === "per_sqft" || item.pricingType === "per_running_ft") {
-    return item.quantity * item.totalSqFt * item.unitPrice;
-  }
-  return item.quantity * item.unitPrice;
-}
-
-function resolveInitialPricing(p: Product): { pricingType: "per_unit" | "per_sqft" | "per_running_ft"; price: number } {
-  let pricingType: "per_unit" | "per_sqft" | "per_running_ft" = "per_unit";
-  let price = 0;
-
+function resolveInitialPricing(p: Product): { pricingType: PricingType; price: number } {
   const ut = (p.pricing_type || "").toLowerCase().trim();
 
   if (ut === "per sq.ft" || ut === "per sqft" || ut === "sqft" || ut === "per_sqft") {
-    pricingType = "per_sqft";
-    price = p.price_per_sqft ?? 0;
-  } else if (ut === "per running ft" || ut === "per running foot" || ut === "per rft" || ut === "rft" || ut === "per_running_ft") {
-    pricingType = "per_running_ft";
-    price = p.price_per_running_ft ?? 0;
-  } else if (ut === "per unit" || ut === "per_unit" || ut === "unit" || ut === "nos") {
-    pricingType = "per_unit";
-    price = p.price_per_unit ?? 0;
-  } else {
-    if (p.price_per_sqft != null && p.price_per_sqft > 0) {
-      pricingType = "per_sqft";
-      price = p.price_per_sqft;
-    } else if (p.price_per_running_ft != null && p.price_per_running_ft > 0) {
-      pricingType = "per_running_ft";
-      price = p.price_per_running_ft;
-    } else if (p.price_per_unit != null && p.price_per_unit > 0) {
-      pricingType = "per_unit";
-      price = p.price_per_unit;
-    } else {
-      pricingType = "per_unit";
-      price = 0;
-    }
+    return { pricingType: "per_sqft", price: p.price_per_sqft ?? 0 };
   }
-
-  return { pricingType, price };
+  if (ut === "per unit" || ut === "per_unit" || ut === "unit" || ut === "nos") {
+    return { pricingType: "per_unit", price: p.price_per_unit ?? 0 };
+  }
+  // Legacy running-ft products fall back to unit pricing
+  if (p.price_per_sqft != null && p.price_per_sqft > 0) {
+    return { pricingType: "per_sqft", price: p.price_per_sqft };
+  }
+  if (p.price_per_unit != null && p.price_per_unit > 0) {
+    return { pricingType: "per_unit", price: p.price_per_unit };
+  }
+  return { pricingType: "per_unit", price: 0 };
 }
 
-function getProductPriceForType(p: Product, type: "per_unit" | "per_sqft" | "per_running_ft"): number {
-  if (type === "per_sqft") {
-    return p.price_per_sqft ?? 0;
-  }
-  if (type === "per_running_ft") {
-    return p.price_per_running_ft ?? 0;
-  }
+function getProductPriceForType(p: Product, type: PricingType): number {
+  if (type === "per_sqft") return p.price_per_sqft ?? 0;
   return p.price_per_unit ?? 0;
+}
+
+function normalizeSection(section: SignageSection): SignageSection {
+  return {
+    ...section,
+    lines: (section.lines || []).map((line) => normalizeLineItem(line)),
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -301,7 +295,7 @@ function ProductSearch({
                     ₹{resolved.price.toLocaleString("en-IN")}
                   </div>
                   <div style={{ fontSize: 9, color: "#64748b" }}>
-                    per {resolved.pricingType === "per_sqft" ? "sqft" : resolved.pricingType === "per_running_ft" ? "rft" : "unit"}
+                    per {resolved.pricingType === "per_sqft" ? "sqft" : "unit"}
                   </div>
                 </div>
               </button>
@@ -324,6 +318,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
   products,
   initialQuotation,
   siteVisitItems = [],
+  onRequestAdvance,
 }) => {
   const [isPending, startTransition] = useTransition();
   const [saveMsg, setSaveMsg] = useState<{ text: string; ok: boolean } | null>(null);
@@ -333,28 +328,6 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
   const [isMounted, setIsMounted] = useState(false);
   const [selectedProductInfo, setSelectedProductInfo] = useState<Product | null>(null);
   const [pendingAction, setPendingAction] = useState<"admin" | "customer" | null>(null);
-
-  const isPastQuotation = ![
-    "Site Visit Pending",
-    "Site Visit Scheduled",
-    "Site Visit Completed",
-    "Quotation In Progress",
-    "Quotation Sent",
-    "Quotation Negotiation",
-    "Quotation Approved",
-  ].includes(order.stage || "");
-
-  const isDesignFirst = order.workflow_type === "design_first";
-  const nextStageLabel = isDesignFirst ? "Production" : "Design";
-  const nextStageValue = isDesignFirst ? "Production" : "Design In Progress";
-
-  const [advanceReceived, setAdvanceReceived] = useState(
-    isPastQuotation || (initialQuotation?.advance_paid ?? false)
-  );
-  const [measurementsVerified, setMeasurementsVerified] = useState(
-    isPastQuotation
-  );
-  const [isMovingToDesign, setIsMovingToDesign] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
@@ -414,7 +387,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
 
   // Redesigned: multi-section structure without options A/B
   const [sections, setSections] = useState<SignageSection[]>(() => {
-    const savedSections = initialQuotation?.signage_options || [];
+    const savedSections = (initialQuotation?.signage_options || []).map(normalizeSection);
 
     if (siteVisitItems && siteVisitItems.length > 0) {
       const mapped = siteVisitItems.map((item) => {
@@ -426,6 +399,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
           };
         }
 
+        const defaultMeasurement = (item.width && item.height) ? item.width * item.height : 1;
         // Default empty row inside a section
         return {
           siteVisitItemId: item.id,
@@ -434,11 +408,11 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
             {
               id: crypto.randomUUID(),
               description: "",
-              quantity: 1,
+              quantity: defaultMeasurement,
               pricingType: "per_unit" as const,
               unit: "nos",
               unitPrice: 0,
-              totalSqFt: (item.width && item.height) ? item.width * item.height : 0,
+              totalSqFt: defaultMeasurement,
               gstRate: 18,
             },
           ],
@@ -566,15 +540,27 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
   function selectProduct(sectionId: string, lineId: string, p: Product) {
     const resolved = resolveInitialPricing(p);
     const siteVisitItem = siteVisitItems.find((sv) => sv.id === sectionId);
-    const defaultSqFt = (siteVisitItem?.width && siteVisitItem?.height) ? siteVisitItem.width * siteVisitItem.height : 1;
+    const defaultMeasurement =
+      siteVisitItem?.width && siteVisitItem?.height
+        ? siteVisitItem.width * siteVisitItem.height
+        : 1;
 
     updateLine(sectionId, lineId, {
       productId: p.id,
       description: p.name,
       pricingType: resolved.pricingType,
-      unit: resolved.pricingType === "per_sqft" ? "sqft" : resolved.pricingType === "per_running_ft" ? "rft" : "nos",
+      unit: resolved.pricingType === "per_sqft" ? "sqft" : "nos",
       unitPrice: resolved.price,
-      totalSqFt: resolved.pricingType === "per_sqft" ? defaultSqFt : 0,
+      quantity: defaultMeasurement,
+      totalSqFt: defaultMeasurement,
+    });
+  }
+
+  function setLineMeasurement(sectionId: string, lineId: string, value: number) {
+    const measurement = value > 0 ? value : 0;
+    updateLine(sectionId, lineId, {
+      quantity: measurement,
+      totalSqFt: measurement,
     });
   }
 
@@ -682,50 +668,6 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
     });
   };
 
-  const handleMoveToNextStage = async () => {
-    setIsMovingToDesign(true);
-    try {
-      const supabase = createClient();
-      
-      const { error: quoteErr } = await supabase
-        .from("quotations")
-        .update({
-          advance_paid: true
-        })
-        .eq("order_id", order.id);
-
-      if (quoteErr) throw new Error(quoteErr.message);
-
-      await updateOrderStageAction(order.id, nextStageValue);
-
-      setSaveMsg({ text: `Moved to ${nextStageLabel} phase successfully!`, ok: true });
-      
-      setTimeout(() => {
-        window.location.reload();
-      }, 1000);
-    } catch (err: any) {
-      console.error("Error moving to design:", err);
-      setSaveMsg({ text: err.message || `Failed to move to ${nextStageLabel.toLowerCase()} phase`, ok: false });
-      setTimeout(() => setSaveMsg(null), 4000);
-    } finally {
-      setIsMovingToDesign(false);
-    }
-  };
-
-  const addCustomSection = () => {
-    const label = prompt("Enter custom signage item name:");
-    if (!label?.trim()) return;
-    setSections((prev) => [
-      ...prev,
-      {
-        siteVisitItemId: crypto.randomUUID(),
-        itemLabel: label,
-        lines: [newItem(taxPercent)],
-        notes: "",
-      },
-    ]);
-  };
-
   const inputCls = "border border-slate-200 rounded-lg text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500";
 
   return (
@@ -827,12 +769,14 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
               <div className="bg-[#f8fafc] px-5 py-3.5 border-b border-slate-100 flex items-center justify-between rounded-t-2xl">
                 <div className="flex flex-col gap-0.5">
                   <span className="text-xs font-black text-[#0f172a] uppercase tracking-wider">{section.itemLabel}</span>
-                  {svItem && (svItem.width || svItem.height) && (
-                    <span className="text-[10px] text-slate-400 font-bold uppercase">
-                      Site Measurement: {svItem.width ?? "—"} × {svItem.height ?? "—"} ft
-                      {svItem.depth ? ` · depth: ${svItem.depth} in` : ""}
-                    </span>
-                  )}
+                  {(() => {
+                    const measurementLabel = formatSiteMeasurementLabel(svItem);
+                    return measurementLabel ? (
+                      <span className="text-[10px] text-slate-450 font-bold uppercase tracking-wider">
+                        {measurementLabel}
+                      </span>
+                    ) : null;
+                  })()}
                 </div>
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-2">
@@ -858,13 +802,12 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
               <div
                 className="grid gap-2 px-4 py-2.5 text-[10px] font-black text-[#64748b] uppercase tracking-wider bg-slate-50 border-b border-slate-100"
                 style={{
-                  gridTemplateColumns: "1fr 70px 105px 80px 105px 40px 90px 28px",
+                  gridTemplateColumns: "1fr 105px 120px 105px 40px 90px 28px",
                 }}
               >
                 <div>Item Description</div>
-                <div className="text-center">Qty</div>
                 <div className="text-center">Unit Type</div>
-                <div className="text-center">Measure</div>
+                <div className="text-center">Measurement/Qty</div>
                 <div className="text-right">Rate (₹)</div>
                 <div className="text-center">GST</div>
                 <div className="text-right">Amount (₹)</div>
@@ -875,14 +818,14 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
               <div className="divide-y divide-slate-100 overflow-visible">
                 {section.lines.map((line) => {
                   const lineAmt = calcLineAmount(line) * (1 + (line.gstRate || 0) / 100);
-                  const isSqft = line.pricingType === "per_sqft" || line.pricingType === "per_running_ft";
+                  const measurement = getLineMeasurement(line);
 
                   return (
                     <div key={line.id} className="flex flex-col hover:bg-slate-50 transition-colors">
                       <div
                         className="grid gap-2 px-4 py-3.5 items-center overflow-visible"
                         style={{
-                          gridTemplateColumns: "1fr 70px 105px 80px 105px 40px 90px 28px",
+                          gridTemplateColumns: "1fr 105px 120px 105px 40px 90px 28px",
                           position: "relative",
                           zIndex: activeRowId === line.id ? 50 : 1,
                         }}
@@ -935,35 +878,20 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                         )}
                       </div>
 
-                      {/* Qty */}
-                      <input
-                        type="number"
-                        min="1"
-                        step="1"
-                        value={line.quantity === 0 ? "" : line.quantity}
-                        disabled={isLocked}
-                        onFocus={(e) => e.target.select()}
-                        onBlur={() => {
-                          if (line.quantity <= 0) {
-                            updateLine(section.siteVisitItemId, line.id, { quantity: 1 });
-                          }
-                        }}
-                        onChange={(e) =>
-                          updateLine(section.siteVisitItemId, line.id, {
-                            quantity: Number(e.target.value) || 0,
-                          })
-                        }
-                        className={`${inputCls} w-full py-1.5 text-center font-mono`}
-                        placeholder="0"
-                      />
-
                       {/* Unit Type Selector */}
                       <select
-                        value={line.pricingType}
+                        value={normalizePricingType(line.pricingType)}
                         disabled={isLocked}
                         onChange={(e) => {
-                          const newType = e.target.value as "per_unit" | "per_sqft" | "per_running_ft";
-                          const patch: Partial<LineItem> = { pricingType: newType };
+                          const newType = e.target.value as PricingType;
+                          const measurement = getLineMeasurement(line) || 1;
+                          const patch: Partial<LineItem> = {
+                            pricingType: newType,
+                            unit: newType === "per_sqft" ? "sqft" : "nos",
+                            quantity: measurement,
+                            totalSqFt: measurement,
+                          };
+
                           if (line.productId) {
                             const p = products.find((prod) => prod.id === line.productId);
                             if (p) {
@@ -976,29 +904,31 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                       >
                         <option value="per_unit">Per Unit</option>
                         <option value="per_sqft">Per Sq.Ft</option>
-                        <option value="per_running_ft">Per Run.Ft</option>
                       </select>
 
-                      {/* Measure (SqFt / Running Ft) */}
-                      {isSqft ? (
-                        <input
-                          type="number"
-                          min="0.01"
-                          step="0.01"
-                          value={line.totalSqFt === 0 ? "" : line.totalSqFt}
-                          disabled={isLocked}
-                          onFocus={(e) => e.target.select()}
-                          onChange={(e) =>
-                            updateLine(section.siteVisitItemId, line.id, {
-                              totalSqFt: parseFloat(e.target.value) || 0,
-                            })
+                      {/* Qty / Measurement — same field for unit and sqft */}
+                      <input
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        value={measurement === 0 ? "" : measurement}
+                        disabled={isLocked}
+                        onFocus={(e) => e.target.select()}
+                        onBlur={() => {
+                          if (getLineMeasurement(line) <= 0) {
+                            setLineMeasurement(section.siteVisitItemId, line.id, 1);
                           }
-                          className={`${inputCls} w-full py-1.5 text-center font-mono`}
-                          placeholder={line.pricingType === "per_sqft" ? "Sq.Ft" : "Run.Ft"}
-                        />
-                      ) : (
-                        <div className="text-center text-[10px] text-slate-300 font-bold">—</div>
-                      )}
+                        }}
+                        onChange={(e) =>
+                          setLineMeasurement(
+                            section.siteVisitItemId,
+                            line.id,
+                            parseFloat(e.target.value) || 0
+                          )
+                        }
+                        className={`${inputCls} w-full py-1.5 text-center font-mono`}
+                        placeholder="Qty / Meas."
+                      />
 
                       {/* Rate */}
                       <div className="relative">
@@ -1108,16 +1038,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
         })}
       </div>
 
-      {/* Add Custom signage section button */}
-      {!isLocked && (
-        <button
-          type="button"
-          onClick={addCustomSection}
-          className="w-full flex items-center justify-center gap-2 py-3 border border-dashed border-slate-300 rounded-2xl text-xs font-black text-slate-500 hover:border-blue-500 hover:text-blue-600 hover:bg-slate-50 transition-all"
-        >
-          <Plus size={14} /> Add Custom Signage Item
-        </button>
-      )}
+
 
 
 
@@ -1269,83 +1190,6 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
         </div>
       </div>
 
-      {/* Checklist & Move to Next Stage Box */}
-      {status === "Approved" && (
-        <div className="bg-slate-50 border border-slate-200 rounded-3xl p-6 space-y-4 shadow-sm">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-            <div className="space-y-2">
-              <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
-                <Sparkles size={14} className="text-blue-600 animate-pulse" />
-                Quotation Approved - Next Steps
-              </h4>
-              <p className="text-[11px] text-slate-500 font-bold">
-                Please verify the checklist below to transition this order to the {nextStageLabel} phase.
-              </p>
-              
-              {/* Checklist */}
-              <div className="space-y-2 pt-2">
-                <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={advanceReceived}
-                    disabled={isPastQuotation}
-                    onChange={(e) => setAdvanceReceived(e.target.checked)}
-                    className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:cursor-not-allowed"
-                  />
-                  <span className="text-xs font-bold text-slate-700">
-                    Advance payment received
-                  </span>
-                </label>
-
-                <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={measurementsVerified}
-                    disabled={isPastQuotation}
-                    onChange={(e) => setMeasurementsVerified(e.target.checked)}
-                    className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:cursor-not-allowed"
-                  />
-                  <span className="text-xs font-bold text-slate-700">
-                    Site measurements and requirements verified
-                  </span>
-                </label>
-              </div>
-            </div>
-
-            <div className="flex flex-col items-stretch md:items-end gap-3 justify-center">
-              {isPastQuotation ? (
-                <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-2xl px-4 py-3 flex items-center gap-2 text-xs font-bold shadow-sm">
-                  <ShieldCheck size={16} className="text-emerald-600" />
-                  <div>
-                    <div className="font-black uppercase tracking-wider text-[10px]">Moved to {nextStageLabel}</div>
-                    <div className="text-[10px] text-emerald-600 font-bold">Advance paid & verified</div>
-                  </div>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  disabled={!advanceReceived || !measurementsVerified || isMovingToDesign}
-                  onClick={handleMoveToNextStage}
-                  className="py-2 px-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isMovingToDesign ? (
-                    <>
-                      <Loader2 size={13} className="animate-spin" />
-                      Moving to {nextStageLabel}...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles size={13} />
-                      Move to {nextStageLabel}
-                    </>
-                  )}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Save Msg Notification */}
       {saveMsg && (
         <div className={`p-3.5 rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm border ${
@@ -1360,8 +1204,17 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
       {(() => {
         const portalTarget = isMounted ? document.getElementById("modal-footer-portal") : null;
         
-        const isEmployee = currentUserRole === "Employee";
+        const isEmployeeRole = currentUserRole === "Employee";
         const isAdmin = currentUserRole === "Admin";
+        const isDesignFirst = order.workflow_type === "design_first";
+        const nextStageLabel = isDesignFirst ? "Production" : "Design";
+        const quoteStage = order.stage || "";
+        const canMoveToNextStage =
+          status === "Approved" &&
+          !!onRequestAdvance &&
+          (isAdmin || currentUserRole === "Employee") &&
+          quoteStage === "Quotation Approved";
+        const paymentLocked = order.stageStatus === "Pending Payment Verification";
         
         const actionButtons = (
           <>
@@ -1377,7 +1230,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                   Save Draft
                 </button>
                 
-                {isEmployee && (
+                {isEmployeeRole && (
                   <button
                     type="button"
                     onClick={() => setPendingAction("admin")}
@@ -1411,8 +1264,22 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                 )}
               </div>
             ) : (
-              <div className="py-2 px-4 bg-slate-100 border border-slate-200 text-slate-500 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 shadow-sm">
-                <Check size={14} /> Submitted & Locked
+              <div className="flex items-center gap-2">
+                <div className="py-2 px-4 bg-slate-100 border border-slate-200 text-slate-500 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 shadow-sm">
+                  <Check size={14} /> Submitted & Locked
+                </div>
+                {canMoveToNextStage && (
+                  <button
+                    type="button"
+                    onClick={onRequestAdvance}
+                    className="py-2 px-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm"
+                  >
+                    <Sparkles size={13} />
+                    {paymentLocked
+                      ? "Complete Payment to Continue"
+                      : `Move to ${nextStageLabel}`}
+                  </button>
+                )}
               </div>
             )}
           </>
@@ -1637,9 +1504,9 @@ function ProductInfoModal({ product, onClose }: { product: Product; onClose: () 
             <div>
               <span style={{ fontSize: "9px", color: "#94a3b8", fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.05em", display: "block" }}>Standard Rate</span>
               <span style={{ fontSize: "12px", fontWeight: 900, color: "#1d4ed8", fontFamily: "monospace", display: "block", marginTop: "2px" }}>
-                ₹{(product.price_per_unit || product.price_per_sqft || product.price_per_running_ft || 0).toLocaleString("en-IN")}
+                ₹{(product.price_per_unit || product.price_per_sqft || 0).toLocaleString("en-IN")}
                 <span style={{ fontSize: "10px", color: "#94a3b8", fontWeight: 500, fontFamily: "sans-serif" }}>
-                  /{product.pricing_type === "per_sqft" ? "sqft" : product.pricing_type === "per_running_ft" ? "rft" : "unit"}
+                  /{product.pricing_type === "per_sqft" ? "sqft" : "unit"}
                 </span>
               </span>
             </div>

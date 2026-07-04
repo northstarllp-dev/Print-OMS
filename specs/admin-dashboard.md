@@ -29,10 +29,14 @@ The Admin Dashboard oversees all states, specifically managing:
 | Pending Admin Approval: Quote Approval | Review the drafted quotation | Quotation moves to Sent |
 | Pending Admin Approval: Design Approval | Review the drafted design proofs | Design moves to Sent |
 | Pending Admin Approval: Job Done | Review after-photos and signature | Completed |
+| **Pending Payment Verification** | Verify or waive required payment milestones on the Payments tab | Stage stays the same; status returns to `Normal` when clear |
 
 ## Business Rules
 
-* Only Admins can clear a `stage_status` lock.
+* Only Admins can clear a `stage_status` lock (admin approval locks and payment locks).
+* **Payments are not a pipeline stage.** Creating a required payment sets `stage_status = Pending Payment Verification` without changing `stage`. See `specs/payments.md`.
+* On Approve & Advance, Admin is prompted whether a payment is required before the next stage (`PaymentRequiredModal`).
+* Stage transitions are blocked while any payment has `required_for_next_stage = true` and status is not `verified` or `waived`.
 * Admins can assign or reassign employees to any order.
 * Admins can change the `workflow_type` (Quote First vs Design First) to adapt to specific customer requests.
 * Deleting orders is generally restricted or soft-deleted via marking as `Lost`.
@@ -119,3 +123,7 @@ Admin clicks "Approve Stage"
 Version: 1.0
 Date: 2026-07-03
 Summary: Initial specification for the Admin Dashboard and Control Workflow.
+
+Version: 1.1
+Date: 2026-07-04
+Summary: Documented `Pending Payment Verification` lock and payment gate modal on stage advance.

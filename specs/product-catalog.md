@@ -9,7 +9,7 @@
 ## Workflow
 
 1. **Creation**: Admin navigates to the Products dashboard and clicks "Add Product".
-2. **Configuration**: Admin defines the product name, category, pricing strategy (per sqft, per running ft, per unit), and base price.
+2. **Configuration**: Admin defines the product name, category, pricing strategy (per sqft or per unit), and base price. Running-feet pricing has been removed.
 3. **Usage**: When a staff member builds a Quotation, this catalog populates the dropdown. Selecting a product auto-fills the price based on the selected pricing strategy.
 4. **Maintenance**: Admins can update prices as material costs change or toggle products to inactive if they are no longer offered.
 
@@ -48,9 +48,8 @@ Permissions:
 | company_id | uuid (FK) | Reference to the tenant company |
 | name | text | e.g., "3mm ACP Board" |
 | category | text | e.g., "Raw Material", "Finished Sign" |
-| pricing_type | text | "per_sqft", "per_running_ft", or "per_unit" |
+| pricing_type | text | `"per_sqft"` or `"per_unit"` (running feet removed) |
 | price_per_sqft | numeric | Base price if applicable |
-| price_per_running_ft | numeric | Base price if applicable |
 | price_per_unit | numeric | Base price if applicable |
 | is_active | boolean | Determines visibility in quotes |
 | images | jsonb | Array of product image URLs (optional) |
@@ -93,3 +92,7 @@ Admin edits price in Product Modal
 Version: 1.0
 Date: 2026-07-03
 Summary: Initial specification for the Product Catalog.
+
+Version: 1.1
+Date: 2026-07-04
+Summary: Removed running-feet pricing (`price_per_running_ft` / `per_running_ft`).

@@ -18,7 +18,6 @@ export default async function ProductsPage() {
     created_at: p.created_at ?? null,
     price_per_sqft: p.price_per_sqft != null ? Number(p.price_per_sqft) : null,
     price_per_unit: p.price_per_unit != null ? Number(p.price_per_unit) : null,
-    price_per_running_ft: p.price_per_running_ft != null ? Number(p.price_per_running_ft) : null,
     images: Array.isArray(p.images) ? p.images : [],
   }));
 

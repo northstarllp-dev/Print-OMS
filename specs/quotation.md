@@ -9,7 +9,7 @@
 ## Workflow
 
 1. **Initialization**: Once an order reaches `Quotation In Progress`, the system automatically fetches site visit measurements and available product catalogs.
-2. **Drafting**: Estimator maps products (e.g., "ACP Signage", "Acrylic Letters") to the measured locations. The system auto-calculates totals based on `price_per_sqft`, `price_per_unit`, or `price_per_running_ft`.
+2. **Drafting**: Estimator maps products (e.g., "ACP Signage", "Acrylic Letters") to the measured locations. The system auto-calculates totals based on `price_per_sqft` or `price_per_unit` (running-feet pricing removed). Each signage section shows site measurements with units from `site_visit_measurements` (`width_unit`, `height_unit`, `depth_unit`).
 3. **Internal Review**: The quotation is saved as `Draft`. Admin reviews the subtotal, taxes, and applies any necessary discounts.
 4. **Sending to Customer**: Admin clicks "Send to Customer", changing the quotation status to `Sent`. An activity log is recorded.
 5. **Customer Review**: Customer views the itemized quote via the portal. They can approve it or reject/request changes.
@@ -20,15 +20,17 @@
 | State | Description | Next Allowed States |
 | ----- | ----------- | ------------------- |
 | Draft | Being prepared internally by staff | Sent |
-| Sent | Delivered to customer for review | Approved, Rejected |
+| Sent | Delivered to customer for review | Approved, Rejected (displayed to customer as "Sent for Revision") |
 | Approved | Customer signed off on the costs | N/A (Order stage progresses) |
-| Rejected | Customer declined or requested changes | Draft (New iteration) |
+| Rejected | Customer requested revisions. UI displays "Sent for Revision" and disables customer action buttons until a revised quote is sent. | Draft (New iteration) |
 
 ## Business Rules
 
 * Quotations must have a unique identifier format `QT-NNN`.
-* Line items can use three pricing types: `per_sqft`, `per_running_ft`, or `per_unit`.
-* Site visit measurements (Width × Height) auto-populate the total square footage for line items mapped to them.
+* Line items use two pricing types: `per_unit` or `per_sqft` (running feet removed from products and quotations).
+* A single **Qty / Measurement** field applies to both types. Amount is always `measurement × unitPrice` (`getLineMeasurement` / `calcLineAmount` in `src/features/quotations/utils/lineAmount.ts`).
+* `quantity` and `totalSqFt` are kept in sync with the same measurement value. Legacy lines that stored measurement only in `totalSqFt` (with `quantity = 1`) are still resolved correctly.
+* Site visit measurements (Width × Height × Depth) display under each signage section with units from the DB (`formatSiteMeasurementLabel`). Selecting a product pre-fills measurement from site visit width × height when available.
 * Discounts are applied before tax calculation.
 * Standard GST rates (0%, 5%, 12%, 18%, 28%) are applicable per line item.
 * Quotations can only be sent to the customer if the order stage is `Quotation In Progress`.
@@ -126,7 +128,8 @@ Fields:
 ### QuotationTab (Customer Facing)
 Purpose: Read-only summary view for the customer to review line items, totals, and terms.
 Fields:
-* Action buttons: "Approve Quotation", "Request Changes".
+* Dynamic Status Badges: Shows "Sent for Revision" in amber when status is Rejected or Negotiation.
+* Action Panel: Shows "Approve Quotation" / "Decline / Revise" buttons only when status is `Sent`. If Rejected/Negotiation, renders a banner indicating the revision request is being processed.
 
 ## File Structure
 
@@ -159,16 +162,21 @@ Fields:
 
 ## Edge Cases
 
-* Flat rate items vs Area items: The code dynamically changes the formula `(Qty * Price)` vs `(Qty * SqFt * Price)` based on the selected `pricingType`.
+* Flat rate vs area: Both use the same Qty/Measurement field and formula `measurement × rate`. Pricing type only affects the rate source (`price_per_unit` vs `price_per_sqft`) and unit label (`nos` vs `sqft`).
 * Blank/Manual rows: Staff can add rows without selecting a product from the database, entering a custom description and price manually.
+* Stage advance after quote approval uses **Approve & Advance** with the payment gate modal (see `specs/payments.md`). The old quotation checklist (“Advance payment received / Move to Design”) has been removed.
 
 ## Future Enhancements
 
 * Export to PDF: Server-side PDF generation of the quote document using Puppeteer or react-pdf.
-* Payment Gateway Integration: Allow the customer to pay the advance amount directly upon clicking "Approve Quotation".
+* Payment Gateway Integration: Allow the customer to pay milestones online (Razorpay/PhonePe) via the Payments tab.
 
 ## Change Log
 
 Version: 1.0
 Date: 2026-07-03
 Summary: Initial specification for the Quotation Workflow.
+
+Version: 1.1
+Date: 2026-07-04
+Summary: Unified Qty/Measurement for unit and sqft; removed running feet; site measurement units on section headers; payment checklist integrates with `payments` milestones.
