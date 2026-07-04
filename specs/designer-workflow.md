@@ -82,7 +82,6 @@ Design data was extracted from the legacy `orders.design_details` JSONB column i
 | `order_id` | uuid FK → `orders.id` | Unique, ON DELETE CASCADE |
 | `resources` | jsonb | Inspiration / logo uploads |
 | `items` | jsonb | Multi-item proofs, versions, comments, production files |
-| `payment_verified` | boolean | Legacy checklist flag; payment **gates** use `payments` table |
 | `created_at` / `updated_at` | timestamptz | `updated_at` via trigger |
 
 `items` / `resources` JSONB shape (unchanged from legacy):
@@ -165,7 +164,7 @@ Request:
 
 Validation Rules:
 * User must be authenticated.
-* Payload maps to `Partial<DesignRecord>` (`resources`, `items`, `payment_verified`).
+* Payload maps to `Partial<DesignRecord>` (`resources`, `items`).
 * Writes to `designs` via UPSERT on `order_id`.
 
 ### Upload File

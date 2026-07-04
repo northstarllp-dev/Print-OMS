@@ -383,7 +383,6 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
                   subtotal: Number(updatedQuote.subtotal) || 0,
                   discount: Number(updatedQuote.discount) || 0,
                   tax: Number(updatedQuote.tax) || 0,
-                  advancePaid: updatedQuote.advance_paid || false,
                   signageOptions: updatedQuote.signage_options || [],
                   shipping: Number(updatedQuote.shipping) || 0,
                   notes: updatedQuote.notes || "",

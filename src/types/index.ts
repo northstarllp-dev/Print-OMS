@@ -191,21 +191,11 @@ export interface DesignItem {
   productionFiles?: { id: string; name: string; url: string; createdAt: string }[];
 }
 
-export interface DesignDetails {
-  resources?: DesignResource[];
-  items?: DesignItem[];
-  versions?: DesignVersion[]; // Legacy support
-  currentVersion?: number; // Legacy support
-  productionFiles?: { id: string; name: string; url: string; createdAt: string }[];
-  paymentVerified?: boolean;
-}
-
 export interface DesignRecord {
   id: string;
   order_id: string;
   resources: DesignResource[];
   items: DesignItem[];
-  payment_verified: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -246,7 +236,7 @@ export interface Order {
   design?: DesignRecord;
   productionDetails?: ProductionDetails;
   installationDetails?: InstallationDetails;
-  stageStatus?: "Normal" | "Pending Payment Verification" | "Pending Admin Approval: Site Visit Completed" | "Pending Admin Approval: Quote Stage" | "Pending Admin Approval: Quote Approval" | "Pending Admin Approval: Design Approval" | "Pending Admin Approval: Production Ready" | "Pending Admin Approval: Job Done" | string;
+  stageStatus?: "Normal" | "Pending Admin Approval: Site Visit Completed" | "Pending Admin Approval: Quote Stage" | "Pending Admin Approval: Quote Approval" | "Pending Admin Approval: Design Approval" | "Pending Admin Approval: Production Ready" | "Pending Admin Approval: Job Done" | string;
   stageAdminNotes?: string;
   orderCode?: string;
   health?: string;
@@ -256,37 +246,24 @@ export interface Order {
   workflow_type?: "quote_first" | "design_first";
 }
 
-/** Payment milestone statuses (business gates, not pipeline stages). */
-export type PaymentStatus =
-  | "pending"
-  | "requested"
-  | "paid"
-  | "verified"
-  | "waived";
+/** Payment tracking statuses (financial record only — no workflow). */
+export type PaymentStatus = "expected" | "received";
 
 export type PaymentAmountType = "fixed" | "percentage";
-
-/** Stage at which the payment gate was created / applies. */
-export type PaymentTriggerStage = string;
 
 export interface Payment {
   id: string;
   order_id: string;
   payment_name: string;
-  trigger_stage: PaymentTriggerStage;
+  /** Optional note of order stage when recorded (not a gate). */
+  trigger_stage: string;
   amount_type: PaymentAmountType;
   amount?: number | null;
   percentage?: number | null;
   calculated_amount?: number | null;
-  required_for_next_stage: boolean;
   status: PaymentStatus;
-  payment_method?: string | null;
-  payment_reference?: string | null;
   notes?: string | null;
-  requested_at?: string | null;
   paid_at?: string | null;
-  verified_at?: string | null;
-  verified_by?: string | null;
   created_at: string;
   updated_at: string;
 }

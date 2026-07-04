@@ -198,21 +198,6 @@ export async function sendQuotationToCustomer(quotationId: string, adminName: st
   revalidatePath("/admin/orders");
 }
 
-/** Admin sets advance percent & amount */
-export async function setQuotationAdvance(quotationId: string, advancePercent: number, grandTotal: number) {
-  const supabase = await getSupabase();
-  const advanceAmount = Math.round((advancePercent / 100) * grandTotal * 100) / 100;
-  const { error } = await supabase.from("quotations").update({
-    advance_percent: advancePercent,
-    advance_amount: advanceAmount,
-  }).eq("id", quotationId);
-  if (error) throw new Error(error.message);
-  return advanceAmount;
-}
-
-
-
-
 // ─────────────────────────────────────────────────────────────────────────────
 // WRITE — Customer Actions
 // ─────────────────────────────────────────────────────────────────────────────

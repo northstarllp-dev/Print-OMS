@@ -171,8 +171,8 @@
 
 | Column | Type | Notes |
 |--------|------|-------|
-| `stage` | `text` | Pipeline phase (unchanged by payment gates) |
-| `stage_status` | `text` | `"Normal"`, `"Pending Admin Approval: …"`, or **`"Pending Payment Verification"`** |
+| `stage` | `text` | Pipeline phase |
+| `stage_status` | `text` | `"Normal"` or `"Pending Admin Approval: …"` |
 
 Design, production, installation, and payment data live in dedicated tables (`designs`, `productions`, `installations`, `payments`) — not JSONB columns on `orders`. Legacy `orders.design_details` was migrated and dropped.
 
@@ -406,38 +406,29 @@ One row per order (extracted from legacy `orders.design_details`).
 | `order_id` | `uuid` | NO | — | FK → `orders.id`, UNIQUE |
 | `resources` | `jsonb` | NO | `'[]'` | Inspiration / logos |
 | `items` | `jsonb` | NO | `'[]'` | Proofs, versions, comments, production files |
-| `payment_verified` | `boolean` | NO | `false` | Legacy checklist; gates use `payments` |
 | `created_at` | `timestamptz` | NO | `now()` | |
 | `updated_at` | `timestamptz` | NO | `now()` | Trigger-maintained |
 
 ### 17. payments
-Payment milestones (business gates — not a pipeline stage).
+Financial tracking only (does not block stage progression).
 
 | Column | Type | Nullable | Default | Notes |
 |--------|------|----------|---------|-------|
 | `id` | `uuid` | NO | `gen_random_uuid()` | Primary key |
 | `order_id` | `uuid` | NO | — | FK → `orders.id` ON DELETE CASCADE |
-| `payment_name` | `text` | NO | — | |
-| `trigger_stage` | `text` | NO | — | Stage when gate was created |
+| `payment_name` | `text` | NO | — | e.g. `1st installment` |
+| `trigger_stage` | `text` | NO | — | Optional note of order stage when recorded |
 | `amount_type` | `text` | NO | — | `fixed` / `percentage` |
 | `amount` | `numeric` | YES | — | Fixed amount |
 | `percentage` | `numeric` | YES | — | % of quotation `grand_total` |
 | `calculated_amount` | `numeric` | YES | — | Resolved amount |
-| `required_for_next_stage` | `boolean` | NO | `true` | |
-| `status` | `text` | NO | `'pending'` | `pending` / `requested` / `paid` / `verified` / `waived` |
-| `payment_method` | `text` | YES | — | `manual` today; future gateways |
-| `payment_reference` | `text` | YES | — | UTR / gateway id |
+| `status` | `text` | NO | `'expected'` | `expected` / `received` |
 | `notes` | `text` | YES | — | |
-| `requested_at` | `timestamptz` | YES | — | |
-| `paid_at` | `timestamptz` | YES | — | |
-| `verified_at` | `timestamptz` | YES | — | |
-| `verified_by` | `uuid` | YES | — | |
+| `paid_at` | `timestamptz` | YES | — | Set when marked received |
 | `created_at` | `timestamptz` | NO | `now()` | |
 | `updated_at` | `timestamptz` | NO | `now()` | |
 
 Indexes: `order_id`, `status`, `trigger_stage`.
-
-When a required payment is created, `orders.stage_status` becomes `Pending Payment Verification` (stage unchanged).
 
 ### 18. productions / installations
 Dedicated tables for workshop and field work (extracted from legacy order JSONB). See application code for full column lists.

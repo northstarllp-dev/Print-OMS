@@ -10,7 +10,6 @@ interface AdminControlModuleProps {
   employees: Employee[];
   onAdminApprove: () => Promise<void>;
   onApproveWithWorkflowChoice?: () => void;
-  onOpenPayments?: () => void;
   updateSiteVisitDetails: (orderId: string, details: Partial<SiteVisitDetails>) => Promise<void>;
   updateOrderStage: (orderId: string, stage: string) => Promise<void>;
 }
@@ -38,11 +37,9 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
   employees,
   onAdminApprove,
   onApproveWithWorkflowChoice,
-  onOpenPayments,
   updateSiteVisitDetails,
   updateOrderStage
 }) => {
-  const isPaymentLocked = order.stageStatus === "Pending Payment Verification";
   const [savingNotes, setSavingNotes] = useState(false);
 
   // Employee stats for assignment
@@ -134,27 +131,6 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
                <h4 className="text-sm font-bold text-slate-700">Order is Cancelled</h4>
                <p className="text-xs text-slate-500 mt-1">This order is lost/cancelled. Approvals are blocked.</p>
              </div>
-          ) : isPaymentLocked ? (
-            <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div>
-                <h4 className="text-sm font-bold text-rose-900 flex items-center gap-2">
-                  <AlertTriangle size={16} />
-                  Payment Verification Required
-                </h4>
-                <p className="text-xs text-rose-700 mt-1">
-                  Stage remains <span className="font-bold">{order.stage}</span>. Required payment milestones must be verified or waived before progression.
-                </p>
-              </div>
-              {onOpenPayments && (
-                <button
-                  type="button"
-                  onClick={onOpenPayments}
-                  className="px-4 py-2 bg-rose-600 text-white rounded-lg text-xs font-bold hover:bg-rose-700 transition-colors shrink-0"
-                >
-                  Open Payments
-                </button>
-              )}
-            </div>
           ) : order.stageStatus && order.stageStatus !== "Normal" ? (
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>

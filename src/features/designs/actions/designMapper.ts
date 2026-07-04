@@ -22,7 +22,6 @@ export function mapDesignFromDb(d: unknown): DesignRecord {
     order_id: record.order_id as string,
     resources,
     items,
-    payment_verified: (record.payment_verified as boolean) || false,
     created_at: record.created_at as string,
     updated_at: record.updated_at as string
   };
@@ -33,7 +32,6 @@ export function mapDesignToDb(design: Partial<DesignRecord>): Record<string, unk
     ...(design.id ? { id: design.id } : {}),
     ...(design.order_id ? { order_id: design.order_id } : {}),
     ...(design.resources !== undefined ? { resources: design.resources } : {}),
-    ...(design.items !== undefined ? { items: design.items } : {}),
-    ...(design.payment_verified !== undefined ? { payment_verified: design.payment_verified } : {})
+    ...(design.items !== undefined ? { items: design.items } : {})
   };
 }

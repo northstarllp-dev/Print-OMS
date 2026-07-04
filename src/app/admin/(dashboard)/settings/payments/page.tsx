@@ -1,5 +1,6 @@
-import { PaymentGateSettings } from "@/features/settings/components/PaymentGateSettings";
+import { redirect } from "next/navigation";
 
-export default function PaymentGateSettingsPage() {
-  return <PaymentGateSettings />;
+/** Payment gate settings removed — payments are financial tracking only. */
+export default function PaymentsSettingsRedirect() {
+  redirect("/admin/settings");
 }

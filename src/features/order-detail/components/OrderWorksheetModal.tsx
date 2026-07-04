@@ -24,7 +24,6 @@ import { ProductionModule } from "./production/ProductionModule";
 import { AdminControlModule } from "./admin/AdminControlModule";
 import { InstallationModule } from "./installation/InstallationModule";
 import { PaymentsModule } from "./payments/PaymentsModule";
-import { PaymentRequiredModal } from "./payments/PaymentRequiredModal";
 import { CustomerDetailsDrawer } from "./CustomerDetailsDrawer";
 import { WorkflowChoiceModal } from "./WorkflowChoiceModal";
 import {
@@ -40,7 +39,6 @@ import {
   approveSiteVisitAction,
   freezeSiteVisitAction,
   setWorkflowTypeAction,
-  setWorkflowTypeOnlyAction,
 } from "@/features/orders/actions/orderActions";
 import {
   updateDesignDetailsAction,
@@ -196,9 +194,6 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   const [activeRightPanel, setActiveRightPanel] = useState<"logs" | "chat" | null>(null);
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [isWorkflowChoiceOpen, setIsWorkflowChoiceOpen] = useState(false);
-  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-  /** When set, payment modal skip/create runs workflow choice then advance/lock. */
-  const [pendingWorkflowType, setPendingWorkflowType] = useState<"quote_first" | "design_first" | null>(null);
   const [adminOverrideUnlocked, setAdminOverrideUnlocked] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -356,11 +351,6 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     triggerLocalAlert("Stage approved and advanced.", "success");
   };
 
-  const openPaymentGate = (workflowType?: "quote_first" | "design_first" | null) => {
-    setPendingWorkflowType(workflowType ?? null);
-    setIsPaymentModalOpen(true);
-  };
-
   const handleAdminApprove = async () => {
     setIsProcessing(true);
     try {
@@ -371,38 +361,17 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
         setIsProcessing(false);
         return;
       }
-      // Leaving Site Visit with pending admin approval → choose workflow, then payment gate
+      // Leaving Site Visit with pending admin approval → choose workflow path
       if (
         order.stage.startsWith("Site Visit") &&
         order.stageStatus &&
-        order.stageStatus !== "Normal" &&
-        order.stageStatus !== "Pending Payment Verification"
+        order.stageStatus !== "Normal"
       ) {
         setIsWorkflowChoiceOpen(true);
         setIsProcessing(false);
         return;
       }
-      // Payment lock: must verify/waive on Payments tab first
-      if (order.stageStatus === "Pending Payment Verification") {
-        triggerLocalAlert("Payment verification required before proceeding.", "warning");
-        setActiveStepTab(PAYMENTS_TAB);
-        setIsProcessing(false);
-        return;
-      }
-      // Admin-configured stages show the payment-required popup; others advance directly
-      const { isPaymentGateEnabledForStage } = await import(
-        "@/features/settings/actions/paymentGateSettingsActions"
-      );
-      const promptPayment = await isPaymentGateEnabledForStage(
-        order.stage,
-        order.id,
-        order.stageStatus
-      );
-      if (promptPayment) {
-        openPaymentGate(null);
-      } else {
-        await executeAdminApprove();
-      }
+      await executeAdminApprove();
       setIsProcessing(false);
     } catch (err: any) {
       triggerLocalAlert(err?.message || "Failed to approve stage.", "error");
@@ -533,7 +502,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
 
   /* ── Module fallbacks ── */
   const sv = order.siteVisitDetails || { width: 0, height: 0, depth: 0, auditDate: "", auditTime: "", sitePersonnel: "", photos: [], completed: false, notes: "", locations: [] };
-  const dd = (order.design as DesignRecord) || { resources: [], items: [], payment_verified: false };
+  const dd = (order.design as DesignRecord) || { resources: [], items: [] };
   const pd = order.productionDetails || { procurementOfMaterials: false, acpAndAcrylicCutting: false, lightingAndWiring: false, qualityCheck: false };
   const inst = order.installationDetails || { photoUrl: "", customerSignature: "", paymentCode: "" };
 
@@ -676,7 +645,6 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           employees={employees}
           onAdminApprove={handleAdminApprove}
           onApproveWithWorkflowChoice={() => setIsWorkflowChoiceOpen(true)}
-          onOpenPayments={() => setActiveStepTab(PAYMENTS_TAB)}
           updateSiteVisitDetails={updateSiteVisitDetails}
           updateOrderStage={handleUpdateOrderStage}
         />
@@ -690,17 +658,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           currentStage={order.stage}
           currentUserRole={currentUserRole}
           isEmployee={isStaffOrAdmin}
-          onPaymentsChanged={async () => {
-            const { getBlockingPayments } = await import(
-              "@/features/payments/actions/paymentActions"
-            );
-            const blocking = await getBlockingPayments(order.id);
-            setOrder((prev) => ({
-              ...prev,
-              stageStatus: blocking.length === 0 ? "Normal" : "Pending Payment Verification",
-            }));
-            router.refresh();
-          }}
+          onPaymentsChanged={() => router.refresh()}
         />
       );
     }
@@ -952,9 +910,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                       }}
                     >
                       <Lock size={14} /> Admin Controls
-                      {order.stageStatus &&
-                        order.stageStatus !== "Normal" &&
-                        order.stageStatus !== "Pending Payment Verification" && (
+                      {order.stageStatus && order.stageStatus !== "Normal" && (
                         <span className="flex items-center justify-center w-4 h-4 ml-1 text-[10px] font-bold text-white bg-red-500 rounded-full animate-pulse shadow-sm">
                           1
                         </span>
@@ -992,11 +948,6 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                     }}
                   >
                     <CreditCard size={14} /> Payment
-                    {order.stageStatus === "Pending Payment Verification" && (
-                      <span className="flex items-center justify-center w-4 h-4 ml-1 text-[10px] font-bold text-white bg-red-500 rounded-full animate-pulse shadow-sm">
-                        1
-                      </span>
-                    )}
                   </button>
                 </div>
               </div>
@@ -1109,60 +1060,13 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
 
 
-              {/* Stage / payment lock status */}
-              {order.stageStatus === "Pending Payment Verification" ? (
-                <button
-                  type="button"
-                  onClick={() => setActiveStepTab(PAYMENTS_TAB)}
-                  style={{ fontSize: "11px", fontWeight: "800", color: "#BE123C", background: "#FFF1F2", border: "1px solid #FECDD3", padding: "4px 12px", borderRadius: "6px", cursor: "pointer" }}
-                >
-                  Payment Verification Required
-                </button>
-              ) : order.stageStatus && order.stageStatus !== "Normal" ? (
+              {order.stageStatus && order.stageStatus !== "Normal" && (
                 <span style={{ fontSize: "11px", fontWeight: "800", color: "#EA580C", background: "#FFF7ED", border: "1px solid #FED7AA", padding: "4px 12px", borderRadius: "6px" }}>
                   Pending Approval
                 </span>
-              ) : null}
+              )}
             </div>
           </div>
-
-          {order.stageStatus === "Pending Payment Verification" && activeStepTab !== PAYMENTS_TAB && (
-            <div
-              style={{
-                margin: "12px 24px 0",
-                padding: "10px 14px",
-                background: "#FFF1F2",
-                border: "1px solid #FECDD3",
-                borderRadius: "12px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: "12px",
-                flexShrink: 0,
-              }}
-            >
-              <p style={{ margin: 0, fontSize: "12px", fontWeight: 600, color: "#9F1239" }}>
-                Stage is locked at <strong>{order.stage}</strong> until required payments are verified or waived.
-              </p>
-              <button
-                type="button"
-                onClick={() => setActiveStepTab(PAYMENTS_TAB)}
-                style={{
-                  padding: "6px 12px",
-                  background: "#E11D48",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "8px",
-                  fontSize: "11px",
-                  fontWeight: 800,
-                  cursor: "pointer",
-                  flexShrink: 0,
-                }}
-              >
-                Open Payments
-              </button>
-            </div>
-          )}
 
           {/* Module body (scrollable) */}
           <div style={{ flex: 1, overflowY: "auto", padding: "0 24px 24px 24px" }}>
@@ -1330,131 +1234,24 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
             setIsWorkflowChoiceOpen(false);
             setIsProcessing(true);
             try {
-              const { isPaymentGateEnabledForStage } = await import(
-                "@/features/settings/actions/paymentGateSettingsActions"
+              await setWorkflowTypeAction(order.id, workflowType);
+              setOrder((prev) => ({
+                ...prev,
+                workflow_type: workflowType,
+                stage:
+                  workflowType === "design_first"
+                    ? "Design In Progress"
+                    : "Quotation In Progress",
+                stageStatus: "Normal",
+              }));
+              router.refresh();
+              triggerLocalAlert(
+                `Workflow set to "${workflowType === "design_first" ? "Design First" : "Quote First"}". Order advanced.`,
+                "success"
               );
-              const promptPayment = await isPaymentGateEnabledForStage(
-                order.stage,
-                order.id,
-                order.stageStatus
-              );
-              if (promptPayment) {
-                openPaymentGate(workflowType);
-              } else {
-                await setWorkflowTypeAction(order.id, workflowType);
-                setOrder((prev) => ({
-                  ...prev,
-                  workflow_type: workflowType,
-                  stage:
-                    workflowType === "design_first"
-                      ? "Design In Progress"
-                      : "Quotation In Progress",
-                  stageStatus: "Normal",
-                }));
-                router.refresh();
-                triggerLocalAlert(
-                  `Workflow set to "${workflowType === "design_first" ? "Design First" : "Quote First"}". Order advanced.`,
-                  "success"
-                );
-              }
             } catch (err: any) {
               triggerLocalAlert(err?.message || "Failed to set workflow.", "error");
             } finally {
-              setIsProcessing(false);
-            }
-          }}
-        />
-      )}
-
-      {/* ── PAYMENT GATE MODAL (not a pipeline stage) ── */}
-      {isPaymentModalOpen && (
-        <PaymentRequiredModal
-          orderId={order.id}
-          currentStage={order.stage}
-          onClose={() => {
-            setIsPaymentModalOpen(false);
-            setPendingWorkflowType(null);
-          }}
-          onSkip={async () => {
-            setIsProcessing(true);
-            try {
-              if (pendingWorkflowType) {
-                await setWorkflowTypeAction(order.id, pendingWorkflowType);
-                setOrder((prev) => ({
-                  ...prev,
-                  workflow_type: pendingWorkflowType,
-                  stage:
-                    pendingWorkflowType === "design_first"
-                      ? "Design In Progress"
-                      : "Quotation In Progress",
-                  stageStatus: "Normal",
-                }));
-                triggerLocalAlert(
-                  `Workflow set to "${pendingWorkflowType === "design_first" ? "Design First" : "Quote First"}". Order advanced.`,
-                  "success"
-                );
-              } else {
-                await executeAdminApprove();
-              }
-              router.refresh();
-            } catch (err: any) {
-              triggerLocalAlert(err?.message || "Failed to approve stage.", "error");
-            } finally {
-              setPendingWorkflowType(null);
-              setIsProcessing(false);
-            }
-          }}
-          onCreated={async () => {
-            setIsProcessing(true);
-            try {
-              const { getBlockingPayments } = await import(
-                "@/features/payments/actions/paymentActions"
-              );
-              const blocking = await getBlockingPayments(order.id);
-
-              if (blocking.length > 0) {
-                // Required payment: lock stage, do not advance
-                if (pendingWorkflowType) {
-                  await setWorkflowTypeOnlyAction(order.id, pendingWorkflowType);
-                  setOrder((prev) => ({
-                    ...prev,
-                    workflow_type: pendingWorkflowType,
-                    stageStatus: "Pending Payment Verification",
-                  }));
-                } else {
-                  setOrder((prev) => ({
-                    ...prev,
-                    stageStatus: "Pending Payment Verification",
-                  }));
-                }
-                setActiveStepTab(PAYMENTS_TAB);
-                triggerLocalAlert(
-                  "Payment requirement created. Verify or waive it on the Payments tab before advancing.",
-                  "warning"
-                );
-              } else {
-                // Optional payment only: proceed to next stage
-                if (pendingWorkflowType) {
-                  await setWorkflowTypeAction(order.id, pendingWorkflowType);
-                  setOrder((prev) => ({
-                    ...prev,
-                    workflow_type: pendingWorkflowType,
-                    stage:
-                      pendingWorkflowType === "design_first"
-                        ? "Design In Progress"
-                        : "Quotation In Progress",
-                    stageStatus: "Normal",
-                  }));
-                } else {
-                  await executeAdminApprove();
-                }
-                triggerLocalAlert("Payment recorded. Order advanced.", "success");
-              }
-              router.refresh();
-            } catch (err: any) {
-              triggerLocalAlert(err?.message || "Payment created but stage update failed.", "error");
-            } finally {
-              setPendingWorkflowType(null);
               setIsProcessing(false);
             }
           }}

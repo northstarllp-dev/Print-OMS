@@ -138,7 +138,6 @@ export default async function OrderDetailPage({
     status: quotationData.status,
     notes: quotationData.notes,
     terms: quotationData.terms,
-    advancePaid: Boolean(quotationData.advance_paid),
   } : null;
 
   // Find the site visit for this order

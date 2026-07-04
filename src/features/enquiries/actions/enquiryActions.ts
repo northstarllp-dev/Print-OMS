@@ -199,7 +199,6 @@ export async function convertEnquiryToOrderAction(enquiryId: string, projectName
     order_id: orderId,
     resources: [],
     items: [],
-    payment_verified: false
   });
 
   // 4b. Log order creation to activity timeline

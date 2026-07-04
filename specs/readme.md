@@ -14,7 +14,7 @@ The solution provides:
 * **Unified Pipeline Tracking**: Two pipeline route configurations tailored to different business models (Concept-First vs. Cost-First).
 * **Survey Optimization**: Gathering spatial measurements (with units) and converting them directly into costing values.
 * **Collaboration Workspace**: Direct chat logs and design annotations linking customers, designers, and sales reps (design data in dedicated `designs` table).
-* **Payment Milestones**: Flexible fixed/percentage payment gates between stages via `payments` and `stage_status` locks (not a pipeline stage).
+* **Payment Tracking**: Expected/received amounts on orders via `payments` (financial visibility only; does not block stages).
 * **Logistical Coordination**: Planning field resources (scaffolding, crane access) and verifying physical installation with digital handovers.
 
 ### 1.2 Document Scope
@@ -512,7 +512,7 @@ The central hub for all active and historical signage projects.
 * `customer_id` (uuid, FK -> `customers.id`)
 * `project_name` (varchar): Name of the signage project.
 * `stage` (varchar): Enum representing current phase (e.g., "Quotation In Progress").
-* `stage_status` (varchar): Lifecycle lock state. Values include `"Normal"`, `"Pending Admin Approval: …"`, and **`"Pending Payment Verification"`** (payment gate — not a pipeline stage).
+* `stage_status` (varchar): Lifecycle lock state. Values include `"Normal"` and `"Pending Admin Approval: …"`.
 * `workflow_type` (varchar): "quote_first" or "design_first".
 * `budget` (numeric)
 * `deposit_paid` (numeric)
@@ -580,36 +580,29 @@ Dedicated design record per order (extracted from legacy `orders.design_details`
 * `order_id` (uuid, FK -> `orders.id`, **unique**)
 * `resources` (jsonb): Inspiration/logo uploads `[{ id, url, name, type, uploadedBy, createdAt }]`
 * `items` (jsonb): Multi-item design proofs `[{ id, name, versions[], currentVersion, productionFiles[] }]`
-* `payment_verified` (boolean): Legacy checklist flag; payment gates use `payments` table
 * `created_at` (timestamptz)
 * `updated_at` (timestamptz)
 
 Frontend maps this to `order.design` (`DesignRecord`). Server actions: `src/features/designs/actions/designActions.ts`.
 
 #### 9b. `payments`
-Flexible payment milestones (business gates between stages — **not** a pipeline stage).
+Financial tracking only (does **not** block stage progression). See `specs/payments.md`.
 * `id` (uuid, PK)
 * `order_id` (uuid, FK -> `orders.id` ON DELETE CASCADE)
 * `payment_name` (text)
-* `trigger_stage` (text): Stage when the gate was created
+* `trigger_stage` (text): Optional note of order stage when recorded
 * `amount_type` (text): `"fixed"` | `"percentage"`
 * `amount` (numeric): Fixed amount when `amount_type = fixed`
 * `percentage` (numeric): Percent of quotation `grand_total` when `amount_type = percentage`
-* `calculated_amount` (numeric): Resolved amount to collect
-* `required_for_next_stage` (boolean, default true)
-* `status` (text): `"pending"` | `"requested"` | `"paid"` | `"verified"` | `"waived"`
-* `payment_method` (text): `"manual"` today; future `"razorpay"` | `"phonepe"` | `"stripe"`
-* `payment_reference` (text): UTR / gateway payment id
+* `calculated_amount` (numeric): Resolved amount
+* `status` (text): `"expected"` | `"received"`
 * `notes` (text)
-* `requested_at`, `paid_at`, `verified_at` (timestamptz)
-* `verified_by` (uuid)
+* `paid_at` (timestamptz)
 * `created_at`, `updated_at` (timestamptz)
 
 Indexes: `order_id`, `status`, `trigger_stage`.
 
-**Stage locking:** When a required payment is created, `orders.stage` is unchanged and `orders.stage_status` becomes `"Pending Payment Verification"`. Progression is blocked until all required payments are `verified` or `waived`.
-
-Server actions: `src/features/payments/actions/paymentActions.ts`. Reporting: `paymentReporting.ts`.
+Server actions: `src/features/payments/actions/paymentActions.ts`.
 
 #### 10. `productions`
 * `id` (uuid, PK)
@@ -710,24 +703,17 @@ Defined in `src/features/designs/actions/designActions.ts`.
 | `updateDesignDetailsAction` | Update `resources` / `items` JSONB |
 | `sendDesignToCustomerAction` | Mark draft versions as Sent to Customer |
 | `approveAllDesignItemsAction` | Approve latest versions; advance stage when all approved |
-| `markDesignPaymentVerifiedAction` | Records verified payment milestone + legacy `payment_verified`; advances to Production if no blocking payments |
 
-### 6.1c Payment Milestone Actions
-Defined in `src/features/payments/actions/paymentActions.ts`. Payments are **business gates**, not pipeline stages.
+### 6.1c Payment Tracking Actions
+Defined in `src/features/payments/actions/paymentActions.ts`. Payments are **financial records only** and do not block stages. See `specs/payments.md`.
 
 | Action | Purpose |
 | ------ | ------- |
-| `createPaymentRequirement` | Create milestone; optionally lock `stage_status` to `Pending Payment Verification` |
-| `recordVerifiedPayment` | Staff records payment already received (audit trail, no lock) |
-| `markPaymentPaid` | Customer submits reference (`status = paid`) |
-| `verifyPayment` / `waivePayment` | Admin clears gate; unlocks stage when no blockers remain |
-| `getPaymentsByOrder` / `getBlockingPayments` | List milestones / outstanding required payments |
-| `assertNoBlockingPayments` | Throws if required payments are not verified/waived |
+| `createPayment` | Create expected (or received) record |
+| `markPaymentReceived` / `markPaymentExpected` | Toggle received status |
+| `deletePayment` / `updatePayment` | Remove or edit a record |
+| `getPaymentsByOrder` / `getPaymentBalanceSummary` | List records / totals |
 | `calculatePaymentAmount` | Fixed amount or `quotation.grand_total * percentage / 100` |
-
-Reporting helpers in `paymentReporting.ts`: totals per order, customer, and calendar month.
-
-Stage transitions (`adminApproveStageAction`, `updateOrderStageAction`, `setWorkflowTypeAction`, design stage advances) call `assertNoBlockingPayments` before changing `orders.stage`.
 
 ---
 
@@ -1064,7 +1050,7 @@ npm run test
 | 1.0 | 2026-07-02 | Lead Architect | Initial release detailing core Enquiry and Site Survey modules. |
 | 1.1 | 2026-07-03 | Lead Architect | Added Quotation Calculations, GST Tax Rules, and Stage Locks. |
 | 1.2 | 2026-07-04 | Core Developer | Documented the merged Measurement/Qty column, dynamic site units mapping, vector file uploads bucket fix, and the Portal revision state warning panel. |
-| 1.3 | 2026-07-04 | Core Developer | Designs extracted to `designs` table (`order.design`); site measurement units on quotation; unified Qty/Measurement (removed running feet); flexible `payments` milestones with `Pending Payment Verification` stage lock (not a pipeline stage). |
+| 1.3 | 2026-07-04 | Core Developer | Designs extracted to `designs` table (`order.design`); site measurement units on quotation; unified Qty/Measurement (removed running feet); payments as financial tracking only (`expected` / `received`, no stage gates). |
 
 ---
 *End of Master Specification Document.*

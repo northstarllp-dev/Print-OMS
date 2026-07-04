@@ -79,12 +79,8 @@ interface Quotation {
   tax: number;
   grand_total: number;
   shipping?: number;
-  amount_paid?: number;
   notes: string;
   terms: string;
-  advance_paid?: boolean;
-  advance_percent?: number | null;
-  advance_amount?: number | null;
 }
 
 interface QuotationModuleProps {
@@ -104,7 +100,7 @@ interface QuotationModuleProps {
   initialQuotation: Quotation | null;
   siteVisitItems?: SiteVisitItem[];
   currentUserRole?: string;
-  /** Advance to Design/Production (opens payment gate popup when configured). */
+  /** Advance to Design/Production. */
   onRequestAdvance?: () => void;
 }
 
@@ -1214,7 +1210,6 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
           !!onRequestAdvance &&
           (isAdmin || currentUserRole === "Employee") &&
           quoteStage === "Quotation Approved";
-        const paymentLocked = order.stageStatus === "Pending Payment Verification";
         
         const actionButtons = (
           <>
@@ -1275,9 +1270,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                     className="py-2 px-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm"
                   >
                     <Sparkles size={13} />
-                    {paymentLocked
-                      ? "Complete Payment to Continue"
-                      : `Move to ${nextStageLabel}`}
+                    Move to {nextStageLabel}
                   </button>
                 )}
               </div>

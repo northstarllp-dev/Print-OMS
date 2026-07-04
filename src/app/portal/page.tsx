@@ -171,7 +171,6 @@ export default async function PortalPage({
     status: q.status,
     notes: q.notes,
     terms: q.terms,
-    advancePaid: Boolean(q.advance_paid),
   }));
 
   const orders = ordersData.map((o: any) => {
@@ -219,7 +218,6 @@ export default async function PortalPage({
         status: q.status,
         notes: q.notes,
         terms: q.terms,
-        advancePaid: Boolean(q.advance_paid),
       } : null,
       design: (Array.isArray(o.designs) && o.designs.length > 0 ? mapDesignFromDb(o.designs[0]) : o.designs ? mapDesignFromDb(o.designs) : null),
       productionDetails: Array.isArray(o.productions) && o.productions.length > 0 ? o.productions[0] : (o.productions || null),

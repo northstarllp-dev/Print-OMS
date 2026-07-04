@@ -164,7 +164,7 @@ Fields:
 
 * Flat rate vs area: Both use the same Qty/Measurement field and formula `measurement × rate`. Pricing type only affects the rate source (`price_per_unit` vs `price_per_sqft`) and unit label (`nos` vs `sqft`).
 * Blank/Manual rows: Staff can add rows without selecting a product from the database, entering a custom description and price manually.
-* Stage advance after quote approval uses **Approve & Advance** with the payment gate modal (see `specs/payments.md`). The old quotation checklist (“Advance payment received / Move to Design”) has been removed.
+* Stage advance after quote approval moves to Design/Production directly. Payments are tracked separately (see `specs/payments.md`).
 
 ## Future Enhancements
 

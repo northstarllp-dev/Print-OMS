@@ -1,8 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import Link from "next/link";
-import { Save, MoreVertical, Bell, Lock, Palette, ArrowRight, CreditCard } from "lucide-react";
+import { Save, MoreVertical, Bell, Lock, Palette } from "lucide-react";
 
 export function SettingsViewNew() {
   const [settings, setSettings] = useState({
@@ -34,17 +33,6 @@ export function SettingsViewNew() {
       fields: [
         { label: "Email Notifications", key: "notifications", type: "toggle" },
       ],
-    },
-    {
-      title: "Payment Gates",
-      icon: <CreditCard size={20} />,
-      description:
-        "Choose which stages show the “Is payment required before the next stage?” popup",
-      fields: [] as { label: string; key: string; type: string }[],
-      link: {
-        href: "/admin/settings/payments",
-        label: "Configure payment gate stages",
-      },
     },
     {
       title: "Security",
@@ -152,23 +140,6 @@ export function SettingsViewNew() {
               ))}
             </div>
 
-            {"link" in section && section.link && (
-              <Link
-                href={section.link.href}
-                style={{
-                  marginTop: "16px",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  fontSize: "13px",
-                  fontWeight: "700",
-                  color: "var(--color-primary)",
-                  textDecoration: "none",
-                }}
-              >
-                {section.link.label} <ArrowRight size={14} />
-              </Link>
-            )}
           </div>
         ))}
 

@@ -34,7 +34,7 @@ The portal itself doesn't have "states" but visually reflects the states of the 
 * Access to the portal is completely password-less, relying on securely generated, short-lived (or manageable) tokens using HMAC.
 * A token can be instantly revoked in the database, locking the customer out on their next page load.
 * Rate limiting is enforced on the `/portal` route to prevent brute-forcing or denial of service attacks.
-* Customers can only modify specific nested states (like approving a quote, adding a design comment, or submitting a payment reference). They cannot edit the core order data or verify/waive payments.
+* Customers can only modify specific nested states (like approving a quote or adding a design comment). Payments are view-only. They cannot edit core order data.
 
 ## User Roles
 

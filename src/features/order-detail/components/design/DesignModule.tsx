@@ -25,7 +25,6 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
     order_id: order.id,
     resources: [],
     items: [],
-    payment_verified: false,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   };

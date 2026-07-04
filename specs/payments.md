@@ -1,132 +1,40 @@
-# Payment Milestones Feature Specification
+# Payment Tracking Feature Specification
 
 ## Overview
 
-* Purpose: Flexible payment milestones as **business gates** between order phases — not a pipeline stage.
-* Business objective: Per-client installments (fixed amount, % of quotation, or remaining balance), optional or blocking, manual verification today, future Razorpay/PhonePe/Stripe without schema changes.
-* User roles: Admin, Staff, Customer (portal)
+* Purpose: Simple **financial tracking** for orders — expected amounts, amounts received, and outstanding balances.
+* Payments are **not** workflow stages and **do not** block stage progression.
+* All payment communication happens **outside** the OMS (phone, WhatsApp, bank transfer, UPI, cash, etc.).
+* The OMS only **records** payment information.
+* No payment gateway, UTR tracking, verification workflow, or stage locking.
 
 ## Core Principle
 
-**Payments are not a workflow stage.**
+Payments are a visibility module only.
 
-| Field | Behavior |
-| ----- | -------- |
-| `orders.stage` | Unchanged when a payment gate is created |
-| `orders.stage_status` | Set to `"Pending Payment Verification"` while a required payment is outstanding |
+| Concern | Behavior |
+| ------- | -------- |
+| Stage progression | Unaffected by payments |
+| Payment popup | **Removed** |
+| Stage-wise payment settings | **Removed** |
+| Verification / waive | **Removed** |
+| Customer actions | View-only |
 
-Example:
+## Business workflow
 
-```
-stage: Quotation Approved
-stage_status: Pending Payment Verification
-```
+Payments can be recorded at any time (advance after quote, after design, during production, final settlement, etc.).
 
-The order cannot advance until all payments with `required_for_next_stage = true` are `verified` or `waived`.
+1. Staff open the order header **Payment** tab.
+2. Staff **Add Payment** (installment name, fixed / % / rest of amount).
+3. Optionally check **Mark as received now**, or later click **Received**.
+4. Customer portal **Payments** tab shows the same records as information only.
 
----
-
-## End-to-end workflow
-
-### 1. Admin configures when the payment popup appears
-
-**Path:** Admin → Settings → Payment Gates → **Configure payment gate stages**  
-(`/admin/settings/payments`)
-
-Six checkboxes (per company / tenant). Popup only at the **end** of each phase:
-
-| Checkbox | Popup when advancing from |
-| -------- | ------------------------- |
-| Site Visit | `Site Visit Completed` (also when audit is submitted for approval while stage is still Scheduled) |
-| Quotation | `Quotation Approved` |
-| Design | `Design Approved` |
-| Production | `Ready For Installation` |
-| Installation Scheduled | `Installation Scheduled` |
-| Completed | `Completed` |
-
-* **Checked:** show payment popup when leaving that phase.  
-* **Unchecked:** advance with no popup.  
-* Intermediate stages (e.g. Quotation Sent) never show the popup.
-
-Settings are **per `company_id`** (multi-tenant).
-
-### 2. Staff/Admin advances the order
-
-Triggers:
-
-* **Approve & Advance** (order footer / Admin Controls)
-* **Move to Design / Move to Production** on an approved quotation (footer next to “Submitted & Locked”)
-* After Site Visit approval: **Choose workflow** (Quote First / Design First), then payment popup if Site Visit gate is enabled
-
-If the current phase is **not** enabled in Payment Gate Settings → advance immediately (no popup).
-
-If **enabled** → open `PaymentRequiredModal`.
-
-### 3. Payment popup (`PaymentRequiredModal`)
-
-**Title:** “Do you need to collect a payment before continuing?”  
-Shows current stage as subtitle.
-
-**Step A — Yes / No only** (form not expanded yet)
-
-| Choice | Result |
-| ------ | ------ |
-| **No** | Continue to next stage without creating a payment |
-| **Yes** | Expand form to enter installment details |
-
-**Step B — After Yes**
-
-* **Payment name:** auto `1st installment`, `2nd installment`, … (editable)
-* **Rest of the amount** (checkbox): amount = quotation `grand_total` − sum of **verified** payments
-* Or **Percentage** / **Fixed** amount
-* Creating a payment **always** blocks progression (`required_for_next_stage = true`, stage lock)
-
-There is **no** separate “Required before next stage?” checkbox on the popup.
-
-### 4. Order is locked (if payment created)
-
-* `orders.stage` stays the same  
-* `orders.stage_status` = `Pending Payment Verification`  
-* Header **Payment** button shows a badge; banner links to Payments tab  
-
-### 5. Customer pays (portal)
-
-Portal **Payments** tab (loads from `payments` table):
-
-* Totals: expected, outstanding, paid & verified  
-* Each installment: name, amount expected, status  
-* Customer enters UTR/reference → **Mark as Paid** (`status = paid`)  
-* **Pay Online** is a placeholder for future gateways  
-
-### 6. Admin verifies
-
-Order header → **Payment** tab (`PaymentsModule`):
-
-* **Verify** or **Waive**  
-* When no blocking payments remain → `stage_status` = `Normal`  
-* Staff/Admin advances again (Approve & Advance / Move to Design)
-
-### 7. Manual installments
-
-On the **Payment** tab, Admin can **Add Payment** anytime:
-
-* Same installment naming (`Nth installment`)
-* Percentage, fixed, or **Rest of the amount**
-* Optional “Required before next stage” for manually added milestones only
-
----
-
-## Payment statuses (`payments.status`)
+## Payment statuses
 
 | Status | Meaning |
 | ------ | ------- |
-| `pending` | Optional / not yet requested |
-| `requested` | Customer should pay (blocking gate) |
-| `paid` | Customer submitted reference; awaiting staff verification |
-| `verified` | Staff confirmed receipt |
-| `waived` | Staff waived requirement |
-
----
+| `expected` | Amount planned / due (not yet received) |
+| `received` | Staff marked as received |
 
 ## Amount types
 
@@ -134,13 +42,9 @@ On the **Payment** tab, Admin can **Add Payment** anytime:
 | ---- | ----------- |
 | `fixed` | `calculated_amount = amount` |
 | `percentage` | `calculated_amount = quotation.grand_total × percentage / 100` |
-| Rest of amount (UI) | Stored as `fixed` where `amount = grand_total − sum(verified payments)` |
+| Rest of amount (UI) | Fixed amount = quotation total − sum of **received** payments |
 
-Helper: `getPaymentBalanceSummary(orderId)` → `{ grandTotal, paidTotal, remaining }`.
-
-Installment names: `nextInstallmentName(existingCount)` → `"1st installment"`, `"2nd installment"`, …
-
----
+Installment names auto-number: `1st installment`, `2nd installment`, …
 
 ## Database
 
@@ -149,63 +53,31 @@ Installment names: `nextInstallmentName(existingCount)` → `"1st installment"`,
 | Column | Type | Notes |
 | ------ | ---- | ----- |
 | `id` | uuid PK | |
-| `order_id` | uuid FK → `orders.id` | ON DELETE CASCADE |
+| `order_id` | uuid FK | ON DELETE CASCADE |
 | `payment_name` | text | e.g. `1st installment` |
-| `trigger_stage` | text | Pipeline stage when gate was created |
+| `trigger_stage` | text | Optional note of order stage when recorded |
 | `amount_type` | text | `fixed` \| `percentage` |
-| `amount` | numeric | Fixed amount |
-| `percentage` | numeric | % of quotation total |
-| `calculated_amount` | numeric | Amount to collect |
-| `required_for_next_stage` | boolean | Blocks advance when true |
-| `status` | text | See statuses above |
-| `payment_method` | text | `manual` today; future gateways |
-| `payment_reference` | text | UTR / gateway id |
-| `notes` | text | |
-| `requested_at` / `paid_at` / `verified_at` | timestamptz | |
-| `verified_by` | uuid | |
+| `amount` / `percentage` / `calculated_amount` | numeric | |
+| `status` | text | `expected` \| `received` |
+| `notes` | text | Optional |
+| `paid_at` | timestamptz | Set when marked received |
 | `created_at` / `updated_at` | timestamptz | |
 
-Indexes: `order_id`, `status`, `trigger_stage`.
+### Removed
 
-### `payment_gate_stages` (per company)
-
-| Column | Type | Notes |
-| ------ | ---- | ----- |
-| `id` | uuid PK | |
-| `company_id` | uuid FK → `companies.id` | **Required** (multi-tenant) |
-| `stage` | text | Phase key (see below) |
-| `is_enabled` | boolean | Show popup for that phase |
-| `created_at` / `updated_at` | timestamptz | |
-
-Unique: `(company_id, stage)`.
-
-Phase keys:
-
-| Key | Label |
-| --- | ----- |
-| `site_visit` | Site Visit |
-| `quotation` | Quotation |
-| `design` | Design |
-| `production` | Production |
-| `installation_scheduled` | Installation Scheduled |
-| `installation_completed` | Completed |
-
-### Related order fields
-
-| Column | Role |
-| ------ | ---- |
-| `orders.stage` | Pipeline phase (never a “Payment” stage) |
-| `orders.stage_status` | `Pending Payment Verification` while gates are open |
+* `payment_gate_stages` table (stage-wise popup config)
+* `payment_notification_rules` table
+* Gate columns on `payments` (`required_for_next_stage`, `payment_reference`, `verified_*`, etc.)
+* Legacy checklist columns (`designs.payment_verified`, `quotations.advance_*`)
+* `orders.stage_status = Pending Payment Verification` (cleared on migrate)
+* Portal UPDATE policy on `payments` (view-only)
 
 ### Migrations
 
-* `20260704000003_create_payments.sql`
-* `20260704000004_payments_portal_policies.sql`
-* `20260704000006_payment_gate_stages.sql`
-* `20260704000007_payment_gate_phases.sql`
-* `20260704000008_payment_gate_company_and_install_split.sql`
-
----
+* `20260704000003_create_payments.sql` — original table
+* `20260704000004_payments_portal_policies.sql` — portal read access
+* `20260704000009_simplify_payments_tracking.sql` — statuses + drop gates
+* `20260704000010_drop_unused_payment_columns.sql` — drop unused columns/tables
 
 ## Server actions
 
@@ -213,123 +85,63 @@ Phase keys:
 
 | Action | Who | Behavior |
 | ------ | --- | -------- |
-| `createPaymentRequirement` | Staff | Create milestone; lock stage when required |
-| `getPaymentBalanceSummary` | Staff | Quotation total − verified payments |
-| `getPaymentsByOrder` | Portal / staff | List milestones |
-| `markPaymentPaid` | Customer | `status = paid` only |
-| `verifyPayment` / `waivePayment` | Staff | Clear gate; unlock when no blockers |
-| `getBlockingPayments` / `assertNoBlockingPayments` | System | Block stage transitions |
+| `createPayment` | Staff | Create expected (or received) record |
+| `markPaymentReceived` | Staff | Mark received |
+| `markPaymentExpected` | Staff | Revert to expected |
+| `deletePayment` | Staff | Remove record |
+| `updatePayment` | Staff | Edit name/amount/notes |
+| `getPaymentsByOrder` | Staff / portal | List records |
+| `getPaymentBalanceSummary` | Staff / portal | Quotation total, received, outstanding |
 
-`src/features/settings/actions/paymentGateSettingsActions.ts`
+## UI
 
-| Action | Behavior |
-| ------ | -------- |
-| `isPaymentGateEnabledForStage(stage, orderId?, stageStatus?)` | Whether popup should show |
-| `listPaymentGateStages` | Admin settings list (current company) |
-| `setPaymentGateStageEnabled` | Toggle phase for current company |
+| Surface | Purpose |
+| ------- | ------- |
+| Order header **Payment** | Staff tracking: add, mark received, delete |
+| Portal **Payments** tab | Customer read-only: totals + installment list |
+| Quotation **Move to Design/Production** | Advances stage only (no payment popup) |
 
-Stage transitions call `assertNoBlockingPayments` before changing `orders.stage`.
-
-Site Visit note: completion is often approved while `stage` is still `Site Visit Scheduled` and `stage_status` is `Pending Admin Approval: Site Visit Completed`. Gate detection uses both `stage` and `stage_status`.
-
----
-
-## UI map
-
-| Surface | Location | Purpose |
-| ------- | -------- | ------- |
-| Payment gate settings | `/admin/settings/payments` | Phase checkboxes per company |
-| Payment popup | `PaymentRequiredModal` | Yes/No then installment details |
-| Order Payment tab | Header **Payment** (next to Admin Controls) | List / add / verify / waive |
-| Quotation footer | After customer approval | **Move to Design** / **Move to Production** (same gate flow) |
-| Portal Payments | Portal Payments tab | Expected amounts, submit reference |
-
-Workflow choice modal (Quote First / Design First) does **not** mention payment; payment is asked only via the gate popup when configured.
-
----
-
-## Data flows
-
-### Create gate
+## Data flow
 
 ```
-Approve & Advance / Move to Design
-  → isPaymentGateEnabledForStage? 
-      No  → advance stage
-      Yes → PaymentRequiredModal
-            No  → advance stage
-            Yes → expand form → createPaymentRequirement
-                 → stage unchanged, stage_status = Pending Payment Verification
-                 → open Payment tab
+Staff: Add Payment → status = expected (or received if checked)
+Staff: Received → status = received, paid_at set
+Customer: view totals and line items only
+Stage advance: never checks payments
 ```
-
-### Customer pay
-
-```
-Portal Payments tab
-  → markPaymentPaid (status = paid)
-```
-
-### Unlock
-
-```
-Payment tab → verifyPayment / waivePayment
-  → if no blockers: stage_status = Normal
-  → Approve & Advance / Move to Design again
-```
-
----
 
 ## Security
 
-* Staff create/verify/waive require authenticated session (`requireStaffUser` / admin for settings).
-* Portal may SELECT payments and UPDATE to `paid` only.
-* `payment_gate_stages` RLS: admins manage their `company_id`; staff can read their company.
+* Staff create/update/delete require authenticated session.
+* Portal may read payments only.
 
----
+## Removed logic
 
-## Removed / legacy
-
-* Quotation “Advance payment received / Move to Design” checklist — **removed**; use **Move to Design** + payment popup.
-* Workflow cards “Design + Payment” / “PAYMENT HERE” — **removed**.
-* Email/WhatsApp automated notification rules — **removed** (not part of this workflow).
-* Popup “Required Before Next Stage?” checkbox — **removed**; Yes always creates a blocking payment.
-
----
+* PaymentRequiredModal (stage advance popup)
+* Payment gate settings (`/admin/settings/payments` redirects away)
+* `assertNoBlockingPayments` on stage transitions
+* Verify / waive / UTR / mark-as-paid customer flow
+* `Pending Payment Verification` locks and banners
 
 ## Future enhancements
 
-* Razorpay / PhonePe / Stripe on portal Payments tab (`payment_method` + `payment_reference`)
-* Webhooks calling `markPaymentPaid` / `verifyPayment`
-* Invoice PDF linked to installments
-
----
+* Optional payment gateway (out of scope)
+* Export payment summary PDF
 
 ## File structure
 
 ```
 src/features/payments/actions/paymentActions.ts
-src/features/payments/actions/paymentReporting.ts
 src/features/payments/utils/installmentName.ts
-src/features/settings/paymentGateStages.ts
-src/features/settings/actions/paymentGateSettingsActions.ts
-src/features/settings/components/PaymentGateSettings.tsx
 src/features/order-detail/components/payments/PaymentsModule.tsx
-src/features/order-detail/components/payments/PaymentRequiredModal.tsx
 src/app/portal/components/PaymentsTab.tsx
-src/app/admin/(dashboard)/settings/payments/page.tsx
 src/types/index.ts
 specs/payments.md
 ```
-
----
 
 ## Change Log
 
 | Version | Date | Summary |
 | ------- | ---- | ------- |
-| 1.0 | 2026-07-04 | Payment milestones as gates via `stage_status` |
-| 1.1 | 2026-07-04 | Admin payment gate settings; removed email/WhatsApp notification rules |
-| 1.2 | 2026-07-04 | Phase-level gates; rest of amount |
-| 1.3 | 2026-07-04 | Installation Scheduled / Completed separate; `company_id` on gate settings |
-| 1.4 | 2026-07-04 | Full workflow doc: Yes/No-first popup, installment naming, Move to Design, site-visit status match |
+| 1.0–1.4 | 2026-07-04 | Gate-based payment workflow (superseded) |
+| 2.0 | 2026-07-04 | Simplified to financial tracking only: expected / received, no gates or verification |

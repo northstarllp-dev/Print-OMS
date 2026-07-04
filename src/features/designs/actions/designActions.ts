@@ -67,11 +67,6 @@ async function updateOrderStage(supabase: SupabaseClient, orderUuid: string, sta
 
   const isChanged = stage !== o.stage;
   if (isChanged) {
-    const { assertNoBlockingPayments } = await import(
-      "@/features/payments/actions/paymentActions"
-    );
-    await assertNoBlockingPayments(orderUuid);
-
     const { error: updateError } = await supabase
       .from("orders")
       .update({ stage })
@@ -86,7 +81,6 @@ async function updateOrderStage(supabase: SupabaseClient, orderUuid: string, sta
       content: `Order stage changed from "${o.stage}" to "${stage}".`,
       metadata: { action: "stage_changed", old: o.stage, new: stage }
     });
-
   }
 }
 
@@ -112,7 +106,6 @@ export async function createDesignForOrderAction(orderId: string): Promise<Desig
       order_id: orderUuid,
       resources: [],
       items: [],
-      payment_verified: false
     }, { onConflict: "order_id" })
     .select()
     .single();
@@ -139,7 +132,6 @@ export async function updateDesignDetailsAction(
     order_id: orderUuid,
     resources: current?.resources || [],
     items: current?.items || [],
-    payment_verified: current?.payment_verified || false,
     ...details
   };
   payload.order_id = orderUuid;
@@ -231,18 +223,6 @@ export async function sendDesignToCustomerAction(orderId: string): Promise<Desig
   }));
 
   return updateDesignDetailsAction(orderId, { items });
-}
-
-/** @deprecated Payment gates use the `payments` table and Approve & Advance flow. */
-export async function markDesignPaymentVerifiedAction(orderId: string): Promise<void> {
-  const supabase = await getSupabase();
-  const orderUuid = await resolveOrderUuid(supabase, orderId);
-  const { error } = await supabase
-    .from("designs")
-    .update({ payment_verified: true })
-    .eq("order_id", orderUuid);
-  if (error) throw new Error(error.message);
-  revalidateDesignPaths(orderId);
 }
 
 export async function approveAllDesignItemsAction(orderId: string): Promise<DesignRecord> {
