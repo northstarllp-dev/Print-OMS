@@ -90,17 +90,22 @@ export async function testWhatsAppHelloWorldAction(
     };
   }
 
-  const raw =
-    phone?.trim() ||
-    process.env.WHATSAPP_TEST_PHONE ||
-    "15556275106";
+  const raw = phone?.trim() || process.env.WHATSAPP_TEST_PHONE || "";
+  if (!raw) {
+    return {
+      ok: false,
+      error: "No test phone configured.",
+      hint:
+        "Add your WhatsApp number in Meta Developer Console → WhatsApp → API Setup → To, then set WHATSAPP_TEST_PHONE in .env.local (digits only, country code included).",
+    };
+  }
 
   const normalized = normalizeWhatsAppPhone(raw);
   if (!normalized) {
     return {
       ok: false,
       error: `Invalid phone number: ${raw}`,
-      hint: "Use E.164 format, e.g. 15556275106 or +1 (555) 627-5106",
+      hint: "Use E.164 digits only, e.g. 919876543210",
     };
   }
 

@@ -100,7 +100,8 @@ export async function dispatchWhatsAppNotification(
     }
   }
 
-  const ctx = await buildNotificationContext(supabase, input).catch((err: unknown) => {
+  // Use admin client for context (portal token insert, company lookups).
+  const ctx = await buildNotificationContext(db, input).catch((err: unknown) => {
     console.error("[WhatsApp] buildContext failed:", err);
     return null;
   });
@@ -115,14 +116,35 @@ export async function dispatchWhatsAppNotification(
     return { sent: false, skipped: true, reason: "No WhatsApp number or customer context" };
   }
 
-  const phone = normalizeWhatsAppPhone(ctx.recipientPhone);
+  // In test mode, only message a number on Meta's allowed list (API Setup → To).
+  if (testMode && !process.env.WHATSAPP_TEST_PHONE?.trim()) {
+    await logOutboxAttempt(db, {
+      template_key: outboxTemplateKey,
+      enquiry_id: input.enquiryId ?? null,
+      status: "skipped",
+      error_message: "WHATSAPP_TEST_PHONE not set",
+      idempotency_key: idempotencyKey,
+    });
+    return {
+      sent: false,
+      skipped: true,
+      reason:
+        "WHATSAPP_TEST_MODE is on but WHATSAPP_TEST_PHONE is empty. Add your WhatsApp number in Meta Developer Console → WhatsApp → API Setup → To, set WHATSAPP_TEST_PHONE to that number (e.g. 9198XXXXXXXX), restart the dev server.",
+    };
+  }
+
+  const recipientRaw = testMode
+    ? process.env.WHATSAPP_TEST_PHONE!
+    : ctx.recipientPhone;
+
+  const phone = normalizeWhatsAppPhone(recipientRaw);
   if (!phone) {
     await logOutboxAttempt(db, {
       template_key: outboxTemplateKey,
-      recipient_phone: ctx.recipientPhone,
+      recipient_phone: recipientRaw,
       enquiry_id: input.enquiryId ?? null,
       status: "skipped",
-      error_message: `Invalid phone: ${ctx.recipientPhone}`,
+      error_message: `Invalid phone: ${recipientRaw}`,
       idempotency_key: idempotencyKey,
     });
     return { sent: false, skipped: true, reason: "Invalid phone number" };

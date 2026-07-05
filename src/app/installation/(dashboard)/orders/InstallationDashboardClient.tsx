@@ -18,11 +18,11 @@ interface OrderItem {
 
 interface InstallationDashboardClientProps {
   initialOrders: OrderItem[];
-  getOrderDetailHref?: (order: OrderItem) => string;
+  /** Base path for order detail links. Defaults to floor portal `/installation/orders`. */
+  orderDetailBasePath?: string;
+  /** Optional entryStage query param (e.g. staff queue lock). */
+  entryStage?: string;
 }
-
-const defaultOrderDetailHref = (order: OrderItem) =>
-  `/installation/orders/${order.orderId || order.id}`;
 
 const getStageBadgeStyle = (stage: string) => {
   const styles: Record<string, { bg: string; text: string; border: string }> = {
@@ -36,13 +36,18 @@ const getStageBadgeStyle = (stage: string) => {
 
 export function InstallationDashboardClient({
   initialOrders,
-  getOrderDetailHref = defaultOrderDetailHref,
+  orderDetailBasePath = "/installation/orders",
+  entryStage,
 }: InstallationDashboardClientProps) {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
   const [stageFilter, setStageFilter] = useState("ALL");
 
-  const resolveOrderHref = (order: OrderItem) => getOrderDetailHref(order);
+  const resolveOrderHref = (order: OrderItem) => {
+    const id = order.orderId || order.id;
+    const base = `${orderDetailBasePath}/${id}`;
+    return entryStage ? `${base}?entryStage=${entryStage}` : base;
+  };
 
   const activeJobs = initialOrders.filter(o => o.stage === "Ready For Installation" || o.stage === "Installation Scheduled").length;
   const completedJobs = initialOrders.filter(o => o.stage === "Completed" || o.stage === "Closed").length;

@@ -31,9 +31,8 @@ export default async function StaffProductionPage() {
   return (
     <ProductionDashboardClient
       initialOrders={mappedOrders}
-      getOrderDetailHref={(order) =>
-        `/staff/orders/${order.orderId || order.id}?entryStage=production`
-      }
+      orderDetailBasePath="/staff/orders"
+      entryStage="production"
     />
   );
 }

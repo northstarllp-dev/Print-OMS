@@ -59,7 +59,8 @@ export function OrdersManagementDashboard({
   initialEnquiries,
   userRole,
   currentEmployeeName,
-  getOrderDetailHref,
+  orderDetailBasePath,
+  entryStage,
 }: { 
   initialOrders: any[];
   initialCustomers: any[];
@@ -67,7 +68,10 @@ export function OrdersManagementDashboard({
   initialEnquiries: any[];
   userRole: "Admin" | "Employee";
   currentEmployeeName: string;
-  getOrderDetailHref?: (order: { orderId?: string; id: string }) => string;
+  /** Base path for order detail links (e.g. `/staff/orders`). Defaults by role. */
+  orderDetailBasePath?: string;
+  /** Optional entryStage query param (e.g. staff queue lock). */
+  entryStage?: string;
 }) {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
@@ -92,11 +96,13 @@ export function OrdersManagementDashboard({
 
   const resolveOrderHref = useCallback(
     (order: { orderId?: string; id: string }) => {
-      if (getOrderDetailHref) return getOrderDetailHref(order);
-      const prefix = currentUserRole === "Admin" ? "/admin" : "/staff";
-      return `${prefix}/orders/${order.orderId || order.id}`;
+      const basePath =
+        orderDetailBasePath ??
+        (currentUserRole === "Admin" ? "/admin/orders" : "/staff/orders");
+      const base = `${basePath}/${order.orderId || order.id}`;
+      return entryStage ? `${base}?entryStage=${entryStage}` : base;
     },
-    [getOrderDetailHref, currentUserRole]
+    [orderDetailBasePath, entryStage, currentUserRole]
   );
   const employeeName = currentEmployeeName;
   const currentEmployeeObj = initialEmployees.find(e => e.name === employeeName || e.email === employeeName || e.id === employeeName);

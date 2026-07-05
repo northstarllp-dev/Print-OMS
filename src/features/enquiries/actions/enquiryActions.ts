@@ -9,6 +9,7 @@ import { getRequestBaseUrl } from "@/features/notifications/whatsapp/requestBase
 
 
 import { createAdminClient } from "@/utils/supabase/admin";
+import { revalidateStaffQueuePaths } from "@/features/orders/actions/orderActions";
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -365,12 +366,13 @@ export async function convertEnquiryToOrderAction(enquiryId: string, projectName
     baseUrl,
   });
 
-  // 6. Revalidate cache
+  // 6. Revalidate cache (all staff queues — not only /staff/orders)
   revalidatePath("/admin/enquire");
-  revalidatePath("/admin/orders");
+  await revalidateStaffQueuePaths();
   revalidatePath(`/admin/orders/${friendlyOrderId}`);
-  revalidatePath("/staff/orders");
   revalidatePath(`/staff/orders/${friendlyOrderId}`);
+  revalidatePath(`/admin/orders/${orderId}`);
+  revalidatePath(`/staff/orders/${orderId}`);
   
   return {
     success: true,

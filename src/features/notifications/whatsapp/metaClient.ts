@@ -90,10 +90,31 @@ export async function sendWhatsAppTemplateMessage(
     const data = await res.json().catch(() => ({}));
 
     if (!res.ok) {
+      const metaErr = (data as {
+        error?: { message?: string; code?: number; error_subcode?: number; type?: string };
+      })?.error;
       const errMsg =
-        (data as { error?: { message?: string } })?.error?.message ||
+        metaErr?.message ||
         `Meta API error ${res.status}`;
-      return { success: false, error: errMsg, raw: data };
+      // Temporary tokens from Meta expire in ~24h.
+      const isExpired =
+        metaErr?.code === 190 ||
+        /expired|session has expired|oauth/i.test(errMsg);
+      // Dev/sandbox WABA can only message numbers added under API Setup → To.
+      const notAllowed =
+        metaErr?.code === 131030 ||
+        /not in allowed list|recipient phone number not in allowed/i.test(errMsg);
+
+      let error = errMsg;
+      if (isExpired) {
+        error =
+          "Access token expired. Refresh WHATSAPP_ACCESS_TOKEN in .env.local (Meta Developer Console → WhatsApp → API Setup → Generate access token), then restart the dev server.";
+      } else if (notAllowed) {
+        error =
+          `Recipient ${input.to} is not on Meta's allowed list. In Meta Developer Console → WhatsApp → API Setup, add your real WhatsApp number under "To", verify the code Meta sends, set WHATSAPP_TEST_PHONE to that number (digits only, e.g. 9198XXXXXXXX), then restart the dev server. Do not use 15556275106 — that is Meta's docs example, not a real recipient.`;
+      }
+
+      return { success: false, error, raw: data };
     }
 
     const messageId = (data as { messages?: { id?: string }[] })?.messages?.[0]?.id;

@@ -29,9 +29,8 @@ export default async function StaffInstallationPage() {
   return (
     <InstallationDashboardClient
       initialOrders={mappedOrders}
-      getOrderDetailHref={(order) =>
-        `/staff/orders/${order.orderId || order.id}?entryStage=installation`
-      }
+      orderDetailBasePath="/staff/orders"
+      entryStage="installation"
     />
   );
 }

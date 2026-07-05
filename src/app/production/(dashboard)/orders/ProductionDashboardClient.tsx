@@ -18,11 +18,11 @@ interface OrderItem {
 
 interface ProductionDashboardClientProps {
   initialOrders: OrderItem[];
-  getOrderDetailHref?: (order: OrderItem) => string;
+  /** Base path for order detail links. Defaults to floor portal `/production/orders`. */
+  orderDetailBasePath?: string;
+  /** Optional entryStage query param (e.g. staff queue lock). */
+  entryStage?: string;
 }
-
-const defaultOrderDetailHref = (order: OrderItem) =>
-  `/production/orders/${order.orderId || order.id}`;
 
 const getStageBadgeStyle = (stage: string) => {
   const styles: Record<string, { bg: string; text: string; border: string }> = {
@@ -38,13 +38,18 @@ const getStageBadgeStyle = (stage: string) => {
 
 export function ProductionDashboardClient({
   initialOrders,
-  getOrderDetailHref = defaultOrderDetailHref,
+  orderDetailBasePath = "/production/orders",
+  entryStage,
 }: ProductionDashboardClientProps) {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
   const [stageFilter, setStageFilter] = useState("ALL");
 
-  const resolveOrderHref = (order: OrderItem) => getOrderDetailHref(order);
+  const resolveOrderHref = (order: OrderItem) => {
+    const id = order.orderId || order.id;
+    const base = `${orderDetailBasePath}/${id}`;
+    return entryStage ? `${base}?entryStage=${entryStage}` : base;
+  };
 
   // Calculations
   const activeJobs = initialOrders.filter(o => o.stage === "Design Approved" || o.stage === "Production" || o.stage === "Ready For Installation").length;

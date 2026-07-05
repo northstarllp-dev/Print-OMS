@@ -44,14 +44,7 @@ export function AssignTeamModal({ isOpen, onClose, orderId, onSuccess }: AssignT
   const handleSubmit = async () => {
     try {
       setSaving(true);
-      // Auto-assign Installation and Production roles
-      const autoAssignedIds = employees
-        .filter(emp => emp.staff_role === "Installation" || emp.staff_role === "Production")
-        .map(emp => emp.id);
-        
-      const finalIds = Array.from(new Set([...Array.from(selectedIds), ...autoAssignedIds]));
-      
-      await assignTeamToOrder(orderId, finalIds);
+      await assignTeamToOrder(orderId, Array.from(selectedIds));
       setSaving(false);
       onSuccess();
     } catch (err) {
@@ -61,7 +54,8 @@ export function AssignTeamModal({ isOpen, onClose, orderId, onSuccess }: AssignT
     }
   };
 
-  const visibleEmployees = employees.filter(emp => emp.staff_role === "Designer" || emp.staff_role === "Marketer");
+  // All tenant staff roles (Designer, Recce & Installation, Production & Service, etc.)
+  const visibleEmployees = employees;
 
   return (
     <div style={{

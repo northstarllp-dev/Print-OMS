@@ -16,6 +16,7 @@ import {
 import { createClient } from "@/utils/supabase/client";
 import { DesignRecord } from "@/types";
 import { updateDesignDetailsAction } from "@/features/designs/actions/designActions";
+import { revalidateOrderPathsAction } from "@/features/orders/actions/orderActions";
 
 interface Customer {
   id: string;
@@ -95,6 +96,7 @@ export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabPro
 
     if (updateStage) {
       await supabase.from("orders").update({ stage: updateStage }).eq("id", order.id);
+      await revalidateOrderPathsAction(order.id);
     }
   };
 

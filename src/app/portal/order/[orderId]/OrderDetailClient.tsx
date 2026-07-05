@@ -26,7 +26,7 @@ import {
   UploadCloud
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
-import { scheduleSiteVisitAction } from "@/features/orders/actions/orderActions";
+import { scheduleSiteVisitAction, revalidateOrderPathsAction } from "@/features/orders/actions/orderActions";
 import { mapSiteVisitFromDb, formatSiteMeasurementLabel } from "@/features/orders/actions/siteVisitMapper";
 import { calcLineAmount, getLineMeasurement, normalizePricingType } from "@/features/quotations/utils/lineAmount";
 import { mapDesignFromDb } from "@/features/designs/actions/designMapper";
@@ -153,6 +153,7 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
     await supabase.from("order_activity").insert({ order_id: order.orderId || order.id, activity_type: "timeline", actor_name: "System", actor_role: "System", content: "Client approved the quotation details.", metadata: { action: "quotation_approved_by_customer" } });
     await supabase.from("quotations").update({ status: "Approved" }).eq("order_id", order.id);
     await supabase.from("orders").update({ stage: "Quotation Approved" }).eq("id", order.id);
+    await revalidateOrderPathsAction(order.id);
     setUpdatingStatus(null);
   };
 
@@ -165,6 +166,7 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
     await supabase.from("order_activity").insert({ order_id: order.orderId || order.id, activity_type: "customer", actor_name: customer.name, actor_role: "Customer", content: `Quotation Declined. Feedback: ${quoteFeedback}`, metadata: { action: "quotation_declined" } });
     await supabase.from("quotations").update({ status: "Rejected" }).eq("order_id", order.id);
     await supabase.from("orders").update({ stage: "Quotation Negotiation" }).eq("id", order.id);
+    await revalidateOrderPathsAction(order.id);
     setQuoteFeedback(""); setShowQuoteDeclineInput(false); setUpdatingStatus(null);
   };
 

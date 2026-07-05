@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { Payment, PaymentAmountType, PaymentStatus } from "@/types";
 import { assertAdminOnly } from "@/features/orders/workspace/shared/serverPermissions";
+import { revalidateStaffQueuePaths } from "@/features/orders/actions/orderActions";
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -72,10 +73,9 @@ function mapPayment(row: Record<string, unknown>): Payment {
   };
 }
 
-function revalidatePaymentPaths(orderId: string) {
-  revalidatePath("/admin/orders");
+async function revalidatePaymentPaths(orderId: string) {
+  await revalidateStaffQueuePaths();
   revalidatePath(`/admin/orders/${orderId}`);
-  revalidatePath("/staff/orders");
   revalidatePath(`/staff/orders/${orderId}`);
   revalidatePath("/portal");
   revalidatePath(`/portal/order/${orderId}`);
@@ -213,7 +213,7 @@ export async function createPayment(
     metadata: { action: received ? "payment_received" : "payment_expected", payment_id: data.id },
   });
 
-  revalidatePaymentPaths(orderId);
+  await revalidatePaymentPaths(orderId);
   return mapPayment(data);
 }
 
@@ -257,7 +257,7 @@ export async function markPaymentReceived(paymentId: string): Promise<Payment> {
     metadata: { action: "payment_received", payment_id: paymentId },
   });
 
-  revalidatePaymentPaths(current.order_id);
+  await revalidatePaymentPaths(current.order_id);
   return mapPayment(data);
 }
 
@@ -283,7 +283,7 @@ export async function markPaymentExpected(paymentId: string): Promise<Payment> {
     .single();
 
   if (error) throw new Error(error.message);
-  revalidatePaymentPaths(current.order_id);
+  await revalidatePaymentPaths(current.order_id);
   return mapPayment(data);
 }
 
@@ -299,7 +299,7 @@ export async function deletePayment(paymentId: string): Promise<void> {
 
   const { error } = await supabase.from("payments").delete().eq("id", paymentId);
   if (error) throw new Error(error.message);
-  if (current?.order_id) revalidatePaymentPaths(current.order_id);
+  if (current?.order_id) await revalidatePaymentPaths(current.order_id);
 }
 
 export async function updatePayment(
@@ -355,6 +355,6 @@ export async function updatePayment(
     .single();
 
   if (error) throw new Error(error.message);
-  revalidatePaymentPaths(current.order_id);
+  await revalidatePaymentPaths(current.order_id);
   return mapPayment(data);
 }

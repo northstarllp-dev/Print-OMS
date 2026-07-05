@@ -179,8 +179,7 @@ export async function createOrder(formData: any) {
     metadata: { action: "order_created", method: "manual" }
   });
 
-  revalidatePath("/admin/orders");
-  revalidatePath("/staff/orders");
+  await revalidateStaffQueuePaths();
   return data;
 }
 
@@ -212,10 +211,9 @@ export async function updateOrder(id: string, updates: any) {
   if (error) throw new Error(error.message);
   if (data && data.length > 0) {
     const orderIdFriendly = data[0].order_id || id;
-    revalidatePath("/admin/orders");
+    await revalidateStaffQueuePaths();
     revalidatePath(`/admin/orders/${orderIdFriendly}`);
     revalidatePath(`/admin/orders/${orderUuid}`);
-    revalidatePath("/staff/orders");
     revalidatePath(`/staff/orders/${orderIdFriendly}`);
     revalidatePath(`/staff/orders/${orderUuid}`);
     revalidatePath("/portal");
@@ -230,8 +228,7 @@ export async function deleteOrder(id: string) {
   const { data: o } = await supabase.from("orders").select("order_id").eq("id", id).single();
   const { error } = await supabase.from("orders").delete().eq("id", id);
   if (error) throw new Error(error.message);
-  revalidatePath("/admin/orders");
-  revalidatePath("/staff/orders");
+  await revalidateStaffQueuePaths();
   if (o) {
     revalidatePath(`/admin/orders/${o.order_id}`);
     revalidatePath(`/staff/orders/${o.order_id}`);
@@ -297,9 +294,8 @@ export async function updateSiteVisitDetailsAction(orderId: string, details: any
 
   // Revalidate cache for all possible URLs
   const orderCode = order?.order_id;
-  revalidatePath("/admin/orders");
+  await revalidateStaffQueuePaths();
   revalidatePath(`/admin/orders/${orderId}`);
-  revalidatePath("/staff/orders");
   revalidatePath(`/staff/orders/${orderId}`);
   revalidatePath("/portal");
   revalidatePath(`/portal/order/${orderId}`);
@@ -331,13 +327,11 @@ export async function updateProductionDetailsAction(orderId: string, details: an
   }
   
   // Revalidate cache
-  revalidatePath("/production/orders");
+  await revalidateStaffQueuePaths();
   revalidatePath(`/production/orders/${orderId}`);
   revalidatePath(`/production/orders/${orderUuid}`);
-  revalidatePath("/admin/orders");
   revalidatePath(`/admin/orders/${orderId}`);
   revalidatePath(`/admin/orders/${orderUuid}`);
-  revalidatePath("/staff/orders");
   revalidatePath(`/staff/orders/${orderId}`);
   revalidatePath(`/staff/orders/${orderUuid}`);
   revalidatePath("/portal");
@@ -364,13 +358,11 @@ export async function updateInstallationDetailsAction(orderId: string, details: 
   }
   
   // Revalidate cache
-  revalidatePath("/installation/orders");
+  await revalidateStaffQueuePaths();
   revalidatePath(`/installation/orders/${orderId}`);
   revalidatePath(`/installation/orders/${orderUuid}`);
-  revalidatePath("/admin/orders");
   revalidatePath(`/admin/orders/${orderId}`);
   revalidatePath(`/admin/orders/${orderUuid}`);
-  revalidatePath("/staff/orders");
   revalidatePath(`/staff/orders/${orderId}`);
   revalidatePath(`/staff/orders/${orderUuid}`);
   revalidatePath("/portal");
@@ -580,6 +572,35 @@ export async function assignEmployeesToOrderAction(orderId: string, employeeIds:
   return await assignTeamToOrder(orderId, employeeIds);
 }
 
+/**
+ * Server action callable from the customer portal (client component) after it
+ * directly writes to the orders table. Triggers full revalidation of all
+ * staff/admin/floor queue pages so staff see the stage change immediately.
+ */
+export async function revalidateOrderPathsAction(orderId?: string) {
+  "use server";
+  await revalidateStaffQueuePaths();
+  if (orderId) {
+    revalidatePath(`/admin/orders/${orderId}`);
+    revalidatePath(`/staff/orders/${orderId}`);
+    revalidatePath(`/portal/order/${orderId}`);
+  }
+  revalidatePath("/portal");
+}
+
+/** Invalidate all staff/floor queue pages after assignment or order creation. */
+export async function revalidateStaffQueuePaths() {
+  revalidatePath("/admin/orders");
+  revalidatePath("/staff/orders");
+  revalidatePath("/staff/site-visit");
+  revalidatePath("/staff/design");
+  revalidatePath("/staff/production");
+  revalidatePath("/staff/installation");
+  revalidatePath("/production/orders");
+  revalidatePath("/installation/orders");
+  revalidatePath("/installation/site-visit");
+}
+
 export async function fetchEmployeeStats() {
   const supabase = await getSupabase();
   
@@ -587,7 +608,7 @@ export async function fetchEmployeeStats() {
     .from("users")
     .select("id, name, email, staff_role")
     .eq("role", "staff")
-    .neq("staff_role", "Production");
+    .order("name");
   if (staffError) throw new Error(staffError.message);
 
   // Load active assignments from order_assignments joined to active orders
@@ -640,8 +661,13 @@ export async function assignTeamToOrder(orderId: string, employeeIds: string[]) 
     metadata: { action: "team_assigned", count: employeeIds.length }
   });
 
-  revalidatePath("/admin/orders");
-  revalidatePath("/staff/orders");
+  await revalidateStaffQueuePaths();
+  if (o?.order_id) {
+    revalidatePath(`/admin/orders/${o.order_id}`);
+    revalidatePath(`/staff/orders/${o.order_id}`);
+  }
+  revalidatePath(`/admin/orders/${orderUuid}`);
+  revalidatePath(`/staff/orders/${orderUuid}`);
   return { success: true };
 }
 
@@ -745,8 +771,7 @@ export async function scheduleSiteVisitAction(orderId: string, scheduleData: any
     baseUrl,
   });
 
-  revalidatePath("/admin/orders");
-  revalidatePath("/staff/orders");
+  await revalidateStaffQueuePaths();
   revalidatePath(`/admin/orders/${order.order_id || orderId}`);
   revalidatePath(`/staff/orders/${order.order_id || orderId}`);
   
@@ -791,9 +816,7 @@ export async function approveSiteVisitAction(orderId: string) {
     metadata: { action: "site_visit_staff_approved" }
   });
 
-  revalidatePath("/admin/orders");
-  revalidatePath("/staff/orders");
-  revalidatePath(`/staff/site-visit`);
+  await revalidateStaffQueuePaths();
   revalidatePath(`/admin/orders/${order.order_id || orderId}`);
   revalidatePath(`/staff/orders/${order.order_id || orderId}`);
   
@@ -853,8 +876,7 @@ export async function freezeSiteVisitAction(orderId: string) {
   });
 
   // 5. Revalidate all views
-  revalidatePath("/admin/orders");
-  revalidatePath("/staff/orders");
+  await revalidateStaffQueuePaths();
   revalidatePath(`/admin/orders/${order.order_id || orderId}`);
   revalidatePath(`/staff/orders/${order.order_id || orderId}`);
 

@@ -25,7 +25,7 @@ import {
   Download
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
-import { scheduleSiteVisitAction } from "@/features/orders/actions/orderActions";
+import { scheduleSiteVisitAction, revalidateOrderPathsAction } from "@/features/orders/actions/orderActions";
 import { mapSiteVisitFromDb, formatSiteMeasurementLabel } from "@/features/orders/actions/siteVisitMapper";
 import { calcLineAmount, getLineMeasurement, normalizePricingType } from "@/features/quotations/utils/lineAmount";
 import { PaymentsTab } from "./components/PaymentsTab";
@@ -512,6 +512,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
     await supabase.from("order_activity").insert({ order_id: activeOrder.orderId || activeOrder.id, activity_type: "timeline", actor_name: "System", actor_role: "System", content: "Client approved the quotation details.", metadata: { action: "quotation_approved_by_customer" } });
     await supabase.from("quotations").update({ status: "Approved" }).eq("order_id", activeOrder.id);
     await supabase.from("orders").update({ stage: "Quotation Approved" }).eq("id", activeOrder.id);
+    await revalidateOrderPathsAction(activeOrder.id);
     setUpdatingStatus(null);
   };
 
@@ -524,6 +525,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
     await supabase.from("order_activity").insert({ order_id: activeOrder.orderId || activeOrder.id, activity_type: "customer", actor_name: customer.name, actor_role: "Customer", content: `Quotation Declined. Feedback: ${quoteFeedback}`, metadata: { action: "quotation_declined" } });
     await supabase.from("quotations").update({ status: "Rejected", rejection_reason: quoteFeedback }).eq("order_id", activeOrder.id);
     await supabase.from("orders").update({ stage: "Quotation Negotiation" }).eq("id", activeOrder.id);
+    await revalidateOrderPathsAction(activeOrder.id);
     setQuoteFeedback(""); setShowQuoteDeclineInput(false); setUpdatingStatus(null);
   };
 
@@ -552,6 +554,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
     const supabase = createClient();
     await supabase.from("order_activity").insert({ order_id: activeOrder.orderId || activeOrder.id, activity_type: "customer", actor_name: customer.name, actor_role: "Customer", content: `Design Revision Requested. Notes: ${designFeedback}`, metadata: { action: "design_revision_requested" } });
     await supabase.from("orders").update({ stage: "Design In Progress" }).eq("id", activeOrder.id);
+    await revalidateOrderPathsAction(activeOrder.id);
     setDesignFeedback(""); setShowDesignDeclineInput(false); setUpdatingStatus(null);
   };
 

@@ -32,7 +32,8 @@ export function StaffLoginForm({ employees }: StaffLoginFormProps) {
       if (res.error) {
         setError(res.error);
       } else {
-        router.push("/staff/orders");
+        // Let root gateway apply tenant/stage-grant based home routing.
+        router.push("/");
       }
     } catch (err: any) {
       setError(err.message || "An unexpected error occurred.");

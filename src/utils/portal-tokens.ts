@@ -1,6 +1,6 @@
-
-
 import { createHmac, randomUUID, timingSafeEqual } from "crypto";
+import { createAdminClient } from "@/utils/supabase/admin";
+
 
 // ============================================================
 // Portal Token Configuration
@@ -157,8 +157,11 @@ export async function storePortalToken(
   createdBy: string = "system",
   metadata: Record<string, any> = {}
 ): Promise<void> {
+  // Prefer service-role client: token issuance is a privileged server action and
+  // must work for enquiry-time tokens (order_id is null) under tenant RLS.
+  const db = createAdminClient() || supabase;
   try {
-    const { error } = await supabase.from("portal_access_tokens").insert({
+    const { error } = await db.from("portal_access_tokens").insert({
       jti,
       customer_id: customerId,
       order_id: orderId || null,

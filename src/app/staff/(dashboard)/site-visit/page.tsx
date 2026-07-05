@@ -15,14 +15,11 @@ export default async function StaffSiteVisitPage() {
   // Find current employee info
   const currentEmployee = employeesData?.find(e => e.id === user?.id);
   
-  // Filter orders allotted to this staff member & in Site Visit stages
+  // Stage-based queue: all orders in site-visit stages, visible to anyone with the site_visit grant
   const siteVisitStages = ["Site Visit Pending", "Site Visit Scheduled", "Site Visit Completed"];
-  const allottedOrders = orders?.filter(o => 
-    o.assigned_employees?.includes(user?.id) &&
-    siteVisitStages.includes(o.stage)
-  ) || [];
+  const queueOrders = orders?.filter(o => siteVisitStages.includes(o.stage)) || [];
   
-  const mappedOrders = allottedOrders.map(o => ({
+  const mappedOrders = queueOrders.map(o => ({
     id: o.id,
     projectName: o.project_name,
     customerId: o.customer_id,
@@ -72,9 +69,8 @@ export default async function StaffSiteVisitPage() {
         initialEnquiries={mappedEnquiries}
         userRole="Employee"
         currentEmployeeName={currentEmployee?.name || ""}
-        getOrderDetailHref={(order) =>
-          `/staff/orders/${order.orderId || order.id}?entryStage=site_visit`
-        }
+        orderDetailBasePath="/staff/orders"
+        entryStage="site_visit"
       />
     </div>
   );

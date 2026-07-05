@@ -15,14 +15,11 @@ export default async function StaffDesignPage() {
   // Find current employee info
   const currentEmployee = employeesData?.find(e => e.id === user?.id);
   
-  // Filter orders allotted to this staff member & in Design stages
+  // Stage-based queue: all orders in design stages, visible to anyone with the design grant
   const designStages = ["Design In Progress", "Design Approved"];
-  const allottedOrders = orders?.filter(o => 
-    o.assigned_employees?.includes(user?.id) &&
-    designStages.includes(o.stage)
-  ) || [];
+  const queueOrders = orders?.filter(o => designStages.includes(o.stage)) || [];
   
-  const mappedOrders = allottedOrders.map(o => ({
+  const mappedOrders = queueOrders.map(o => ({
     id: o.id,
     projectName: o.project_name,
     customerId: o.customer_id,
@@ -70,9 +67,8 @@ export default async function StaffDesignPage() {
         initialEnquiries={mappedEnquiries}
         userRole="Employee"
         currentEmployeeName={currentEmployee?.name || ""}
-        getOrderDetailHref={(order) =>
-          `/staff/orders/${order.orderId || order.id}?entryStage=design`
-        }
+        orderDetailBasePath="/staff/orders"
+        entryStage="design"
       />
     </div>
   );

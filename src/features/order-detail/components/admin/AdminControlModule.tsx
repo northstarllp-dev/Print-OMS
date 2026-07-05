@@ -71,14 +71,7 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
   const handleSaveTeam = async () => {
     try {
       setSavingTeam(true);
-      // Auto-assign Installation and Production roles
-      const autoAssignedIds = employeeStats
-        .filter(emp => emp.staff_role === "Installation" || emp.staff_role === "Production")
-        .map(emp => emp.id);
-        
-      const finalIds = Array.from(new Set([...Array.from(selectedEmployeeIds), ...autoAssignedIds]));
-      
-      await assignTeamToOrder(order.id, finalIds);
+      await assignTeamToOrder(order.id, Array.from(selectedEmployeeIds));
       alert("Team assignments updated!");
     } catch (e) {
       alert("Failed to assign team");
@@ -87,7 +80,8 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
     }
   };
 
-  const visibleEmployees = employeeStats.filter(emp => emp.staff_role === "Designer" || emp.staff_role === "Marketer");
+  // All tenant staff roles (Designer, Recce & Installation, Production & Service, etc.)
+  const visibleEmployees = employeeStats;
 
   const toggleEmployee = (id: string) => {
     setSelectedEmployeeIds(prev => {

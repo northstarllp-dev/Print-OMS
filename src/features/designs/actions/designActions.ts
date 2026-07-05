@@ -55,6 +55,10 @@ function revalidateDesignPaths(orderId: string) {
   revalidatePath(`/admin/orders/${orderId}`);
   revalidatePath("/staff/orders");
   revalidatePath(`/staff/orders/${orderId}`);
+  revalidatePath("/staff/site-visit");
+  revalidatePath("/staff/design");
+  revalidatePath("/staff/production");
+  revalidatePath("/staff/installation");
   revalidatePath("/production/orders");
   revalidatePath(`/production/orders/${orderId}`);
   revalidatePath("/installation/orders");
