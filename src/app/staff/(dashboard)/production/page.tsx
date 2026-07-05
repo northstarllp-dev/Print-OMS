@@ -1,8 +1,10 @@
 import { getOrders } from "@/features/orders/actions/orderActions";
+import { getUserSession } from "@/features/auth/actions/authActions";
 import { ProductionDashboardClient } from "@/app/production/(dashboard)/orders/ProductionDashboardClient";
 
 export default async function StaffProductionPage() {
   const orders = await getOrders();
+  const user = await getUserSession();
 
   const productionReadyStages = [
     "Design Approved",
@@ -13,8 +15,11 @@ export default async function StaffProductionPage() {
     "Closed",
   ];
 
-  const filteredOrders = (orders || []).filter((o) =>
-    productionReadyStages.includes(o.stage)
+  // Stage + assignment: orders in production stages AND assigned to this staff member
+  const filteredOrders = (orders || []).filter(
+    (o) =>
+      o.assigned_employees?.includes(user?.id) &&
+      productionReadyStages.includes(o.stage)
   );
 
   const mappedOrders = filteredOrders.map((o) => ({

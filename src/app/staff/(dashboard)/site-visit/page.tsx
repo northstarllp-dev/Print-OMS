@@ -15,9 +15,12 @@ export default async function StaffSiteVisitPage() {
   // Find current employee info
   const currentEmployee = employeesData?.find(e => e.id === user?.id);
   
-  // Stage-based queue: all orders in site-visit stages, visible to anyone with the site_visit grant
+  // Stage + assignment: orders in site-visit stages AND assigned to this staff member
   const siteVisitStages = ["Site Visit Pending", "Site Visit Scheduled", "Site Visit Completed"];
-  const queueOrders = orders?.filter(o => siteVisitStages.includes(o.stage)) || [];
+  const queueOrders = orders?.filter(o =>
+    o.assigned_employees?.includes(user?.id) &&
+    siteVisitStages.includes(o.stage)
+  ) || [];
   
   const mappedOrders = queueOrders.map(o => ({
     id: o.id,
