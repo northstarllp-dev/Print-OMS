@@ -18,7 +18,11 @@ interface OrderItem {
 
 interface InstallationDashboardClientProps {
   initialOrders: OrderItem[];
+  getOrderDetailHref?: (order: OrderItem) => string;
 }
+
+const defaultOrderDetailHref = (order: OrderItem) =>
+  `/installation/orders/${order.orderId || order.id}`;
 
 const getStageBadgeStyle = (stage: string) => {
   const styles: Record<string, { bg: string; text: string; border: string }> = {
@@ -30,10 +34,15 @@ const getStageBadgeStyle = (stage: string) => {
   return styles[stage] || { bg: "bg-slate-50/70", text: "text-slate-600", border: "border-slate-200" };
 };
 
-export function InstallationDashboardClient({ initialOrders }: InstallationDashboardClientProps) {
+export function InstallationDashboardClient({
+  initialOrders,
+  getOrderDetailHref = defaultOrderDetailHref,
+}: InstallationDashboardClientProps) {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
   const [stageFilter, setStageFilter] = useState("ALL");
+
+  const resolveOrderHref = (order: OrderItem) => getOrderDetailHref(order);
 
   const activeJobs = initialOrders.filter(o => o.stage === "Ready For Installation" || o.stage === "Installation Scheduled").length;
   const completedJobs = initialOrders.filter(o => o.stage === "Completed" || o.stage === "Closed").length;
@@ -148,7 +157,7 @@ export function InstallationDashboardClient({ initialOrders }: InstallationDashb
                     <tr 
                       key={order.id} 
                       className="border-b border-slate-100 hover:bg-slate-50/30 transition-all duration-150 cursor-pointer"
-                      onClick={() => router.push(`/installation/orders/${order.orderId || order.id}`)}
+                      onClick={() => router.push(resolveOrderHref(order))}
                     >
                       {/* Code */}
                       <td className="py-4 px-6 text-sm font-bold text-slate-800">
@@ -189,7 +198,7 @@ export function InstallationDashboardClient({ initialOrders }: InstallationDashb
                       {/* Action */}
                       <td className="py-4 px-6 text-right">
                         <Link
-                          href={`/installation/orders/${order.orderId || order.id}`}
+                          href={resolveOrderHref(order)}
                           onClick={e => e.stopPropagation()}
                           className="inline-flex items-center gap-1.5 text-xs font-extrabold text-green-600 hover:text-green-700 transition-colors uppercase tracking-wider"
                         >

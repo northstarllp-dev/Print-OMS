@@ -1,6 +1,7 @@
 import React from "react";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/features/auth/actions/authActions";
+import { canAccessInstallationPortal } from "@/features/orders/workspace/shared/stageGrants";
 import { InstallationLayoutClient } from "./InstallationLayoutClient";
 
 export default async function InstallationLayout({
@@ -9,9 +10,13 @@ export default async function InstallationLayout({
   children: React.ReactNode;
 }) {
   const profile = await getCurrentUser();
+  const actor = {
+    role: profile?.role ?? "",
+    staff_role: profile?.staff_role ?? null,
+    company_id: profile?.company_id ?? null,
+  };
 
-  // Enforce server-side security checks (allow Admins or Installation Staff)
-  if (!profile || (profile.role !== "admin" && (profile.role !== "staff" || profile.staff_role !== "Installation"))) {
+  if (!profile || !canAccessInstallationPortal(actor)) {
     redirect("/installation/login");
   }
 
@@ -20,7 +25,8 @@ export default async function InstallationLayout({
     name: profile.name,
     email: profile.email || "",
     role: profile.role,
-    staff_role: profile.staff_role || "Installation"
+    staff_role: profile.staff_role || "Installation",
+    company_id: profile.company_id ?? null,
   };
 
   return (

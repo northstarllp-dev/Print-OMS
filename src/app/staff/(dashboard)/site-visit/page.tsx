@@ -72,6 +72,9 @@ export default async function StaffSiteVisitPage() {
         initialEnquiries={mappedEnquiries}
         userRole="Employee"
         currentEmployeeName={currentEmployee?.name || ""}
+        getOrderDetailHref={(order) =>
+          `/staff/orders/${order.orderId || order.id}?entryStage=site_visit`
+        }
       />
     </div>
   );

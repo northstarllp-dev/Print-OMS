@@ -10,6 +10,7 @@ import { OrderDetailPageClient } from "./OrderDetailPageClient";
 
 export default async function OrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const profile = await getCurrentUser();
 
   const order = await getOrderById(id);
   if (!order) {
@@ -114,6 +115,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
       products={mappedProducts}
       initialQuotation={quotationData}
       siteVisitItems={siteVisitItemsData || []}
+      companyId={profile?.company_id ?? null}
     />
   );
 }

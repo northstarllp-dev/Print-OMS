@@ -41,6 +41,7 @@ interface OrderDetailPageClientProps {
   entryStage?: OrderStage;
   /** Where "Back" navigates to. Defaults to /admin/orders (Admin) or /staff/orders (Employee). */
   backHref?: string;
+  companyId?: string | null;
 }
 
 export function OrderDetailPageClient({
@@ -55,6 +56,7 @@ export function OrderDetailPageClient({
   siteVisitItems = [],
   entryStage,
   backHref,
+  companyId,
 }: OrderDetailPageClientProps) {
   const router = useRouter();
 
@@ -75,6 +77,7 @@ export function OrderDetailPageClient({
         initialQuotation={initialQuotation}
         siteVisitItems={siteVisitItems}
         entryStage={entryStage}
+        companyId={companyId}
       />
     </div>
   );

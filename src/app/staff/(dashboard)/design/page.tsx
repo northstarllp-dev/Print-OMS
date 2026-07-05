@@ -70,6 +70,9 @@ export default async function StaffDesignPage() {
         initialEnquiries={mappedEnquiries}
         userRole="Employee"
         currentEmployeeName={currentEmployee?.name || ""}
+        getOrderDetailHref={(order) =>
+          `/staff/orders/${order.orderId || order.id}?entryStage=design`
+        }
       />
     </div>
   );

@@ -18,7 +18,11 @@ interface OrderItem {
 
 interface ProductionDashboardClientProps {
   initialOrders: OrderItem[];
+  getOrderDetailHref?: (order: OrderItem) => string;
 }
+
+const defaultOrderDetailHref = (order: OrderItem) =>
+  `/production/orders/${order.orderId || order.id}`;
 
 const getStageBadgeStyle = (stage: string) => {
   const styles: Record<string, { bg: string; text: string; border: string }> = {
@@ -32,10 +36,15 @@ const getStageBadgeStyle = (stage: string) => {
   return styles[stage] || { bg: "bg-slate-50/70", text: "text-slate-600", border: "border-slate-200" };
 };
 
-export function ProductionDashboardClient({ initialOrders }: ProductionDashboardClientProps) {
+export function ProductionDashboardClient({
+  initialOrders,
+  getOrderDetailHref = defaultOrderDetailHref,
+}: ProductionDashboardClientProps) {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
   const [stageFilter, setStageFilter] = useState("ALL");
+
+  const resolveOrderHref = (order: OrderItem) => getOrderDetailHref(order);
 
   // Calculations
   const activeJobs = initialOrders.filter(o => o.stage === "Design Approved" || o.stage === "Production" || o.stage === "Ready For Installation").length;
@@ -153,7 +162,7 @@ export function ProductionDashboardClient({ initialOrders }: ProductionDashboard
                     <tr 
                       key={order.id} 
                       className="border-b border-slate-100 hover:bg-slate-50/30 transition-all duration-150 cursor-pointer"
-                      onClick={() => router.push(`/production/orders/${order.orderId || order.id}`)}
+                      onClick={() => router.push(resolveOrderHref(order))}
                     >
                       {/* Code */}
                       <td className="py-4 px-6 text-sm font-bold text-slate-800">
@@ -196,7 +205,7 @@ export function ProductionDashboardClient({ initialOrders }: ProductionDashboard
                       {/* Action */}
                       <td className="py-4 px-6 text-right">
                         <Link
-                          href={`/production/orders/${order.orderId || order.id}`}
+                          href={resolveOrderHref(order)}
                           onClick={e => e.stopPropagation()}
                           className="inline-flex items-center gap-1.5 text-xs font-extrabold text-blue-600 hover:text-blue-700 transition-colors uppercase tracking-wider"
                         >

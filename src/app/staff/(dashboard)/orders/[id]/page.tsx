@@ -10,9 +10,21 @@ import {
   getSiteVisitMeasurementsForOrder 
 } from "@/features/quotations/actions/quotationActions";
 import { OrderDetailPageClient } from "@/app/admin/(dashboard)/orders/[id]/OrderDetailPageClient";
+import {
+  getStaffOrderBackHref,
+  parseOrderStage,
+} from "@/features/orders/workspace/shared/stageGrants";
 
-export default async function StaffOrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function StaffOrderDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ entryStage?: string }>;
+}) {
   const { id } = await params;
+  const { entryStage: entryStageParam } = await searchParams;
+  const entryStage = parseOrderStage(entryStageParam);
   const profile = await getCurrentUser();
   if (!profile) {
     redirect("/staff/login");
@@ -120,6 +132,9 @@ export default async function StaffOrderDetailPage({ params }: { params: Promise
       products={mappedProducts}
       initialQuotation={quotationData}
       siteVisitItems={siteVisitItemsData || []}
+      entryStage={entryStage}
+      backHref={getStaffOrderBackHref(entryStage)}
+      companyId={profile?.company_id ?? null}
     />
   );
 }

@@ -8,6 +8,10 @@ import { DesignRecord, DesignComment, DesignVersion } from "@/types";
 import { mapDesignFromDb } from "./designMapper";
 import { dispatchWhatsAppNotification } from "@/features/notifications/actions/dispatchNotification";
 import { getRequestBaseUrl } from "@/features/notifications/whatsapp/requestBaseUrl";
+import {
+  assertStageEditOrPortalOrder,
+  assertStageEditPermission,
+} from "@/features/orders/workspace/shared/serverPermissions";
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -100,6 +104,7 @@ export async function getDesignByOrderId(orderId: string): Promise<DesignRecord 
 }
 
 export async function createDesignForOrderAction(orderId: string): Promise<DesignRecord> {
+  await assertStageEditPermission("design");
   const supabase = await getSupabase();
   const orderUuid = await resolveOrderUuid(supabase, orderId);
   const { data, error } = await supabase
@@ -120,6 +125,7 @@ export async function updateDesignDetailsAction(
   orderId: string,
   details: Partial<DesignRecord>
 ): Promise<DesignRecord> {
+  await assertStageEditOrPortalOrder("design", orderId);
   const supabase = await getSupabase();
   const orderUuid = await resolveOrderUuid(supabase, orderId);
 
@@ -156,6 +162,7 @@ export async function updateDesignItemStatusAction(
   status: DesignVersion["status"],
   updateStage?: string
 ): Promise<DesignRecord> {
+  await assertStageEditOrPortalOrder("design", orderId);
   const design = await getDesignByOrderId(orderId);
   if (!design) throw new Error("Design not found");
 
@@ -187,6 +194,7 @@ export async function addDesignCommentAction(
   comment: DesignComment,
   updateStage?: string
 ): Promise<DesignRecord> {
+  await assertStageEditOrPortalOrder("design", orderId);
   const design = await getDesignByOrderId(orderId);
   if (!design) throw new Error("Design not found");
 
@@ -212,6 +220,7 @@ export async function addDesignCommentAction(
 }
 
 export async function sendDesignToCustomerAction(orderId: string): Promise<DesignRecord> {
+  await assertStageEditPermission("design");
   const design = await getDesignByOrderId(orderId);
   if (!design) throw new Error("Design not found");
 
@@ -246,6 +255,7 @@ export async function sendDesignToCustomerAction(orderId: string): Promise<Desig
 }
 
 export async function approveAllDesignItemsAction(orderId: string): Promise<DesignRecord> {
+  await assertStageEditOrPortalOrder("design", orderId);
   const design = await getDesignByOrderId(orderId);
   if (!design) throw new Error("Design not found");
 

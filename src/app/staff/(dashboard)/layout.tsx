@@ -1,4 +1,4 @@
-import React from "react";
+import React, { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/features/auth/actions/authActions";
 import { StaffLayoutClient } from "./StaffLayoutClient";
@@ -20,12 +20,15 @@ export default async function StaffLayout({
     name: profile.name,
     email: profile.email || "",
     role: profile.role,
-    staff_role: profile.staff_role || "Field Agent"
+    staff_role: profile.staff_role || "Field Agent",
+    company_id: profile.company_id ?? null,
   };
 
   return (
-    <StaffLayoutClient profile={mappedProfile}>
-      {children}
-    </StaffLayoutClient>
+    <Suspense fallback={null}>
+      <StaffLayoutClient profile={mappedProfile}>
+        {children}
+      </StaffLayoutClient>
+    </Suspense>
   );
 }

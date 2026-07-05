@@ -202,6 +202,8 @@ interface OrderWorksheetModalProps {
   siteVisitItems?: SiteVisitItem[];
   /** Queue-scoped entry: when set, only this stage's timeline node is accessible for staff. */
   entryStage?: OrderStage;
+  /** Tenant key for per-company stage grant overrides (Phase 4b). */
+  companyId?: string | null;
 }
 
 /* ─── Component ─────────────────────────────────────────────────── */
@@ -218,6 +220,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   initialQuotation = null,
   siteVisitItems = [],
   entryStage,
+  companyId = null,
 }) => {
   const router = useRouter();
   const [order, setOrder] = useState<Order>(initialOrder);
@@ -371,6 +374,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   const actor = {
     role: currentUserRole === "Admin" ? "admin" : "staff",
     staff_role: currentEmployee?.role ?? null,
+    company_id: companyId ?? null,
   };
   /**
    * Workflow progression gate (Phase 6): separate from resolveStagePermission (RBAC).

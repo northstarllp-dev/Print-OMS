@@ -58,7 +58,8 @@ export function OrdersManagementDashboard({
   initialEmployees,
   initialEnquiries,
   userRole,
-  currentEmployeeName
+  currentEmployeeName,
+  getOrderDetailHref,
 }: { 
   initialOrders: any[];
   initialCustomers: any[];
@@ -66,6 +67,7 @@ export function OrdersManagementDashboard({
   initialEnquiries: any[];
   userRole: "Admin" | "Employee";
   currentEmployeeName: string;
+  getOrderDetailHref?: (order: { orderId?: string; id: string }) => string;
 }) {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
@@ -87,6 +89,15 @@ export function OrdersManagementDashboard({
   }, [searchTerm]);
   
   const currentUserRole = userRole;
+
+  const resolveOrderHref = useCallback(
+    (order: { orderId?: string; id: string }) => {
+      if (getOrderDetailHref) return getOrderDetailHref(order);
+      const prefix = currentUserRole === "Admin" ? "/admin" : "/staff";
+      return `${prefix}/orders/${order.orderId || order.id}`;
+    },
+    [getOrderDetailHref, currentUserRole]
+  );
   const employeeName = currentEmployeeName;
   const currentEmployeeObj = initialEmployees.find(e => e.name === employeeName || e.email === employeeName || e.id === employeeName);
   const currentEmployeeId = currentEmployeeObj?.id || employeeName;
@@ -546,7 +557,7 @@ export function OrdersManagementDashboard({
                     <td style={{ padding: "16px 20px", textAlign: "center" }}>
                       <button
                         onClick={() => {
-                          router.push(`${currentUserRole === "Admin" ? "/admin" : "/staff"}/orders/${order.orderId || order.id}`);
+                          router.push(resolveOrderHref(order));
                         }}
                         style={{
                           padding: "6px 12px",

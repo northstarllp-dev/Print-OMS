@@ -4,11 +4,17 @@ import React, { useState } from "react";
 import { 
   Bell, CheckCircle, AlertCircle, Info, LogOut,
   History, RotateCcw, Lock, Loader2, Key,
-  ShoppingBag, MapPin, Palette, LifeBuoy, Settings,
-  ChevronLeft, ChevronRight, Search
+  ShoppingBag, MapPin, Palette, Settings,
+  ChevronLeft, ChevronRight, Search, Hammer, Truck,
+  type LucideIcon,
 } from "lucide-react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { signOut, updateUserPassword } from "@/features/auth/actions/authActions";
+import {
+  getNavItemsForActor,
+  type StaffNavIcon,
+} from "@/features/orders/workspace/shared/stageGrants";
+import type { StageActor } from "@/features/orders/workspace/shared/types";
 
 interface StaffLayoutClientProps {
   children: React.ReactNode;
@@ -18,13 +24,32 @@ interface StaffLayoutClientProps {
     email: string;
     role: string;
     staff_role: string;
+    company_id: string | null;
   };
 }
+
+const NAV_ICON_MAP: Record<StaffNavIcon, LucideIcon> = {
+  orders: ShoppingBag,
+  site_visit: MapPin,
+  design: Palette,
+  production: Hammer,
+  installation: Truck,
+  settings: Settings,
+};
 
 export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const entryStage = searchParams.get("entryStage");
   const isWorksheetPage = pathname.startsWith("/staff/orders/") && pathname.replace(/\/$/, "") !== "/staff/orders";
+
+  const actor: StageActor = {
+    role: profile.role,
+    staff_role: profile.staff_role,
+    company_id: profile.company_id,
+  };
+  const navItems = getNavItemsForActor(actor);
 
   const [collapsed, setCollapsed] = useState(true);
   const [isHovered, setIsHovered] = useState(false);
@@ -92,19 +117,25 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
     router.push("/staff/login");
   };
 
-  const navItems = [
-    { id: "/staff/orders", label: "Orders", icon: ShoppingBag },
-    { id: "/staff/site-visit", label: "Site Visit", icon: MapPin },
-    { id: "/staff/design", label: "Design", icon: Palette },
-    { id: "/staff/support", label: "Support", icon: LifeBuoy },
-    { id: "/staff/settings", label: "Settings", icon: Settings },
-  ] as const;
+  const isActivePath = (item: (typeof navItems)[number]) => {
+    const isOrderDetail =
+      pathname.startsWith("/staff/orders/") && pathname.replace(/\/$/, "") !== "/staff/orders";
 
-  const isActivePath = (item: typeof navItems[number]) => {
-    if (item.id === "/staff/orders") {
-      return pathname === "/staff/orders" || pathname === "/staff" || (pathname.startsWith("/staff/orders/") && pathname !== "/staff/orders");
+    if (isOrderDetail) {
+      if (item.orderDetailEntryStage) {
+        return entryStage === item.orderDetailEntryStage;
+      }
+      if (item.href === "/staff/orders") {
+        return !entryStage || entryStage === "quotation";
+      }
+      return false;
     }
-    return pathname.startsWith(item.id);
+
+    if (item.href === "/staff/orders") {
+      return pathname === "/staff/orders" || pathname === "/staff";
+    }
+
+    return pathname === item.href || pathname.startsWith(`${item.href}/`);
   };
 
   const initials = profile.name
@@ -254,13 +285,13 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
         <nav style={{ flex: 1, padding: "8px 0", overflowY: "auto" }}>
           {navItems.map((item) => {
             const isActive = isActivePath(item);
-            const Icon = item.icon;
+            const Icon = NAV_ICON_MAP[item.icon];
 
             return (
               <button
-                key={item.id}
+                key={item.href}
                 onClick={() => {
-                  router.push(item.id);
+                  router.push(item.href);
                 }}
                 title={!isExpanded ? item.label : undefined}
                 style={{

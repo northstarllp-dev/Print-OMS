@@ -1,6 +1,7 @@
 import React from "react";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/features/auth/actions/authActions";
+import { getStaffHomePath } from "@/features/orders/workspace/shared/stageGrants";
 import { Shield, Users, ArrowRight, BarChart3, ClipboardList } from "lucide-react";
 import Link from "next/link";
 
@@ -8,15 +9,15 @@ export default async function RootGateway() {
   const profile = await getCurrentUser();
 
   if (profile) {
+    const actor = {
+      role: profile.role,
+      staff_role: profile.staff_role ?? null,
+      company_id: profile.company_id ?? null,
+    };
     if (profile.role === "admin") {
       redirect("/admin/dashboard");
-    } else if (profile.staff_role === "Production") {
-      redirect("/production/orders");
-    } else if (profile.staff_role === "Installation") {
-      redirect("/installation/orders");
-    } else {
-      redirect("/staff/orders");
     }
+    redirect(getStaffHomePath(actor));
   }
 
   return (
@@ -144,9 +145,9 @@ export default async function RootGateway() {
           <div style={{ width: 40, height: 40, background: "#dbeafe", borderRadius: "var(--radius-xl)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
             <ClipboardList size={18} color="#0284c7" />
           </div>
-          <div style={{ fontSize: 16, fontWeight: 800, color: "var(--text-primary)", marginBottom: 6 }}>Production Portal</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: "var(--text-primary)", marginBottom: 6 }}>Production Floor</div>
           <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5, marginBottom: 20, flex: 1 }}>
-            Track signage orders that have crossed design stage and manage workshop fabrication milestones.
+            Dedicated workshop display for tenants with floor portals enabled. Staff at other clients use the Staff portal instead.
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "#0284c7" }}>
             Go to Production Login <ArrowRight size={13} />
@@ -174,9 +175,9 @@ export default async function RootGateway() {
           <div style={{ width: 40, height: 40, background: "#dcfce7", borderRadius: "var(--radius-xl)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
             <ClipboardList size={18} color="#16a34a" />
           </div>
-          <div style={{ fontSize: 16, fontWeight: 800, color: "var(--text-primary)", marginBottom: 6 }}>Installation Portal</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: "var(--text-primary)", marginBottom: 6 }}>Installation Floor</div>
           <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5, marginBottom: 20, flex: 1 }}>
-            Access final signage orders ready for on-site installation, check dimensions, and upload completion photos.
+            Dedicated on-site display for tenants with floor portals enabled. Staff at other clients use the Staff portal instead.
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "#16a34a" }}>
             Go to Installation Login <ArrowRight size={13} />

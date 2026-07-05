@@ -127,6 +127,7 @@ export default async function ProductionOrderDetailPage({ params }: { params: Pr
       siteVisitItems={siteVisitItemsData || []}
       entryStage="production"
       backHref="/production/orders"
+      companyId={profile?.company_id ?? null}
     />
   );
 }

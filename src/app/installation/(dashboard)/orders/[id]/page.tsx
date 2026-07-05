@@ -7,9 +7,33 @@ import { getCurrentUser } from "@/features/auth/actions/authActions";
 import { getProducts } from "@/features/products/actions/productActions";
 import { getQuotationByOrderId, getSiteVisitMeasurementsForOrder } from "@/features/quotations/actions/quotationActions";
 import { OrderDetailPageClient } from "@/app/admin/(dashboard)/orders/[id]/OrderDetailPageClient";
+import { parseOrderStage } from "@/features/orders/workspace/shared/stageGrants";
+import type { OrderStage } from "@/features/orders/workspace/shared/types";
 
-export default async function InstallationOrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
+const INSTALLATION_STAGES = [
+  "Ready For Installation",
+  "Installation Scheduled",
+  "Completed",
+  "Closed",
+];
+
+const SITE_VISIT_STAGES = [
+  "Site Visit Pending",
+  "Site Visit Scheduled",
+  "Site Visit Completed",
+];
+
+export default async function InstallationOrderDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ entryStage?: string }>;
+}) {
   const { id } = await params;
+  const { entryStage: entryStageParam } = await searchParams;
+  const entryStage: OrderStage =
+    parseOrderStage(entryStageParam) ?? "installation";
 
   const profile = await getCurrentUser();
   if (!profile) {
@@ -18,18 +42,13 @@ export default async function InstallationOrderDetailPage({ params }: { params: 
 
   const order = await getOrderById(id);
   if (!order) {
-    redirect("/installation/orders");
+    redirect(entryStage === "site_visit" ? "/installation/site-visit" : "/installation/orders");
   }
 
-  // Ensure order is in installation stages
-  const installationStages = [
-    "Ready For Installation",
-    "Installation Scheduled",
-    "Completed",
-    "Closed"
-  ];
-  if (!installationStages.includes(order.stage)) {
-    redirect("/installation/orders");
+  const allowedStages =
+    entryStage === "site_visit" ? SITE_VISIT_STAGES : INSTALLATION_STAGES;
+  if (!allowedStages.includes(order.stage)) {
+    redirect(entryStage === "site_visit" ? "/installation/site-visit" : "/installation/orders");
   }
 
   const [customersData, employeesData, productsData, quotationData, siteVisitItemsData] = await Promise.all([
@@ -123,8 +142,13 @@ export default async function InstallationOrderDetailPage({ params }: { params: 
       products={mappedProducts}
       initialQuotation={quotationData}
       siteVisitItems={siteVisitItemsData || []}
-      entryStage="installation"
-      backHref="/installation/orders"
+      entryStage={entryStage}
+      backHref={
+        entryStage === "site_visit"
+          ? "/installation/site-visit"
+          : "/installation/orders"
+      }
+      companyId={profile?.company_id ?? null}
     />
   );
 }

@@ -1,6 +1,7 @@
 import React from "react";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/features/auth/actions/authActions";
+import { canAccessProductionPortal } from "@/features/orders/workspace/shared/stageGrants";
 import { ProductionLayoutClient } from "./ProductionLayoutClient";
 
 export default async function ProductionLayout({
@@ -9,9 +10,13 @@ export default async function ProductionLayout({
   children: React.ReactNode;
 }) {
   const profile = await getCurrentUser();
+  const actor = {
+    role: profile?.role ?? "",
+    staff_role: profile?.staff_role ?? null,
+    company_id: profile?.company_id ?? null,
+  };
 
-  // Enforce server-side security checks (allow Admins or Production Staff)
-  if (!profile || (profile.role !== "admin" && (profile.role !== "staff" || profile.staff_role !== "Production"))) {
+  if (!profile || !canAccessProductionPortal(actor)) {
     redirect("/production/login");
   }
 
@@ -20,7 +25,8 @@ export default async function ProductionLayout({
     name: profile.name,
     email: profile.email || "",
     role: profile.role,
-    staff_role: profile.staff_role || "Production"
+    staff_role: profile.staff_role || "Production",
+    company_id: profile.company_id ?? null,
   };
 
   return (

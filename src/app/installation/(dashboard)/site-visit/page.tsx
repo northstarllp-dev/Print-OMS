@@ -72,6 +72,9 @@ export default async function InstallationSiteVisitPage() {
         initialEnquiries={mappedEnquiries}
         userRole="Employee"
         currentEmployeeName={currentEmployee?.name || ""}
+        getOrderDetailHref={(order) =>
+          `/installation/orders/${order.orderId || order.id}?entryStage=site_visit`
+        }
       />
     </div>
   );

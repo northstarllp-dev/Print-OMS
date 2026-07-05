@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { staffSignIn } from "@/features/auth/actions/authActions";
+import { installationFloorSignIn } from "@/features/auth/actions/authActions";
 
 export default function InstallationLogin() {
   const router = useRouter();
@@ -20,7 +20,7 @@ export default function InstallationLogin() {
     setLoading(true);
     
     try {
-      const res = await staffSignIn(email, password);
+      const res = await installationFloorSignIn(email, password);
       if (res.error) {
         setError(res.error);
       } else {

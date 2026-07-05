@@ -19,6 +19,7 @@ interface InstallationLayoutClientProps {
     email: string;
     role: string;
     staff_role: string;
+    company_id?: string | null;
   };
 }
 
@@ -68,7 +69,11 @@ export function InstallationLayoutClient({ children, profile }: InstallationLayo
     router.push("/installation/login");
   };
 
-  const canAccessSiteVisit = getEditableStages({ role: profile.role, staff_role: profile.staff_role }).includes("site_visit");
+  const canAccessSiteVisit = getEditableStages({
+    role: profile.role,
+    staff_role: profile.staff_role,
+    company_id: profile.company_id ?? null,
+  }).includes("site_visit");
 
   const navItems = [
     { id: "/installation/orders", label: "Installation Queue", icon: Hammer },

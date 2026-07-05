@@ -2,6 +2,10 @@
 
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import {
+  canAccessInstallationPortal,
+  canAccessProductionPortal,
+} from "@/features/orders/workspace/shared/stageGrants";
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -101,6 +105,104 @@ export async function staffSignIn(email: string, pass: string) {
   if (profile.role !== "staff") {
     await supabase.auth.signOut();
     return { error: "Unauthorized access. This email is not registered as a Staff member." };
+  }
+
+  return { success: true };
+}
+
+/**
+ * Floor/kiosk production portal login.
+ * Requires tenant floor-portal flag + production stage grant (not staff grants alone).
+ */
+export async function productionFloorSignIn(email: string, pass: string) {
+  const supabase = await getSupabase();
+
+  const { error } = await supabase.auth.signInWithPassword({
+    email,
+    password: pass,
+  });
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from("users")
+    .select("role, staff_role, company_id")
+    .eq("email", email.toLowerCase())
+    .single();
+
+  if (profileError || !profile) {
+    await supabase.auth.signOut();
+    return { error: "Failed to fetch user role profile." };
+  }
+
+  if (profile.role !== "staff" && profile.role !== "admin") {
+    await supabase.auth.signOut();
+    return { error: "Unauthorized access." };
+  }
+
+  const actor = {
+    role: profile.role,
+    staff_role: profile.staff_role ?? null,
+    company_id: profile.company_id ?? null,
+  };
+
+  if (!canAccessProductionPortal(actor)) {
+    await supabase.auth.signOut();
+    return {
+      error:
+        "This account cannot use the Production Floor portal. Sign in via Staff Portal instead.",
+    };
+  }
+
+  return { success: true };
+}
+
+/**
+ * Floor/kiosk installation portal login.
+ * Requires tenant floor-portal flag + installation stage grant (not staff grants alone).
+ */
+export async function installationFloorSignIn(email: string, pass: string) {
+  const supabase = await getSupabase();
+
+  const { error } = await supabase.auth.signInWithPassword({
+    email,
+    password: pass,
+  });
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from("users")
+    .select("role, staff_role, company_id")
+    .eq("email", email.toLowerCase())
+    .single();
+
+  if (profileError || !profile) {
+    await supabase.auth.signOut();
+    return { error: "Failed to fetch user role profile." };
+  }
+
+  if (profile.role !== "staff" && profile.role !== "admin") {
+    await supabase.auth.signOut();
+    return { error: "Unauthorized access." };
+  }
+
+  const actor = {
+    role: profile.role,
+    staff_role: profile.staff_role ?? null,
+    company_id: profile.company_id ?? null,
+  };
+
+  if (!canAccessInstallationPortal(actor)) {
+    await supabase.auth.signOut();
+    return {
+      error:
+        "This account cannot use the Installation Floor portal. Sign in via Staff Portal instead.",
+    };
   }
 
   return { success: true };
