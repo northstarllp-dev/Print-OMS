@@ -105,9 +105,17 @@ export async function createProduct(formData: CreateProductPayload) {
     .insert([payload])
     .select();
 
-  // Retry if product_id collides
-  if (error && error.code === "23505" && error.message.includes("products_product_id_key")) {
-    const { data: existing } = await supabase.from("products").select("product_id");
+  // Retry if product_id collides within this tenant
+  if (
+    error &&
+    error.code === "23505" &&
+    (error.message.includes("products_product_id_key") ||
+      error.message.includes("products_company_product_id_key"))
+  ) {
+    const { data: existing } = await supabase
+      .from("products")
+      .select("product_id")
+      .eq("company_id", companyId);
     if (payload.final_prdt) {
       const maxNum = (existing || []).reduce((max, p) => {
         const match = p.product_id?.match(/^FP(\d+)$/);

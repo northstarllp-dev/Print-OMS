@@ -28,11 +28,12 @@ async function getSupabase() {
   );
 }
 
-/** Generate next QT-NNN id by looking at existing quotation_ids */
-async function generateQuotationId(supabase: any): Promise<string> {
+/** Generate next QT-NNN id scoped to the tenant's existing quotations. */
+async function generateQuotationId(supabase: Awaited<ReturnType<typeof getSupabase>>, companyId: string): Promise<string> {
   const { data } = await supabase
     .from("quotations")
     .select("quotation_id")
+    .eq("company_id", companyId)
     .order("created_at", { ascending: false });
 
   let maxNum = 0;
@@ -145,11 +146,13 @@ export async function upsertQuotation(orderId: string, payload: QuotationPayload
     if (error) throw new Error(error.message);
     result = data;
   } else {
-    const quotation_id = payload.quotation_id || (await generateQuotationId(supabase));
+    const companyId = resolved.companyId;
+    if (!companyId) throw new Error("company_id is required to create a quotation");
+    const quotation_id = payload.quotation_id || (await generateQuotationId(supabase, companyId));
     const { data, error } = await supabase.from("quotations").insert({
       quotation_id,
       order_id: resolved.uuid,
-      company_id: resolved.companyId ?? null,
+      company_id: companyId,
       customer_id: payload.customer_id ?? null,
       signage_options: payload.signage_options ?? [],
       subtotal: payload.subtotal,

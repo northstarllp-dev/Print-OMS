@@ -13,8 +13,14 @@ import {
 
 const PRICING_TYPES = ["Per Sq.Ft", "Per Unit", "Multiple"];
 
-function generateProductId(existing: Product[]): string {
-  const maxNum = existing.reduce((max, p) => {
+function productsForTenant(existing: Product[], companyId?: string | null): Product[] {
+  if (!companyId) return existing;
+  return existing.filter((p) => p.company_id === companyId);
+}
+
+function generateProductId(existing: Product[], companyId?: string | null): string {
+  const scoped = productsForTenant(existing, companyId);
+  const maxNum = scoped.reduce((max, p) => {
     const match = p.product_id?.match(/^PRD-(\d+)$/);
     if (match) return Math.max(max, parseInt(match[1], 10));
     return max;
@@ -22,8 +28,9 @@ function generateProductId(existing: Product[]): string {
   return `PRD-${String(maxNum + 1).padStart(3, "0")}`;
 }
 
-function generateFinalProductId(existing: Product[]): string {
-  const maxNum = existing.reduce((max, p) => {
+function generateFinalProductId(existing: Product[], companyId?: string | null): string {
+  const scoped = productsForTenant(existing, companyId);
+  const maxNum = scoped.reduce((max, p) => {
     const match = p.product_id?.match(/^FP(\d+)$/);
     if (match) return Math.max(max, parseInt(match[1], 10));
     return max;
@@ -217,9 +224,13 @@ function ProductFormModal({
   const [uploadedImagesThisSession, setUploadedImagesThisSession] = useState<string[]>([]);
   const [imagesToDeleteOnSave, setImagesToDeleteOnSave] = useState<string[]>([]);
 
+  const tenantCompanyId = product?.company_id ?? allProducts.find((p) => p.company_id)?.company_id;
+
   const [form, setForm] = useState<Partial<CreateProductPayload>>(() => {
     const final_prdt = product?.final_prdt ?? false;
-    const defaultId = final_prdt ? generateFinalProductId(allProducts) : generateProductId(allProducts);
+    const defaultId = final_prdt
+      ? generateFinalProductId(allProducts, tenantCompanyId)
+      : generateProductId(allProducts, tenantCompanyId);
     return {
       product_id: product?.product_id ?? defaultId,
       name: product?.name ?? "",
@@ -322,7 +333,7 @@ function ProductFormModal({
                         const updated = {
                           ...f,
                           final_prdt: checked,
-                          product_id: isEdit ? f.product_id : (checked ? generateFinalProductId(allProducts) : generateProductId(allProducts))
+                          product_id: isEdit ? f.product_id : (checked ? generateFinalProductId(allProducts, tenantCompanyId) : generateProductId(allProducts, tenantCompanyId))
                         };
                         return updated;
                       });
