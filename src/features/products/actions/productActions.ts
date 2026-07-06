@@ -110,7 +110,8 @@ export async function createProduct(formData: CreateProductPayload) {
     error &&
     error.code === "23505" &&
     (error.message.includes("products_product_id_key") ||
-      error.message.includes("products_company_product_id_key"))
+      error.message.includes("products_company_product_id_key") ||
+      error.message.includes("idx_products_product_id"))
   ) {
     const { data: existing } = await supabase
       .from("products")

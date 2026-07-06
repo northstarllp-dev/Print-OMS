@@ -107,6 +107,7 @@ ALTER TABLE public.orders
 -- ── 4. PRODUCTS (PRD-001 / FP001 — app-generated; composite unique only) ─────
 
 ALTER TABLE public.products DROP CONSTRAINT IF EXISTS products_product_id_key;
+DROP INDEX IF EXISTS public.idx_products_product_id;
 ALTER TABLE public.products
   ADD CONSTRAINT products_company_product_id_key UNIQUE (company_id, product_id);
 
