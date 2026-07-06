@@ -1,87 +1,180 @@
 # Quotation Feature Specification
 
+> **Source of truth:** Implementation in `c:\printec` (Printec OMS). This document reflects actual code behavior as of 2026-07-06.
+
+---
+
 ## Overview
 
-* Purpose of the feature: Generate and manage cost estimates for signage projects based on site visit measurements and products.
-* Business objective: Create accurate quotations by calculating per-sqft or per-unit costs, apply GST, send to customers for approval, and seamlessly convert approved quotes into active production orders.
-* User roles involved: Admin, Staff (Sales/Estimator), Customer
+The Quotation stage produces a priced estimate for signage work. Staff build line items from the product catalogue and site-visit measurements, optionally route the draft through admin review, send it to the customer portal, and collect approval or revision feedback before the order advances to Design or Production (depending on `workflow_type`).
+
+## Business Goal
+
+- Turn site-visit measurements into an itemized, GST-aware quote.
+- Enforce an internal admin gate (optional staff → admin → customer path).
+- Let customers approve or request revisions via the portal.
+- Feed `grand_total` into the payments module for milestone calculations.
 
 ## Workflow
 
-1. **Initialization**: Once an order reaches `Quotation In Progress`, the system automatically fetches site visit measurements and available product catalogs.
-2. **Drafting**: Estimator maps products (e.g., "ACP Signage", "Acrylic Letters") to the measured locations. The system auto-calculates totals based on `price_per_sqft` or `price_per_unit` (running-feet pricing removed). Each signage section shows site measurements with units from `site_visit_measurements` (`width_unit`, `height_unit`, `depth_unit`).
-3. **Internal Review**: The quotation is saved as `Draft`. Admin reviews the subtotal, taxes, and applies any necessary discounts.
-4. **Sending to Customer**: Admin clicks "Send to Customer", changing the quotation status to `Sent`. An activity log is recorded.
-5. **Customer Review**: Customer views the itemized quote via the portal. They can approve it or reject/request changes.
-6. **Approval**: If approved, the quotation becomes `Approved`. The order transitions to the next stage (`Design Pending` or `Production Pending` based on `workflow_type`).
+### Order pipeline stages (quotation-related)
+
+| Order `stage` | Meaning |
+|---------------|---------|
+| `Quotation In Progress` | Quote is being built internally. Entered after site-visit admin approval on **quote_first**, or after design approval on **design_first**. |
+| `Quotation Sent` | Admin has sent the quote to the customer (`sendQuotationToCustomer`). |
+| `Quotation Negotiation` | Customer declined / requested revision. |
+| `Quotation Approved` | Customer approved, or admin overrode approval. Ready to advance. |
+
+`stage_status` is separate. Staff can set `Pending Admin Approval: Quote Approval` via `requestStageAdvancementAction` while still in quotation stages; admin clears it with `adminApproveStageAction`.
+
+### Quotation record `status` (on `quotations.status`)
+
+| Status | Set by | Meaning |
+|--------|--------|---------|
+| `Draft` | Default / save / admin “Request Changes” | Internal editing. |
+| `Pending Approval` | Staff “Push to Admin” | Locked for staff; admin can edit and send. |
+| `Sent` | Admin “Push to Customer” (+ `sendQuotationToCustomer`) | Customer-facing; action buttons shown in portal. |
+| `Approved` | Customer approve or `adminMarkQuotationApprovedAction` | Costs locked; order can advance. |
+| `Rejected` | Customer decline / revision request | UI shows “Sent for Revision”; portal blocks actions until re-sent. |
+
+There is no separate `Negotiation` DB status. The portal maps `Rejected` to the label “Sent for Revision”.
+
+### End-to-end flow
+
+```
+Site visit approved → order.stage = Quotation In Progress (workflow-dependent)
+        ↓
+Staff opens Quotation tab (QuotationModule)
+        ↓
+Sections auto-created from site_visit_measurements (or saved signage_options)
+        ↓
+Products selected → rates/measurements filled (client-side calc)
+        ↓
+[Optional] Staff → Push to Admin (status = Pending Approval)
+        ↓
+Admin reviews → Push to Customer
+        ↓
+upsertQuotation (status Sent) + sendQuotationToCustomer
+        ↓
+orders.stage = Quotation Sent + timeline + WhatsApp notification
+        ↓
+Customer portal: Approve OR Decline/Revise
+        ↓
+Approve: quotations.status = Approved, orders.stage = Quotation Approved
+Decline: quotations.status = Rejected (+ rejection_reason), orders.stage = Quotation Negotiation
+        ↓
+Staff revises → re-send → cycle repeats
+        ↓
+Admin/staff: Move to Design or Production (workflow_type + adminApproveStageAction)
+```
+
+**Note:** A `quotations` row is **not** auto-created when the order enters `Quotation In Progress`. It is created on the first `upsertQuotation` call.
 
 ## Workflow States
 
-| State | Description | Next Allowed States |
-| ----- | ----------- | ------------------- |
-| Draft | Being prepared internally by staff | Sent |
-| Sent | Delivered to customer for review | Approved, Rejected (displayed to customer as "Sent for Revision") |
-| Approved | Customer signed off on the costs | N/A (Order stage progresses) |
-| Rejected | Customer requested revisions. UI displays "Sent for Revision" and disables customer action buttons until a revised quote is sent. | Draft (New iteration) |
+### Quotation `status` transitions
+
+| From | Action | To |
+|------|--------|-----|
+| — | First save | `Draft` |
+| `Draft` | Staff Push to Admin | `Pending Approval` |
+| `Pending Approval` | Admin Request Changes | `Draft` |
+| `Draft` / `Pending Approval` | Admin Push to Customer | `Sent` |
+| `Sent` | Customer approve | `Approved` |
+| `Sent` | Customer decline | `Rejected` |
+| `Rejected` | Admin re-send | `Sent` |
+| Any (admin override) | `adminMarkQuotationApprovedAction` | `Approved` |
+
+### Order `stage` mutations (quotation-related server actions)
+
+| Trigger | `orders.stage` after |
+|---------|----------------------|
+| `sendQuotationToCustomer` | `Quotation Sent` |
+| Customer approve (portal) | `Quotation Approved` |
+| Customer decline (portal) | `Quotation Negotiation` |
+| `adminMarkQuotationApprovedAction` | `Quotation Approved` |
+| `adminApproveStageAction` (from quotation stages) | Next stage per workflow map |
 
 ## Business Rules
 
-* Quotations must have a unique identifier format `QT-NNN`.
-* Line items use two pricing types: `per_unit` or `per_sqft` (running feet removed from products and quotations).
-* A single **Qty / Measurement** field applies to both types. Amount is always `measurement × unitPrice` (`getLineMeasurement` / `calcLineAmount` in `src/features/quotations/utils/lineAmount.ts`).
-* `quantity` and `totalSqFt` are kept in sync with the same measurement value. Legacy lines that stored measurement only in `totalSqFt` (with `quantity = 1`) are still resolved correctly.
-* Site visit measurements (Width × Height × Depth) display under each signage section with units from the DB (`formatSiteMeasurementLabel`). Selecting a product pre-fills measurement from site visit width × height when available.
-* Discounts are applied before tax calculation.
-* Standard GST rates (0%, 5%, 12%, 18%, 28%) are applicable per line item.
-* Quotations can only be sent to the customer if the order stage is `Quotation In Progress`.
+1. **One quotation per order** — `upsertQuotation` upserts by `order_id` (`maybeSingle`).
+2. **Friendly ID** — `QT-NNN` per tenant (`company_id`); generated by `generateQuotationId()` in application code or DB trigger `generate_quotation_id()` scoped to `company_id`.
+3. **Pricing types** — `per_unit` or `per_sqft` only (running feet removed).
+4. **Qty / measurement** — Single field; `quantity` and `totalSqFt` kept in sync. Formula: `amount = measurement × unitPrice` (`lineAmount.ts`).
+5. **Legacy lines** — If `quantity === 1` and `totalSqFt > 1`, measurement is read from `totalSqFt`.
+6. **GST** — Per line item (0, 5, 12, 18, 28). Section totals show line amount **including** GST.
+7. **Discount** — Flat ₹ amount subtracted from subtotal before grand total. Tax is reduced proportionally: `tax = totalGst × (1 - discount/subtotal)` when `subtotal > 0`.
+8. **Shipping** — Optional flat ₹ added after discount and tax.
+9. **Grand total** — `round((subtotal - discount + tax + shipping) × 100) / 100`.
+10. **Site measurements** — Section headers show `formatSiteMeasurementLabel()` from linked `site_visit_measurements`. Product select pre-fills measurement as `width × height` when both exist.
+11. **Staff lock** — Staff cannot edit when status is `Sent`, `Approved`, or `Pending Approval`.
+12. **Admin lock** — Admin cannot edit when status is `Sent` or `Approved`; **can** edit when `Pending Approval`.
+13. **Customer visibility** — Portal shows “being prepared” for `Draft` / missing status (`PortalClient`). Line items visible in `OrderDetailClient` even for `Draft` if `signage_options` exist (implementation gap vs intended rule).
+14. **Customer actions** — Approve/decline buttons only when `status === "Sent"`.
+15. **Workflow fork** — `quote_first`: Quotation → Design → Production. `design_first`: Design → Quotation → Production.
+16. **Advance without customer** — Admin can call `adminMarkQuotationApprovedAction` then `adminApproveStageAction` via “Move to Design/Production”.
 
-## User Roles
-
-### Staff (Estimator)
-
-Permissions:
-* View site visit measurements.
-* Add line items and apply products.
-* Adjust pricing and quantities.
-* Save as Draft.
+## User Permissions
 
 ### Admin
+- Full quotation stage edit (`resolveStagePermission("quotation")` → `canEdit`).
+- Push to Customer, Request Changes (return to Draft), Move to next stage.
+- `adminMarkQuotationApprovedAction` override.
 
-Permissions:
-* All Staff permissions.
-* Send quotation to customer.
-* Apply global discounts and edit terms.
-* Override quotation status.
+### Staff (Employee)
+- Edit quotation if `staff_role` grant includes `quotation` (default: **Marketer** via `STAGE_GRANTS_BY_STAFF_ROLE`).
+- Save Draft, Push to Admin.
+- Cannot Push to Customer.
+- Locked when `Pending Approval`, `Sent`, or `Approved`.
 
-### Customer
+### Customer (portal)
+- Read quotation via anon Supabase client + portal session (page-level order ownership check).
+- Approve or decline when `status === "Sent"`.
+- Cannot modify line items or financial fields.
+- Mutations use **direct Supabase client calls** in `PortalClient` / `OrderDetailClient` (not `customerApproveQuotation` server actions).
 
-Permissions:
-* View quotations in `Sent` status.
-* Download quotation PDF.
-* Approve or reject the quotation with notes.
+## Database Tables
 
-## Database Design
+### `quotations`
 
-### Tables
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | uuid PK | |
+| `quotation_id` | text | Friendly `QT-NNN`; unique per `(company_id, quotation_id)` |
+| `order_id` | uuid FK → `orders.id` | One row per order |
+| `company_id` | uuid FK → `companies.id` | Required on insert |
+| `customer_id` | uuid FK → `customers.id` | Auto-filled from order if omitted |
+| `status` | text | `Draft`, `Pending Approval`, `Sent`, `Approved`, `Rejected` |
+| `signage_options` | jsonb | Array of sections with `lines` (see below) |
+| `subtotal` | numeric | Pre-discount sum of line amounts (ex-GST) |
+| `discount` | numeric | Flat ₹ discount |
+| `tax` | numeric | GST total after proportional discount |
+| `shipping` | numeric | Flat ₹ shipping |
+| `grand_total` | numeric | Final payable |
+| `notes` | text | Customer-facing notes |
+| `terms` | text | Terms & conditions |
+| `rejection_reason` | text | Set on customer decline (`PortalClient`); not always set in `OrderDetailClient` |
+| `admin_approved_at` | timestamptz | Set by `sendQuotationToCustomer` |
+| `admin_approved_by` | text | Actor name passed to `sendQuotationToCustomer` |
+| `customer_response` | text | `Yes`, `Revision`, or `Admin` on approve/decline/override |
+| `created_at` | timestamptz | |
 
-#### quotations
+**Dropped columns (migrations):** `items`, `customer_name`, `valid_until`, `payment_status`, advance payment columns, `advance_paid`.
 
-| Column | Type | Description |
-| ------ | ---- | ----------- |
-| id | uuid (PK) | Unique quote ID |
-| order_id | uuid (FK) | Reference to `orders` table |
-| quotation_id | varchar | Auto-generated friendly ID (e.g., QT-001) |
-| status | text | "Draft", "Sent", "Approved", "Rejected" |
-| signage_options | jsonb | Array of locations containing line items |
-| subtotal | numeric | Sum of line amounts before tax/discount |
-| discount | numeric | Total discount amount |
-| tax | numeric | Total calculated tax |
-| grand_total | numeric | Final amount payable |
-| notes | text | Customer-facing notes |
-| terms | text | Terms and conditions text |
-| rejection_reason| text | Populated if status is Rejected |
+### Related tables
 
-**`signage_options` JSONB Structure**:
+| Table | Role |
+|-------|------|
+| `orders` | `stage`, `stage_status`, `workflow_type` |
+| `site_visits` | Parent for measurements |
+| `site_visit_measurements` | Drives quotation sections |
+| `products` | Catalogue pricing |
+| `order_activity` | Timeline entries |
+| `payments` | Reads `quotations.grand_total` for balance summary |
+
+### `signage_options` JSONB structure
+
 ```json
 [
   {
@@ -93,90 +186,196 @@ Permissions:
         "id": "uuid",
         "productId": "uuid",
         "description": "ACP Board",
-        "quantity": 1,
+        "quantity": 150,
         "pricingType": "per_sqft",
         "unit": "sqft",
         "unitPrice": 450,
         "totalSqFt": 150,
-        "gstRate": 18
+        "gstRate": 18,
+        "notes": "optional line note"
       }
     ]
   }
 ]
 ```
 
-## API Endpoints
+## Quotation Data Structure (TypeScript)
 
-### Upsert Quotation
-Method: Server Action (`upsertQuotation`)
-Request: `QuotationPayload` object containing subtotal, tax, grand_total, and `signage_options`.
-Behavior: Auto-generates `quotation_id` if new. Updates existing row if `id` is present.
+- `QuoteItem` / `QuoteDetails` in `src/types/index.ts` — legacy flat `items[]` shape; portal still supports fallback render.
+- Runtime shape in UI: `SignageSection[]` inside `signage_options`.
 
-### Send Quotation to Customer
-Method: Server Action (`sendQuotationToCustomer`)
-Behavior: Updates quotation status to `Sent`. Adds timeline log in `order_activity`. Optionally transitions the order `stage_status` to "Pending Admin Approval" or directly to next step depending on workflow configuration.
+## Pricing Logic
+
+1. Resolve product pricing via `resolveInitialPricing()` — maps `products.pricing_type` strings to `per_sqft` or `per_unit`.
+2. `unitPrice` from `price_per_sqft` or `price_per_unit`.
+3. `calcLineAmount(line) = getLineMeasurement(line) × unitPrice`.
+4. Line display total (incl. GST) = `calcLineAmount × (1 + gstRate/100)`.
+
+## Calculation Rules
+
+```
+subtotal = Σ sections Σ lines calcLineAmount(line)
+totalGst = Σ sections Σ lines calcLineAmount(line) × (gstRate/100)
+tax      = subtotal > 0 ? round(totalGst × (1 - discount/subtotal) × 100) / 100 : 0
+grandTotal = round((subtotal - discount + tax + shipping) × 100) / 100
+```
+
+Calculations run **client-side** in `QuotationModule`; server persists client-supplied totals without recomputation.
+
+## Discount Rules
+
+- Flat currency amount (₹), not percentage.
+- Reduces taxable base proportionally (all line GST rates scaled by same factor).
+- Optional; hidden until “+ Discount” clicked.
+
+## Tax Rules
+
+- Per-line GST rate (dropdown).
+- No IGST/CGST split; single GST total stored in `tax`.
+- `syncGlobalTaxToLines()` exists in `QuotationModule` but is **not wired to any UI control** (dead code path).
+
+## Server Actions
+
+| Action | File | Auth | Behavior |
+|--------|------|------|----------|
+| `getQuotationByOrderId` | `quotationActions.ts` | Session | Read single row |
+| `getAllQuotations` | `quotationActions.ts` | Session | List all (**unused** in app) |
+| `getSiteVisitMeasurementsForOrder` | `quotationActions.ts` | Session | Maps measurements to camelCase |
+| `upsertQuotation` | `quotationActions.ts` | `assertStageEditPermission("quotation")` | Insert/update by `order_id` |
+| `sendQuotationToCustomer` | `quotationActions.ts` | Stage edit | `status=Sent`, `orders.stage=Quotation Sent`, activity, WhatsApp |
+| `adminMarkQuotationApprovedAction` | `quotationActions.ts` | Stage edit | Force `Approved` + `Quotation Approved` |
+| `customerApproveQuotation` | `quotationActions.ts` | None enforced | **Unused** — portal uses direct Supabase |
+| `customerRequestRevision` | `quotationActions.ts` | None enforced | **Unused** — portal uses direct Supabase |
+
+Related order actions (`orderActions.ts`):
+- `requestStageAdvancementAction` — sets `stage_status` for admin approval queue.
+- `adminApproveStageAction` — advances `orders.stage` along workflow map.
+- `setWorkflowTypeAction` — sets `quote_first` / `design_first` and first post-site-visit stage.
 
 ## UI Components
 
-### QuotationModule (Staff Facing)
-Purpose: Complex tabular editor for estimators to build the quote.
-Fields:
-* Accordions for each `SiteVisitItem`.
-* Product dropdown to auto-fill pricing data.
-* Dynamic calculation rows (Subtotal, Discount, Tax, Grand Total).
+| Component | Location | Audience |
+|-----------|----------|----------|
+| `QuotationModule` | `src/features/orders/workspace/modules/quotation/QuotationModule.tsx` | Admin / Staff |
+| `QuotationTab` | `src/app/portal/order/[orderId]/OrderDetailClient.tsx` | Customer (single order) |
+| Quotation step | `src/app/portal/PortalClient.tsx` | Customer (multi-order) |
+| `ProductionModule` | reads `quotation.signage_options` | Staff |
+| `OrderWorksheetModal` | embeds `QuotationModule`, `handleQuotationAdvance` | Admin / Staff |
 
-### QuotationTab (Customer Facing)
-Purpose: Read-only summary view for the customer to review line items, totals, and terms.
-Fields:
-* Dynamic Status Badges: Shows "Sent for Revision" in amber when status is Rejected or Negotiation.
-* Action Panel: Shows "Approve Quotation" / "Decline / Revise" buttons only when status is `Sent`. If Rejected/Negotiation, renders a banner indicating the revision request is being processed.
+`QuotationModule` subcomponents (same file): `ProductSearch`, `ProductInfoModal`, `QuotationConfirmModal`.
+
+Footer actions render via portal to `#modal-footer-portal` when mounted.
 
 ## File Structure
 
-* `src/features/order-detail/components/quotation/QuotationModule.tsx`
-* `src/features/quotations/actions/quotationActions.ts`
-* `src/types/index.ts`
+```
+src/features/quotations/
+  actions/quotationActions.ts
+  utils/lineAmount.ts
+src/features/orders/workspace/modules/quotation/
+  QuotationModule.tsx
+src/features/orders/workspace/shared/
+  stageGrants.ts, permissions.ts, serverPermissions.ts, registry.tsx
+src/features/orders/actions/orderActions.ts
+src/features/order-detail/components/OrderWorksheetModal.tsx
+src/app/admin/(dashboard)/orders/[id]/page.tsx
+src/app/staff/(dashboard)/orders/[id]/page.tsx
+src/app/portal/page.tsx
+src/app/portal/order/[orderId]/page.tsx
+src/app/portal/order/[orderId]/OrderDetailClient.tsx
+src/app/portal/PortalClient.tsx
+src/types/index.ts
+supabase/migrations/*quotation*
+```
 
 ## Data Flow
 
-`QuotationModule` (React State)
-→ Auto-calculates totals on the client
-→ User clicks Save
-→ `upsertQuotation` server action called
-→ Supabase `quotations` table updated
+```
+[Server] page.tsx loads getQuotationByOrderId + getSiteVisitMeasurementsForOrder
+    ↓
+[Client] QuotationModule state (sections, discount, shipping, notes, terms)
+    ↓ calc on change
+[Client] upsertQuotation(orderId, payload)  — server action
+    ↓
+[DB] quotations upsert + revalidatePath
+    ↓
+[Realtime] supabase channel on quotations (staff UI sync)
+    ↓
+[Admin] sendQuotationToCustomer(quotationUuid, adminName)
+    ↓
+[DB] quotations + orders + order_activity + WhatsApp
+    ↓
+[Portal] Customer approve/decline via createClient() direct updates
+```
+
+## Timeline Events
+
+| `metadata.action` | Content pattern |
+|-------------------|-----------------|
+| `quotation_sent` | Quotation QT-NNN approved by {name} and sent to customer |
+| `quotation_approved_by_admin` | Admin marked quotation approved |
+| `quotation_approved_by_customer` | {name} approved / Client approved |
+| `quotation_revision_requested` | Revision Requested: {notes} (server action only) |
+| `quotation_declined` | Quotation Declined. Feedback: {notes} (portal) |
+| `stage_approved` | Admin approved stage progression (includes quotation → next) |
+
+## Validation Rules
+
+**Client (`QuotationModule`):**
+- Measurement input min 0.01; blur resets to 1 if ≤ 0.
+- Push to Admin / Push to Customer disabled if `sections.length === 0`.
+- No validation that `grand_total > 0` or descriptions non-empty.
+
+**Server (`upsertQuotation`):**
+- `assertStageEditPermission("quotation")`.
+- `company_id` required on insert.
+- No recomputation or schema validation of financial fields.
+
+**Portal:**
+- Decline requires non-empty feedback text.
 
 ## Error Handling
 
-* Invalid math state: The UI prevents saving if required fields (like Price) are negative.
-* Database constraint: Ensure `order_id` is a valid UUID before upserting.
-
-## Notifications
-
-* Timeline entries logged when quotes are drafted, sent, approved, or rejected.
+- Server actions throw `Error(message)` on Supabase failures.
+- UI shows inline `saveMsg` banner (success/error).
+- `getQuotationByOrderId` failures on order pages are caught → `null` initial quotation.
 
 ## Security Rules
 
-* Customers can only see the quote once status is `Sent`.
-* Customers cannot modify the quote, only the `status` (via approval/rejection endpoints).
-* RLS policies restrict read/write to users within the same `company_id`.
+**Authenticated staff/admin:**
+- RLS: `quotations` rows scoped to `company_id = current_company_id()`.
+- Mutations gated by `assertStageEditPermission("quotation")`.
+
+**Customer portal:**
+- Page routes verify portal session + `orders.customer_id` match.
+- RLS allows `anon` **SELECT** and **UPDATE** on all `quotations` rows (`using (true)`). This relies on obscurity of UUIDs and client-only field changes — **not** row-level portal scoping.
+- Customer can theoretically update any quotation row if `order_id` is known.
 
 ## Edge Cases
 
-* Flat rate vs area: Both use the same Qty/Measurement field and formula `measurement × rate`. Pricing type only affects the rate source (`price_per_unit` vs `price_per_sqft`) and unit label (`nos` vs `sqft`).
-* Blank/Manual rows: Staff can add rows without selecting a product from the database, entering a custom description and price manually.
-* Stage advance after quote approval moves to Design/Production directly. Payments are tracked separately (see `specs/payments.md`).
+1. **No site visit measurements** — Single “General Signage” section with empty line, or restored `signage_options` only.
+2. **Manual line items** — Description/rate without `productId`.
+3. **Re-send after rejection** — `sendQuotationToCustomer` uses `revised_quotation_ready` WhatsApp template when prior status was `Sent`.
+4. **Admin skip customer** — `adminMarkQuotationApprovedAction` + stage advance.
+5. **Legacy `items` JSON** — Portal `QuotationTab` still renders flat `items[]` if no `signage_options`.
+6. **design_first** — Portal approve CTA text: “proceed to Production” instead of Design.
+7. **Customer name field** — Editable in `QuotationModule` but **not persisted** (display only).
+8. **`order_activity.order_id`** — Portal inserts sometimes use friendly `order_id` string instead of UUID (inconsistent).
 
-## Future Enhancements
+## Future Improvements
 
-* Export to PDF: Server-side PDF generation of the quote document using Puppeteer or react-pdf.
-* Payment Gateway Integration: Allow the customer to pay milestones online (Razorpay/PhonePe) via the Payments tab.
+- Server-side total recomputation and validation on `upsertQuotation`.
+- Replace portal direct Supabase writes with `assertStageEditOrPortalOrder` server actions.
+- Tighten RLS: scope anon quotation UPDATE to portal-validated orders only.
+- Remove dead code: `getAllQuotations`, `customerApproveQuotation`, `customerRequestRevision`, `syncGlobalTaxToLines`.
+- Unify decline path to always set `rejection_reason`.
+- PDF export of quotation document.
+- Hide draft quotation line items in `OrderDetailClient` (match `PortalClient`).
 
 ## Change Log
 
-Version: 1.0
-Date: 2026-07-03
-Summary: Initial specification for the Quotation Workflow.
-
-Version: 1.1
-Date: 2026-07-04
-Summary: Unified Qty/Measurement for unit and sqft; removed running feet; site measurement units on section headers; payment checklist integrates with `payments` milestones.
+| Version | Date | Summary |
+|---------|------|---------|
+| 1.0 | 2026-07-03 | Initial specification |
+| 1.1 | 2026-07-04 | Unified qty/measurement; removed running feet; site measurement units |
+| 2.0 | 2026-07-06 | Full audit rewrite: Pending Approval workflow, shipping, admin/customer paths, actual server actions, security notes, dead code, calculation formulas |
