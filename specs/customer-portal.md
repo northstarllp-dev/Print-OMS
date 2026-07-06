@@ -13,7 +13,7 @@
 3. **Dashboard View**: Customer is presented with `PortalClient`, which displays all active and past orders associated with their `customer_id`.
 4. **Order Tracking**: Customer selects an active order to view its timeline and progress bar.
 5. **Interactive Tabs**: Depending on the current stage of the order, specific tabs unlock:
-   * **Quotation Tab**: Read quotes (with site measurement units under signage items), accept/reject.
+   * **Quotation Tab**: Shared `QuotationTab` component — read quotes when `Sent`/`Approved`/`Rejected`; approve/decline via server actions when `Sent`. Draft/Pending Approval shows “being prepared”.
    * **Design Tab**: View proofs, add feedback comments on the canvas, upload inspiration, approve proofs.
    * **Payments Tab**: View payment milestones, submit UTR/reference, mark as paid (Pay Online placeholder for gateways). Always available; not a pipeline stage.
    * **Installation Tab**: View scheduled dates, and later see "After Photos" once completed.
@@ -34,7 +34,8 @@ The portal itself doesn't have "states" but visually reflects the states of the 
 * Access to the portal is completely password-less, relying on securely generated, short-lived (or manageable) tokens using HMAC.
 * A token can be instantly revoked in the database, locking the customer out on their next page load.
 * Rate limiting is enforced on the `/portal` route to prevent brute-forcing or denial of service attacks.
-* Customers can only modify specific nested states (like approving a quote or adding a design comment). Payments are view-only. They cannot edit core order data.
+* Customers can approve quotations, request revisions, add design comments, and schedule site visits/installations (when enabled). They cannot edit core order data or quotation line items.
+* Quotation mutations use `customerApproveQuotation` / `customerRequestRevision` (portal session + Supabase service role). No direct anon client updates on `quotations`.
 
 ## User Roles
 
@@ -78,7 +79,13 @@ Behavior: Fetches `customers`, `orders` (with `site_visits`, `site_visit_measure
 Purpose: Handles auth, rate limiting, and data fetching securely on the server.
 
 ### PortalClient (Client Component)
-Purpose: The main layout wrapper for the customer view. Handles state for switching between multiple orders.
+Purpose: The main layout wrapper for the customer view. Handles state for switching between multiple orders. Uses `useQuotationActions` and `usePortalOrderRealtime`.
+
+### QuotationTab (Shared Client Component)
+Purpose: Renders quotation line items, totals, and approve/decline UI. Used by both `PortalClient` and `OrderDetailClient`. Gates visibility with `isQuotationVisibleToCustomer`.
+
+### OrderDetailClient (Client Component)
+Purpose: Single-order portal view at `/portal/order/[orderId]`. Shares quotation hooks and `QuotationTab` with `PortalClient`.
 
 ### Order Tracker / Progress Bar
 Purpose: Visually maps the `stage` of the order into a clean 5-step UI (Enquiry, Site Visit, Quote/Design, Production, Installation).
@@ -90,6 +97,10 @@ Purpose: Visually maps the `stage` of the order into a clean 5-step UI (Enquiry,
 * `src/app/portal/components/DesignTab.tsx`
 * `src/app/portal/components/QuotationTab.tsx`
 * `src/app/portal/components/InstallationLayoutClient.tsx`
+* `src/app/portal/hooks/useQuotationActions.ts`
+* `src/app/portal/hooks/usePortalOrderRealtime.ts`
+* `src/app/portal/order/[orderId]/page.tsx`
+* `src/app/portal/order/[orderId]/OrderDetailClient.tsx`
 * `src/utils/portal-tokens.ts`
 
 ## Data Flow
@@ -118,7 +129,10 @@ Request URL with `?token=...`
 
 * Token generation uses strong environment variables (`PORTAL_SECRET_KEY`).
 * Rate limiting prevents abuse.
-* RLS (Row Level Security) is bypassed in the server component (using Service Role or similar secure fetch), but the query strictly filters `eq("customer_id", payload.customerId)`. No other customer data can bleed over.
+* Server components fetch customer data with service role after token validation; queries filter by `customer_id` / order scope.
+* Quotation reads: `getCustomerVisibleQuotationForOrder` (service role; hides Draft / Pending Approval).
+* Quotation writes: `customerApproveQuotation` / `customerRequestRevision` (portal session ownership check + service role; `status = 'Sent'` guard).
+* **`quotations` table has no anon RLS policies** (revoked in `20260706130000_quotation_revoke_anon_access.sql`).
 * `app_settings` are strictly read-only for the portal (granted via Anon policy).
 
 ## Future Enhancements
@@ -140,3 +154,7 @@ Summary: Payments tab for milestones; design data via `designs` join; site measu
 Version: 1.2
 Date: 2026-07-06
 Summary: Integration with `app_settings` to conditionally disable customer self-scheduling for Site Visits and Installations based on Admin preferences.
+
+Version: 1.3
+Date: 2026-07-07
+Summary: Unified quotation portal UI (`QuotationTab`, `useQuotationActions`, `usePortalOrderRealtime`); server-action mutations replace direct anon client updates; quotation hidden until admin sends (`Sent`/`Approved`/`Rejected` only).
