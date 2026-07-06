@@ -17,7 +17,8 @@ import {
   CheckCircle,
   Calendar,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  RefreshCw,
 } from "lucide-react";
 import { updateOrder, assignTeamToOrder } from "@/features/orders/actions/orderActions";
 
@@ -77,6 +78,7 @@ export function OrdersManagementDashboard({
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [orders, setOrders] = useState(initialOrders);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [stageFilter, setStageFilter] = useState("ALL");
   const [healthFilter, setHealthFilter] = useState("ALL");
   const [selectedKpi, setSelectedKpi] = useState<string | null>(null);
@@ -91,6 +93,16 @@ export function OrdersManagementDashboard({
     const t = setTimeout(() => setDebouncedSearch(searchTerm.trim().toLowerCase()), 220);
     return () => clearTimeout(t);
   }, [searchTerm]);
+
+  useEffect(() => {
+    setOrders(initialOrders);
+  }, [initialOrders]);
+
+  const handleRefresh = useCallback(() => {
+    setIsRefreshing(true);
+    router.refresh();
+    setTimeout(() => setIsRefreshing(false), 600);
+  }, [router]);
   
   const currentUserRole = userRole;
 
@@ -256,6 +268,28 @@ export function OrdersManagementDashboard({
               Track and process initial project requests
             </p>
           </div>
+          <button
+            type="button"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "8px",
+              padding: "10px 16px",
+              fontSize: "13px",
+              fontWeight: "600",
+              color: "#0f172a",
+              background: "white",
+              border: "1px solid #e2e8f0",
+              borderRadius: "10px",
+              cursor: isRefreshing ? "wait" : "pointer",
+              opacity: isRefreshing ? 0.7 : 1,
+            }}
+          >
+            <RefreshCw size={16} className={isRefreshing ? "animate-spin" : ""} />
+            Refresh
+          </button>
         </div>
 
         {/* Stats Cards */}

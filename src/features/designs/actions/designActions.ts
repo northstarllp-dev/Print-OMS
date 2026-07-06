@@ -3,7 +3,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
-import { revalidatePath } from "next/cache";
 import { DesignRecord, DesignComment, DesignVersion } from "@/types";
 import { mapDesignFromDb } from "./designMapper";
 import { dispatchWhatsAppNotification } from "@/features/notifications/actions/dispatchNotification";
@@ -12,6 +11,10 @@ import {
   assertStageEditOrPortalOrder,
   assertStageEditPermission,
 } from "@/features/orders/workspace/shared/serverPermissions";
+import {
+  revalidateOrderDetailPaths,
+  revalidateStaffQueuePaths,
+} from "@/features/orders/actions/orderActions";
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -50,21 +53,9 @@ async function resolveOrderUuid(supabase: SupabaseClient, idOrOrderId: string): 
   return data.id;
 }
 
-function revalidateDesignPaths(orderId: string) {
-  revalidatePath("/admin/orders");
-  revalidatePath(`/admin/orders/${orderId}`);
-  revalidatePath("/staff/orders");
-  revalidatePath(`/staff/orders/${orderId}`);
-  revalidatePath("/staff/site-visit");
-  revalidatePath("/staff/design");
-  revalidatePath("/staff/production");
-  revalidatePath("/staff/installation");
-  revalidatePath("/production/orders");
-  revalidatePath(`/production/orders/${orderId}`);
-  revalidatePath("/installation/orders");
-  revalidatePath(`/installation/orders/${orderId}`);
-  revalidatePath("/portal");
-  revalidatePath(`/portal/order/${orderId}`);
+async function revalidateDesignPaths(orderId: string) {
+  await revalidateStaffQueuePaths();
+  await revalidateOrderDetailPaths(orderId);
 }
 
 async function updateOrderStage(supabase: SupabaseClient, orderUuid: string, stage: string) {
@@ -121,7 +112,7 @@ export async function createDesignForOrderAction(orderId: string): Promise<Desig
     .select()
     .single();
   if (error) throw new Error(error.message);
-  revalidateDesignPaths(orderId);
+  await revalidateDesignPaths(orderId);
   return mapDesignFromDb(data);
 }
 
@@ -155,7 +146,7 @@ export async function updateDesignDetailsAction(
     .single();
   if (error) throw new Error(error.message);
 
-  revalidateDesignPaths(orderId);
+  await revalidateDesignPaths(orderId);
   return mapDesignFromDb(data);
 }
 
@@ -185,7 +176,7 @@ export async function updateDesignItemStatusAction(
     const supabase = await getSupabase();
     const orderUuid = await resolveOrderUuid(supabase, orderId);
     await updateOrderStage(supabase, orderUuid, updateStage);
-    revalidateDesignPaths(orderId);
+    await revalidateDesignPaths(orderId);
   }
 
   return result;
@@ -217,7 +208,7 @@ export async function addDesignCommentAction(
     const supabase = await getSupabase();
     const orderUuid = await resolveOrderUuid(supabase, orderId);
     await updateOrderStage(supabase, orderUuid, updateStage);
-    revalidateDesignPaths(orderId);
+    await revalidateDesignPaths(orderId);
   }
 
   return result;
@@ -288,7 +279,7 @@ export async function approveAllDesignItemsAction(orderId: string): Promise<Desi
       idempotencyKey: `design_approved:${orderUuid}`,
       baseUrl,
     });
-    revalidateDesignPaths(orderId);
+    await revalidateDesignPaths(orderId);
   }
 
   return result;

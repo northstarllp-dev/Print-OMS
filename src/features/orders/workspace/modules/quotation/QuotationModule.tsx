@@ -10,7 +10,6 @@ import {
   upsertQuotation, 
   sendQuotationToCustomer
 } from "@/features/quotations/actions/quotationActions";
-import { createClient } from "@/utils/supabase/client";
 import { formatSiteMeasurementLabel } from "@/features/orders/actions/siteVisitMapper";
 import {
   calcLineAmount,
@@ -98,6 +97,8 @@ interface QuotationModuleProps {
   isEmployee: boolean;
   products: Product[];
   initialQuotation: Quotation | null;
+  /** Live quote fields from parent useOrderDetailSync (cross-user sync). */
+  realtimeQuotation?: Record<string, unknown> | null;
   siteVisitItems?: SiteVisitItem[];
   currentUserRole?: string;
   /** Advance to Design/Production. */
@@ -313,6 +314,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
   currentUserRole = "Customer",
   products,
   initialQuotation,
+  realtimeQuotation,
   siteVisitItems = [],
   onRequestAdvance,
 }) => {
@@ -330,42 +332,18 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
   }, []);
 
   useEffect(() => {
-    const supabase = createClient();
-    const channelName = `quotation-sync-${order.id}-${Date.now()}`;
-
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "quotations",
-          filter: `order_id=eq.${order.id}`,
-        },
-        (payload) => {
-          if (payload.eventType === "INSERT" || payload.eventType === "UPDATE") {
-            const newQuote = payload.new as any;
-            if (newQuote) {
-              if (newQuote.quotation_id) setQuotationId(newQuote.quotation_id);
-              if (newQuote.status) setStatus(newQuote.status);
-              if (newQuote.notes !== undefined) setNotes(newQuote.notes ?? "");
-              if (newQuote.terms !== undefined) setTerms(newQuote.terms ?? "");
-              if (newQuote.shipping !== undefined) setShipping(Number(newQuote.shipping) || 0);
-              if (newQuote.rejection_reason !== undefined) setRejectionReason(newQuote.rejection_reason ?? "");
-              if (Array.isArray(newQuote.signage_options)) {
-                setSections(newQuote.signage_options);
-              }
-            }
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [order.id]);
+    if (!realtimeQuotation) return;
+    if (realtimeQuotation.quotationId) setQuotationId(String(realtimeQuotation.quotationId));
+    if (realtimeQuotation.status) {
+      setStatus(realtimeQuotation.status as "Draft" | "Sent" | "Approved" | "Rejected" | "Pending Approval");
+    }
+    if (realtimeQuotation.notes !== undefined) setNotes(String(realtimeQuotation.notes ?? ""));
+    if (realtimeQuotation.terms !== undefined) setTerms(String(realtimeQuotation.terms ?? ""));
+    if (realtimeQuotation.shipping !== undefined) setShipping(Number(realtimeQuotation.shipping) || 0);
+    if (Array.isArray(realtimeQuotation.signageOptions)) {
+      setSections(realtimeQuotation.signageOptions);
+    }
+  }, [realtimeQuotation]);
 
   // Core metadata states
   const [quotationId, setQuotationId] = useState(

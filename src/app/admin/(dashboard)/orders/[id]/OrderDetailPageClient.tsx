@@ -65,6 +65,7 @@ export function OrderDetailPageClient({
       <OrderWorksheetModal
         isOpen={true}
         onClose={() => {
+          router.refresh();
           router.push(backHref ?? (role === "Admin" ? "/admin/orders" : "/staff/orders"));
         }}
         order={order}

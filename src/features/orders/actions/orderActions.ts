@@ -601,6 +601,14 @@ export async function revalidateStaffQueuePaths() {
   revalidatePath("/installation/site-visit");
 }
 
+/** Invalidate order detail routes (admin, staff, portal) after a mutation. */
+export async function revalidateOrderDetailPaths(orderId: string) {
+  revalidatePath(`/admin/orders/${orderId}`);
+  revalidatePath(`/staff/orders/${orderId}`);
+  revalidatePath("/portal");
+  revalidatePath(`/portal/order/${orderId}`);
+}
+
 export async function fetchEmployeeStats() {
   const supabase = await getSupabase();
   

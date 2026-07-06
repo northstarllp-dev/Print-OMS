@@ -2,11 +2,14 @@
 
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import { revalidatePath } from "next/cache";
 import { mapSiteVisitMeasurementFromDb } from "@/features/orders/actions/siteVisitMapper";
 import { dispatchWhatsAppNotification } from "@/features/notifications/actions/dispatchNotification";
 import { getRequestBaseUrl } from "@/features/notifications/whatsapp/requestBaseUrl";
 import { assertStageEditPermission } from "@/features/orders/workspace/shared/serverPermissions";
+import {
+  revalidateOrderDetailPaths,
+  revalidateStaffQueuePaths,
+} from "@/features/orders/actions/orderActions";
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -114,6 +117,11 @@ export interface QuotationPayload {
   shipping?: number;
 }
 
+async function revalidateQuotationPaths(orderId: string) {
+  await revalidateStaffQueuePaths();
+  await revalidateOrderDetailPaths(orderId);
+}
+
 /** Upsert quotation — creates if not exists, updates if already there */
 export async function upsertQuotation(orderId: string, payload: QuotationPayload) {
   await assertStageEditPermission("quotation");
@@ -169,9 +177,7 @@ export async function upsertQuotation(orderId: string, payload: QuotationPayload
     result = data;
   }
 
-  revalidatePath(`/admin/orders/${resolved.friendly}`);
-  revalidatePath(`/staff/orders/${resolved.friendly}`);
-  revalidatePath("/admin/orders");
+  await revalidateQuotationPaths(resolved.friendly);
   return result;
 }
 
@@ -213,7 +219,13 @@ export async function sendQuotationToCustomer(quotationId: string, adminName: st
     baseUrl,
   });
 
-  revalidatePath("/admin/orders");
+  const { data: orderRow } = await supabase
+    .from("orders")
+    .select("order_id")
+    .eq("id", qt.order_id)
+    .maybeSingle();
+
+  await revalidateQuotationPaths(orderRow?.order_id || qt.order_id);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -250,8 +262,7 @@ export async function adminMarkQuotationApprovedAction(orderId: string) {
     metadata: { action: "quotation_approved_by_admin" },
   });
 
-  revalidatePath(`/admin/orders/${friendly}`);
-  revalidatePath("/admin/orders");
+  await revalidateQuotationPaths(friendly);
 }
 
 /** Customer approves quotation → stage = Quotation Approved */
@@ -270,7 +281,7 @@ export async function customerApproveQuotation(orderId: string, customerName: st
     metadata: { action: "quotation_approved_by_customer" }
   });
 
-  revalidatePath(`/admin/orders/${friendly}`);
+  await revalidateQuotationPaths(friendly);
 }
 
 /** Customer requests revision → stage = Quotation Negotiation */
@@ -289,7 +300,7 @@ export async function customerRequestRevision(orderId: string, customerName: str
     metadata: { action: "quotation_revision_requested" }
   });
 
-  revalidatePath(`/admin/orders/${friendly}`);
+  await revalidateQuotationPaths(friendly);
 }
 
 

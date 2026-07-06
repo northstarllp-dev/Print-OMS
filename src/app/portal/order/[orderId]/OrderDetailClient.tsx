@@ -27,9 +27,12 @@ import {
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { scheduleSiteVisitAction, revalidateOrderPathsAction } from "@/features/orders/actions/orderActions";
-import { mapSiteVisitFromDb, formatSiteMeasurementLabel } from "@/features/orders/actions/siteVisitMapper";
+import { formatSiteMeasurementLabel } from "@/features/orders/actions/siteVisitMapper";
 import { calcLineAmount, getLineMeasurement, normalizePricingType } from "@/features/quotations/utils/lineAmount";
-import { mapDesignFromDb } from "@/features/designs/actions/designMapper";
+import {
+  mergeOrderDetailPatch,
+  useOrderDetailSync,
+} from "@/features/orders/realtime/useOrderDetailSync";
 import { GoogleMap, useJsApiLoader, Marker, Autocomplete } from "@react-google-maps/api";
 import { DesignTab } from "../../components/DesignTab";
 import { PaymentsTab } from "../../components/PaymentsTab";
@@ -129,10 +132,21 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
   
   const [activeTab, setActiveTab] = useState(getInitialTab());
   const [order, setOrder] = useState(initialOrder);
+  const orderRef = useRef(order);
+  orderRef.current = order;
 
   useEffect(() => {
     setOrder(initialOrder);
   }, [initialOrder]);
+
+  useOrderDetailSync({
+    orderId: order.id,
+    businessOrderId: order.orderId || order.orderCode || order.id,
+    getOrderSnapshot: () => orderRef.current as unknown as Record<string, unknown>,
+    onPatch: (patch) => {
+      setOrder((prev) => mergeOrderDetailPatch(prev, patch));
+    },
+  });
 
   const [products, setProducts] = useState<any[]>([]);
   const [selectedProductInfo, setSelectedProductInfo] = useState<any | null>(null);
@@ -295,112 +309,6 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
       setGpsCoords(sv.gpsLocation || "12.9716° N, 77.5946° E");
     }
   }, [order.id, order.siteVisitDetails]);
-
-  // Realtime subscription to sync order, site visit, and quotation changes dynamically
-  useEffect(() => {
-    if (!order) return;
-    const supabase = createClient();
-    const orderChannelName = `portal-order-detail-sync-${order.id}-${Date.now()}`;
-
-    const channel = supabase
-      .channel(orderChannelName)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "orders", filter: `id=eq.${order.id}` },
-        (payload) => {
-          if (payload.eventType === "UPDATE" || payload.eventType === "INSERT") {
-            const updatedOrder = payload.new as any;
-            if (updatedOrder) {
-              setOrder(prev => ({
-                ...prev,
-                stage: updatedOrder.stage,
-                depositPaid: Number(updatedOrder.deposit_paid) || 0,
-
-                // productionDetails & installationDetails aren't on the orders table anymore,
-                // so we don't update them from this realtime event.
-                stageStatus: updatedOrder.stage_status,
-                stageAdminNotes: updatedOrder.stage_admin_notes,
-              }));
-            }
-          }
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "site_visits", filter: `order_id=eq.${order.id}` },
-        (payload) => {
-          if (payload.eventType === "DELETE") {
-            setOrder(prev => ({
-              ...prev,
-              siteVisitDetails: undefined
-            }));
-          } else {
-            const mapped = mapSiteVisitFromDb(payload.new);
-            if (mapped) {
-              setOrder(prev => ({
-                ...prev,
-                siteVisitDetails: {
-                  ...mapped,
-                  locations: mapped.locations && mapped.locations.length > 0 ? mapped.locations : (prev.siteVisitDetails?.locations || [])
-                }
-              }));
-            }
-          }
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "designs", filter: `order_id=eq.${order.id}` },
-        (payload) => {
-          if (payload.eventType === "DELETE") {
-            setOrder(prev => ({
-              ...prev,
-              design: undefined
-            }));
-          } else {
-            const mapped = mapDesignFromDb(payload.new);
-            if (mapped) {
-              setOrder(prev => ({
-                ...prev,
-                design: mapped
-              }));
-            }
-          }
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "quotations", filter: `order_id=eq.${order.id}` },
-        (payload) => {
-          if (payload.eventType === "UPDATE" || payload.eventType === "INSERT") {
-            const updatedQuote = payload.new as any;
-            if (updatedQuote) {
-              setOrder(prev => ({
-                ...prev,
-                quoteDetails: {
-                  ...(prev.quoteDetails || {}),
-                  quotationId: updatedQuote.quotation_id,
-                  status: updatedQuote.status,
-                  grandTotal: Number(updatedQuote.grand_total) || 0,
-                  subtotal: Number(updatedQuote.subtotal) || 0,
-                  discount: Number(updatedQuote.discount) || 0,
-                  tax: Number(updatedQuote.tax) || 0,
-                  signageOptions: updatedQuote.signage_options || [],
-                  shipping: Number(updatedQuote.shipping) || 0,
-                  notes: updatedQuote.notes || "",
-                  terms: updatedQuote.terms || "",
-                }
-              }));
-            }
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [order.id]);
 
   // Debug active tab
   useEffect(() => {

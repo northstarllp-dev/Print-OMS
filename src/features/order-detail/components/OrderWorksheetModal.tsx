@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import { OrderCommunicationCenter } from "@/components/communication/OrderCommunicationCenter";
@@ -52,8 +52,10 @@ import {
   updateDesignDetailsAction,
   sendDesignToCustomerAction,
 } from "@/features/designs/actions/designActions";
-import { mapDesignFromDb } from "@/features/designs/actions/designMapper";
-import { mapSiteVisitFromDb } from "@/features/orders/actions/siteVisitMapper";
+import {
+  mergeOrderDetailPatch,
+  useOrderDetailSync,
+} from "@/features/orders/realtime/useOrderDetailSync";
 
 /* ─── helpers ──────────────────────────────────────────────────── */
 const STAGE_LABEL: Record<string, { label: string; color: string }> = {
@@ -247,11 +249,22 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   const [orderTab, setOrderTab] = useState<"all" | "active" | "pending">("all");
 
   const [messages, setMessages] = useState<any[]>([]);
+  const orderRef = useRef(order);
+  orderRef.current = order;
+
+  const triggerLocalAlert = useCallback((
+    message: string,
+    type: "info" | "success" | "warning" | "error"
+  ) => {
+    setLocalAlert({ message, type });
+    setTimeout(() => setLocalAlert(null), 3500);
+  }, []);
 
   useEffect(() => { setOrder(initialOrder); }, [initialOrder]);
   useEffect(() => { setActiveStepTab(stageToTabIndex(order.stage, order.workflow_type)); }, [order.stage, order.workflow_type]);
 
   useEffect(() => {
+    if (!isOpen) return;
     const supabase = createClient();
     async function loadMessages() {
       const { data } = await supabase
@@ -261,110 +274,37 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
       if (data) setMessages(data);
     }
     loadMessages();
+  }, [isOpen, order.id, order.orderId]);
 
-    const channel = supabase
-      .channel(`order-comm-modal-${order.id}`)
-      .on("postgres_changes", {
-        event: "*",
-        schema: "public",
-        table: "order_activity",
-        filter: `order_id=eq.${order.orderId || order.id}`
-      }, (payload) => {
-        if (payload.eventType === "INSERT") {
-          setMessages(prev => {
-            if (prev.some(m => m.id === payload.new.id)) return prev;
-            return [...prev, payload.new];
-          });
-        } else if (payload.eventType === "UPDATE") {
-          setMessages(prev => prev.map(m => m.id === payload.new.id ? payload.new : m));
-        } else if (payload.eventType === "DELETE") {
-          setMessages(prev => prev.filter(m => m.id !== payload.old.id));
-        }
-      })
-      .on("postgres_changes", {
-        event: "UPDATE",
-        schema: "public",
-        table: "orders",
-        filter: `id=eq.${order.id}`
-      }, (payload) => {
-        const updated = payload.new as any;
-        if (updated) {
-          setOrder(prev => ({
-            ...prev,
-            stage: updated.stage,
-            stageStatus: updated.stage_status,
-            stageAdminNotes: updated.stage_admin_notes,
-            chatHistory: updated.chat_history || prev.chatHistory,
-          }));
-        }
-      })
-      .on("postgres_changes", {
-        event: "*",
-        schema: "public",
-        table: "designs",
-        filter: `order_id=eq.${order.id}`
-      }, (payload) => {
-        if (payload.eventType === "DELETE") {
-          setOrder(prev => ({
-            ...prev,
-            design: undefined
-          }));
-        } else {
-          const mapped = mapDesignFromDb(payload.new);
-          if (mapped) {
-            setOrder(prev => ({
-              ...prev,
-              design: mapped
-            }));
-          }
-        }
-      })
-      .on("postgres_changes", {
-        event: "*",
-        schema: "public",
-        table: "site_visits",
-        filter: `order_id=eq.${order.id}`
-      }, (payload) => {
-        if (payload.eventType === "DELETE") {
-          setOrder(prev => ({
-            ...prev,
-            siteVisitDetails: undefined
-          }));
-        } else {
-          const mapped = mapSiteVisitFromDb(payload.new);
-          if (mapped) {
-            setOrder(prev => {
-              const existingLocations = prev.siteVisitDetails?.locations || [];
-              return {
-                ...prev,
-                siteVisitDetails: {
-                  ...mapped,
-                  locations: mapped.locations && mapped.locations.length > 0 ? mapped.locations : existingLocations
-                }
-              };
-            });
-          }
-        }
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [order.id, order.orderId]);
+  useOrderDetailSync({
+    orderId: order.id,
+    businessOrderId: order.orderId || order.id,
+    enabled: isOpen,
+    getOrderSnapshot: () => orderRef.current as unknown as Record<string, unknown>,
+    onPatch: (patch) => {
+      setOrder((prev) => mergeOrderDetailPatch(prev, patch));
+    },
+    onActivityChange: (payload) => {
+      if (payload.eventType === "INSERT" && payload.new) {
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === payload.new!.id)) return prev;
+          return [...prev, payload.new];
+        });
+      } else if (payload.eventType === "UPDATE" && payload.new) {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === payload.new!.id ? payload.new : m))
+        );
+      } else if (payload.eventType === "DELETE" && payload.old) {
+        setMessages((prev) => prev.filter((m) => m.id !== payload.old!.id));
+      }
+    },
+    onExternalStageChange: (message) => triggerLocalAlert(message, "info"),
+  });
 
   const logsCount = messages.filter((m) => m.tab === "timeline").length;
   const chatCount = messages.filter((m) => m.tab === "internal").length;
 
   if (!isOpen) return null;
-
-  const triggerLocalAlert = (
-    message: string,
-    type: "info" | "success" | "warning" | "error"
-  ) => {
-    setLocalAlert({ message, type });
-    setTimeout(() => setLocalAlert(null), 3500);
-  };
 
   /* ── Data ── */
   const client = customers.find((c) => c.id === order.customerId);
@@ -786,6 +726,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           currentUserRole={currentUserRole}
           products={products as any}
           initialQuotation={initialQuotation}
+          realtimeQuotation={(order as Order & { quoteDetails?: Record<string, unknown> }).quoteDetails}
           siteVisitItems={siteVisitItems}
           onRequestAdvance={handleQuotationAdvance}
         />

@@ -26,14 +26,17 @@ import {
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { scheduleSiteVisitAction, revalidateOrderPathsAction } from "@/features/orders/actions/orderActions";
-import { mapSiteVisitFromDb, formatSiteMeasurementLabel } from "@/features/orders/actions/siteVisitMapper";
+import { formatSiteMeasurementLabel } from "@/features/orders/actions/siteVisitMapper";
 import { calcLineAmount, getLineMeasurement, normalizePricingType } from "@/features/quotations/utils/lineAmount";
+import {
+  mergeOrderDetailPatch,
+  useOrderDetailSync,
+} from "@/features/orders/realtime/useOrderDetailSync";
 import { PaymentsTab } from "./components/PaymentsTab";
 import { provideInstallationLocationAction, scheduleInstallationAction } from "@/features/installations/actions/installationActions";
 import { InstallationScheduleModule } from "@/features/installations/components/InstallationScheduleModule";
 import { DesignTab } from "./components/DesignTab";
 import { approveAllDesignItemsAction, updateDesignDetailsAction } from "@/features/designs/actions/designActions";
-import { mapDesignFromDb } from "@/features/designs/actions/designMapper";
 
 interface Customer {
   id: string;
@@ -135,6 +138,25 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
   );
   
   const activeOrder = orders.find(o => o.id === activeOrderId) || orders[0];
+  const activeOrderRef = useRef(activeOrder);
+  activeOrderRef.current = activeOrder;
+
+  useOrderDetailSync({
+    orderId: activeOrder?.id ?? "",
+    businessOrderId: activeOrder?.orderId || activeOrder?.orderCode || activeOrder?.id,
+    enabled: !!activeOrder?.id,
+    getOrderSnapshot: () => (activeOrderRef.current || {}) as unknown as Record<string, unknown>,
+    onPatch: (patch) => {
+      const targetId = activeOrderRef.current?.id;
+      if (!targetId) return;
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.id === targetId ? mergeOrderDetailPatch(o, patch) : o
+        )
+      );
+    },
+  });
+
   const workflowType = activeOrder?.workflow_type || "quote_first";
   const isDesignFirst = workflowType === "design_first";
 
@@ -366,113 +388,6 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
         }
       })
       .subscribe();
-  }, [activeOrder?.id]);
-
-  // Realtime subscription to sync active order and quotation changes dynamically
-  useEffect(() => {
-    if (!activeOrder) return;
-    const supabase = createClient();
-    const orderChannelName = `portal-order-sync-${activeOrder.id}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-
-    const channel = supabase
-      .channel(orderChannelName)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "orders", filter: `id=eq.${activeOrder.id}` },
-        (payload) => {
-          if (payload.eventType === "UPDATE" || payload.eventType === "INSERT") {
-            const updatedOrder = payload.new as any;
-            if (updatedOrder) {
-              setOrders(prev => prev.map(o => o.id === updatedOrder.id ? {
-                ...o,
-                stage: updatedOrder.stage,
-                depositPaid: Number(updatedOrder.deposit_paid) || 0,
-
-                siteVisitDetails: o.siteVisitDetails,
-                productionDetails: updatedOrder.productionDetails,
-                installationDetails: updatedOrder.installationDetails,
-                stageStatus: updatedOrder.stage_status,
-                stageAdminNotes: updatedOrder.stage_admin_notes,
-              } : o));
-            }
-          }
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "site_visits", filter: `order_id=eq.${activeOrder.id}` },
-        (payload) => {
-          if (payload.eventType === "DELETE") {
-            setOrders(prev => prev.map(o => o.id === activeOrder.id ? {
-              ...o,
-              siteVisitDetails: undefined
-            } : o));
-          } else {
-            const mapped = mapSiteVisitFromDb(payload.new);
-            if (mapped) {
-              setOrders(prev => prev.map(o => o.id === activeOrder.id ? {
-                ...o,
-                siteVisitDetails: {
-                  ...mapped,
-                  locations: mapped.locations && mapped.locations.length > 0 ? mapped.locations : (o.siteVisitDetails?.locations || [])
-                }
-              } : o));
-            }
-          }
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "designs", filter: `order_id=eq.${activeOrder.id}` },
-        (payload) => {
-          if (payload.eventType === "DELETE") {
-            setOrders(prev => prev.map(o => o.id === activeOrder.id ? {
-              ...o,
-              design: undefined
-            } : o));
-          } else {
-            const mapped = mapDesignFromDb(payload.new);
-            if (mapped) {
-              setOrders(prev => prev.map(o => o.id === activeOrder.id ? {
-                ...o,
-                design: mapped
-              } : o));
-            }
-          }
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "quotations", filter: `order_id=eq.${activeOrder.id}` },
-        (payload) => {
-          if (payload.eventType === "UPDATE" || payload.eventType === "INSERT") {
-            const updatedQuote = payload.new as any;
-            if (updatedQuote) {
-              setOrders(prev => prev.map(o => o.id === updatedQuote.order_id ? {
-                ...o,
-                quoteDetails: {
-                  ...(o.quoteDetails || {}),
-                  quotationId: updatedQuote.quotation_id,
-                  status: updatedQuote.status,
-                  grandTotal: Number(updatedQuote.grand_total) || 0,
-                  subtotal: Number(updatedQuote.subtotal) || 0,
-                  discount: Number(updatedQuote.discount) || 0,
-                  tax: Number(updatedQuote.tax) || 0,
-                  signageOptions: updatedQuote.signage_options || [],
-                  shipping: Number(updatedQuote.shipping) || 0,
-                  notes: updatedQuote.notes || "",
-                  terms: updatedQuote.terms || "",
-                }
-              } : o));
-            }
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, [activeOrder?.id]);
 
   const getBusinessDays = () => {
