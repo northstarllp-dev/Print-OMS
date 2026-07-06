@@ -98,8 +98,10 @@ Request URL with `?token=...`
 → Rate limiter checks IP
 → `verifyPortalToken` validates signature
 → DB queries fetch customer and associated orders
+→ Server fetches `app_settings` for the company to determine feature flags
 → Rendered HTML sent to client
 → React handles tab switching internally without full page reloads.
+→ If `app_settings.site_visit_scheduling_enabled` or `installation_scheduling_enabled` are false, the respective scheduling modules are replaced with a read-only message.
 
 ## Error Handling
 
@@ -117,6 +119,7 @@ Request URL with `?token=...`
 * Token generation uses strong environment variables (`PORTAL_SECRET_KEY`).
 * Rate limiting prevents abuse.
 * RLS (Row Level Security) is bypassed in the server component (using Service Role or similar secure fetch), but the query strictly filters `eq("customer_id", payload.customerId)`. No other customer data can bleed over.
+* `app_settings` are strictly read-only for the portal (granted via Anon policy).
 
 ## Future Enhancements
 
@@ -133,3 +136,7 @@ Summary: Initial specification for the Customer Portal architecture.
 Version: 1.1
 Date: 2026-07-04
 Summary: Payments tab for milestones; design data via `designs` join; site measurement units on quotations.
+
+Version: 1.2
+Date: 2026-07-06
+Summary: Integration with `app_settings` to conditionally disable customer self-scheduling for Site Visits and Installations based on Admin preferences.

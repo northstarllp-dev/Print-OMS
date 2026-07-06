@@ -50,34 +50,42 @@ Permissions:
 | default_quote_terms | text | Standard T&C block injected into new quotes |
 | currency_symbol | text | e.g., "₹" or "$" |
 
-*(Note: Depending on the exact schema, this might be a single row table for single-tenant, or keyed by `company_id` for multi-tenant).*
+#### app_settings
+
+| Column | Type | Description |
+| ------ | ---- | ----------- |
+| id | uuid (PK) | Settings record ID |
+| company_id | uuid (FK) | Links to `companies.id` |
+| site_visit_scheduling_enabled | boolean | Toggles self-scheduling for site visits in portal |
+| installation_scheduling_enabled | boolean | Toggles self-scheduling for installations in portal |
+
+*(Note: `app_settings` is keyed by `company_id` for multi-tenant isolation).*
 
 ## API Endpoints
 
 ### Update Settings
-Method: Server Action (e.g., `updateCompanySettings`)
-Behavior: Updates the row in the database associated with the current user's tenant.
+Method: Server Action (e.g., `updateAppSettings`)
+Behavior: Updates the row in the `app_settings` or `companies` table associated with the current user's tenant.
 
 ## UI Components
 
-### Settings Dashboard (`SettingsView.tsx`)
+### Settings Dashboard (`SettingsViewNew.tsx`)
 Purpose: Form-heavy page split into logical sections.
 Fields:
-* **Company Profile**: Name, Logo Upload, Address, Contact Info.
-* **Financial Defaults**: Tax Rates, Currency.
-* **Document Templates**: Large Textareas for Default Quote Terms and Invoice Terms.
+* **General Settings**: Company Name, Email, Address, etc.
+* **Customer Portal**: Toggles for enabling/disabling customer self-scheduling.
 
 ## File Structure
 
-* `src/features/settings/components/SettingsView.tsx`
+* `src/features/settings/components/SettingsViewNew.tsx`
 * `src/features/settings/actions/settingsActions.ts`
 
 ## Data Flow
 
-Admin updates "Default Quote Terms" and clicks Save
-→ Server action updates the `companies` table
-→ Later, Staff clicks "Create Quote" on an order
-→ The Quotation initialization logic fetches the `companies.default_quote_terms` and pre-fills the `terms` field on the new quotation row.
+Admin updates "Site Visit Self-Scheduling" and clicks Save
+→ Server action updates the `app_settings` table
+→ Later, Customer visits their portal
+→ The portal fetches `app_settings` and conditionally renders the scheduling form or a read-only message.
 
 ## Future Enhancements
 
@@ -89,3 +97,7 @@ Admin updates "Default Quote Terms" and clicks Save
 Version: 1.0
 Date: 2026-07-03
 Summary: Initial specification for the System Settings module.
+
+Version: 1.1
+Date: 2026-07-06
+Summary: Added `app_settings` table to handle Customer Portal feature toggles (Site Visit & Installation Scheduling).

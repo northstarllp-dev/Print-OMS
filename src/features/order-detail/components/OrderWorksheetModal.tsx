@@ -785,6 +785,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           }}
           isEmployee={isStaffOrAdmin}
           currentUserRole={currentUserRole}
+          currentUserName={currentEmployee?.name || currentUserRole}
           products={products as any}
           initialQuotation={initialQuotation}
           siteVisitItems={siteVisitItems}

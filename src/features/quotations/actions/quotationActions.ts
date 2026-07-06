@@ -6,7 +6,9 @@ import { revalidatePath } from "next/cache";
 import { mapSiteVisitMeasurementFromDb } from "@/features/orders/actions/siteVisitMapper";
 import { dispatchWhatsAppNotification } from "@/features/notifications/actions/dispatchNotification";
 import { getRequestBaseUrl } from "@/features/notifications/whatsapp/requestBaseUrl";
-import { assertStageEditPermission } from "@/features/orders/workspace/shared/serverPermissions";
+import { assertStageEditPermission, assertValidPortalSessionForOrder } from "@/features/orders/workspace/shared/serverPermissions";
+import { computeQuotationTotals } from "@/features/quotations/utils/lineAmount";
+import { createAdminClient } from "@/utils/supabase/admin";
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -122,24 +124,33 @@ export async function upsertQuotation(orderId: string, payload: QuotationPayload
 
   if (!payload.customer_id) payload.customer_id = resolved.customerId;
 
+  const totals = computeQuotationTotals(
+    payload.signage_options ?? [],
+    payload.discount,
+    payload.shipping ?? 0
+  );
+
   const { data: existing } = await supabase.from("quotations").select("id, quotation_id").eq("order_id", resolved.uuid).maybeSingle();
+
+  const persistPayload = {
+    signage_options: payload.signage_options ?? [],
+    subtotal: totals.subtotal,
+    discount: totals.discount,
+    tax: totals.tax,
+    grand_total: totals.grand_total,
+    status: payload.status || "Draft",
+    notes: payload.notes ?? null,
+    terms: payload.terms ?? null,
+    customer_id: payload.customer_id ?? null,
+    shipping: totals.shipping,
+  };
 
   let result;
   if (existing) {
     const { data, error } = await supabase.from("quotations")
       .update({
         quotation_id: payload.quotation_id || existing.quotation_id,
-        signage_options: payload.signage_options ?? [],
-        subtotal: payload.subtotal,
-        discount: payload.discount,
-        tax: payload.tax,
-        grand_total: payload.grand_total,
-        status: payload.status || "Draft",
-        notes: payload.notes ?? null,
-        terms: payload.terms ?? null,
-        customer_id: payload.customer_id ?? null,
-
-        shipping: payload.shipping ?? 0,
+        ...persistPayload,
       })
       .eq("id", existing.id)
       .select().single();
@@ -153,17 +164,7 @@ export async function upsertQuotation(orderId: string, payload: QuotationPayload
       quotation_id,
       order_id: resolved.uuid,
       company_id: companyId,
-      customer_id: payload.customer_id ?? null,
-      signage_options: payload.signage_options ?? [],
-      subtotal: payload.subtotal,
-      discount: payload.discount,
-      tax: payload.tax,
-      grand_total: payload.grand_total,
-      status: payload.status || "Draft",
-      notes: payload.notes ?? null,
-      terms: payload.terms ?? null,
-      shipping: payload.shipping ?? 0,
-
+      ...persistPayload,
     }).select().single();
     if (error) throw new Error(error.message);
     result = data;
@@ -186,7 +187,7 @@ export async function sendQuotationToCustomer(quotationId: string, adminName: st
   const { data: qt, error: qErr } = await supabase.from("quotations").select("order_id, quotation_id, status").eq("id", quotationId).single();
   if (qErr || !qt) throw new Error("Quotation not found");
 
-  const wasSentBefore = qt.status === "Sent";
+  const wasSentBefore = qt.status === "Sent" || qt.status === "Rejected";
 
   const { error } = await supabase.from("quotations").update({
     status: "Sent",
@@ -195,9 +196,15 @@ export async function sendQuotationToCustomer(quotationId: string, adminName: st
   }).eq("id", quotationId);
   if (error) throw new Error(error.message);
 
+  const { data: orderRow } = await supabase
+    .from("orders")
+    .select("order_id")
+    .eq("id", qt.order_id)
+    .maybeSingle();
+
   await supabase.from("orders").update({ stage: "Quotation Sent" }).eq("id", qt.order_id);
   await supabase.from("order_activity").insert({
-    order_id: qt.order_id,
+    order_id: orderRow?.order_id || qt.order_id,
     activity_type: "timeline",
     actor_name: "System",
     actor_role: "System",
@@ -242,7 +249,7 @@ export async function adminMarkQuotationApprovedAction(orderId: string) {
   if (oErr) throw new Error(oErr.message);
 
   await supabase.from("order_activity").insert({
-    order_id: uuid,
+    order_id: friendly,
     activity_type: "timeline",
     actor_name: "System",
     actor_role: "System",
@@ -256,40 +263,93 @@ export async function adminMarkQuotationApprovedAction(orderId: string) {
 
 /** Customer approves quotation → stage = Quotation Approved */
 export async function customerApproveQuotation(orderId: string, customerName: string) {
-  const supabase = await getSupabase();
-  const { uuid, friendly } = await resolveOrderId(supabase, orderId);
+  await assertValidPortalSessionForOrder(orderId);
+  const admin = createAdminClient();
+  if (!admin) throw new Error("Server configuration error");
 
-  await supabase.from("quotations").update({ status: "Approved", customer_response: "Yes" }).eq("order_id", uuid);
-  await supabase.from("orders").update({ stage: "Quotation Approved" }).eq("id", uuid);
-  await supabase.from("order_activity").insert({
-    order_id: uuid,
+  const { uuid, friendly } = await resolveOrderId(admin, orderId);
+
+  const { data: qt } = await admin
+    .from("quotations")
+    .select("status")
+    .eq("order_id", uuid)
+    .maybeSingle();
+  if (!qt || qt.status !== "Sent") {
+    throw new Error("Quotation is not available for approval");
+  }
+
+  const { error: qErr } = await admin
+    .from("quotations")
+    .update({ status: "Approved", customer_response: "Yes" })
+    .eq("order_id", uuid);
+  if (qErr) throw new Error(qErr.message);
+
+  const { error: oErr } = await admin
+    .from("orders")
+    .update({ stage: "Quotation Approved" })
+    .eq("id", uuid);
+  if (oErr) throw new Error(oErr.message);
+
+  await admin.from("order_activity").insert({
+    order_id: friendly,
     activity_type: "timeline",
     actor_name: "System",
     actor_role: "System",
     content: `${customerName} has approved the quotation. Order is ready for advance payment.`,
-    metadata: { action: "quotation_approved_by_customer" }
+    metadata: { action: "quotation_approved_by_customer" },
   });
 
   revalidatePath(`/admin/orders/${friendly}`);
+  revalidatePath("/portal");
 }
 
 /** Customer requests revision → stage = Quotation Negotiation */
 export async function customerRequestRevision(orderId: string, customerName: string, notes: string) {
-  const supabase = await getSupabase();
-  const { uuid, friendly } = await resolveOrderId(supabase, orderId);
+  await assertValidPortalSessionForOrder(orderId);
+  const admin = createAdminClient();
+  if (!admin) throw new Error("Server configuration error");
 
-  await supabase.from("quotations").update({ status: "Rejected", customer_response: "Revision" }).eq("order_id", uuid);
-  await supabase.from("orders").update({ stage: "Quotation Negotiation" }).eq("id", uuid);
-  await supabase.from("order_activity").insert({
-    order_id: uuid,
+  const trimmed = notes.trim();
+  if (!trimmed) throw new Error("Feedback is required");
+
+  const { uuid, friendly } = await resolveOrderId(admin, orderId);
+
+  const { data: qt } = await admin
+    .from("quotations")
+    .select("status")
+    .eq("order_id", uuid)
+    .maybeSingle();
+  if (!qt || qt.status !== "Sent") {
+    throw new Error("Quotation is not available for revision");
+  }
+
+  const { error: qErr } = await admin
+    .from("quotations")
+    .update({
+      status: "Rejected",
+      customer_response: "Revision",
+      rejection_reason: trimmed,
+    })
+    .eq("order_id", uuid);
+  if (qErr) throw new Error(qErr.message);
+
+  const { error: oErr } = await admin
+    .from("orders")
+    .update({ stage: "Quotation Negotiation" })
+    .eq("id", uuid);
+  if (oErr) throw new Error(oErr.message);
+
+  await admin.from("order_activity").insert({
+    order_id: friendly,
     activity_type: "customer",
     actor_name: customerName,
     actor_role: "Customer",
-    content: `Revision Requested: ${notes}`,
-    metadata: { action: "quotation_revision_requested" }
+    content: `Quotation Declined. Feedback: ${trimmed}`,
+    metadata: { action: "quotation_declined" },
   });
 
   revalidatePath(`/admin/orders/${friendly}`);
+  revalidatePath("/portal");
 }
 
 

@@ -28,6 +28,49 @@ export function normalizePricingType(type?: string | null): PricingType {
 }
 
 /** Normalize a saved line: drop running-ft, unify qty/measurement into quantity. */
+/** Customer-facing quotation statuses (portal + anon RLS). */
+export const CUSTOMER_VISIBLE_QUOTATION_STATUSES = ["Sent", "Approved", "Rejected"] as const;
+
+export function isQuotationVisibleToCustomer(status?: string | null): boolean {
+  return CUSTOMER_VISIBLE_QUOTATION_STATUSES.includes(
+    status as (typeof CUSTOMER_VISIBLE_QUOTATION_STATUSES)[number]
+  );
+}
+
+export interface QuotationTotals {
+  subtotal: number;
+  discount: number;
+  tax: number;
+  shipping: number;
+  grand_total: number;
+}
+
+/** Server-authoritative totals from signage_options (matches QuotationModule formulas). */
+export function computeQuotationTotals(
+  signageOptions: Array<{ lines?: Array<Record<string, unknown>> }> | null | undefined,
+  discount: number,
+  shipping: number
+): QuotationTotals {
+  const sections = signageOptions ?? [];
+  const subtotal = sections.reduce((sum, sec) => {
+    return sum + (sec.lines ?? []).reduce((s, line) => s + calcLineAmount(line), 0);
+  }, 0);
+  const totalGst = sections.reduce((sum, sec) => {
+    return sum + (sec.lines ?? []).reduce(
+      (s, line) => s + calcLineAmount(line) * ((Number(line.gstRate) || 0) / 100),
+      0
+    );
+  }, 0);
+  const clampedDiscount = Math.max(0, Math.min(Number(discount) || 0, subtotal));
+  const tax =
+    subtotal > 0
+      ? Math.round(totalGst * (1 - clampedDiscount / subtotal) * 100) / 100
+      : 0;
+  const ship = Math.max(0, Number(shipping) || 0);
+  const grand_total = Math.round((subtotal - clampedDiscount + tax + ship) * 100) / 100;
+  return { subtotal, discount: clampedDiscount, tax, shipping: ship, grand_total };
+}
+
 export function normalizeLineItem<T extends Record<string, any>>(line: T): T & {
   pricingType: PricingType;
   quantity: number;

@@ -109,11 +109,16 @@ Admin/staff: Move to Design or Production (workflow_type + adminApproveStageActi
 9. **Grand total** — `round((subtotal - discount + tax + shipping) × 100) / 100`.
 10. **Site measurements** — Section headers show `formatSiteMeasurementLabel()` from linked `site_visit_measurements`. Product select pre-fills measurement as `width × height` when both exist.
 11. **Staff lock** — Staff cannot edit when status is `Sent`, `Approved`, or `Pending Approval`.
-12. **Admin lock** — Admin cannot edit when status is `Sent` or `Approved`; **can** edit when `Pending Approval`.
-13. **Customer visibility** — Portal shows “being prepared” for `Draft` / missing status (`PortalClient`). Line items visible in `OrderDetailClient` even for `Draft` if `signage_options` exist (implementation gap vs intended rule).
-14. **Customer actions** — Approve/decline buttons only when `status === "Sent"`.
-15. **Workflow fork** — `quote_first`: Quotation → Design → Production. `design_first`: Design → Quotation → Production.
-16. **Advance without customer** — Admin can call `adminMarkQuotationApprovedAction` then `adminApproveStageAction` via “Move to Design/Production”.
+12. **Admin lock** — Admin cannot edit when status is `Sent` or `Approved`; **can** edit when `Pending Approval`, `Draft`, or `Rejected`.
+13. **Admin bypass** — Admin can **Push to Customer** directly from `Draft` without staff **Push to Admin** (`Pending Approval`). Staff must use the admin-review path.
+14. **Customer visibility (`PortalClient`)** — Shows “being prepared” only for `Draft` or missing status. **`Pending Approval` line items are visible** to customers before admin sends (no approve buttons until `Sent`).
+15. **Customer visibility (`OrderDetailClient`)** — Renders full `signage_options` for **all** statuses including `Draft`; no “being prepared” gate. Displays stale copy “Valid for 7 days” (`valid_until` column was dropped).
+16. **Customer actions** — Approve/decline buttons only when `status === "Sent"`.
+17. **Workflow fork** — `quote_first`: Quotation → Design → Production. `design_first`: Design → Quotation → Production.
+18. **Advance without customer** — Admin **Move to Design/Production** calls `adminMarkQuotationApprovedAction` (if order not yet `Quotation Approved`) then `adminApproveStageAction`. Enabled when quotation `status` is `Sent` or `Approved`.
+19. **Staff stage advance** — Staff **Move to Design/Production** calls `requestStageAdvancementAction` (sets `stage_status` to `Pending Admin Approval: Quote Approval`); requires quotation `status === "Approved"` **and** order `stage === "Quotation Approved"`.
+20. **WhatsApp on send** — `sendQuotationToCustomer` dispatches `quotation_ready` or `revised_quotation_ready` (only when prior DB status was exactly `Sent`, not when re-sending after `Rejected`). Actor name in timeline is whatever is passed — UI passes hardcoded `"Staff/Admin"`. Templates `quotation_follow_up` and `final_quotation_shared` exist but are **not dispatched** anywhere.
+21. **Confirm before push** — `QuotationConfirmModal` shown before staff Push to Admin or admin Push to Customer.
 
 ## User Permissions
 
@@ -133,6 +138,8 @@ Admin/staff: Move to Design or Production (workflow_type + adminApproveStageActi
 - Approve or decline when `status === "Sent"`.
 - Cannot modify line items or financial fields.
 - Mutations use **direct Supabase client calls** in `PortalClient` / `OrderDetailClient` (not `customerApproveQuotation` server actions).
+- Approve sets `status = "Approved"` only — does **not** set `customer_response` (unlike unused `customerApproveQuotation` which sets `"Yes"`).
+- Decline sets `status = "Rejected"` and `orders.stage = "Quotation Negotiation"`. `PortalClient` also sets `rejection_reason`; `OrderDetailClient` does **not**.
 
 ## Database Tables
 
@@ -230,9 +237,10 @@ Calculations run **client-side** in `QuotationModule`; server persists client-su
 
 ## Tax Rules
 
-- Per-line GST rate (dropdown).
+- Per-line GST rate (dropdown: 0, 5, 12, 18, 28).
 - No IGST/CGST split; single GST total stored in `tax`.
-- `syncGlobalTaxToLines()` exists in `QuotationModule` but is **not wired to any UI control** (dead code path).
+- New lines default GST from `taxPercent` state (derived from saved `tax/subtotal` on load, default 18%).
+- `syncGlobalTaxToLines()` exists in `QuotationModule` but is **not wired to any UI control** (dead code).
 
 ## Server Actions
 
@@ -262,7 +270,9 @@ Related order actions (`orderActions.ts`):
 | `ProductionModule` | reads `quotation.signage_options` | Staff |
 | `OrderWorksheetModal` | embeds `QuotationModule`, `handleQuotationAdvance` | Admin / Staff |
 
-`QuotationModule` subcomponents (same file): `ProductSearch`, `ProductInfoModal`, `QuotationConfirmModal`.
+`QuotationModule` subcomponents (same file): `ProductSearch`, `ProductInfoModal`, `QuotationConfirmModal` (summary before Push to Admin / Push to Customer).
+
+**Portal approve CTA copy:** `PortalClient` respects `workflow_type` (`design_first` → “proceed to Production”). `OrderDetailClient` always says “proceed to Design”.
 
 Footer actions render via portal to `#modal-footer-portal` when mounted.
 
@@ -355,12 +365,16 @@ supabase/migrations/*quotation*
 
 1. **No site visit measurements** — Single “General Signage” section with empty line, or restored `signage_options` only.
 2. **Manual line items** — Description/rate without `productId`.
-3. **Re-send after rejection** — `sendQuotationToCustomer` uses `revised_quotation_ready` WhatsApp template when prior status was `Sent`.
+3. **Re-send after rejection** — Admin edits when `Rejected` (unlocked), re-pushes via Push to Customer. WhatsApp uses `quotation_ready` (not `revised_quotation_ready`) because `wasSentBefore` checks only `status === "Sent"`.
 4. **Admin skip customer** — `adminMarkQuotationApprovedAction` + stage advance.
 5. **Legacy `items` JSON** — Portal `QuotationTab` still renders flat `items[]` if no `signage_options`.
 6. **design_first** — Portal approve CTA text: “proceed to Production” instead of Design.
 7. **Customer name field** — Editable in `QuotationModule` but **not persisted** (display only).
 8. **`order_activity.order_id`** — Portal inserts sometimes use friendly `order_id` string instead of UUID (inconsistent).
+9. **Placeholder quote ID** — Before first save, UI shows `Q-{random}` or `ORD-` derived placeholder; real `QT-NNN` assigned on insert.
+10. **Realtime overwrite** — Staff `QuotationModule` realtime handler replaces `sections` from DB payload without merge; concurrent edits may be overwritten.
+11. **Discount > subtotal** — No client or server validation; tax becomes negative when `discount > subtotal`.
+12. **`OrdersEnhancedDashboard`** — Filters `stage === "quotation"` (lowercase); does not match real `PipelineStage` strings (stale mock dashboard).
 
 ## Future Improvements
 
@@ -379,3 +393,4 @@ supabase/migrations/*quotation*
 | 1.0 | 2026-07-03 | Initial specification |
 | 1.1 | 2026-07-04 | Unified qty/measurement; removed running feet; site measurement units |
 | 2.0 | 2026-07-06 | Full audit rewrite: Pending Approval workflow, shipping, admin/customer paths, actual server actions, security notes, dead code, calculation formulas |
+| 2.1 | 2026-07-06 | Audit pass 2: admin Draft bypass, portal Pending Approval visibility, portal mutation gaps, WhatsApp template rules, stage-advance preconditions, OrderDetailClient gaps |

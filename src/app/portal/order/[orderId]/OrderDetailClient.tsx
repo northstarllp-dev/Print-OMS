@@ -27,6 +27,8 @@ import {
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { scheduleSiteVisitAction, revalidateOrderPathsAction } from "@/features/orders/actions/orderActions";
+import { customerApproveQuotation, customerRequestRevision } from "@/features/quotations/actions/quotationActions";
+import { isQuotationVisibleToCustomer } from "@/features/quotations/utils/lineAmount";
 import { mapSiteVisitFromDb, formatSiteMeasurementLabel } from "@/features/orders/actions/siteVisitMapper";
 import { calcLineAmount, getLineMeasurement, normalizePricingType } from "@/features/quotations/utils/lineAmount";
 import { mapDesignFromDb } from "@/features/designs/actions/designMapper";
@@ -148,27 +150,33 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
   const handleApproveQuote = async () => {
     if (!order) return;
     setUpdatingStatus("quote-approve");
-    const supabase = createClient();
-    const updatedQuote = { ...order.quoteDetails, status: "Approved" };
-    setOrder(prev => ({ ...prev, stage: "Quotation Approved", quoteDetails: updatedQuote }));
-    await supabase.from("order_activity").insert({ order_id: order.orderId || order.id, activity_type: "timeline", actor_name: "System", actor_role: "System", content: "Client approved the quotation details.", metadata: { action: "quotation_approved_by_customer" } });
-    await supabase.from("quotations").update({ status: "Approved" }).eq("order_id", order.id);
-    await supabase.from("orders").update({ stage: "Quotation Approved" }).eq("id", order.id);
-    await revalidateOrderPathsAction(order.id);
-    setUpdatingStatus(null);
+    try {
+      await customerApproveQuotation(order.id, customer.name);
+      const updatedQuote = { ...order.quoteDetails, status: "Approved" };
+      setOrder(prev => ({ ...prev, stage: "Quotation Approved", quoteDetails: updatedQuote }));
+      await revalidateOrderPathsAction(order.id);
+    } catch (err: any) {
+      alert(err?.message || "Failed to approve quotation");
+    } finally {
+      setUpdatingStatus(null);
+    }
   };
 
   const handleDeclineQuote = async () => {
     if (!order || !quoteFeedback.trim()) return;
     setUpdatingStatus("quote-decline");
-    const supabase = createClient();
-    const updatedQuote = { ...order.quoteDetails, status: "Negotiation" };
-    setOrder(prev => ({ ...prev, stage: "Quotation Negotiation", quoteDetails: updatedQuote }));
-    await supabase.from("order_activity").insert({ order_id: order.orderId || order.id, activity_type: "customer", actor_name: customer.name, actor_role: "Customer", content: `Quotation Declined. Feedback: ${quoteFeedback}`, metadata: { action: "quotation_declined" } });
-    await supabase.from("quotations").update({ status: "Rejected" }).eq("order_id", order.id);
-    await supabase.from("orders").update({ stage: "Quotation Negotiation" }).eq("id", order.id);
-    await revalidateOrderPathsAction(order.id);
-    setQuoteFeedback(""); setShowQuoteDeclineInput(false); setUpdatingStatus(null);
+    try {
+      await customerRequestRevision(order.id, customer.name, quoteFeedback);
+      const updatedQuote = { ...order.quoteDetails, status: "Rejected", rejectionReason: quoteFeedback };
+      setOrder(prev => ({ ...prev, stage: "Quotation Negotiation", quoteDetails: updatedQuote }));
+      await revalidateOrderPathsAction(order.id);
+      setQuoteFeedback("");
+      setShowQuoteDeclineInput(false);
+    } catch (err: any) {
+      alert(err?.message || "Failed to submit feedback");
+    } finally {
+      setUpdatingStatus(null);
+    }
   };
 
   useEffect(() => {
@@ -952,6 +960,8 @@ function QuotationTab({
 }: QuotationTabProps) {
   const qd = order.quoteDetails || {};
   const items = qd.items || [];
+  const isDesignFirst = order.workflow_type === "design_first";
+  const quoteVisible = isQuotationVisibleToCustomer(qd.status);
   
   return (
     <div className="space-y-6">
@@ -959,7 +969,7 @@ function QuotationTab({
         <div className="flex items-start justify-between mb-8">
           <div>
             <h2 className="text-2xl font-extrabold text-gray-900">Quotation</h2>
-            <p className="text-sm text-gray-500 mt-2">Valid for 7 days</p>
+            <p className="text-sm text-gray-500 mt-2">Review pricing and approve to proceed.</p>
           </div>
           <span className={`px-3 py-1 rounded-full text-xs font-bold border ${
             qd.status === "Approved" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
@@ -971,7 +981,14 @@ function QuotationTab({
           </span>
         </div>
 
-        {qd.signageOptions && qd.signageOptions.length > 0 ? (
+        {!quoteVisible ? (
+          <div className="flex flex-col items-center justify-center py-16 px-4 bg-slate-50 border border-slate-200 border-dashed rounded-2xl text-center">
+            <h3 className="text-lg font-bold text-slate-800 mb-2">Quotation is being prepared</h3>
+            <p className="text-sm text-slate-500 max-w-sm">
+              Our team is currently working on your quotation. You will be notified once it is ready for your review.
+            </p>
+          </div>
+        ) : qd.signageOptions && qd.signageOptions.length > 0 ? (
           <div className="space-y-6">
             {/* Invoice Header Details */}
             <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 grid grid-cols-2 md:grid-cols-3 gap-4 text-xs mb-6">
@@ -1246,7 +1263,11 @@ function QuotationTab({
           </div>
         ) : qd.status === "Sent" && (
           <div className="mt-8 bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
-            <p className="text-xs font-bold text-[#1E40AF]">Approve this quotation to proceed to Design</p>
+            <p className="text-xs font-bold text-[#1E40AF]">
+              {isDesignFirst
+                ? "Approve this quotation to proceed to Production"
+                : "Approve this quotation to proceed to Design"}
+            </p>
             {showQuoteDeclineInput ? (
               <div className="space-y-2">
                 <textarea rows={3} value={quoteFeedback} onChange={e => setQuoteFeedback(e.target.value)} placeholder="Your revision feedback..." className="w-full p-2.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-red-500 bg-white" />

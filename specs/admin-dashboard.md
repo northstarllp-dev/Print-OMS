@@ -80,7 +80,11 @@ Fields:
 * Internal Notes editor (Budget, Product Type, Customer demands).
 
 ### Pipeline Board (Kanban / List)
-Purpose: High-level view of all orders grouped by stage. Filters for `health` and `assigned_employee`.
+Purpose: High-level view of all orders grouped by stage.
+Filters:
+* `health`: Active, On Hold, Lost, Completed.
+* `assigned_employee`: Staff filtering.
+* **Date Range**: Filter orders created within a specific custom date range.
 
 ## File Structure
 
@@ -124,3 +128,7 @@ Summary: Initial specification for the Admin Dashboard and Control Workflow.
 Version: 1.1
 Date: 2026-07-04
 Summary: Payments are financial tracking only (no stage locks or payment gate modal).
+
+Version: 1.2
+Date: 2026-07-06
+Summary: Added Custom Date Range filter to the Pipeline Board.

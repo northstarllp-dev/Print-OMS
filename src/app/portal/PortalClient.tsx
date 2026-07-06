@@ -26,6 +26,8 @@ import {
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { scheduleSiteVisitAction, revalidateOrderPathsAction } from "@/features/orders/actions/orderActions";
+import { customerApproveQuotation, customerRequestRevision } from "@/features/quotations/actions/quotationActions";
+import { isQuotationVisibleToCustomer } from "@/features/quotations/utils/lineAmount";
 import { mapSiteVisitFromDb, formatSiteMeasurementLabel } from "@/features/orders/actions/siteVisitMapper";
 import { calcLineAmount, getLineMeasurement, normalizePricingType } from "@/features/quotations/utils/lineAmount";
 import { PaymentsTab } from "./components/PaymentsTab";
@@ -511,27 +513,33 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
   const handleApproveQuote = async () => {
     if (!activeOrder) return;
     setUpdatingStatus("quote-approve");
-    const supabase = createClient();
-    const updatedQuote = { ...activeOrder.quoteDetails, status: "Approved" };
-    setOrders(prev => prev.map(o => o.id === activeOrder.id ? { ...o, stage: "Quotation Approved", quoteDetails: updatedQuote } : o));
-    await supabase.from("order_activity").insert({ order_id: activeOrder.orderId || activeOrder.id, activity_type: "timeline", actor_name: "System", actor_role: "System", content: "Client approved the quotation details.", metadata: { action: "quotation_approved_by_customer" } });
-    await supabase.from("quotations").update({ status: "Approved" }).eq("order_id", activeOrder.id);
-    await supabase.from("orders").update({ stage: "Quotation Approved" }).eq("id", activeOrder.id);
-    await revalidateOrderPathsAction(activeOrder.id);
-    setUpdatingStatus(null);
+    try {
+      await customerApproveQuotation(activeOrder.id, customer.name);
+      const updatedQuote = { ...activeOrder.quoteDetails, status: "Approved" };
+      setOrders(prev => prev.map(o => o.id === activeOrder.id ? { ...o, stage: "Quotation Approved", quoteDetails: updatedQuote } : o));
+      await revalidateOrderPathsAction(activeOrder.id);
+    } catch (err: any) {
+      alert(err?.message || "Failed to approve quotation");
+    } finally {
+      setUpdatingStatus(null);
+    }
   };
 
   const handleDeclineQuote = async () => {
     if (!activeOrder || !quoteFeedback.trim()) return;
     setUpdatingStatus("quote-decline");
-    const supabase = createClient();
-    const updatedQuote = { ...activeOrder.quoteDetails, status: "Rejected", rejectionReason: quoteFeedback };
-    setOrders(prev => prev.map(o => o.id === activeOrder.id ? { ...o, stage: "Quotation Negotiation", quoteDetails: updatedQuote } : o));
-    await supabase.from("order_activity").insert({ order_id: activeOrder.orderId || activeOrder.id, activity_type: "customer", actor_name: customer.name, actor_role: "Customer", content: `Quotation Declined. Feedback: ${quoteFeedback}`, metadata: { action: "quotation_declined" } });
-    await supabase.from("quotations").update({ status: "Rejected", rejection_reason: quoteFeedback }).eq("order_id", activeOrder.id);
-    await supabase.from("orders").update({ stage: "Quotation Negotiation" }).eq("id", activeOrder.id);
-    await revalidateOrderPathsAction(activeOrder.id);
-    setQuoteFeedback(""); setShowQuoteDeclineInput(false); setUpdatingStatus(null);
+    try {
+      await customerRequestRevision(activeOrder.id, customer.name, quoteFeedback);
+      const updatedQuote = { ...activeOrder.quoteDetails, status: "Rejected", rejectionReason: quoteFeedback };
+      setOrders(prev => prev.map(o => o.id === activeOrder.id ? { ...o, stage: "Quotation Negotiation", quoteDetails: updatedQuote } : o));
+      await revalidateOrderPathsAction(activeOrder.id);
+      setQuoteFeedback("");
+      setShowQuoteDeclineInput(false);
+    } catch (err: any) {
+      alert(err?.message || "Failed to submit feedback");
+    } finally {
+      setUpdatingStatus(null);
+    }
   };
 
   const handleApproveDesign = async () => {
@@ -1143,7 +1151,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                       <h2 className="text-xl font-black text-[#0b1c30] mb-1">Quotation</h2>
                       <p className="text-sm text-slate-500">Review pricing options, set material preferences, and approve to proceed.</p>
                     </div>
-                    {(!qd.status || qd.status === "Draft") ? (
+                    {!isQuotationVisibleToCustomer(qd.status) ? (
                       <div className="flex flex-col items-center justify-center py-16 px-4 bg-slate-50 border border-slate-200 border-dashed rounded-2xl text-center">
                         <div className="w-16 h-16 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center mb-4">
                           <BarChart3 size={24} />

@@ -2,12 +2,12 @@
 
 import React, { useState, useEffect, useRef, useTransition } from "react";
 import { createPortal } from "react-dom";
-import { 
+import {
   Plus, Trash2, Search, Check, ChevronDown, Info, X,
   ClipboardList, IndianRupee, Loader2, AlertCircle, Package, Save, Sparkles
 } from "lucide-react";
-import { 
-  upsertQuotation, 
+import {
+  upsertQuotation,
   sendQuotationToCustomer
 } from "@/features/quotations/actions/quotationActions";
 import { createClient } from "@/utils/supabase/client";
@@ -101,6 +101,7 @@ interface QuotationModuleProps {
   initialQuotation: Quotation | null;
   siteVisitItems?: SiteVisitItem[];
   currentUserRole?: string;
+  currentUserName?: string;
   /** Advance to Design/Production. */
   onRequestAdvance?: () => void;
 }
@@ -192,12 +193,13 @@ function ProductSearch({
 
   const filtered = query.trim()
     ? products.filter(
-        (p) =>
-          p.is_active &&
-          (p.name.toLowerCase().includes(query.toLowerCase()) ||
-            p.product_id.toLowerCase().includes(query.toLowerCase()) ||
-            (p.category ?? "").toLowerCase().includes(query.toLowerCase()))
-      )
+      (p) =>
+        p.is_active &&
+        p.product_id.startsWith("PRD") &&
+        (p.name.toLowerCase().includes(query.toLowerCase()) ||
+          p.product_id.toLowerCase().includes(query.toLowerCase()) ||
+          (p.category ?? "").toLowerCase().includes(query.toLowerCase()))
+    )
     : [];
 
   return (
@@ -312,6 +314,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
   order,
   isEmployee,
   currentUserRole = "Customer",
+  currentUserName,
   products,
   initialQuotation,
   siteVisitItems = [],
@@ -325,6 +328,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
   const [isMounted, setIsMounted] = useState(false);
   const [selectedProductInfo, setSelectedProductInfo] = useState<Product | null>(null);
   const [pendingAction, setPendingAction] = useState<"admin" | "customer" | null>(null);
+  const isDirtyRef = useRef(false);
 
   useEffect(() => {
     setIsMounted(true);
@@ -354,7 +358,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
               if (newQuote.terms !== undefined) setTerms(newQuote.terms ?? "");
               if (newQuote.shipping !== undefined) setShipping(Number(newQuote.shipping) || 0);
               if (newQuote.rejection_reason !== undefined) setRejectionReason(newQuote.rejection_reason ?? "");
-              if (Array.isArray(newQuote.signage_options)) {
+              if (Array.isArray(newQuote.signage_options) && !isDirtyRef.current) {
                 setSections(newQuote.signage_options);
               }
             }
@@ -369,9 +373,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
   }, [order.id]);
 
   // Core metadata states
-  const [quotationId, setQuotationId] = useState(
-    initialQuotation?.quotation_id ?? (order.orderCode ? order.orderCode.replace("ORD-", "Q") : `Q-${Math.floor(Math.random() * 1000)}`)
-  );
+  const [quotationId, setQuotationId] = useState(initialQuotation?.quotation_id ?? "");
   const [status, setStatus] = useState<"Draft" | "Sent" | "Approved" | "Rejected" | "Pending Approval">(
     initialQuotation?.status ?? "Draft"
   );
@@ -448,7 +450,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
     initialQuotation?.shipping ? Number(initialQuotation.shipping) : 0
   );
 
-  
+
   const [taxPercent, setTaxPercent] = useState<number>(() => {
     if (initialQuotation) {
       const sub = Number(initialQuotation.subtotal) || 0;
@@ -478,20 +480,35 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
     return sum + sec.lines.reduce((s, line) => s + (calcLineAmount(line) * ((line.gstRate || 0) / 100)), 0);
   }, 0);
 
-  const tax = subtotal > 0 ? Math.round(totalGst * (1 - discount / subtotal) * 100) / 100 : 0;
-  const grandTotal = Math.round((subtotal - discount + tax + shipping) * 100) / 100;
+  const effectiveDiscount = Math.min(Math.max(0, discount), subtotal);
+  const tax = subtotal > 0 ? Math.round(totalGst * (1 - effectiveDiscount / subtotal) * 100) / 100 : 0;
+  const grandTotal = Math.round((subtotal - effectiveDiscount + tax + shipping) * 100) / 100;
+
+  useEffect(() => {
+    if (discount > subtotal) {
+      setDiscount(subtotal);
+    }
+  }, [subtotal, discount]);
+
+  function markDirty() {
+    isDirtyRef.current = true;
+  }
+
+  function persistedQuotationId(): string | undefined {
+    return quotationId?.match(/^QT-\d+$/) ? quotationId : undefined;
+  }
 
   // For staff (Employee), lock it if it's sent, approved, or pending approval.
   // For Admin, only lock it if it's Approved or Sent, but NOT when Pending Approval (Admin needs to edit/approve).
   // Note: currentUserRole gives us exact role.
-  const isLocked = currentUserRole === "Admin" 
+  const isLocked = currentUserRole === "Admin"
     ? (status === "Sent" || status === "Approved")
     : (status === "Sent" || status === "Approved" || status === "Pending Approval");
   const orderStage = order.stage || "";
 
   // ── Sync Global Tax to Line Items ──
   const syncGlobalTaxToLines = (newTaxRate: number) => {
-    setSections(prev => 
+    setSections(prev =>
       prev.map(sec => ({
         ...sec,
         lines: sec.lines.map(line => ({ ...line, gstRate: newTaxRate }))
@@ -501,11 +518,13 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
 
   // ── Section Actions ──
   function updateSection(id: string, updater: (sec: SignageSection) => SignageSection) {
+    markDirty();
     setSections((prev) => prev.map((s) => (s.siteVisitItemId === id ? updater(s) : s)));
   }
 
   function removeSection(sectionId: string) {
     if (confirm("Are you sure you want to remove this entire signage section?")) {
+      markDirty();
       setSections((prev) => prev.filter((s) => s.siteVisitItemId !== sectionId));
     }
   }
@@ -566,19 +585,20 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
     setSaveMsg(null);
     startTransition(async () => {
       try {
-        await upsertQuotation(order.id, {
-          quotation_id: quotationId || undefined,
+        const saved = await upsertQuotation(order.id, {
+          quotation_id: persistedQuotationId(),
           signage_options: sections,
           subtotal,
-          discount,
+          discount: effectiveDiscount,
           tax,
           grand_total: grandTotal,
           status,
           notes,
           terms,
-
           shipping,
         });
+        if (saved.quotation_id) setQuotationId(saved.quotation_id);
+        isDirtyRef.current = false;
         setSaveMsg({ text: "Quotation saved ✓", ok: true });
         setTimeout(() => setSaveMsg(null), 3000);
       } catch (err: any) {
@@ -590,21 +610,23 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
   const handleSendToCustomer = async () => {
     setSendingToCustomer(true);
     try {
+      const actorName = currentUserName || currentUserRole || "Admin";
       const saved = await upsertQuotation(order.id, {
-        quotation_id: quotationId || undefined,
+        quotation_id: persistedQuotationId(),
         signage_options: sections,
         subtotal,
-        discount,
+        discount: effectiveDiscount,
         tax,
         grand_total: grandTotal,
         status: "Sent",
         notes,
         terms,
-
         shipping,
       });
-      await sendQuotationToCustomer(saved.id, "Staff/Admin");
+      if (saved.quotation_id) setQuotationId(saved.quotation_id);
+      await sendQuotationToCustomer(saved.id, actorName);
       setStatus("Sent");
+      isDirtyRef.current = false;
       setSaveMsg({ text: "Quotation sent to customer successfully!", ok: true });
       setTimeout(() => setSaveMsg(null), 4000);
     } catch (err: any) {
@@ -613,24 +635,25 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
       setSendingToCustomer(false);
     }
   };
-  
+
   const handlePushToAdmin = async () => {
     setPushingToAdmin(true);
     try {
-      await upsertQuotation(order.id, {
-        quotation_id: quotationId || undefined,
+      const saved = await upsertQuotation(order.id, {
+        quotation_id: persistedQuotationId(),
         signage_options: sections,
         subtotal,
-        discount,
+        discount: effectiveDiscount,
         tax,
         grand_total: grandTotal,
         status: "Pending Approval",
         notes,
         terms,
-
         shipping,
       });
+      if (saved.quotation_id) setQuotationId(saved.quotation_id);
       setStatus("Pending Approval");
+      isDirtyRef.current = false;
       setSaveMsg({ text: "Quotation submitted to Admin for approval!", ok: true });
       setTimeout(() => setSaveMsg(null), 4000);
     } catch (err: any) {
@@ -643,20 +666,21 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
   const handleRejectToDraft = async () => {
     startTransition(async () => {
       try {
-        await upsertQuotation(order.id, {
-          quotation_id: quotationId || undefined,
+        const saved = await upsertQuotation(order.id, {
+          quotation_id: persistedQuotationId(),
           signage_options: sections,
           subtotal,
-          discount,
+          discount: effectiveDiscount,
           tax,
           grand_total: grandTotal,
           status: "Draft",
           notes,
           terms,
-
           shipping,
         });
+        if (saved.quotation_id) setQuotationId(saved.quotation_id);
         setStatus("Draft");
+        isDirtyRef.current = false;
         setSaveMsg({ text: "Quotation returned to Draft status.", ok: true });
         setTimeout(() => setSaveMsg(null), 4000);
       } catch (err: any) {
@@ -680,7 +704,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
             <span className="text-[10px] text-slate-400 font-bold uppercase">Quote No:</span>
             <input
               type="text"
-              value={quotationId}
+              value={quotationId || "—"}
               readOnly={true}
               className="text-xs font-mono text-slate-700 bg-slate-100/50 border border-slate-200 cursor-not-allowed rounded px-2 py-1"
               style={{ width: "90px" }}
@@ -689,26 +713,24 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
         </div>
         <div className="flex items-center gap-3">
 
-          <span className={`text-[10px] px-2.5 py-1 rounded-full font-black uppercase border ${
-            status === "Approved" ? "bg-emerald-50 border-emerald-200 text-emerald-700" :
-            status === "Sent" ? "bg-blue-50 border-blue-200 text-blue-700" :
-            status === "Rejected" ? "bg-rose-50 border-rose-200 text-rose-700" :
-            "bg-slate-100 border-slate-200 text-slate-600"
-          }`}>
+          <span className={`text-[10px] px-2.5 py-1 rounded-full font-black uppercase border ${status === "Approved" ? "bg-emerald-50 border-emerald-200 text-emerald-700" :
+              status === "Sent" ? "bg-blue-50 border-blue-200 text-blue-700" :
+                status === "Rejected" ? "bg-rose-50 border-rose-200 text-rose-700" :
+                  "bg-slate-100 border-slate-200 text-slate-600"
+            }`}>
             {status}
           </span>
         </div>
       </div>
 
       {status === "Pending Approval" && (
-        <div className={`p-4 rounded-2xl border flex items-center gap-3 shadow-sm ${
-          isEmployee 
-            ? "bg-blue-50 border-blue-200 text-blue-800" 
+        <div className={`p-4 rounded-2xl border flex items-center gap-3 shadow-sm ${isEmployee
+            ? "bg-blue-50 border-blue-200 text-blue-800"
             : "bg-amber-50 border-amber-200 text-amber-800"
-        }`}>
+          }`}>
           <Info size={16} className={isEmployee ? "text-blue-600" : "text-amber-600"} />
           <div className="text-xs font-semibold">
-            {isEmployee 
+            {isEmployee
               ? "Submitted for Approval: This quotation is pending review by Admin and is locked for editing."
               : "Pending Review: This quotation was submitted by staff. Please review the details, then approve and send it to the customer."}
           </div>
@@ -826,194 +848,194 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                           position: "relative",
                           zIndex: activeRowId === line.id ? 50 : 1,
                         }}
-                      onFocus={() => setActiveRowId(line.id)}
-                      onBlur={(e) => {
-                        if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-                          setActiveRowId(null);
-                        }
-                      }}
-                    >
-                      {/* Product Search / Description */}
-                      <div style={{ display: "flex", alignItems: "center", gap: "6px", width: "100%" }}>
-                        <ProductSearch
-                          value={line.description}
-                          products={products}
-                          disabled={isLocked}
-                          onSelect={(p) => selectProduct(section.siteVisitItemId, line.id, p)}
-                          onChange={(val) =>
-                            updateLine(section.siteVisitItemId, line.id, {
-                              description: val,
-                              productId: undefined,
-                            })
-                          }
-                        />
-                        {line.productId && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const prod = products.find((p) => p.id === line.productId);
-                              if (prod) setSelectedProductInfo(prod);
-                            }}
-                            style={{
-                              padding: "4px",
-                              color: "#2563eb",
-                              background: "none",
-                              border: "none",
-                              cursor: "pointer",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              borderRadius: "4px",
-                              flexShrink: 0
-                            }}
-                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#eff6ff"}
-                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
-                            title="Product Details"
-                          >
-                            <Info size={14} style={{ strokeWidth: 2.5 }} />
-                          </button>
-                        )}
-                      </div>
-
-                      {/* Unit Type Selector */}
-                      <select
-                        value={normalizePricingType(line.pricingType)}
-                        disabled={isLocked}
-                        onChange={(e) => {
-                          const newType = e.target.value as PricingType;
-                          const measurement = getLineMeasurement(line) || 1;
-                          const patch: Partial<LineItem> = {
-                            pricingType: newType,
-                            unit: newType === "per_sqft" ? "sqft" : "nos",
-                            quantity: measurement,
-                            totalSqFt: measurement,
-                          };
-
-                          if (line.productId) {
-                            const p = products.find((prod) => prod.id === line.productId);
-                            if (p) {
-                              patch.unitPrice = getProductPriceForType(p, newType);
-                            }
-                          }
-                          updateLine(section.siteVisitItemId, line.id, patch);
-                        }}
-                        className={`${inputCls} w-full py-1.5 px-2 bg-white`}
-                      >
-                        <option value="per_unit">Per Unit</option>
-                        <option value="per_sqft">Per Sq.Ft</option>
-                      </select>
-
-                      {/* Qty / Measurement — same field for unit and sqft */}
-                      <input
-                        type="number"
-                        min="0.01"
-                        step="0.01"
-                        value={measurement === 0 ? "" : measurement}
-                        disabled={isLocked}
-                        onFocus={(e) => e.target.select()}
-                        onBlur={() => {
-                          if (getLineMeasurement(line) <= 0) {
-                            setLineMeasurement(section.siteVisitItemId, line.id, 1);
+                        onFocus={() => setActiveRowId(line.id)}
+                        onBlur={(e) => {
+                          if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                            setActiveRowId(null);
                           }
                         }}
-                        onChange={(e) =>
-                          setLineMeasurement(
-                            section.siteVisitItemId,
-                            line.id,
-                            parseFloat(e.target.value) || 0
-                          )
-                        }
-                        className={`${inputCls} w-full py-1.5 text-center font-mono`}
-                        placeholder="Qty / Meas."
-                      />
-
-                      {/* Rate */}
-                      <div className="relative">
-                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 font-bold">₹</span>
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={line.unitPrice === 0 ? "" : line.unitPrice}
-                          disabled={isLocked}
-                          onFocus={(e) => e.target.select()}
-                          onChange={(e) =>
-                            updateLine(section.siteVisitItemId, line.id, {
-                              unitPrice: parseFloat(e.target.value) || 0,
-                            })
-                          }
-                          className={`${inputCls} w-full pl-5 pr-2 py-1.5 text-right font-mono`}
-                          placeholder="0.00"
-                        />
-                      </div>
-
-                      {/* GST */}
-                      <select
-                        value={line.gstRate}
-                        disabled={isLocked}
-                        onChange={(e) =>
-                          updateLine(section.siteVisitItemId, line.id, {
-                            gstRate: Number(e.target.value),
-                          })
-                        }
-                        className={`${inputCls} w-full py-1.5 text-center bg-white`}
                       >
-                        {GST_OPTIONS.map((g) => (
-                          <option key={g} value={g}>{g}%</option>
-                        ))}
-                      </select>
-
-                      {/* Line Amount */}
-                      <div className="text-right text-xs font-black font-mono text-slate-800 whitespace-nowrap">
-                        ₹{lineAmt.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </div>
-
-                      {/* Delete button */}
-                      <button
-                        type="button"
-                        disabled={isLocked}
-                        onClick={() => removeLine(section.siteVisitItemId, line.id)}
-                        className="text-slate-300 hover:text-rose-500 transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-
-                    {/* Note section */}
-                    <div className="px-4 pb-3 flex flex-col gap-2">
-                      {(line.notes !== undefined && line.notes !== null) ? (
-                        <div className="relative">
-                          <textarea
-                            value={line.notes}
-                            onChange={(e) => updateLine(section.siteVisitItemId, line.id, { notes: e.target.value })}
-                            placeholder="Add item notes..."
+                        {/* Product Search / Description */}
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px", width: "100%" }}>
+                          <ProductSearch
+                            value={line.description}
+                            products={products}
                             disabled={isLocked}
-                            className="w-full text-xs p-2 pr-8 border border-slate-200 rounded-lg outline-none focus:border-blue-500 min-h-[60px] text-slate-700 resize-y"
+                            onSelect={(p) => selectProduct(section.siteVisitItemId, line.id, p)}
+                            onChange={(val) =>
+                              updateLine(section.siteVisitItemId, line.id, {
+                                description: val,
+                                productId: undefined,
+                              })
+                            }
                           />
-                          {!isLocked && (
+                          {line.productId && (
                             <button
                               type="button"
-                              onClick={() => updateLine(section.siteVisitItemId, line.id, { notes: undefined })}
-                              className="absolute top-2 right-2 text-slate-400 hover:text-rose-500 bg-white rounded-md transition-colors"
-                              title="Remove notes"
+                              onClick={() => {
+                                const prod = products.find((p) => p.id === line.productId);
+                                if (prod) setSelectedProductInfo(prod);
+                              }}
+                              style={{
+                                padding: "4px",
+                                color: "#2563eb",
+                                background: "none",
+                                border: "none",
+                                cursor: "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                borderRadius: "4px",
+                                flexShrink: 0
+                              }}
+                              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#eff6ff"}
+                              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
+                              title="Product Details"
                             >
-                              <X size={14} />
+                              <Info size={14} style={{ strokeWidth: 2.5 }} />
                             </button>
                           )}
                         </div>
-                      ) : (
-                        !isLocked && (
-                          <button
-                            type="button"
-                            onClick={() => updateLine(section.siteVisitItemId, line.id, { notes: "" })}
-                            className="text-xs text-blue-600 font-semibold flex items-center gap-1 hover:text-blue-700 self-start"
-                          >
-                            <Plus size={12} /> Add Note
-                          </button>
-                        )
-                      )}
+
+                        {/* Unit Type Selector */}
+                        <select
+                          value={normalizePricingType(line.pricingType)}
+                          disabled={isLocked}
+                          onChange={(e) => {
+                            const newType = e.target.value as PricingType;
+                            const measurement = getLineMeasurement(line) || 1;
+                            const patch: Partial<LineItem> = {
+                              pricingType: newType,
+                              unit: newType === "per_sqft" ? "sqft" : "nos",
+                              quantity: measurement,
+                              totalSqFt: measurement,
+                            };
+
+                            if (line.productId) {
+                              const p = products.find((prod) => prod.id === line.productId);
+                              if (p) {
+                                patch.unitPrice = getProductPriceForType(p, newType);
+                              }
+                            }
+                            updateLine(section.siteVisitItemId, line.id, patch);
+                          }}
+                          className={`${inputCls} w-full py-1.5 px-2 bg-white`}
+                        >
+                          <option value="per_unit">Per Unit</option>
+                          <option value="per_sqft">Per Sq.Ft</option>
+                        </select>
+
+                        {/* Qty / Measurement — same field for unit and sqft */}
+                        <input
+                          type="number"
+                          min="0.01"
+                          step="0.01"
+                          value={measurement === 0 ? "" : measurement}
+                          disabled={isLocked}
+                          onFocus={(e) => e.target.select()}
+                          onBlur={() => {
+                            if (getLineMeasurement(line) <= 0) {
+                              setLineMeasurement(section.siteVisitItemId, line.id, 1);
+                            }
+                          }}
+                          onChange={(e) =>
+                            setLineMeasurement(
+                              section.siteVisitItemId,
+                              line.id,
+                              parseFloat(e.target.value) || 0
+                            )
+                          }
+                          className={`${inputCls} w-full py-1.5 text-center font-mono`}
+                          placeholder="Qty / Meas."
+                        />
+
+                        {/* Rate */}
+                        <div className="relative">
+                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 font-bold">₹</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={line.unitPrice === 0 ? "" : line.unitPrice}
+                            disabled={isLocked}
+                            onFocus={(e) => e.target.select()}
+                            onChange={(e) =>
+                              updateLine(section.siteVisitItemId, line.id, {
+                                unitPrice: parseFloat(e.target.value) || 0,
+                              })
+                            }
+                            className={`${inputCls} w-full pl-5 pr-2 py-1.5 text-right font-mono`}
+                            placeholder="0.00"
+                          />
+                        </div>
+
+                        {/* GST */}
+                        <select
+                          value={line.gstRate}
+                          disabled={isLocked}
+                          onChange={(e) =>
+                            updateLine(section.siteVisitItemId, line.id, {
+                              gstRate: Number(e.target.value),
+                            })
+                          }
+                          className={`${inputCls} w-full py-1.5 text-center bg-white`}
+                        >
+                          {GST_OPTIONS.map((g) => (
+                            <option key={g} value={g}>{g}%</option>
+                          ))}
+                        </select>
+
+                        {/* Line Amount */}
+                        <div className="text-right text-xs font-black font-mono text-slate-800 whitespace-nowrap">
+                          ₹{lineAmt.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+
+                        {/* Delete button */}
+                        <button
+                          type="button"
+                          disabled={isLocked}
+                          onClick={() => removeLine(section.siteVisitItemId, line.id)}
+                          className="text-slate-300 hover:text-rose-500 transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+
+                      {/* Note section */}
+                      <div className="px-4 pb-3 flex flex-col gap-2">
+                        {(line.notes !== undefined && line.notes !== null) ? (
+                          <div className="relative">
+                            <textarea
+                              value={line.notes}
+                              onChange={(e) => updateLine(section.siteVisitItemId, line.id, { notes: e.target.value })}
+                              placeholder="Add item notes..."
+                              disabled={isLocked}
+                              className="w-full text-xs p-2 pr-8 border border-slate-200 rounded-lg outline-none focus:border-blue-500 min-h-[60px] text-slate-700 resize-y"
+                            />
+                            {!isLocked && (
+                              <button
+                                type="button"
+                                onClick={() => updateLine(section.siteVisitItemId, line.id, { notes: undefined })}
+                                className="absolute top-2 right-2 text-slate-400 hover:text-rose-500 bg-white rounded-md transition-colors"
+                                title="Remove notes"
+                              >
+                                <X size={14} />
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          !isLocked && (
+                            <button
+                              type="button"
+                              onClick={() => updateLine(section.siteVisitItemId, line.id, { notes: "" })}
+                              className="text-xs text-blue-600 font-semibold flex items-center gap-1 hover:text-blue-700 self-start"
+                            >
+                              <Plus size={12} /> Add Note
+                            </button>
+                          )
+                        )}
+                      </div>
                     </div>
-                  </div>
                   );
                 })}
               </div>
@@ -1049,7 +1071,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
             <textarea
               value={notes}
               disabled={isLocked}
-              onChange={(e) => setNotes(e.target.value)}
+              onChange={(e) => { markDirty(); setNotes(e.target.value); }}
               rows={3}
               placeholder="Internal notes or notes for customer..."
               className={`${inputCls} w-full px-3.5 py-2.5 resize-none bg-white font-medium`}
@@ -1064,7 +1086,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
             <textarea
               value={terms}
               disabled={isLocked}
-              onChange={(e) => setTerms(e.target.value)}
+              onChange={(e) => { markDirty(); setTerms(e.target.value); }}
               rows={3}
               placeholder="Terms and conditions - late fees, payment methods, delivery schedule"
               className={`${inputCls} w-full px-3.5 py-2.5 resize-none bg-white font-medium`}
@@ -1136,7 +1158,11 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                     value={discount === 0 ? "" : discount}
                     disabled={isLocked && isEmployee}
                     onFocus={(e) => e.target.select()}
-                    onChange={(e) => setDiscount(parseFloat(e.target.value) || 0)}
+                    onChange={(e) => {
+                      const val = parseFloat(e.target.value) || 0;
+                      markDirty();
+                      setDiscount(Math.min(Math.max(0, val), subtotal));
+                    }}
                     className={`${inputCls} w-full pl-7 pr-3 py-2 font-mono font-bold bg-white`}
                     placeholder="0.00"
                   />
@@ -1167,7 +1193,10 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                     value={shipping === 0 ? "" : shipping}
                     disabled={isLocked}
                     onFocus={(e) => e.target.select()}
-                    onChange={(e) => setShipping(parseFloat(e.target.value) || 0)}
+                    onChange={(e) => {
+                      markDirty();
+                      setShipping(parseFloat(e.target.value) || 0);
+                    }}
                     className={`${inputCls} w-full pl-7 pr-3 py-2 font-mono font-bold bg-white`}
                     placeholder="0.00"
                   />
@@ -1189,9 +1218,8 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
 
       {/* Save Msg Notification */}
       {saveMsg && (
-        <div className={`p-3.5 rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm border ${
-          saveMsg.ok ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "bg-rose-50 border-rose-200 text-rose-700"
-        }`}>
+        <div className={`p-3.5 rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm border ${saveMsg.ok ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "bg-rose-50 border-rose-200 text-rose-700"
+          }`}>
           {saveMsg.ok ? <Check size={14} /> : <AlertCircle size={14} />}
           {saveMsg.text}
         </div>
@@ -1200,7 +1228,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
       {/* Action Buttons Row */}
       {(() => {
         const portalTarget = isMounted ? document.getElementById("modal-footer-portal") : null;
-        
+
         const isEmployeeRole = currentUserRole === "Employee";
         const isAdmin = currentUserRole === "Admin";
         const isDesignFirst = order.workflow_type === "design_first";
@@ -1219,7 +1247,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
           (isAdmin
             ? status === "Sent" || status === "Approved"
             : status === "Approved" && quoteStage === "Quotation Approved");
-        
+
         const actionButtons = (
           <>
             {!isLocked ? (
@@ -1233,7 +1261,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                   {isPending ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
                   Save Draft
                 </button>
-                
+
                 {isEmployeeRole && (
                   <button
                     type="button"
@@ -1244,7 +1272,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                     <Check size={14} /> Push to Admin
                   </button>
                 )}
-                
+
                 {isAdmin && status === "Pending Approval" && (
                   <button
                     type="button"
@@ -1255,7 +1283,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                     <AlertCircle size={14} /> Request Changes
                   </button>
                 )}
-                
+
                 {isAdmin && (
                   <button
                     type="button"
@@ -1310,7 +1338,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
         <QuotationConfirmModal
           actionType={pendingAction}
           subtotal={subtotal}
-          discount={discount}
+          discount={effectiveDiscount}
           tax={tax}
           grandTotal={grandTotal}
           totalItems={sections.reduce((acc, sec) => acc + sec.lines.length, 0)}
@@ -1348,7 +1376,7 @@ function ProductInfoModal({ product, onClose }: { product: Product; onClose: () 
   const images = product.images && product.images.length > 0 ? product.images : [];
 
   return (
-    <div 
+    <div
       style={{
         position: "fixed",
         inset: 0,
@@ -1361,7 +1389,7 @@ function ProductInfoModal({ product, onClose }: { product: Product; onClose: () 
         padding: "16px",
       }}
     >
-      <div 
+      <div
         style={{
           backgroundColor: "white",
           borderRadius: "24px",
@@ -1376,7 +1404,7 @@ function ProductInfoModal({ product, onClose }: { product: Product; onClose: () 
         }}
       >
         {/* Header */}
-        <div 
+        <div
           style={{
             padding: "16px 24px",
             borderBottom: "1px solid #f1f5f9",
@@ -1394,8 +1422,8 @@ function ProductInfoModal({ product, onClose }: { product: Product; onClose: () 
               {product.product_id} • {product.category || "General"}
             </span>
           </div>
-          <button 
-            onClick={onClose} 
+          <button
+            onClick={onClose}
             style={{
               padding: "6px",
               backgroundColor: "transparent",
@@ -1420,7 +1448,7 @@ function ProductInfoModal({ product, onClose }: { product: Product; onClose: () 
           {/* Images Section */}
           {images.length > 0 ? (
             <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-              <div 
+              <div
                 style={{
                   aspectRatio: "16/9",
                   backgroundColor: "#f8fafc",
@@ -1466,7 +1494,7 @@ function ProductInfoModal({ product, onClose }: { product: Product; onClose: () 
               )}
             </div>
           ) : (
-            <div 
+            <div
               style={{
                 aspectRatio: "16/9",
                 backgroundColor: "#f8fafc",
@@ -1486,7 +1514,7 @@ function ProductInfoModal({ product, onClose }: { product: Product; onClose: () 
           )}
 
           {/* Pricing Info */}
-          <div 
+          <div
             style={{
               backgroundColor: "rgba(219, 234, 254, 0.3)",
               border: "1px solid #dbeafe",
@@ -1524,7 +1552,7 @@ function ProductInfoModal({ product, onClose }: { product: Product; onClose: () 
         </div>
 
         {/* Footer */}
-        <div 
+        <div
           style={{
             padding: "12px 24px",
             borderTop: "1px solid #f1f5f9",
@@ -1577,10 +1605,10 @@ function QuotationConfirmModal({
   tax: number;
   grandTotal: number;
   totalItems: number;
-  sectionSummaries: { 
-    id: string; 
-    name: string; 
-    linesCount: number; 
+  sectionSummaries: {
+    id: string;
+    name: string;
+    linesCount: number;
     amount: number;
     lines: { id: string; description: string; amount: number; }[];
   }[];
