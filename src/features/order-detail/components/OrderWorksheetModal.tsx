@@ -247,6 +247,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   const [orderTab, setOrderTab] = useState<"all" | "active" | "pending">("all");
 
   const [messages, setMessages] = useState<any[]>([]);
+  const [quotationRealtimeRow, setQuotationRealtimeRow] = useState<Record<string, unknown> | null>(null);
 
   useEffect(() => { setOrder(initialOrder); }, [initialOrder]);
   useEffect(() => { setActiveStepTab(stageToTabIndex(order.stage, order.workflow_type)); }, [order.stage, order.workflow_type]);
@@ -344,6 +345,16 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
               };
             });
           }
+        }
+      })
+      .on("postgres_changes", {
+        event: "*",
+        schema: "public",
+        table: "quotations",
+        filter: `order_id=eq.${order.id}`,
+      }, (payload) => {
+        if (payload.eventType === "INSERT" || payload.eventType === "UPDATE") {
+          setQuotationRealtimeRow(payload.new as Record<string, unknown>);
         }
       })
       .subscribe();
@@ -790,6 +801,8 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           initialQuotation={initialQuotation}
           siteVisitItems={siteVisitItems}
           onRequestAdvance={handleQuotationAdvance}
+          externalRealtime
+          realtimeQuotation={quotationRealtimeRow}
         />
       ),
       [designTab]: <DesignModule order={order} isEmployee={isStaffOrAdmin} updateDesignDetails={updateDesignDetails} siteVisitItems={siteVisitItems} />,

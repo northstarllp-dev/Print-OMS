@@ -28,7 +28,7 @@ export function normalizePricingType(type?: string | null): PricingType {
 }
 
 /** Normalize a saved line: drop running-ft, unify qty/measurement into quantity. */
-/** Customer-facing quotation statuses (portal + anon RLS). */
+/** Customer-facing quotation statuses (portal reads). */
 export const CUSTOMER_VISIBLE_QUOTATION_STATUSES = ["Sent", "Approved", "Rejected"] as const;
 
 export function isQuotationVisibleToCustomer(status?: string | null): boolean {

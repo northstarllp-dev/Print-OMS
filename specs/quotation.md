@@ -117,7 +117,7 @@ Admin/staff: Move to Design or Production (workflow_type + adminApproveStageActi
 17. **Workflow fork** — `quote_first`: Quotation → Design → Production. `design_first`: Design → Quotation → Production.
 18. **Advance without customer** — Admin **Move to Design/Production** calls `adminMarkQuotationApprovedAction` (if order not yet `Quotation Approved`) then `adminApproveStageAction`. Enabled when quotation `status` is `Sent` or `Approved`.
 19. **Staff stage advance** — Staff **Move to Design/Production** calls `requestStageAdvancementAction` (sets `stage_status` to `Pending Admin Approval: Quote Approval`); requires quotation `status === "Approved"` **and** order `stage === "Quotation Approved"`.
-20. **WhatsApp on send** — `sendQuotationToCustomer` dispatches `quotation_ready` or `revised_quotation_ready` (only when prior DB status was exactly `Sent`, not when re-sending after `Rejected`). Actor name in timeline is whatever is passed — UI passes hardcoded `"Staff/Admin"`. Templates `quotation_follow_up` and `final_quotation_shared` exist but are **not dispatched** anywhere.
+20. **WhatsApp on send** — `sendQuotationToCustomer` dispatches `quotation_ready` or `revised_quotation_ready` (when prior status was `Sent` or `Rejected`). Actor name comes from `currentUserName` in `QuotationModule`.
 21. **Confirm before push** — `QuotationConfirmModal` shown before staff Push to Admin or admin Push to Customer.
 
 ## User Permissions
@@ -208,8 +208,7 @@ Admin/staff: Move to Design or Production (workflow_type + adminApproveStageActi
 
 ## Quotation Data Structure (TypeScript)
 
-- `QuoteItem` / `QuoteDetails` in `src/types/index.ts` — legacy flat `items[]` shape; portal still supports fallback render.
-- Runtime shape in UI: `SignageSection[]` inside `signage_options`.
+- Runtime shape in UI: `SignageSection[]` inside `signage_options` (`QuotationModule`, portal clients).
 
 ## Pricing Logic
 
@@ -240,20 +239,19 @@ Calculations run **client-side** in `QuotationModule`; server persists client-su
 - Per-line GST rate (dropdown: 0, 5, 12, 18, 28).
 - No IGST/CGST split; single GST total stored in `tax`.
 - New lines default GST from `taxPercent` state (derived from saved `tax/subtotal` on load, default 18%).
-- `syncGlobalTaxToLines()` exists in `QuotationModule` but is **not wired to any UI control** (dead code).
 
 ## Server Actions
 
 | Action | File | Auth | Behavior |
 |--------|------|------|----------|
-| `getQuotationByOrderId` | `quotationActions.ts` | Session | Read single row |
-| `getAllQuotations` | `quotationActions.ts` | Session | List all (**unused** in app) |
-| `getSiteVisitMeasurementsForOrder` | `quotationActions.ts` | Session | Maps measurements to camelCase |
+| `getQuotationByOrderId` | `quotationActions.ts` | Authenticated staff | Read single row |
+| `getCustomerVisibleQuotationForOrder` | `quotationActions.ts` | Portal SSR (caller validates token) | Customer-visible quotation only |
+| `getSiteVisitMeasurementsForOrder` | `quotationActions.ts` | Authenticated staff | Maps measurements to camelCase |
 | `upsertQuotation` | `quotationActions.ts` | `assertStageEditPermission("quotation")` | Insert/update by `order_id` |
 | `sendQuotationToCustomer` | `quotationActions.ts` | Stage edit | `status=Sent`, `orders.stage=Quotation Sent`, activity, WhatsApp |
 | `adminMarkQuotationApprovedAction` | `quotationActions.ts` | Stage edit | Force `Approved` + `Quotation Approved` |
-| `customerApproveQuotation` | `quotationActions.ts` | None enforced | **Unused** — portal uses direct Supabase |
-| `customerRequestRevision` | `quotationActions.ts` | None enforced | **Unused** — portal uses direct Supabase |
+| `customerApproveQuotation` | `quotationActions.ts` | Portal session + service role | Customer approve when `status=Sent` |
+| `customerRequestRevision` | `quotationActions.ts` | Portal session + service role | Customer decline when `status=Sent` |
 
 Related order actions (`orderActions.ts`):
 - `requestStageAdvancementAction` — sets `stage_status` for admin approval queue.
@@ -379,12 +377,9 @@ supabase/migrations/*quotation*
 ## Future Improvements
 
 - Server-side total recomputation and validation on `upsertQuotation`.
-- Replace portal direct Supabase writes with `assertStageEditOrPortalOrder` server actions.
-- Tighten RLS: scope anon quotation UPDATE to portal-validated orders only.
-- Remove dead code: `getAllQuotations`, `customerApproveQuotation`, `customerRequestRevision`, `syncGlobalTaxToLines`.
-- Unify decline path to always set `rejection_reason`.
-- PDF export of quotation document.
-- Hide draft quotation line items in `OrderDetailClient` (match `PortalClient`).
+- Tighten RLS: scope anon quotation access — **done** (anon policies removed; portal uses service role).
+- Unify decline path to always set `rejection_reason` — **done**.
+- Hide draft quotation line items in `OrderDetailClient` — **done**.
 
 ## Change Log
 

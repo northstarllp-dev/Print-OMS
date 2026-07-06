@@ -8,6 +8,7 @@ import { checkRateLimit } from "@/utils/rate-limiter";
 import { Info, Clock, CheckCircle, Check, Loader2, PlayCircle, MapPin, Search } from "lucide-react";
 import { mapSiteVisitFromDb, mapSiteVisitMeasurementFromDb } from "@/features/orders/actions/siteVisitMapper";
 import { mapDesignFromDb } from "@/features/designs/actions/designMapper";
+import { getCustomerVisibleQuotationForOrder } from "@/features/quotations/actions/quotationActions";
 import { OrderDetailClient } from "./OrderDetailClient";
 import React from "react";
 
@@ -118,17 +119,13 @@ export default async function OrderDetailPage({
     );
   }
 
-  // Fetch quotation for this order
-  const { data: quotationData } = await supabase
-    .from("quotations")
-    .select("*")
-    .eq("order_id", orderData.id)
-    .maybeSingle();
+  // Fetch quotation for this order (service role; customer-visible statuses only)
+  const quotationData = await getCustomerVisibleQuotationForOrder(orderData.id);
 
   const quoteDetails = quotationData ? {
     id: quotationData.id,
     quotationId: quotationData.quotation_id,
-    items: quotationData.items || [],
+    items: [],
     signageOptions: quotationData.signage_options || [],
     discount: Number(quotationData.discount || 0),
     shipping: Number(quotationData.shipping || 0),

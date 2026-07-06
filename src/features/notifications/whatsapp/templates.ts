@@ -5,8 +5,6 @@ export type WhatsAppTemplateKey =
   | "site_visit_completed"
   | "quotation_ready"
   | "revised_quotation_ready"
-  | "quotation_follow_up"
-  | "final_quotation_shared"
   | "design_resources_required"
   | "design_ready_for_review"
   | "design_revision_uploaded"
@@ -38,8 +36,6 @@ export const WHATSAPP_TEMPLATES: Record<WhatsAppTemplateKey, WhatsAppTemplateDef
   site_visit_completed: { metaName: "printec_site_visit_completed", language: "en", bodyParamCount: 1, hasUrlButton: true },
   quotation_ready: { metaName: "printec_quotation_ready", language: "en", bodyParamCount: 1, hasUrlButton: true },
   revised_quotation_ready: { metaName: "printec_revised_quotation", language: "en", bodyParamCount: 1, hasUrlButton: true },
-  quotation_follow_up: { metaName: "printec_quotation_follow_up", language: "en", bodyParamCount: 1, hasUrlButton: true },
-  final_quotation_shared: { metaName: "printec_final_quotation", language: "en", bodyParamCount: 1, hasUrlButton: true },
   design_resources_required: { metaName: "printec_design_resources", language: "en", bodyParamCount: 1, hasUrlButton: true },
   design_ready_for_review: { metaName: "printec_design_ready", language: "en", bodyParamCount: 1, hasUrlButton: true },
   design_revision_uploaded: { metaName: "printec_design_revision", language: "en", bodyParamCount: 1, hasUrlButton: true },

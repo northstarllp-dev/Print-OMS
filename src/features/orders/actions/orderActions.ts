@@ -13,6 +13,7 @@ import {
 } from "@/features/notifications/actions/dispatchNotification";
 import { getRequestBaseUrl } from "@/features/notifications/whatsapp/requestBaseUrl";
 import { assertStageEditPermission } from "@/features/orders/workspace/shared/serverPermissions";
+import { revalidateOrderDetailPaths } from "@/features/orders/actions/revalidateOrderPaths";
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -573,19 +574,19 @@ export async function assignEmployeesToOrderAction(orderId: string, employeeIds:
 }
 
 /**
- * Server action callable from the customer portal (client component) after it
- * directly writes to the orders table. Triggers full revalidation of all
- * staff/admin/floor queue pages so staff see the stage change immediately.
+ * Server action for portal client mutations. Scoped to the affected order —
+ * does not invalidate every staff queue page.
  */
 export async function revalidateOrderPathsAction(orderId?: string) {
-  "use server";
-  await revalidateStaffQueuePaths();
-  if (orderId) {
-    revalidatePath(`/admin/orders/${orderId}`);
-    revalidatePath(`/staff/orders/${orderId}`);
-    revalidatePath(`/portal/order/${orderId}`);
-  }
-  revalidatePath("/portal");
+  if (!orderId) return;
+  const supabase = await getSupabase();
+  const orderUuid = await resolveOrderUuid(supabase, orderId);
+  const { data } = await supabase
+    .from("orders")
+    .select("order_id")
+    .eq("id", orderUuid)
+    .maybeSingle();
+  revalidateOrderDetailPaths(data?.order_id || orderId);
 }
 
 /** Invalidate all staff/floor queue pages after assignment or order creation. */

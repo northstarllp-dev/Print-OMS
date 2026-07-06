@@ -2,12 +2,25 @@
 
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import { revalidatePath } from "next/cache";
+import { getCurrentUser } from "@/features/auth/actions/authActions";
 import { mapSiteVisitMeasurementFromDb } from "@/features/orders/actions/siteVisitMapper";
 import { dispatchWhatsAppNotification } from "@/features/notifications/actions/dispatchNotification";
 import { getRequestBaseUrl } from "@/features/notifications/whatsapp/requestBaseUrl";
-import { assertStageEditPermission, assertValidPortalSessionForOrder } from "@/features/orders/workspace/shared/serverPermissions";
+import {
+  revalidateOrderDetailPaths,
+  revalidateStaffOrderDetailPaths,
+} from "@/features/orders/actions/revalidateOrderPaths";
+import {
+  assertStageEditPermission,
+  assertValidPortalSessionForOrder,
+} from "@/features/orders/workspace/shared/serverPermissions";
 import { computeQuotationTotals } from "@/features/quotations/utils/lineAmount";
+import {
+  assertUpsertStatusTransition,
+  assertValidQuotationStatus,
+  assertCanSendQuotationToCustomer,
+  sanitizeSignageOptions,
+} from "@/features/quotations/utils/quotationSecurity";
 import { createAdminClient } from "@/utils/supabase/admin";
 
 async function getSupabase() {
@@ -30,33 +43,86 @@ async function getSupabase() {
   );
 }
 
-/** Generate next QT-NNN id scoped to the tenant's existing quotations. */
-async function generateQuotationId(supabase: Awaited<ReturnType<typeof getSupabase>>, companyId: string): Promise<string> {
-  const { data } = await supabase
-    .from("quotations")
-    .select("quotation_id")
-    .eq("company_id", companyId)
-    .order("created_at", { ascending: false });
-
-  let maxNum = 0;
-  for (const row of data || []) {
-    const match = row.quotation_id?.match(/^QT-(\d+)$/);
-    if (match) maxNum = Math.max(maxNum, parseInt(match[1], 10));
-  }
-  return `QT-${String(maxNum + 1).padStart(3, "0")}`;
+function requireAdminClient() {
+  const admin = createAdminClient();
+  if (!admin) throw new Error("Server configuration error");
+  return admin;
 }
 
 /** Resolve a friendly order_id or uuid → actual DB uuid */
-async function resolveOrderId(supabase: any, orderId: string): Promise<{ uuid: string; friendly: string; customerId?: string; customerName?: string; companyId?: string }> {
+async function resolveOrderId(
+  supabase: Awaited<ReturnType<typeof getSupabase>>,
+  orderId: string
+): Promise<{
+  uuid: string;
+  friendly: string;
+  customerId?: string;
+  customerName?: string;
+  companyId?: string;
+}> {
   const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   if (!uuidPattern.test(orderId)) {
-    const { data: o } = await supabase.from("orders").select("id, order_id, customer_id, business_name, company_id").eq("order_id", orderId).maybeSingle();
-    if (o) return { uuid: o.id, friendly: o.order_id || o.id, customerId: o.customer_id, customerName: o.business_name, companyId: o.company_id };
+    const { data: o } = await supabase
+      .from("orders")
+      .select("id, order_id, customer_id, business_name, company_id")
+      .eq("order_id", orderId)
+      .maybeSingle();
+    if (o) {
+      return {
+        uuid: o.id,
+        friendly: o.order_id || o.id,
+        customerId: o.customer_id,
+        customerName: o.business_name,
+        companyId: o.company_id,
+      };
+    }
     return { uuid: orderId, friendly: orderId };
-  } else {
-    const { data: o } = await supabase.from("orders").select("order_id, customer_id, business_name, company_id").eq("id", orderId).maybeSingle();
-    return { uuid: orderId, friendly: o?.order_id || orderId, customerId: o?.customer_id, customerName: o?.business_name, companyId: o?.company_id };
   }
+  const { data: o } = await supabase
+    .from("orders")
+    .select("order_id, customer_id, business_name, company_id")
+    .eq("id", orderId)
+    .maybeSingle();
+  return {
+    uuid: orderId,
+    friendly: o?.order_id || orderId,
+    customerId: o?.customer_id,
+    customerName: o?.business_name,
+    companyId: o?.company_id,
+  };
+}
+
+async function assertPortalOrderOwnership(orderUuid: string): Promise<void> {
+  await assertValidPortalSessionForOrder(orderUuid);
+
+  const cookieStore = await cookies();
+  const sessionCookie = cookieStore.get("portal_session")?.value;
+  if (!sessionCookie) throw new Error("Unauthorized");
+
+  const session = JSON.parse(sessionCookie) as { customerId?: string; orderId?: string };
+  const admin = requireAdminClient();
+
+  const { data: order } = await admin
+    .from("orders")
+    .select("id, order_id, customer_id")
+    .eq("id", orderUuid)
+    .maybeSingle();
+  if (!order) throw new Error("Unauthorized");
+
+  if (session.orderId && (session.orderId === order.id || session.orderId === order.order_id)) {
+    return;
+  }
+
+  if (session.customerId) {
+    const { data: customer } = await admin
+      .from("customers")
+      .select("id")
+      .eq("customer_id", session.customerId)
+      .maybeSingle();
+    if (customer && order.customer_id === customer.id) return;
+  }
+
+  throw new Error("Unauthorized");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -64,32 +130,58 @@ async function resolveOrderId(supabase: any, orderId: string): Promise<{ uuid: s
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function getQuotationByOrderId(orderId: string) {
+  const profile = await getCurrentUser();
+  if (!profile) {
+    throw new Error("Unauthorized");
+  }
+
   const supabase = await getSupabase();
   const { uuid } = await resolveOrderId(supabase, orderId);
-  const { data, error } = await supabase.from("quotations").select("*").eq("order_id", uuid).maybeSingle();
+  const { data, error } = await supabase
+    .from("quotations")
+    .select("*")
+    .eq("order_id", uuid)
+    .maybeSingle();
   if (error) throw new Error(error.message);
   return data;
 }
 
-export async function getAllQuotations() {
-  const supabase = await getSupabase();
-  const { data, error } = await supabase.from("quotations").select("*").order("created_at", { ascending: false });
+/**
+ * Portal SSR only — caller MUST verify portal token and order ownership before calling.
+ * Returns null for Draft / Pending Approval quotations.
+ */
+export async function getCustomerVisibleQuotationForOrder(orderUuid: string) {
+  const admin = requireAdminClient();
+  const { data, error } = await admin
+    .from("quotations")
+    .select("*")
+    .eq("order_id", orderUuid)
+    .maybeSingle();
   if (error) throw new Error(error.message);
-  return data || [];
+  const { toCustomerVisibleQuotation } = await import(
+    "@/features/quotations/utils/quotationSecurity"
+  );
+  return toCustomerVisibleQuotation(data as Record<string, unknown> | null);
 }
-
-
 
 /** Get site visit measurements for an order (signage items), mapped to UI camelCase with units. */
 export async function getSiteVisitMeasurementsForOrder(orderId: string) {
+  const profile = await getCurrentUser();
+  if (!profile) throw new Error("Unauthorized");
+
   const supabase = await getSupabase();
   const { uuid } = await resolveOrderId(supabase, orderId);
-  // Find the site visit for this order
-  const { data: sv } = await supabase.from("site_visits").select("id").eq("order_id", uuid).maybeSingle();
+  const { data: sv } = await supabase
+    .from("site_visits")
+    .select("id")
+    .eq("order_id", uuid)
+    .maybeSingle();
   if (!sv) return [];
   const { data, error } = await supabase
     .from("site_visit_measurements")
-    .select("id, name, width, width_unit, height, height_unit, depth, depth_unit, notes, ground_clearance, ground_clearance_unit")
+    .select(
+      "id, name, width, width_unit, height, height_unit, depth, depth_unit, notes, ground_clearance, ground_clearance_unit"
+    )
     .eq("site_visit_id", sv.id)
     .order("created_at", { ascending: true });
   if (error) return [];
@@ -102,18 +194,13 @@ export async function getSiteVisitMeasurementsForOrder(orderId: string) {
 
 export interface QuotationPayload {
   quotation_id?: string;
-  items?: any[];
-  signage_options?: any[];   // new multi-option structure
-  subtotal: number;
-  discount: number;
-  tax: number;
-  grand_total: number;
+  signage_options?: unknown[];
+  discount?: number;
+  shipping?: number;
   status?: string;
   notes?: string;
   terms?: string;
   customer_id?: string;
-
-  shipping?: number;
 }
 
 /** Upsert quotation — creates if not exists, updates if already there */
@@ -122,57 +209,68 @@ export async function upsertQuotation(orderId: string, payload: QuotationPayload
   const supabase = await getSupabase();
   const resolved = await resolveOrderId(supabase, orderId);
 
-  if (!payload.customer_id) payload.customer_id = resolved.customerId;
+  const signageOptions = sanitizeSignageOptions(payload.signage_options);
+  const nextStatus = assertValidQuotationStatus(payload.status);
 
   const totals = computeQuotationTotals(
-    payload.signage_options ?? [],
-    payload.discount,
+    signageOptions,
+    payload.discount ?? 0,
     payload.shipping ?? 0
   );
 
-  const { data: existing } = await supabase.from("quotations").select("id, quotation_id").eq("order_id", resolved.uuid).maybeSingle();
+  const { data: existing } = await supabase
+    .from("quotations")
+    .select("id, quotation_id, status")
+    .eq("order_id", resolved.uuid)
+    .maybeSingle();
+
+  assertUpsertStatusTransition(existing?.status, nextStatus);
+
+  const customerId = payload.customer_id ?? resolved.customerId ?? null;
 
   const persistPayload = {
-    signage_options: payload.signage_options ?? [],
+    signage_options: signageOptions,
     subtotal: totals.subtotal,
     discount: totals.discount,
     tax: totals.tax,
     grand_total: totals.grand_total,
-    status: payload.status || "Draft",
+    status: nextStatus,
     notes: payload.notes ?? null,
     terms: payload.terms ?? null,
-    customer_id: payload.customer_id ?? null,
+    customer_id: customerId,
     shipping: totals.shipping,
   };
 
   let result;
   if (existing) {
-    const { data, error } = await supabase.from("quotations")
+    const { data, error } = await supabase
+      .from("quotations")
       .update({
-        quotation_id: payload.quotation_id || existing.quotation_id,
         ...persistPayload,
       })
       .eq("id", existing.id)
-      .select().single();
+      .select()
+      .single();
     if (error) throw new Error(error.message);
     result = data;
   } else {
     const companyId = resolved.companyId;
     if (!companyId) throw new Error("company_id is required to create a quotation");
-    const quotation_id = payload.quotation_id || (await generateQuotationId(supabase, companyId));
-    const { data, error } = await supabase.from("quotations").insert({
-      quotation_id,
-      order_id: resolved.uuid,
-      company_id: companyId,
-      ...persistPayload,
-    }).select().single();
+    // quotation_id assigned by DB trigger generate_quotation_id() (per company_id)
+    const { data, error } = await supabase
+      .from("quotations")
+      .insert({
+        order_id: resolved.uuid,
+        company_id: companyId,
+        ...persistPayload,
+      })
+      .select()
+      .single();
     if (error) throw new Error(error.message);
     result = data;
   }
 
-  revalidatePath(`/admin/orders/${resolved.friendly}`);
-  revalidatePath(`/staff/orders/${resolved.friendly}`);
-  revalidatePath("/admin/orders");
+  revalidateStaffOrderDetailPaths(resolved.friendly);
   return result;
 }
 
@@ -180,20 +278,29 @@ export async function upsertQuotation(orderId: string, payload: QuotationPayload
 // WRITE — Quotation Status Actions (Admin)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Admin approves quotation — marks it approved, moves order stage to Quotation Sent */
+/** Admin approves quotation — marks it Sent and moves order stage to Quotation Sent */
 export async function sendQuotationToCustomer(quotationId: string, adminName: string) {
   await assertStageEditPermission("quotation");
   const supabase = await getSupabase();
-  const { data: qt, error: qErr } = await supabase.from("quotations").select("order_id, quotation_id, status").eq("id", quotationId).single();
+  const { data: qt, error: qErr } = await supabase
+    .from("quotations")
+    .select("order_id, quotation_id, status")
+    .eq("id", quotationId)
+    .single();
   if (qErr || !qt) throw new Error("Quotation not found");
 
-  const wasSentBefore = qt.status === "Sent" || qt.status === "Rejected";
+  assertCanSendQuotationToCustomer(qt.status);
 
-  const { error } = await supabase.from("quotations").update({
-    status: "Sent",
-    admin_approved_at: new Date().toISOString(),
-    admin_approved_by: adminName,
-  }).eq("id", quotationId);
+  const isRevisionResend = qt.status === "Rejected";
+
+  const { error } = await supabase
+    .from("quotations")
+    .update({
+      status: "Sent",
+      admin_approved_at: new Date().toISOString(),
+      admin_approved_by: adminName,
+    })
+    .eq("id", quotationId);
   if (error) throw new Error(error.message);
 
   const { data: orderRow } = await supabase
@@ -209,28 +316,24 @@ export async function sendQuotationToCustomer(quotationId: string, adminName: st
     actor_name: "System",
     actor_role: "System",
     content: `Quotation ${qt.quotation_id} approved by ${adminName} and sent to the customer.`,
-    metadata: { action: "quotation_sent", quotation_id: qt.quotation_id }
+    metadata: { action: "quotation_sent", quotation_id: qt.quotation_id },
   });
 
   const baseUrl = await getRequestBaseUrl();
   await dispatchWhatsAppNotification(supabase, {
-    templateKey: wasSentBefore ? "revised_quotation_ready" : "quotation_ready",
+    templateKey: isRevisionResend ? "revised_quotation_ready" : "quotation_ready",
     orderUuid: qt.order_id,
-    idempotencyKey: `${wasSentBefore ? "revised_quotation" : "quotation_ready"}:${quotationId}:${Date.now()}`,
+    idempotencyKey: `${isRevisionResend ? "revised_quotation" : "quotation_ready"}:${quotationId}:${Date.now()}`,
     baseUrl,
   });
 
-  revalidatePath("/admin/orders");
+  revalidateOrderDetailPaths(orderRow?.order_id || qt.order_id);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// WRITE — Customer Actions
+// WRITE — Customer Actions (portal session + service role)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Admin override: mark quotation Approved and set order to Quotation Approved
- * so the order can advance to Design/Production without waiting on the customer.
- */
 export async function adminMarkQuotationApprovedAction(orderId: string) {
   await assertStageEditPermission("quotation");
   const supabase = await getSupabase();
@@ -257,17 +360,16 @@ export async function adminMarkQuotationApprovedAction(orderId: string) {
     metadata: { action: "quotation_approved_by_admin" },
   });
 
-  revalidatePath(`/admin/orders/${friendly}`);
-  revalidatePath("/admin/orders");
+  revalidateStaffOrderDetailPaths(friendly);
 }
 
 /** Customer approves quotation → stage = Quotation Approved */
 export async function customerApproveQuotation(orderId: string, customerName: string) {
-  await assertValidPortalSessionForOrder(orderId);
-  const admin = createAdminClient();
-  if (!admin) throw new Error("Server configuration error");
+  const supabase = await getSupabase();
+  const { uuid, friendly } = await resolveOrderId(supabase, orderId);
+  await assertPortalOrderOwnership(uuid);
 
-  const { uuid, friendly } = await resolveOrderId(admin, orderId);
+  const admin = requireAdminClient();
 
   const { data: qt } = await admin
     .from("quotations")
@@ -281,7 +383,8 @@ export async function customerApproveQuotation(orderId: string, customerName: st
   const { error: qErr } = await admin
     .from("quotations")
     .update({ status: "Approved", customer_response: "Yes" })
-    .eq("order_id", uuid);
+    .eq("order_id", uuid)
+    .eq("status", "Sent");
   if (qErr) throw new Error(qErr.message);
 
   const { error: oErr } = await admin
@@ -299,20 +402,23 @@ export async function customerApproveQuotation(orderId: string, customerName: st
     metadata: { action: "quotation_approved_by_customer" },
   });
 
-  revalidatePath(`/admin/orders/${friendly}`);
-  revalidatePath("/portal");
+  revalidateOrderDetailPaths(friendly);
 }
 
 /** Customer requests revision → stage = Quotation Negotiation */
-export async function customerRequestRevision(orderId: string, customerName: string, notes: string) {
-  await assertValidPortalSessionForOrder(orderId);
-  const admin = createAdminClient();
-  if (!admin) throw new Error("Server configuration error");
-
+export async function customerRequestRevision(
+  orderId: string,
+  customerName: string,
+  notes: string
+) {
   const trimmed = notes.trim();
   if (!trimmed) throw new Error("Feedback is required");
 
-  const { uuid, friendly } = await resolveOrderId(admin, orderId);
+  const supabase = await getSupabase();
+  const { uuid, friendly } = await resolveOrderId(supabase, orderId);
+  await assertPortalOrderOwnership(uuid);
+
+  const admin = requireAdminClient();
 
   const { data: qt } = await admin
     .from("quotations")
@@ -330,7 +436,8 @@ export async function customerRequestRevision(orderId: string, customerName: str
       customer_response: "Revision",
       rejection_reason: trimmed,
     })
-    .eq("order_id", uuid);
+    .eq("order_id", uuid)
+    .eq("status", "Sent");
   if (qErr) throw new Error(qErr.message);
 
   const { error: oErr } = await admin
@@ -348,8 +455,5 @@ export async function customerRequestRevision(orderId: string, customerName: str
     metadata: { action: "quotation_declined" },
   });
 
-  revalidatePath(`/admin/orders/${friendly}`);
-  revalidatePath("/portal");
+  revalidateOrderDetailPaths(friendly);
 }
-
-
