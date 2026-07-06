@@ -60,7 +60,7 @@ async function loadOrderContext(
 }> {
   const { data: order, error } = await supabase
     .from("orders")
-    .select("id, order_id, company_id, customer_id, business_name, project_name")
+    .select("id, order_id, company_id, customer_id, business_name, client_name")
     .eq("id", orderUuid)
     .single();
   if (error || !order) throw new Error("Order not found for notification");

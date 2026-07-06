@@ -222,7 +222,8 @@ export interface InstallationDetails {
 
 export interface Order {
   id: string;
-  projectName: string;
+  clientName: string;
+  businessName: string;
   customerId: string;
   customerName?: string;
   stage: PipelineStage;

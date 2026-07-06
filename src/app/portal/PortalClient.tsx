@@ -51,7 +51,8 @@ interface Customer {
 
 interface Order {
   id: string;
-  projectName: string;
+  clientName: string;
+  businessName: string;
   customerId: string;
   customerName?: string;
   stage: string;
@@ -99,6 +100,10 @@ interface PortalClientProps {
   initialToken: string;
   initialActiveOrderId: string | null;
   token: string;
+  appSettings?: {
+    siteVisitSchedulingEnabled: boolean;
+    installationSchedulingEnabled: boolean;
+  };
 }
 
 // We moved STEPS inside the component to be dynamic
@@ -119,7 +124,7 @@ function getStepIndex(stage: string, workflowType: string = "quote_first"): numb
   return 0;
 }
 
-export function PortalClient({ customer, orders: initialOrders, quotations = [], initialActiveOrderId, token }: PortalClientProps) {
+export function PortalClient({ customer, orders: initialOrders, quotations = [], initialActiveOrderId, token, appSettings }: PortalClientProps) {
   const [orders, setOrders] = useState<Order[]>(initialOrders);
 
   useEffect(() => {
@@ -627,8 +632,8 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                   <span>Call Manager</span>
                 </a>
               </div>
-              <p className="text-[11px] text-slate-500 mt-1">
-                Client: {customer.name} | {activeOrder?.projectName || "Signage Project"}
+              <p className="text-slate-500 mt-1">
+                Client: {activeOrder?.clientName || customer.name} | {activeOrder?.businessName || "Signage Project"}
               </p>
             </div>
           </div>
@@ -738,8 +743,12 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                     <div className="p-5 border border-slate-200 rounded-2xl bg-white shadow-sm space-y-4">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="bg-slate-50 rounded-lg p-4 border border-slate-100">
-                          <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block mb-1">Project Name</span>
-                          <p className="font-semibold text-slate-800">{activeOrder.projectName}</p>
+                          <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block mb-1">Client Name</span>
+                          <p className="font-semibold text-slate-800">{activeOrder.clientName}</p>
+                        </div>
+                        <div className="bg-slate-50 rounded-lg p-4 border border-slate-100">
+                          <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block mb-1">Business Name</span>
+                          <p className="font-semibold text-slate-800">{activeOrder.businessName}</p>
                         </div>
                         <div className="bg-slate-50 rounded-lg p-4 border border-slate-100">
                           <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block mb-1">Product Type</span>
@@ -774,6 +783,12 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                         </p>
                       </div>
                     ) : currentStep <= 1 && (!sv.auditDate || isRescheduling) ? (
+                      appSettings?.siteVisitSchedulingEnabled === false ? (
+                        <div className="py-6 text-center text-slate-500 text-sm font-medium bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                          <Calendar size={24} className="mx-auto mb-2 opacity-30" />
+                          Your site visit schedule is pending confirmation from our team.
+                        </div>
+                      ) : (
                       <div className="space-y-6">
                         <div>
                           <h2 className="text-xl font-black text-[#0b1c30] mb-1.5">Schedule Your Physical Site Audit</h2>
@@ -915,6 +930,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                           </div>
                         </form>
                       </div>
+                      )
                     ) : currentStep <= 1 && sv.completed === false ? (
                       // Scheduled confirmation
                       <div className="text-center space-y-5 py-4">
@@ -928,11 +944,23 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                         <div className="max-w-sm mx-auto bg-slate-50 border border-slate-200 rounded-xl p-4 text-left grid grid-cols-2 gap-3 text-xs">
                           <div><span className="text-[10px] text-slate-400 uppercase font-bold block">Date</span><p className="font-bold text-slate-800 font-mono mt-0.5">{sv.auditDate}</p></div>
                           <div><span className="text-[10px] text-slate-400 uppercase font-bold block">Time</span><p className="font-bold text-slate-800 font-mono mt-0.5">{sv.auditTime}</p></div>
-                          <div className="col-span-2"><span className="text-[10px] text-slate-400 uppercase font-bold block">Address</span><p className="font-medium text-slate-800 mt-0.5">{sv.customerAddress}</p></div>
+                          <div className="col-span-2">
+                            <span className="text-[10px] text-slate-400 uppercase font-bold block">Address</span>
+                            <a
+                              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(sv.customerAddress || "")}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-medium text-blue-600 hover:text-blue-800 hover:underline mt-0.5 block"
+                            >
+                              {sv.customerAddress}
+                            </a>
+                          </div>
                         </div>
-                        <button onClick={() => setIsRescheduling(true)} className="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50 transition-all flex items-center gap-2 mx-auto">
-                          <RefreshCw size={12} /> Reschedule Appointment
-                        </button>
+                        {appSettings?.siteVisitSchedulingEnabled !== false && (
+                          <button onClick={() => setIsRescheduling(true)} className="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50 transition-all flex items-center gap-2 mx-auto">
+                            <RefreshCw size={12} /> Reschedule Appointment
+                          </button>
+                        )}
                       </div>
                     ) : (
                       // Completed or pending approval
@@ -1134,8 +1162,8 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                             <span className="font-mono font-bold text-slate-800">{qd.quotationId || "—"}</span>
                           </div>
                           <div>
-                            <span className="text-[10px] text-slate-400 font-bold uppercase block">Project Name</span>
-                            <span className="font-bold text-slate-800">{activeOrder.projectName}</span>
+                            <span className="text-[10px] text-slate-400 font-bold uppercase block">Client & Business</span>
+                            <span className="font-bold text-slate-800">{activeOrder.businessName} - {activeOrder.clientName}</span>
                           </div>
                           <div>
                              <span className="text-[10px] text-slate-400 font-bold uppercase block">Status</span>
@@ -1406,6 +1434,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                         initialScheduledTime={inst.scheduledTime}
                         isCompleted={activeOrder.stage === "Completed" || activeOrder.stage === "Closed"}
                         isCustomerView={true}
+                        customerSchedulingEnabled={appSettings?.installationSchedulingEnabled !== false}
                       />
                     </div>
 

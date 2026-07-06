@@ -28,7 +28,8 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
 
   const mappedOrder = {
     id: order.id,
-    projectName: order.project_name,
+    clientName: order.client_name,
+    businessName: order.business_name || "",
     customerId: order.customer_id,
     stage: order.stage,
     productType: order.product_type,
@@ -81,7 +82,8 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
   // All orders for the left panel sidebar
   const mappedAllOrders = (allOrdersData || []).map((o) => ({
     id: o.id,
-    projectName: o.project_name,
+    clientName: o.client_name,
+    businessName: o.business_name || "",
     customerId: o.customer_id,
     customerName: o.business_name || "",
     stage: o.stage,

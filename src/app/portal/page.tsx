@@ -10,6 +10,7 @@ import React from "react";
 import { ShieldAlert, LogOut, Share2, ClipboardList, AlertCircle, FileText } from "lucide-react";
 import { mapSiteVisitFromDb, mapSiteVisitMeasurementFromDb } from "@/features/orders/actions/siteVisitMapper";
 import { mapDesignFromDb } from "@/features/designs/actions/designMapper";
+import { getAppSettingsForCompany } from "@/features/settings/actions/settingsActions";
 
 export const dynamic = "force-dynamic";
 
@@ -184,7 +185,8 @@ export default async function PortalPage({
 
     return {
       id: o.id,
-      projectName: o.project_name,
+      clientName: o.client_name,
+      businessName: o.business_name || "",
       customerId: o.customer_id,
       customerName: o.business_name,
       stage: o.stage,
@@ -231,6 +233,8 @@ export default async function PortalPage({
     };
   });
 
+  // Fetch app settings using customer's company ID
+  const appSettings = await getAppSettingsForCompany(customerData.company_id);
 
   return (
     <PortalClient
@@ -240,6 +244,7 @@ export default async function PortalPage({
       initialActiveOrderId={payload.orderId || null}
       initialToken={tokenParam}
       token={tokenParam}
+      appSettings={appSettings}
     />
   );
 }

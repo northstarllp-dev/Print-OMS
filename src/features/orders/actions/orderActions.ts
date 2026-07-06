@@ -175,7 +175,7 @@ export async function createOrder(formData: any) {
     activity_type: "timeline",
     actor_name: "System",
     actor_role: "System",
-    content: `Order "${createdOrder.project_name}" created manually by Admin.`,
+    content: `Order for Client "${createdOrder.client_name}" created manually by Admin.`,
     metadata: { action: "order_created", method: "manual" }
   });
 
@@ -614,7 +614,7 @@ export async function fetchEmployeeStats() {
   // Load active assignments from order_assignments joined to active orders
   const { data: assignments, error: assignError } = await supabase
     .from("order_assignments")
-    .select("employee_id, orders!inner(id, project_name, stage)")
+    .select("employee_id, orders!inner(id, client_name, business_name, stage)")
     .neq("orders.stage", "Completed")
     .neq("orders.stage", "Closed");
   if (assignError) throw new Error(assignError.message);
@@ -626,7 +626,10 @@ export async function fetchEmployeeStats() {
       name: emp.name,
       staff_role: emp.staff_role,
       activeJobs: myAssignments.length,
-      jobTitles: myAssignments.map(a => (a.orders as any)?.project_name).filter(Boolean)
+      jobTitles: myAssignments.map(a => {
+        const ord = (a.orders as any);
+        return ord ? `${ord.business_name || ""} - ${ord.client_name || ""}`.trim() : "";
+      }).filter(Boolean)
     };
   });
   

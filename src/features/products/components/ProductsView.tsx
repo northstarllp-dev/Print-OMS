@@ -321,9 +321,14 @@ function ProductFormModal({
               <input type="text" readOnly value={form.product_id} style={{ ...inputStyle, background: "#f8fafc", color: "#64748b", fontFamily: "monospace", fontSize: 12 }} />
             </div>
              <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
-                <label style={{ ...labelStyle, marginBottom: 0 }}>Product Name *</label>
-                <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", fontWeight: "700", color: "#374151", textTransform: "uppercase", letterSpacing: "0.04em", cursor: "pointer", userSelect: "none" }}>
+              <label style={{ ...labelStyle, marginBottom: "4px" }}>Product Name *</label>
+              <input
+                type="text" required placeholder="e.g. SS Letters 3D" autoFocus
+                value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                style={inputStyle}
+              />
+              <div style={{ marginTop: "8px" }}>
+                <label style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "11px", fontWeight: "700", color: "#374151", textTransform: "uppercase", letterSpacing: "0.04em", cursor: "pointer", userSelect: "none" }}>
                   <input
                     type="checkbox"
                     checked={form.final_prdt ?? false}
@@ -340,14 +345,9 @@ function ProductFormModal({
                     }}
                     style={{ cursor: "pointer" }}
                   />
-                  Final Prdt
+                  Final Products
                 </label>
               </div>
-              <input
-                type="text" required placeholder="e.g. SS Letters 3D" autoFocus
-                value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                style={inputStyle}
-              />
             </div>
           </div>
 
@@ -612,6 +612,7 @@ export function ProductsView({
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState<"All" | "Active" | "Inactive">("All");
+  const [finalFilter, setFinalFilter] = useState<"All" | "Final" | "Regular">("All");
   const [showForm, setShowForm] = useState(false);
   const [showManageCategories, setShowManageCategories] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -625,7 +626,8 @@ export function ProductsView({
     const matchSearch = !search.trim() || p.name.toLowerCase().includes(search.toLowerCase()) || p.product_id?.toLowerCase().includes(search.toLowerCase()) || (p.category || "").toLowerCase().includes(search.toLowerCase());
     const matchCategory = categoryFilter === "All" || p.category === categoryFilter;
     const matchStatus = statusFilter === "All" || (statusFilter === "Active" ? p.is_active : !p.is_active);
-    return matchSearch && matchCategory && matchStatus;
+    const matchFinal = finalFilter === "All" || (finalFilter === "Final" ? p.final_prdt === true : !p.final_prdt);
+    return matchSearch && matchCategory && matchStatus && matchFinal;
   });
 
   const handleOpenAdd = () => { setEditingProduct(null); setShowForm(true); setPageError(""); };
@@ -742,6 +744,11 @@ export function ProductsView({
           <option value="All">All Status</option>
           <option value="Active">Active</option>
           <option value="Inactive">Inactive</option>
+        </select>
+        <select value={finalFilter} onChange={e => setFinalFilter(e.target.value as any)} style={{ ...inputStyle, width: "auto", height: 40 }}>
+          <option value="All">All Types</option>
+          <option value="Final">Final Products</option>
+          <option value="Regular">Regular Products</option>
         </select>
       </div>
 

@@ -428,7 +428,7 @@ export function AdminDashboardClient({ orders, enquiries }: AdminDashboardClient
                           }}>{order.health || "Active"}</span>
                         </div>
                         <p style={{ margin: "2px 0 0", fontSize: "12px", color: "#64748B", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                          {order.customerName || order.projectName}
+                          {(order.businessName || order.customerName || "No Business")} • {(order.clientName || "No Client")}
                         </p>
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>

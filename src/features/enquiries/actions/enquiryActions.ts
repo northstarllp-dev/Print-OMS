@@ -218,7 +218,7 @@ export async function updateEnquiry(id: string, updates: any) {
   return data;
 }
 
-export async function convertEnquiryToOrderAction(enquiryId: string, projectName: string, productType?: string, requirements?: string) {
+export async function convertEnquiryToOrderAction(enquiryId: string, clientName: string, businessName: string, productType?: string, requirements?: string) {
   const supabase = await getSupabase();
   
   // 1. Fetch enquiry
@@ -276,7 +276,7 @@ export async function convertEnquiryToOrderAction(enquiryId: string, projectName
       .from("customers")
       .insert([{
         company_id: companyId,
-        name: enq.business_name || enq.lead_name,
+        name: businessName || clientName,
         phone: enq.phone,
         whatsapp: enq.whatsapp,
         email: enq.email,
@@ -300,9 +300,9 @@ export async function convertEnquiryToOrderAction(enquiryId: string, projectName
     .from("orders")
     .insert([{
       company_id: companyId,
-      project_name: projectName,
+      client_name: clientName,
+      business_name: businessName || customerName,
       customer_id: customerId,
-      business_name: customerName,
       stage: "Site Visit Pending",
       health: "Active",
       product_type: productType || "",

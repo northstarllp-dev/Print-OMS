@@ -88,7 +88,8 @@ interface QuotationModuleProps {
     id: string;
     orderId?: string;
     orderCode?: string;
-    projectName: string;
+    clientName: string;
+    businessName: string;
     customerName?: string;
     customerId?: string;
     stage?: string;
@@ -740,7 +741,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
             placeholder="Customer Name..."
             className="w-full font-black text-slate-800 bg-transparent border-b border-dashed border-slate-200 focus:outline-none focus:border-blue-500 py-0.5"
           />
-          <div className="text-slate-500 font-medium">{order.projectName}</div>
+          <div className="text-slate-500 font-medium">{order.businessName} - {order.clientName}</div>
         </div>
         <div className="text-right">
           <div className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-0.5">Date</div>

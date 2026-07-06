@@ -5,13 +5,15 @@ import { getActiveProducts } from "@/features/products/actions/productActions";
 interface ConvertEnquiryModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (projectName: string, productType: string, requirements: string) => void;
-  defaultProjectName: string;
+  onSubmit: (clientName: string, businessName: string, productType: string, requirements: string) => void;
+  defaultClientName: string;
+  defaultBusinessName: string;
   defaultRequirements?: string;
 }
 
-export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultProjectName, defaultRequirements = "" }: ConvertEnquiryModalProps) {
-  const [projectName, setProjectName] = useState(defaultProjectName);
+export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultClientName, defaultBusinessName, defaultRequirements = "" }: ConvertEnquiryModalProps) {
+  const [clientName, setClientName] = useState(defaultClientName);
+  const [businessName, setBusinessName] = useState(defaultBusinessName);
   const [productType, setProductType] = useState("");
   const [requirements, setRequirements] = useState(defaultRequirements);
   const [products, setProducts] = useState<{ id: string; name: string }[]>([]);
@@ -20,12 +22,15 @@ export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultProjectN
 
   useEffect(() => {
     if (isOpen) {
+      setClientName(defaultClientName);
+      setBusinessName(defaultBusinessName);
+      setRequirements(defaultRequirements);
       getActiveProducts().then((data) => {
         const finalProducts = data.filter((p) => p.final_prdt === true);
         setProducts(finalProducts.map((p) => ({ id: p.id, name: p.name })));
       }).catch(console.error);
     }
-  }, [isOpen]);
+  }, [isOpen, defaultClientName, defaultBusinessName, defaultRequirements]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -48,10 +53,11 @@ export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultProjectN
       background: "rgba(15, 23, 42, 0.4)",
       backdropFilter: "blur(4px)",
       display: "flex",
-      alignItems: "center",
+      alignItems: "flex-start",
       justifyContent: "center",
       zIndex: 1000,
-      padding: "20px"
+      padding: "40px 20px",
+      overflowY: "auto"
     }}>
       <div style={{
         background: "white",
@@ -61,8 +67,7 @@ export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultProjectN
         boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)",
         display: "flex",
         flexDirection: "column",
-        maxHeight: "90vh",
-        overflow: "hidden",
+        margin: "auto",
         animation: "slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)"
       }}>
         {/* Header */}
@@ -100,18 +105,43 @@ export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultProjectN
         </div>
 
         {/* Body */}
-        <div style={{ padding: "24px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "20px" }}>
+        <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "20px" }}>
           
-          {/* Project Name */}
+          {/* Client Name */}
           <div>
             <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#475569", marginBottom: "8px" }}>
-              Project Name <span style={{ color: "#ef4444" }}>*</span>
+              Client Name <span style={{ color: "#ef4444" }}>*</span>
             </label>
             <input 
               type="text" 
-              value={projectName}
-              onChange={(e) => setProjectName(e.target.value)}
-              placeholder="e.g. Lobby Signage - Northstar"
+              value={clientName}
+              onChange={(e) => setClientName(e.target.value)}
+              placeholder="e.g. Amit Sharma"
+              style={{
+                width: "100%",
+                padding: "10px 12px",
+                border: "1px solid #cbd5e1",
+                borderRadius: "8px",
+                fontSize: "14px",
+                color: "#0f172a",
+                outline: "none",
+                transition: "border-color 0.2s"
+              }}
+              onFocus={(e) => e.target.style.borderColor = "var(--color-primary)"}
+              onBlur={(e) => e.target.style.borderColor = "#cbd5e1"}
+            />
+          </div>
+
+          {/* Business Name */}
+          <div>
+            <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#475569", marginBottom: "8px" }}>
+              Business Name <span style={{ color: "#ef4444" }}>*</span>
+            </label>
+            <input 
+              type="text" 
+              value={businessName}
+              onChange={(e) => setBusinessName(e.target.value)}
+              placeholder="e.g. MAK Badminton"
               style={{
                 width: "100%",
                 padding: "10px 12px",
@@ -128,7 +158,7 @@ export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultProjectN
           </div>
 
           {/* Product Type */}
-          <div ref={dropdownRef} style={{ position: "relative" }}>
+          <div ref={dropdownRef} style={{ position: "relative", zIndex: 20 }}>
             <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#475569", marginBottom: "8px" }}>
               Product Type / Sign Type
             </label>
@@ -158,18 +188,13 @@ export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultProjectN
             
             {showDropdown && (
               <div style={{
-                position: "absolute",
-                top: "100%",
-                left: 0,
-                right: 0,
                 marginTop: "4px",
                 background: "white",
                 border: "1px solid #e2e8f0",
                 borderRadius: "8px",
-                boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
+                boxShadow: "0 4px 6px -2px rgba(0, 0, 0, 0.05)",
                 maxHeight: "200px",
                 overflowY: "auto",
-                zIndex: 10
               }}>
                 {filteredProducts.length > 0 ? (
                   filteredProducts.map((p) => (
@@ -257,8 +282,8 @@ export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultProjectN
             Cancel
           </button>
           <button 
-            onClick={() => onSubmit(projectName, productType, requirements)}
-            disabled={!projectName.trim()}
+            onClick={() => onSubmit(clientName, businessName, productType, requirements)}
+            disabled={!clientName.trim() || !businessName.trim()}
             style={{
               padding: "10px 16px",
               background: "var(--color-primary)",
@@ -267,8 +292,8 @@ export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultProjectN
               color: "white",
               fontSize: "14px",
               fontWeight: "600",
-              cursor: projectName.trim() ? "pointer" : "not-allowed",
-              opacity: projectName.trim() ? 1 : 0.6,
+              cursor: (clientName.trim() && businessName.trim()) ? "pointer" : "not-allowed",
+              opacity: (clientName.trim() && businessName.trim()) ? 1 : 0.6,
               transition: "all 0.2s"
             }}
           >

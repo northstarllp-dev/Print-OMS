@@ -430,9 +430,14 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
                     Site Address
                   </span>
                 </div>
-                <p className="text-xs font-semibold text-slate-800 line-clamp-2">
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(scheduledAddress)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 hover:underline line-clamp-2"
+                >
                   {scheduledAddress}
-                </p>
+                </a>
                 {siteVisit.landmark && (
                   <p className="text-[10px] text-slate-500 mt-0.5 truncate">
                     Near: {siteVisit.landmark}

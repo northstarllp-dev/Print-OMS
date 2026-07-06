@@ -239,7 +239,7 @@ export function InstallationModule({ data, permission, callbacks, embedded = fal
           <div>
             <div className="flex items-center gap-3 mb-1">
               <h1 className="text-2xl font-black text-slate-900 tracking-tight">
-                {order.projectName}
+                {order.businessName} - {order.clientName}
               </h1>
             </div>
             <p className="text-xs text-slate-500 font-semibold">

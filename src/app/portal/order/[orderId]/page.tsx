@@ -175,7 +175,8 @@ export default async function OrderDetailPage({
 
   const order = {
     id: orderData.id,
-    projectName: orderData.project_name,
+    clientName: orderData.client_name,
+    businessName: orderData.business_name || "",
     customerId: orderData.customer_id,
     customerName: orderData.business_name,
     stage: orderData.stage,

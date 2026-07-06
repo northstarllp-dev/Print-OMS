@@ -342,7 +342,7 @@ export function CustomersViewNew({
                       <div className="flex justify-between items-start gap-2">
                         <div>
                           <span className="text-[10px] font-bold text-slate-400 block">{o.orderCode || o.id}</span>
-                          <span className="text-xs font-bold text-slate-800 mt-0.5 block truncate max-w-[180px]">{o.projectName}</span>
+                          <span className="text-xs font-bold text-slate-800 mt-0.5 block truncate max-w-[180px]">{o.businessName || o.clientName}</span>
                         </div>
                         <div className="flex gap-1">
                           <button

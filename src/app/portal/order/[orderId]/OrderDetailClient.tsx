@@ -63,7 +63,8 @@ interface Customer {
 
 interface Order {
   id: string;
-  projectName: string;
+  clientName: string;
+  businessName: string;
   customerId: string;
   customerName?: string;
   stage: string;
@@ -454,7 +455,7 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
               <ArrowLeft size={20} className="text-gray-600" />
             </button>
             <div>
-              <h1 className="text-2xl font-extrabold text-gray-900">{order.projectName}</h1>
+              <h1 className="text-2xl font-extrabold text-gray-900">{order.businessName} - {order.clientName}</h1>
               <p className="text-sm text-gray-500">Order {order.orderCode || order.id}</p>
             </div>
           </div>
@@ -734,7 +735,17 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
                 <div className="max-w-sm mx-auto bg-gray-50 border border-gray-200 rounded-xl p-4 text-left grid grid-cols-2 gap-3 text-xs">
                   <div><span className="text-[10px] text-gray-400 uppercase font-bold block">Date</span><p className="font-bold text-gray-800 font-mono mt-0.5">{sv.auditDate}</p></div>
                   <div><span className="text-[10px] text-gray-400 uppercase font-bold block">Time</span><p className="font-bold text-gray-800 font-mono mt-0.5">{sv.auditTime}</p></div>
-                  <div className="col-span-2"><span className="text-[10px] text-gray-400 uppercase font-bold block">Address</span><p className="font-medium text-gray-800 mt-0.5">{sv.customerAddress}</p></div>
+                  <div className="col-span-2">
+                    <span className="text-[10px] text-gray-400 uppercase font-bold block">Address</span>
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(sv.customerAddress || "")}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-medium text-indigo-600 hover:text-indigo-800 hover:underline mt-0.5 block"
+                    >
+                      {sv.customerAddress}
+                    </a>
+                  </div>
                 </div>
                 <button onClick={() => setIsRescheduling(true)} className="px-4 py-2 border border-gray-200 text-gray-600 rounded-xl text-xs font-bold hover:bg-gray-50 transition-all flex items-center gap-2 mx-auto">
                   <RefreshCw size={12} /> Reschedule Appointment
@@ -969,8 +980,8 @@ function QuotationTab({
                 <span className="font-mono font-bold text-slate-800">{qd.quotationId || "—"}</span>
               </div>
               <div>
-                <span className="text-[10px] text-slate-400 font-bold uppercase block">Project Name</span>
-                <span className="font-bold text-slate-800">{order.projectName}</span>
+                <span className="text-[10px] text-slate-400 font-bold uppercase block">Client & Business</span>
+                <span className="font-bold text-slate-800">{order.businessName} - {order.clientName}</span>
               </div>
               <div>
                 <span className="text-[10px] text-slate-400 font-bold uppercase block">Status</span>
