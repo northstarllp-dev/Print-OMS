@@ -1198,9 +1198,31 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
               {(activeStepTab === ADMIN_TAB || activeStepTab === PAYMENTS_TAB) && (
                 <button
                   onClick={() => setActiveStepTab(stageToTabIndex(order.stage, order.workflow_type))}
-                  style={{ display: "flex", alignItems: "center", gap: "6px", background: "white", border: "1px solid #E2E8F0", borderRadius: "8px", cursor: "pointer", color: "#475569", fontSize: "12px", fontWeight: "600", padding: "6px 12px", transition: "all 0.15s", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = "#F8FAFC"; e.currentTarget.style.color = "#0F172A"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = "white"; e.currentTarget.style.color = "#475569"; }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    background: "var(--color-primary-container)",
+                    border: "1.5px solid var(--color-primary)",
+                    borderRadius: "8px",
+                    cursor: "pointer",
+                    color: "var(--color-primary)",
+                    fontSize: "12px",
+                    fontWeight: "700",
+                    padding: "7px 14px",
+                    transition: "all 0.15s",
+                    boxShadow: "0 1px 3px rgba(30, 64, 175, 0.15)",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = "#BFDBFE";
+                    e.currentTarget.style.borderColor = "#1D4ED8";
+                    e.currentTarget.style.color = "#1D4ED8";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "var(--color-primary-container)";
+                    e.currentTarget.style.borderColor = "var(--color-primary)";
+                    e.currentTarget.style.color = "var(--color-primary)";
+                  }}
                 >
                   <ArrowLeft size={14} /> Back to Worksheet
                 </button>

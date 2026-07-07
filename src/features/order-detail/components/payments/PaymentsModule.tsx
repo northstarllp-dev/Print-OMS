@@ -53,7 +53,7 @@ export const PaymentsModule: React.FC<PaymentsModuleProps> = ({
   const [newType, setNewType] = useState<PaymentAmountType>("percentage");
   const [newValue, setNewValue] = useState("50");
   const [restOfAmount, setRestOfAmount] = useState(false);
-  const [markReceivedOnCreate, setMarkReceivedOnCreate] = useState(false);
+  const [withGst, setWithGst] = useState(true);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -84,14 +84,15 @@ export const PaymentsModule: React.FC<PaymentsModuleProps> = ({
   useEffect(() => {
     if (restOfAmount && balance) {
       setNewType("fixed");
-      setNewValue(String(balance.outstanding));
+      const amt = withGst ? balance.outstanding : (balance.totalBeforeTax - balance.receivedTotal);
+      setNewValue(String(Math.max(0, amt)));
       setNewName((n) => (isAutoPaymentName(n) ? "Rest of Amount" : n));
     } else if (!restOfAmount) {
       setNewName((n) =>
         n === "Rest of Amount" ? nextInstallmentName(payments.length) : n
       );
     }
-  }, [restOfAmount, balance, payments.length]);
+  }, [restOfAmount, balance, payments.length, withGst]);
 
   const run = (fn: () => Promise<void>) => {
     startTransition(async () => {
@@ -114,8 +115,8 @@ export const PaymentsModule: React.FC<PaymentsModuleProps> = ({
             <CreditCard size={16} className="text-blue-600" />
             Payment Tracking
           </h2>
-          <p className="text-xs text-slate-500 mt-1 font-medium">
-            Record expected and received amounts. Payments do not block the order workflow.
+          <p className="text-xs text-amber-600 mt-2 font-medium bg-amber-50 p-2 rounded-lg border border-amber-200/60 leading-relaxed">
+            Note: Payment gateway integration is in progress. Until then, use this as a payment received tool only.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -126,7 +127,6 @@ export const PaymentsModule: React.FC<PaymentsModuleProps> = ({
                 setShowAdd((v) => {
                   if (!v) {
                     setRestOfAmount(false);
-                    setMarkReceivedOnCreate(false);
                     setNewName(nextInstallmentName(payments.length));
                     setNewType("percentage");
                     setNewValue("50");
@@ -150,10 +150,23 @@ export const PaymentsModule: React.FC<PaymentsModuleProps> = ({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-          <div className="text-[10px] font-black uppercase text-slate-500">Quotation total</div>
+          <div className="text-[10px] font-black uppercase text-slate-500">Total amount</div>
           <div className="text-lg font-black text-slate-800 font-mono mt-0.5">
+            ₹{(balance?.totalAmount ?? 0).toLocaleString("en-IN")}
+          </div>
+          <div className="text-[9px] font-semibold text-slate-400 mt-0.5">Ex-GST</div>
+        </div>
+        <div className="bg-violet-50 border border-violet-100 rounded-xl p-3">
+          <div className="text-[10px] font-black uppercase text-violet-600">GST</div>
+          <div className="text-lg font-black text-violet-800 font-mono mt-0.5">
+            ₹{(balance?.gst ?? 0).toLocaleString("en-IN")}
+          </div>
+        </div>
+        <div className="bg-blue-50 border border-blue-100 rounded-xl p-3">
+          <div className="text-[10px] font-black uppercase text-blue-600">Total incl. GST</div>
+          <div className="text-lg font-black text-blue-800 font-mono mt-0.5">
             ₹{(balance?.grandTotal ?? 0).toLocaleString("en-IN")}
           </div>
         </div>
@@ -163,7 +176,7 @@ export const PaymentsModule: React.FC<PaymentsModuleProps> = ({
             ₹{(balance?.receivedTotal ?? 0).toLocaleString("en-IN")}
           </div>
         </div>
-        <div className="bg-amber-50 border border-amber-100 rounded-xl p-3">
+        <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 col-span-2 sm:col-span-1">
           <div className="text-[10px] font-black uppercase text-amber-600">Outstanding</div>
           <div className="text-lg font-black text-amber-800 font-mono mt-0.5">
             ₹{(balance?.outstanding ?? 0).toLocaleString("en-IN")}
@@ -189,64 +202,102 @@ export const PaymentsModule: React.FC<PaymentsModuleProps> = ({
             />
           </div>
 
-          <label className="flex items-start gap-2 text-xs font-bold text-slate-700 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={restOfAmount}
-              onChange={(e) => setRestOfAmount(e.target.checked)}
-              className="mt-0.5 rounded border-slate-300 text-blue-600"
-            />
-            <span>
-              Rest of the amount
-              <span className="block text-[10px] font-semibold text-slate-400 mt-0.5">
-                Quotation total − received
-                {balance
-                  ? ` = ₹${balance.outstanding.toLocaleString("en-IN")}`
-                  : ""}
-              </span>
-            </span>
-          </label>
-
-          {!restOfAmount && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-4">
               <div>
-                <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Type</label>
-                <div className="flex gap-3 pt-1">
+                <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Calculation Base</label>
+                <div className="flex gap-4 pt-1 flex-wrap">
                   <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 cursor-pointer">
-                    <input type="radio" checked={newType === "percentage"} onChange={() => setNewType("percentage")} />
-                    Percentage
+                    <input 
+                      type="radio" 
+                      checked={withGst} 
+                      onChange={() => setWithGst(true)} 
+                    />
+                    With GST
                   </label>
                   <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 cursor-pointer">
-                    <input type="radio" checked={newType === "fixed"} onChange={() => setNewType("fixed")} />
-                    Fixed
+                    <input 
+                      type="radio" 
+                      checked={!withGst} 
+                      onChange={() => setWithGst(false)} 
+                    />
+                    Without GST
                   </label>
                 </div>
               </div>
+
               <div>
-                <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">
-                  Value ({newType === "percentage" ? "%" : "₹"})
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={newValue}
-                  onChange={(e) => setNewValue(e.target.value)}
-                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg bg-white font-mono"
-                />
+                <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Type</label>
+                <div className="flex gap-4 pt-1 flex-wrap">
+                  <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 cursor-pointer">
+                    <input 
+                      type="radio" 
+                      checked={!restOfAmount && newType === "percentage"} 
+                      onChange={() => { setRestOfAmount(false); setNewType("percentage"); }} 
+                    />
+                    Percentage
+                  </label>
+                  <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 cursor-pointer">
+                    <input 
+                      type="radio" 
+                      checked={!restOfAmount && newType === "fixed"} 
+                      onChange={() => { setRestOfAmount(false); setNewType("fixed"); }} 
+                    />
+                    Fixed
+                  </label>
+                  <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 cursor-pointer">
+                    <input 
+                      type="radio" 
+                      checked={restOfAmount} 
+                      onChange={() => setRestOfAmount(true)} 
+                    />
+                    Rest of amount
+                  </label>
+                </div>
               </div>
             </div>
-          )}
-
-          <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={markReceivedOnCreate}
-              onChange={(e) => setMarkReceivedOnCreate(e.target.checked)}
-              className="rounded border-slate-300 text-blue-600"
-            />
-            Mark as received now
-          </label>
+            <div>
+              <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">
+                Value ({newType === "percentage" && !restOfAmount ? "%" : "₹"})
+              </label>
+              <input
+                type="number"
+                min="0"
+                max={newType === "percentage" && !restOfAmount ? "100" : undefined}
+                step="0.01"
+                value={newValue}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  if (newType === "percentage" && !restOfAmount) {
+                    if (raw === "") {
+                      setNewValue("");
+                      return;
+                    }
+                    const num = parseFloat(raw);
+                    if (!Number.isFinite(num)) return;
+                    setNewValue(String(Math.min(100, Math.max(0, num))));
+                    return;
+                  }
+                  setNewValue(raw);
+                }}
+                disabled={restOfAmount}
+                className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg bg-white font-mono disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
+              />
+              {!restOfAmount && newType === "percentage" && balance && (
+                <div className="text-xs font-bold text-blue-700 mt-2 bg-blue-50/50 px-3 py-2 rounded-lg border border-blue-100 flex justify-between items-center">
+                  <span>Calculated:</span>
+                  <span className="font-mono">
+                    ₹{Math.round(((withGst ? balance.grandTotal : balance.totalBeforeTax) * (parseFloat(newValue) || 0) / 100) * 100) / 100}
+                  </span>
+                </div>
+              )}
+              {restOfAmount && balance && (
+                <div className="text-[10px] font-semibold text-slate-500 mt-1">
+                  {withGst ? "Quotation total" : "Total before tax"} − received
+                </div>
+              )}
+            </div>
+          </div>
 
           <button
             type="button"
@@ -260,16 +311,29 @@ export const PaymentsModule: React.FC<PaymentsModuleProps> = ({
 
                 if (restOfAmount) {
                   const bal = balance || (await getPaymentBalanceSummary(orderId));
-                  if (bal.outstanding <= 0) throw new Error("No outstanding balance.");
+                  const restAmt = withGst ? bal.outstanding : (bal.totalBeforeTax - bal.receivedTotal);
+                  if (restAmt <= 0) throw new Error("No outstanding balance for this base.");
                   amountType = "fixed";
-                  amount = bal.outstanding;
+                  amount = restAmt;
                 } else {
                   const num = parseFloat(newValue);
                   if (!Number.isFinite(num) || num <= 0) {
                     throw new Error("Enter a valid amount or percentage.");
                   }
-                  if (newType === "fixed") amount = num;
-                  else percentage = num;
+                  if (newType === "percentage" && num > 100) {
+                    throw new Error("Percentage cannot exceed 100%.");
+                  }
+
+                  if (newType === "fixed") {
+                    amount = num;
+                  } else {
+                    if (withGst) {
+                      percentage = num;
+                    } else {
+                      amountType = "fixed";
+                      amount = Math.round(((balance?.totalBeforeTax || 0) * (num / 100)) * 100) / 100;
+                    }
+                  }
                 }
 
                 await createPayment(orderId, {
@@ -278,16 +342,15 @@ export const PaymentsModule: React.FC<PaymentsModuleProps> = ({
                   amount_type: amountType,
                   amount,
                   percentage,
-                  received: markReceivedOnCreate,
+                  received: true,
                 });
                 setShowAdd(false);
                 setRestOfAmount(false);
-                setMarkReceivedOnCreate(false);
               })
             }
             className="px-4 py-2 text-xs font-bold rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
           >
-            {isPending ? "Saving…" : "Save Payment"}
+            {isPending ? "Saving…" : "Payment Received"}
           </button>
         </div>
       )}

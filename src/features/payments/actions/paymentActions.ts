@@ -82,7 +82,11 @@ async function revalidatePaymentPaths(orderId: string) {
 }
 
 export type PaymentBalanceSummary = {
+  totalAmount: number;
+  gst: number;
   grandTotal: number;
+  /** Ex-GST payable base (subtotal − discount + shipping). Used for without-GST payment math. */
+  totalBeforeTax: number;
   expectedTotal: number;
   receivedTotal: number;
   outstanding: number;
@@ -94,15 +98,22 @@ export async function getPaymentBalanceSummary(
   const supabase = await getSupabase();
   const orderUuid = await resolveOrderUuid(orderId);
 
-  const { data: quotation } = await supabase
+  const { data: quotation, error: quotationError } = await supabase
     .from("quotations")
-    .select("grand_total")
+    .select("grand_total, subtotal, discount, tax, shipping")
     .eq("order_id", orderUuid)
-    .order("created_at", { ascending: false })
-    .limit(1)
     .maybeSingle();
 
-  const grandTotal = Math.round((Number(quotation?.grand_total) || 0) * 100) / 100;
+  if (quotationError) throw new Error(quotationError.message);
+
+  const subtotal = Math.round((Number(quotation?.subtotal) || 0) * 100) / 100;
+  const discount = Math.round((Number(quotation?.discount) || 0) * 100) / 100;
+  const gst = Math.round((Number(quotation?.tax) || 0) * 100) / 100;
+  const shipping = Math.round((Number(quotation?.shipping) || 0) * 100) / 100;
+  const totalBeforeTax = Math.round((subtotal - discount + shipping) * 100) / 100;
+  const grandTotal = Math.round(
+    (Number(quotation?.grand_total) || totalBeforeTax + gst) * 100
+  ) / 100;
 
   const payments = await getPaymentsByOrder(orderUuid);
   const expectedTotal = Math.round(
@@ -118,7 +129,15 @@ export async function getPaymentBalanceSummary(
     Math.round((grandTotal - receivedTotal) * 100) / 100
   );
 
-  return { grandTotal, expectedTotal, receivedTotal, outstanding };
+  return {
+    totalAmount: totalBeforeTax,
+    gst,
+    grandTotal,
+    totalBeforeTax,
+    expectedTotal,
+    receivedTotal,
+    outstanding,
+  };
 }
 
 export async function calculatePaymentAmount(
@@ -130,8 +149,11 @@ export async function calculatePaymentAmount(
   if (amountType === "fixed") {
     return Math.round((Number(amount) || 0) * 100) / 100;
   }
-  const { grandTotal } = await getPaymentBalanceSummary(orderId);
   const pct = Number(percentage) || 0;
+  if (pct <= 0 || pct > 100) {
+    throw new Error("Percentage must be between 0 and 100.");
+  }
+  const { grandTotal } = await getPaymentBalanceSummary(orderId);
   return Math.round(grandTotal * (pct / 100) * 100) / 100;
 }
 
