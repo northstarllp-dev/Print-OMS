@@ -133,7 +133,7 @@ export function OrdersManagementDashboard({
   const enquiries = initialEnquiries;
 
   const queueViewCounts = useMemo(() => {
-    if (!parsedEntryStage) return { incoming: 0, completed: 0 };
+    if (!parsedEntryStage) return { incoming: 0, current: 0, completed: 0 };
     return countQueueViews(orders, parsedEntryStage);
   }, [orders, parsedEntryStage]);
 
