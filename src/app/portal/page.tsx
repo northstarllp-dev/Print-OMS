@@ -10,6 +10,7 @@ import React from "react";
 import { ShieldAlert, LogOut, Share2, ClipboardList, AlertCircle, FileText } from "lucide-react";
 import { mapSiteVisitFromDb, mapSiteVisitMeasurementFromDb } from "@/features/orders/actions/siteVisitMapper";
 import { mapDesignFromDb } from "@/features/designs/actions/designMapper";
+import { toCustomerVisibleDesign } from "@/features/designs/utils/customerVisibleDesign";
 import { getAppSettingsForCompany } from "@/features/settings/actions/settingsActions";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { isQuotationVisibleToCustomer } from "@/features/quotations/utils/lineAmount";
@@ -59,6 +60,7 @@ export default async function PortalPage({
   // ── DB Revocation check ──
   const cookieStore = await cookies();
   const supabase = createClient(cookieStore);
+  const admin = createAdminClient();
 
   let isRevoked: boolean;
   try {
@@ -77,7 +79,16 @@ export default async function PortalPage({
   }
 
   // ── Fetch data from Supabase ──
-  const { data: customerData, error: customerError } = await supabase
+  if (!admin) {
+    return (
+      <PortalError
+        title="Server Configuration Error"
+        message="Portal service is temporarily unavailable. Please contact support."
+      />
+    );
+  }
+
+  const { data: customerData, error: customerError } = await admin
     .from("customers")
     .select("*")
     .eq("customer_id", payload.customerId)
@@ -92,7 +103,7 @@ export default async function PortalPage({
     );
   }
 
-  const { data: ordersData, error: ordersError } = await supabase
+  const { data: ordersData, error: ordersError } = await admin
     .from("orders")
     .select("*, site_visits(*, site_visit_measurements(*)), installations(*), productions(*), designs(*)")
     .eq("customer_id", customerData.id)
@@ -114,12 +125,11 @@ export default async function PortalPage({
   let siteVisitMeasurementsData: any[] = [];
 
   if (orderIds.length > 0) {
-    const admin = createAdminClient();
     const [qtsRes, svsRes] = await Promise.all([
       admin
         ? admin.from("quotations").select("*").in("order_id", orderIds)
         : Promise.resolve({ data: [], error: null }),
-      supabase.from("site_visits").select("id, order_id").in("order_id", orderIds),
+      admin.from("site_visits").select("id, order_id").in("order_id", orderIds),
     ]);
     if (!qtsRes.error && qtsRes.data) {
       quotationsData = qtsRes.data.filter((q) =>
@@ -130,7 +140,7 @@ export default async function PortalPage({
 
     if (siteVisitsData.length > 0) {
       const svIds = siteVisitsData.map((sv: any) => sv.id);
-      const { data: measData } = await supabase
+      const { data: measData } = await admin
         .from("site_visit_measurements")
         .select("id, site_visit_id, name, width, width_unit, height, height_unit, depth, depth_unit, notes, ground_clearance, ground_clearance_unit")
         .in("site_visit_id", svIds);
@@ -228,7 +238,13 @@ export default async function PortalPage({
         notes: q.notes,
         terms: q.terms,
       } : null,
-      design: (Array.isArray(o.designs) && o.designs.length > 0 ? mapDesignFromDb(o.designs[0]) : o.designs ? mapDesignFromDb(o.designs) : null),
+      design: toCustomerVisibleDesign(
+        Array.isArray(o.designs) && o.designs.length > 0
+          ? mapDesignFromDb(o.designs[0])
+          : o.designs
+            ? mapDesignFromDb(o.designs)
+            : null
+      ),
       productionDetails: Array.isArray(o.productions) && o.productions.length > 0 ? o.productions[0] : (o.productions || null),
       installationDetails: Array.isArray(o.installations) && o.installations.length > 0 ? o.installations[0] : (o.installations || null),
       stageStatus: o.stage_status || null,

@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { createClient } from "@/utils/supabase/server";
+import { createAdminClient } from "@/utils/supabase/admin";
 import {
   verifyPortalToken,
   isTokenRevoked,
@@ -60,10 +61,20 @@ export default async function OrderDetailPage({
   // ── DB Revocation check ──
   const cookieStore = await cookies();
   const supabase = createClient(cookieStore);
+  const admin = createAdminClient();
+
+  if (!admin) {
+    return (
+      <PortalError
+        title="Server Configuration Error"
+        message="Portal service is temporarily unavailable. Please contact support."
+      />
+    );
+  }
 
   let isRevoked: boolean;
   try {
-    isRevoked = await isTokenRevoked(supabase, payload.jti);
+    isRevoked = await isTokenRevoked(admin, payload.jti);
   } catch {
     isRevoked = true;
   }
@@ -78,7 +89,7 @@ export default async function OrderDetailPage({
   }
 
   // ── Fetch data ──
-  const { data: customerData, error: customerError } = await supabase
+  const { data: customerData, error: customerError } = await admin
     .from("customers")
     .select("*")
     .eq("customer_id", payload.customerId)
@@ -94,7 +105,7 @@ export default async function OrderDetailPage({
   }
 
   // Fetch the specific order
-  const { data: orderData, error: orderError } = await supabase
+  const { data: orderData, error: orderError } = await admin
     .from("orders")
     .select("*, site_visits(*, site_visit_measurements(*)), installations(*), productions(*), designs(*)")
     .eq("id", payload.orderId)
@@ -138,7 +149,7 @@ export default async function OrderDetailPage({
   } : null;
 
   // Find the site visit for this order
-  const { data: sv } = await supabase
+  const { data: sv } = await admin
     .from("site_visits")
     .select("id")
     .eq("order_id", orderData.id)
@@ -146,7 +157,7 @@ export default async function OrderDetailPage({
 
   // Fetch measurements from site_visit_measurements (include unit columns)
   const { data: siteVisitItemsData } = sv
-    ? await supabase
+    ? await admin
         .from("site_visit_measurements")
         .select("id, name, width, width_unit, height, height_unit, depth, depth_unit, notes, ground_clearance, ground_clearance_unit")
         .eq("site_visit_id", sv.id)

@@ -1174,8 +1174,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
 
         const isEmployeeRole = currentUserRole === "Employee";
         const isAdmin = currentUserRole === "Admin";
-        const isDesignFirst = order.workflow_type === "design_first";
-        const nextStageLabel = isDesignFirst ? "Production" : "Design";
+        const nextStageLabel = nextStageLabelFromWorkflow(order.workflow_type);
         const quoteStage = order.stage || "";
         const isQuotationStage = [
           "Quotation In Progress",
@@ -1297,9 +1296,11 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
 
       {showSendConfirm && (
         <QuotationConfirmModal
+          status={status}
           subtotal={subtotal}
           discount={effectiveDiscount}
           tax={tax}
+          shipping={shipping}
           grandTotal={grandTotal}
           totalItems={sections.reduce((acc, sec) => acc + sec.lines.length, 0)}
           sectionSummaries={sections.map((sec) => ({
@@ -1324,7 +1325,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
       {advanceConfirmType && (
         <WorkflowAdvanceConfirmModal
           mode={advanceConfirmType}
-          isEmployee={isEmployee}
+          isEmployee={currentUserRole === "Employee"}
           nextStageLabel={nextStageLabelFromWorkflow(order.workflow_type)}
           onConfirm={() => {
             onRequestAdvance?.();
@@ -1338,7 +1339,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
 };
 
 function nextStageLabelFromWorkflow(workflowType?: "quote_first" | "design_first"): string {
-  return workflowType === "design_first" ? "Production" : "Design";
+  return workflowType === "design_first" ? "Production" : "Design In Progress";
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1561,19 +1562,33 @@ function ProductInfoModal({ product, onClose }: { product: Product; onClose: () 
 // ─────────────────────────────────────────────────────────────────────────────
 // Quotation Confirm Modal Component
 // ─────────────────────────────────────────────────────────────────────────────
+function getSendConfirmSubtitle(status: string): string {
+  if (status === "Rejected") {
+    return "Review revised totals before resending to the customer.";
+  }
+  if (status === "Sent") {
+    return "Review totals before resending the quotation to the customer.";
+  }
+  return "Review totals before sending to the customer for approval.";
+}
+
 function QuotationConfirmModal({
+  status,
   subtotal,
   discount,
   tax,
+  shipping,
   grandTotal,
   totalItems,
   sectionSummaries,
   onConfirm,
   onClose,
 }: {
+  status: string;
   subtotal: number;
   discount: number;
   tax: number;
+  shipping: number;
   grandTotal: number;
   totalItems: number;
   sectionSummaries: {
@@ -1586,6 +1601,8 @@ function QuotationConfirmModal({
   onConfirm: () => void;
   onClose: () => void;
 }) {
+  const confirmLabel = status === "Rejected" ? "Resend to Customer" : "Send to Customer";
+
   return (
     <div
       style={{
@@ -1620,7 +1637,7 @@ function QuotationConfirmModal({
               Confirm Quotation
             </h4>
             <span style={{ fontSize: "10px", color: "#64748b", fontWeight: 600 }}>
-              Sending to Customer for Approval
+              {getSendConfirmSubtitle(status)}
             </span>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
@@ -1682,6 +1699,12 @@ function QuotationConfirmModal({
             <span style={{ fontSize: "12px", color: "#64748b", fontWeight: 600 }}>Tax (GST)</span>
             <span style={{ fontSize: "12px", color: "#0f172a", fontWeight: 800 }}>+₹{tax.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
           </div>
+          {shipping > 0 && (
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: "12px", color: "#64748b", fontWeight: 600 }}>Shipping</span>
+              <span style={{ fontSize: "12px", color: "#0f172a", fontWeight: 800 }}>+₹{shipping.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+            </div>
+          )}
           <div style={{ borderTop: "1px dashed #cbd5e1", margin: "4px 0" }} />
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span style={{ fontSize: "14px", color: "#0f172a", fontWeight: 900 }}>Grand Total</span>
@@ -1705,7 +1728,7 @@ function QuotationConfirmModal({
             onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#16a34a"}
             onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "#22c55e"}
           >
-            <Check size={14} /> Confirm & Proceed
+            <Check size={14} /> {confirmLabel}
           </button>
         </div>
       </div>
@@ -1727,13 +1750,23 @@ function WorkflowAdvanceConfirmModal({
   onClose: () => void;
 }) {
   const title =
-    mode === "override" ? "Approve Without Customer?" : isEmployee ? "Request Admin Approval?" : `Move to ${nextStageLabel}?`;
+    mode === "override"
+      ? "Approve Without Customer?"
+      : isEmployee
+        ? `Request Advance to ${nextStageLabel}?`
+        : `Move to ${nextStageLabel}?`;
   const description =
     mode === "override"
-      ? `This will mark the quotation approved on behalf of the customer and move the order to ${nextStageLabel}.`
+      ? `This will mark the quotation as approved on behalf of the customer, set the order to Quotation Approved, and advance it to ${nextStageLabel}.`
       : isEmployee
-        ? `This sends an admin approval request to move the order to ${nextStageLabel}. The stage will not advance immediately.`
-        : `This will move the order to ${nextStageLabel}.`;
+        ? `This flags the order for admin review. The order will not move to ${nextStageLabel} until an admin approves.`
+        : `This will advance the order from Quotation Approved to ${nextStageLabel}.`;
+  const confirmLabel =
+    mode === "override"
+      ? "Approve & Advance"
+      : isEmployee
+        ? "Submit Request"
+        : `Move to ${nextStageLabel}`;
 
   return (
     <div
@@ -1779,7 +1812,7 @@ function WorkflowAdvanceConfirmModal({
             onClick={onConfirm}
             style={{ padding: "8px 16px", backgroundColor: mode === "override" ? "#d97706" : "#16a34a", color: "white", border: "none", borderRadius: "8px", fontSize: "12px", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}
           >
-            <Check size={14} /> Confirm
+            <Check size={14} /> {confirmLabel}
           </button>
         </div>
       </div>

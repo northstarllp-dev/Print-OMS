@@ -1,27 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyPortalToken } from "@/utils/portal-tokens";
 import { checkRateLimit } from "@/utils/rate-limiter";
-import { cookies } from "next/headers";
-
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const SUPABASE_ANON_KEY =
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-async function supabaseFetch(path: string, options: RequestInit = {}) {
-  const url = `${SUPABASE_URL}/rest/v1/${path}`;
-  const res = await fetch(url, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-      Prefer: "return=representation",
-      ...(options.headers || {}),
-    },
-  });
-  return res;
-}
+import { createAdminClient } from "@/utils/supabase/admin";
 
 // Extract token from query or session cookie
 function getTokenFromRequest(req: NextRequest): string | null {
@@ -118,20 +98,26 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const res = await supabaseFetch(
-    `order_activity?order_id=eq.${encodeURIComponent(orderId)}&activity_type=eq.customer&order=created_at.asc&select=*`
-  );
+  const admin = createAdminClient();
+  if (!admin) {
+    return NextResponse.json({ error: "Portal server unavailable" }, { status: 500 });
+  }
 
-  if (!res.ok) {
-    const err = await res.text();
-    console.error("Supabase error:", err);
+  const { data, error } = await admin
+    .from("order_activity")
+    .select("*")
+    .eq("order_id", orderId)
+    .eq("activity_type", "customer")
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    console.error("Supabase error:", error.message);
     return NextResponse.json(
-      { error: "Failed to load messages", detail: err },
+      { error: "Failed to load messages", detail: error.message },
       { status: 500 }
     );
   }
 
-  const data = await res.json();
   return NextResponse.json({ messages: data || [] });
 }
 
@@ -192,22 +178,26 @@ export async function POST(req: NextRequest) {
     attachments: [],
   };
 
-  const res = await supabaseFetch("order_activity", {
-    method: "POST",
-    body: JSON.stringify(payloadData),
-  });
+  const admin = createAdminClient();
+  if (!admin) {
+    return NextResponse.json({ error: "Portal server unavailable" }, { status: 500 });
+  }
 
-  if (!res.ok) {
-    const err = await res.text();
-    console.error("Supabase insert error:", err);
+  const { data, error } = await admin
+    .from("order_activity")
+    .insert(payloadData)
+    .select("*")
+    .single();
+
+  if (error) {
+    console.error("Supabase insert error:", error.message);
     return NextResponse.json(
-      { error: "Failed to send message", detail: err },
+      { error: "Failed to send message", detail: error.message },
       { status: 500 }
     );
   }
 
-  const data = await res.json();
   return NextResponse.json({
-    message: Array.isArray(data) ? data[0] : data,
+    message: data,
   });
 }
