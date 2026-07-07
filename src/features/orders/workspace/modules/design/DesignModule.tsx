@@ -314,13 +314,7 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">
-          Design Workflow
-        </h3>
-        <span className="text-[10px] font-bold text-slate-400">STAGE 3</span>
-      </div>
+      {/* Header removed as requested */}
 
       {/* Customer Resources Section */}
       <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-3">

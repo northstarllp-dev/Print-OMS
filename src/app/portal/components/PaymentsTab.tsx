@@ -66,32 +66,32 @@ export function PaymentsTab({ orderId }: PaymentsTabProps) {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
           <div className="text-[10px] font-black uppercase tracking-wider text-slate-500">Total amount</div>
-          <div className="text-xl font-black text-slate-900 font-mono mt-1">
+          <div className="text-lg font-bold text-slate-900 mt-1">
             ₹{(balance?.totalAmount ?? 0).toLocaleString("en-IN")}
           </div>
           <div className="text-[10px] font-semibold text-slate-400 mt-0.5">Ex-GST</div>
         </div>
         <div className="bg-violet-50 border border-violet-100 rounded-2xl p-4">
           <div className="text-[10px] font-black uppercase tracking-wider text-violet-600">GST</div>
-          <div className="text-xl font-black text-violet-900 font-mono mt-1">
+          <div className="text-lg font-bold text-violet-900 mt-1">
             ₹{(balance?.gst ?? 0).toLocaleString("en-IN")}
           </div>
         </div>
         <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4">
           <div className="text-[10px] font-black uppercase tracking-wider text-blue-600">Total incl. GST</div>
-          <div className="text-xl font-black text-blue-900 font-mono mt-1">
+          <div className="text-lg font-bold text-blue-900 mt-1">
             ₹{(balance?.grandTotal ?? 0).toLocaleString("en-IN")}
           </div>
         </div>
         <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4">
           <div className="text-[10px] font-black uppercase tracking-wider text-emerald-600">Received</div>
-          <div className="text-xl font-black text-emerald-900 font-mono mt-1">
+          <div className="text-lg font-bold text-emerald-900 mt-1">
             ₹{(balance?.receivedTotal ?? 0).toLocaleString("en-IN")}
           </div>
         </div>
         <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 col-span-2 sm:col-span-1">
           <div className="text-[10px] font-black uppercase tracking-wider text-amber-600">Outstanding</div>
-          <div className="text-xl font-black text-amber-900 font-mono mt-1">
+          <div className="text-lg font-bold text-amber-900 mt-1">
             ₹{(balance?.outstanding ?? 0).toLocaleString("en-IN")}
           </div>
         </div>
@@ -112,8 +112,8 @@ export function PaymentsTab({ orderId }: PaymentsTabProps) {
                 className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm flex flex-wrap items-center justify-between gap-3"
               >
                 <div>
-                  <h3 className="text-sm font-black text-slate-800">{p.payment_name}</h3>
-                  <div className="text-lg font-black text-blue-700 font-mono mt-1">
+                  <h3 className="text-sm font-bold text-slate-800">{p.payment_name}</h3>
+                  <div className="text-base font-bold text-blue-700 mt-1">
                     ₹{amountOf(p).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                   </div>
                 </div>

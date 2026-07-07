@@ -843,11 +843,11 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     if (activeStepTab === PAYMENTS_TAB) return "Payment Milestones";
     if (activeStepTab === 0) return "Site Visit Audit";
     if (isDesignFirst) {
-      if (activeStepTab === 1) return "Design Proof";
+      if (activeStepTab === 1) return "Design Workflow";
       if (activeStepTab === 2) return "Product Quote";
     } else {
       if (activeStepTab === 1) return "Product Quote";
-      if (activeStepTab === 2) return "Design Proof";
+      if (activeStepTab === 2) return "Design Workflow";
     }
     if (activeStepTab === 3) return "Fabrication Checklist";
     if (activeStepTab === 4) return "Field Installation";
