@@ -1,9 +1,16 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search, ClipboardList, CheckCircle, ArrowRight } from "lucide-react";
 import Link from "next/link";
+import { parseOrderStage } from "@/features/orders/workspace/shared/stageGrants";
+import {
+  countQueueViews,
+  partitionQueueOrdersByView,
+} from "@/features/orders/workspace/shared/staffQueueStages";
+import { QueueViewToggle } from "@/features/orders/components/QueueViewToggle";
+import type { QueueView } from "@/features/orders/workspace/shared/staffQueueStages";
 
 interface OrderItem {
   id: string;
@@ -38,11 +45,23 @@ const getStageBadgeStyle = (stage: string) => {
 export function InstallationDashboardClient({
   initialOrders,
   orderDetailBasePath = "/installation/orders",
-  entryStage,
+  entryStage = "installation",
 }: InstallationDashboardClientProps) {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
   const [stageFilter, setStageFilter] = useState("ALL");
+  const [queueView, setQueueView] = useState<QueueView>("current");
+  const parsedEntryStage = parseOrderStage(entryStage) ?? "installation";
+
+  const queueViewCounts = useMemo(
+    () => countQueueViews(initialOrders, parsedEntryStage),
+    [initialOrders, parsedEntryStage]
+  );
+
+  const queueScopedOrders = useMemo(
+    () => partitionQueueOrdersByView(initialOrders, parsedEntryStage, queueView),
+    [initialOrders, parsedEntryStage, queueView]
+  );
 
   const resolveOrderHref = (order: OrderItem) => {
     const id = order.orderId || order.id;
@@ -50,10 +69,10 @@ export function InstallationDashboardClient({
     return entryStage ? `${base}?entryStage=${entryStage}` : base;
   };
 
-  const activeJobs = initialOrders.filter(o => o.stage === "Ready For Installation" || o.stage === "Installation Scheduled").length;
-  const completedJobs = initialOrders.filter(o => o.stage === "Completed" || o.stage === "Closed").length;
+  const activeJobs = countQueueViews(initialOrders, parsedEntryStage).current;
+  const completedJobs = countQueueViews(initialOrders, parsedEntryStage).completed;
 
-  const filteredOrders = initialOrders.filter(order => {
+  const filteredOrders = queueScopedOrders.filter(order => {
     const matchesSearch = 
       (order.clientName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
       (order.businessName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -78,6 +97,15 @@ export function InstallationDashboardClient({
         <p className="text-sm text-slate-500 font-medium">
           Monitor and update active on-site installation orders.
         </p>
+        <div className="mt-4">
+          <QueueViewToggle
+            value={queueView}
+            onChange={setQueueView}
+            incomingCount={queueViewCounts.incoming}
+            currentCount={queueViewCounts.current}
+            completedCount={queueViewCounts.completed}
+          />
+        </div>
       </div>
 
       {/* Stats row */}
@@ -86,28 +114,28 @@ export function InstallationDashboardClient({
         <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all duration-200">
           <div className="flex justify-between items-start mb-4">
             <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-              Active Installations
+              Current
             </span>
             <div className="w-8 height-8 bg-indigo-50 rounded-lg flex items-center justify-center">
               <ClipboardList size={16} className="text-indigo-600" />
             </div>
           </div>
           <div className="text-3xl font-black text-slate-800 mb-1">{activeJobs}</div>
-          <p className="text-xs text-slate-500 font-semibold">Orders ready or scheduled for installation</p>
+          <p className="text-xs text-slate-500 font-semibold">Orders currently in installation</p>
         </div>
 
         {/* Completed Jobs Card */}
         <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all duration-200">
           <div className="flex justify-between items-start mb-4">
             <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-              Total Completed
+              Completed
             </span>
             <div className="w-8 height-8 bg-emerald-50 rounded-lg flex items-center justify-center">
               <CheckCircle size={16} className="text-emerald-600" />
             </div>
           </div>
           <div className="text-3xl font-black text-slate-800 mb-1">{completedJobs}</div>
-          <p className="text-xs text-slate-500 font-semibold">Installation jobs successfully completed</p>
+          <p className="text-xs text-slate-500 font-semibold">Orders past the installation phase</p>
         </div>
       </div>
 

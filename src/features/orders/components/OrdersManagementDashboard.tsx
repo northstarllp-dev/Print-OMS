@@ -21,6 +21,13 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { updateOrder, assignTeamToOrder } from "@/features/orders/actions/orderActions";
+import { parseOrderStage } from "@/features/orders/workspace/shared/stageGrants";
+import {
+  countQueueViews,
+  partitionQueueOrdersByView,
+} from "@/features/orders/workspace/shared/staffQueueStages";
+import { QueueViewToggle } from "./QueueViewToggle";
+import type { QueueView } from "@/features/orders/workspace/shared/staffQueueStages";
 
 const getStatusColor = (status: string) => {
   const colors: Record<string, { bg: string; text: string; label: string }> = {
@@ -82,6 +89,8 @@ export function OrdersManagementDashboard({
   const [stageFilter, setStageFilter] = useState("ALL");
   const [healthFilter, setHealthFilter] = useState("ALL");
   const [selectedKpi, setSelectedKpi] = useState<string | null>(null);
+  const parsedEntryStage = parseOrderStage(entryStage);
+  const [queueView, setQueueView] = useState<QueueView>("current");
   
   // Custom Date Range Filter
   const [dateFilterType, setDateFilterType] = useState<"all" | "range">("range");
@@ -122,6 +131,16 @@ export function OrdersManagementDashboard({
   const customers = initialCustomers;
   const employees = initialEmployees;
   const enquiries = initialEnquiries;
+
+  const queueViewCounts = useMemo(() => {
+    if (!parsedEntryStage) return { incoming: 0, completed: 0 };
+    return countQueueViews(orders, parsedEntryStage);
+  }, [orders, parsedEntryStage]);
+
+  const queueScopedOrders = useMemo(() => {
+    if (!parsedEntryStage) return orders;
+    return partitionQueueOrdersByView(orders, parsedEntryStage, queueView);
+  }, [orders, parsedEntryStage, queueView]);
   
   // State for right assignment panel
   const [assignPanelOrderId, setAssignPanelOrderId] = useState<string | null>(null);
@@ -204,18 +223,18 @@ export function OrdersManagementDashboard({
   ];
 
   const getKpiFilteredOrders = () => {
-    if (selectedKpi === "active")       return orders.filter(o => o.stage !== "Completed" && o.stage !== "Closed");
-    if (selectedKpi === "unassigned")   return orders.filter(o => o.stage !== "Completed" && o.stage !== "Closed" && (!o.assignedEmployees || o.assignedEmployees.length === 0));
-    if (selectedKpi === "pendingcalls") return orders.filter(o => enquiries?.find((e: any) => e.orderId === o.id && e.status === "Pending" && e.source === "Phone Call"));
-    if (selectedKpi === "completed")    return orders.filter(o => o.stage === "Completed" || o.stage === "Closed");
-    if (selectedKpi === "myactive")     return orders.filter(o => o.stage !== "Completed" && o.stage !== "Closed" && (o.assignedEmployees?.includes(employeeName) || o.assignedEmployees?.includes(currentEmployeeId)));
-    if (selectedKpi === "mycompleted")  return orders.filter(o => (o.stage === "Completed" || o.stage === "Closed") && (o.assignedEmployees?.includes(employeeName) || o.assignedEmployees?.includes(currentEmployeeId)));
+    if (selectedKpi === "active")       return queueScopedOrders.filter(o => o.stage !== "Completed" && o.stage !== "Closed");
+    if (selectedKpi === "unassigned")   return queueScopedOrders.filter(o => o.stage !== "Completed" && o.stage !== "Closed" && (!o.assignedEmployees || o.assignedEmployees.length === 0));
+    if (selectedKpi === "pendingcalls") return queueScopedOrders.filter(o => enquiries?.find((e: any) => e.orderId === o.id && e.status === "Pending" && e.source === "Phone Call"));
+    if (selectedKpi === "completed")    return queueScopedOrders.filter(o => o.stage === "Completed" || o.stage === "Closed");
+    if (selectedKpi === "myactive")     return queueScopedOrders.filter(o => o.stage !== "Completed" && o.stage !== "Closed" && (o.assignedEmployees?.includes(employeeName) || o.assignedEmployees?.includes(currentEmployeeId)));
+    if (selectedKpi === "mycompleted")  return queueScopedOrders.filter(o => (o.stage === "Completed" || o.stage === "Closed") && (o.assignedEmployees?.includes(employeeName) || o.assignedEmployees?.includes(currentEmployeeId)));
     return null;
   };
 
   const kpiFilteredOrders = getKpiFilteredOrders();
 
-  const filteredOrders = (kpiFilteredOrders ?? orders).filter(order => {
+  const filteredOrders = (kpiFilteredOrders ?? queueScopedOrders).filter(order => {
     if (debouncedSearch) {
       const q = debouncedSearch;
       // Resolve customer name from customers list
@@ -292,6 +311,18 @@ export function OrdersManagementDashboard({
             Refresh
           </button>
         </div>
+
+        {parsedEntryStage && (
+          <div style={{ marginBottom: "20px" }}>
+            <QueueViewToggle
+              value={queueView}
+              onChange={setQueueView}
+              incomingCount={queueViewCounts.incoming}
+              currentCount={queueViewCounts.current}
+              completedCount={queueViewCounts.completed}
+            />
+          </div>
+        )}
 
         {/* Stats Cards */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>

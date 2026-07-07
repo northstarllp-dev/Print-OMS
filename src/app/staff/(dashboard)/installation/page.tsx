@@ -1,24 +1,13 @@
 import { getOrders } from "@/features/orders/actions/orderActions";
 import { getUserSession } from "@/features/auth/actions/authActions";
 import { InstallationDashboardClient } from "@/app/installation/(dashboard)/orders/InstallationDashboardClient";
+import { filterStaffQueueOrders } from "@/features/orders/workspace/shared/staffQueueStages";
 
 export default async function StaffInstallationPage() {
   const orders = await getOrders();
   const user = await getUserSession();
 
-  const installationStages = [
-    "Ready For Installation",
-    "Installation Scheduled",
-    "Completed",
-    "Closed",
-  ];
-
-  // Stage + assignment: orders in installation stages AND assigned to this staff member
-  const filteredOrders = (orders || []).filter(
-    (o) =>
-      o.assigned_employees?.includes(user?.id) &&
-      installationStages.includes(o.stage)
-  );
+  const filteredOrders = filterStaffQueueOrders(orders, user?.id, "installation");
 
   const mappedOrders = filteredOrders.map((o) => ({
     id: o.id,

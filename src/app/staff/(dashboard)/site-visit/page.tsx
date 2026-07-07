@@ -4,6 +4,7 @@ import { getCustomers } from "@/features/customers/actions/customerActions";
 import { getEnquiries } from "@/features/enquiries/actions/enquiryActions";
 import { getUserSession } from "@/features/auth/actions/authActions";
 import { getEmployees } from "@/features/employees/actions/employeeActions";
+import { filterStaffQueueOrders } from "@/features/orders/workspace/shared/staffQueueStages";
 
 export default async function StaffSiteVisitPage() {
   const orders = await getOrders();
@@ -15,12 +16,7 @@ export default async function StaffSiteVisitPage() {
   // Find current employee info
   const currentEmployee = employeesData?.find(e => e.id === user?.id);
   
-  // Stage + assignment: orders in site-visit stages AND assigned to this staff member
-  const siteVisitStages = ["Site Visit Pending", "Site Visit Scheduled", "Site Visit Completed"];
-  const queueOrders = orders?.filter(o =>
-    o.assigned_employees?.includes(user?.id) &&
-    siteVisitStages.includes(o.stage)
-  ) || [];
+  const queueOrders = filterStaffQueueOrders(orders, user?.id, "site_visit");
   
   const mappedOrders = queueOrders.map(o => ({
     id: o.id,

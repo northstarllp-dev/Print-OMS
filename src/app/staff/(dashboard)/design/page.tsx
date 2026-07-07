@@ -4,6 +4,7 @@ import { getCustomers } from "@/features/customers/actions/customerActions";
 import { getEnquiries } from "@/features/enquiries/actions/enquiryActions";
 import { getUserSession } from "@/features/auth/actions/authActions";
 import { getEmployees } from "@/features/employees/actions/employeeActions";
+import { filterStaffQueueOrders } from "@/features/orders/workspace/shared/staffQueueStages";
 
 export default async function StaffDesignPage() {
   const orders = await getOrders();
@@ -15,12 +16,7 @@ export default async function StaffDesignPage() {
   // Find current employee info
   const currentEmployee = employeesData?.find(e => e.id === user?.id);
   
-  // Stage + assignment: orders in design stages AND assigned to this staff member
-  const designStages = ["Design In Progress", "Design Approved"];
-  const queueOrders = orders?.filter(o =>
-    o.assigned_employees?.includes(user?.id) &&
-    designStages.includes(o.stage)
-  ) || [];
+  const queueOrders = filterStaffQueueOrders(orders, user?.id, "design");
   
   const mappedOrders = queueOrders.map(o => ({
     id: o.id,

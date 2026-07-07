@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import { dispatchWhatsAppNotification } from "@/features/notifications/actions/dispatchNotification";
 import { getRequestBaseUrl } from "@/features/notifications/whatsapp/requestBaseUrl";
 import { assertStageEditPermission } from "@/features/orders/workspace/shared/serverPermissions";
+import { revalidateStaffQueuePaths } from "@/features/orders/actions/orderActions";
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -72,8 +73,14 @@ export async function updateInstallationDetails(orderId: string, details: any) {
 export async function markInstallationCompleted(orderId: string, checklist: any[], photos: any[], notes: string) {
   await assertStageEditPermission("installation");
   const supabase = await getSupabase();
-  
-  // Update the installations table (write both photo columns — live DB has both)
+
+  const { data: order, error: fetchError } = await supabase
+    .from("orders")
+    .select("order_id, stage")
+    .eq("id", orderId)
+    .single();
+  if (fetchError) throw fetchError;
+
   const { error } = await supabase
     .from("installations")
     .update({
@@ -81,19 +88,29 @@ export async function markInstallationCompleted(orderId: string, checklist: any[
       checklist,
       photos,
       afterPhotos: photos,
-      notes
+      notes,
     })
     .eq("order_id", orderId);
 
   if (error) throw error;
-  
-  // Installation team can complete the installation stage directly.
+
   const { error: orderError } = await supabase
     .from("orders")
-    .update({ stage: "Completed" })
+    .update({ stage_status: "Pending Admin Approval: Job Done" })
     .eq("id", orderId);
   if (orderError) throw orderError;
-  
+
+  await supabase.from("order_activity").insert({
+    order_id: order.order_id || orderId,
+    activity_type: "timeline",
+    actor_name: "Installation Team",
+    actor_role: "Installation",
+    content: `Installation marked complete from "${order.stage}". Pending admin payment review.`,
+    metadata: { action: "installation_complete_pending_admin" },
+  });
+
+  await revalidateStaffQueuePaths();
+
   return { success: true };
 }
 

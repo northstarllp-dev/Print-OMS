@@ -1,0 +1,251 @@
+"use client";
+
+import React, { useCallback, useEffect, useState } from "react";
+import {
+  X,
+  CreditCard,
+  CheckCircle2,
+  Loader2,
+  IndianRupee,
+  AlertTriangle,
+} from "lucide-react";
+import type { Payment } from "@/types";
+import {
+  getPaymentsByOrder,
+  getPaymentBalanceSummary,
+  type PaymentBalanceSummary,
+} from "@/features/payments/actions/paymentActions";
+
+interface InstallationPaymentApprovalModalProps {
+  orderId: string;
+  orderLabel?: string;
+  onClose: () => void;
+  onConfirm: () => Promise<void>;
+}
+
+function amountOf(p: Payment): number {
+  return Number(p.calculated_amount ?? p.amount ?? 0);
+}
+
+export function InstallationPaymentApprovalModal({
+  orderId,
+  orderLabel,
+  onClose,
+  onConfirm,
+}: InstallationPaymentApprovalModalProps) {
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [balance, setBalance] = useState<PaymentBalanceSummary | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [confirming, setConfirming] = useState(false);
+  const [paymentConfirmed, setPaymentConfirmed] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [data, bal] = await Promise.all([
+        getPaymentsByOrder(orderId),
+        getPaymentBalanceSummary(orderId),
+      ]);
+      setPayments(data);
+      setBalance(bal);
+    } catch (e: any) {
+      setError(e.message || "Failed to load payments");
+    } finally {
+      setLoading(false);
+    }
+  }, [orderId]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const handleConfirm = async () => {
+    if (!paymentConfirmed) return;
+    setConfirming(true);
+    setError(null);
+    try {
+      await onConfirm();
+    } catch (e: any) {
+      setError(e.message || "Failed to complete order");
+      setConfirming(false);
+    }
+  };
+
+  const outstanding = balance?.outstanding ?? 0;
+  const allReceived = outstanding <= 0;
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden border border-slate-200">
+        <div className="px-6 py-4 border-b border-slate-100 flex items-start justify-between gap-4 bg-slate-50">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <CreditCard size={18} className="text-blue-600" />
+              <h2 className="text-base font-black text-slate-900">
+                Review Payments & Complete Order
+              </h2>
+            </div>
+            {orderLabel && (
+              <p className="text-xs text-slate-500 font-semibold">{orderLabel}</p>
+            )}
+            <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+              Installation is complete. Confirm payment status before marking this order as completed.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={confirming}
+            className="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-50"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6 space-y-5">
+          {loading ? (
+            <div className="flex items-center justify-center py-16 text-xs font-bold text-slate-400 gap-2">
+              <Loader2 size={16} className="animate-spin" /> Loading payments…
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                  <div className="text-[10px] font-black uppercase text-slate-500">Total ex-GST</div>
+                  <div className="text-lg font-bold text-slate-800 mt-0.5">
+                    ₹{(balance?.totalAmount ?? 0).toLocaleString("en-IN")}
+                  </div>
+                </div>
+                <div className="bg-violet-50 border border-violet-100 rounded-xl p-3">
+                  <div className="text-[10px] font-black uppercase text-violet-600">GST</div>
+                  <div className="text-lg font-bold text-violet-800 mt-0.5">
+                    ₹{(balance?.gst ?? 0).toLocaleString("en-IN")}
+                  </div>
+                </div>
+                <div className="bg-blue-50 border border-blue-100 rounded-xl p-3">
+                  <div className="text-[10px] font-black uppercase text-blue-600">Total incl. GST</div>
+                  <div className="text-lg font-bold text-blue-800 mt-0.5">
+                    ₹{(balance?.grandTotal ?? 0).toLocaleString("en-IN")}
+                  </div>
+                </div>
+                <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3">
+                  <div className="text-[10px] font-black uppercase text-emerald-600">Received</div>
+                  <div className="text-lg font-bold text-emerald-800 mt-0.5">
+                    ₹{(balance?.receivedTotal ?? 0).toLocaleString("en-IN")}
+                  </div>
+                </div>
+                <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 col-span-2 sm:col-span-2">
+                  <div className="text-[10px] font-black uppercase text-amber-600">Outstanding</div>
+                  <div className="text-lg font-bold text-amber-800 mt-0.5">
+                    ₹{outstanding.toLocaleString("en-IN")}
+                  </div>
+                </div>
+              </div>
+
+              {!allReceived && (
+                <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-800">
+                  <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+                  <span>
+                    There is still ₹{outstanding.toLocaleString("en-IN")} outstanding. You can still complete the order if payment has been received offline.
+                  </span>
+                </div>
+              )}
+
+              <div>
+                <h3 className="text-[10px] font-black uppercase text-slate-500 tracking-wider mb-3">
+                  Previous Payments
+                </h3>
+                {payments.length === 0 ? (
+                  <div className="text-center py-10 border border-dashed border-slate-200 rounded-2xl bg-slate-50">
+                    <IndianRupee size={28} className="mx-auto text-slate-300 mb-2" />
+                    <p className="text-xs font-bold text-slate-500">No payments recorded yet</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                    {payments.map((p) => {
+                      const amt = amountOf(p);
+                      const received = p.status === "received";
+                      return (
+                        <div
+                          key={p.id}
+                          className="flex flex-wrap items-center justify-between gap-3 border border-slate-200 rounded-xl bg-white px-4 py-3"
+                        >
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-bold text-slate-800">{p.payment_name}</span>
+                              <span
+                                className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md border ${
+                                  received
+                                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                    : "bg-amber-50 text-amber-700 border-amber-200"
+                                }`}
+                              >
+                                {received ? "Received" : "Expected"}
+                              </span>
+                            </div>
+                            <div className="text-sm font-bold text-slate-700 mt-0.5">
+                              ₹{amt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                              {p.amount_type === "percentage" && p.percentage != null && (
+                                <span className="text-slate-400 font-semibold ml-1">({p.percentage}%)</span>
+                              )}
+                            </div>
+                          </div>
+                          {received && (
+                            <CheckCircle2 size={18} className="text-emerald-500 shrink-0" />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <label className="flex items-start gap-3 p-4 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={paymentConfirmed}
+                  onChange={(e) => setPaymentConfirmed(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                />
+                <span className="text-sm font-semibold text-slate-700 leading-snug">
+                  Payment completed — I confirm all dues for this order have been received or reconciled.
+                </span>
+              </label>
+            </>
+          )}
+
+          {error && (
+            <div className="text-xs font-bold text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2">
+              {error}
+            </div>
+          )}
+        </div>
+
+        <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex items-center justify-end gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={confirming}
+            className="px-4 py-2 text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleConfirm}
+            disabled={loading || confirming || !paymentConfirmed}
+            className="inline-flex items-center gap-2 px-5 py-2 text-xs font-bold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {confirming ? (
+              <><Loader2 size={14} className="animate-spin" /> Completing…</>
+            ) : (
+              <><CheckCircle2 size={14} /> Mark Order Completed</>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -1,9 +1,16 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Search, ClipboardList, AlertTriangle, CheckCircle, ArrowRight, Clock } from "lucide-react";
+import { Search, ClipboardList, CheckCircle, ArrowRight } from "lucide-react";
 import Link from "next/link";
+import { parseOrderStage } from "@/features/orders/workspace/shared/stageGrants";
+import {
+  countQueueViews,
+  partitionQueueOrdersByView,
+} from "@/features/orders/workspace/shared/staffQueueStages";
+import { QueueViewToggle } from "@/features/orders/components/QueueViewToggle";
+import type { QueueView } from "@/features/orders/workspace/shared/staffQueueStages";
 
 interface OrderItem {
   id: string;
@@ -40,11 +47,23 @@ const getStageBadgeStyle = (stage: string) => {
 export function ProductionDashboardClient({
   initialOrders,
   orderDetailBasePath = "/production/orders",
-  entryStage,
+  entryStage = "production",
 }: ProductionDashboardClientProps) {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
   const [stageFilter, setStageFilter] = useState("ALL");
+  const [queueView, setQueueView] = useState<QueueView>("current");
+  const parsedEntryStage = parseOrderStage(entryStage) ?? "production";
+
+  const queueViewCounts = useMemo(
+    () => countQueueViews(initialOrders, parsedEntryStage),
+    [initialOrders, parsedEntryStage]
+  );
+
+  const queueScopedOrders = useMemo(
+    () => partitionQueueOrdersByView(initialOrders, parsedEntryStage, queueView),
+    [initialOrders, parsedEntryStage, queueView]
+  );
 
   const resolveOrderHref = (order: OrderItem) => {
     const id = order.orderId || order.id;
@@ -52,11 +71,10 @@ export function ProductionDashboardClient({
     return entryStage ? `${base}?entryStage=${entryStage}` : base;
   };
 
-  // Calculations
-  const activeJobs = initialOrders.filter(o => o.stage === "Design Approved" || o.stage === "Production" || o.stage === "Ready For Installation").length;
-  const completedJobs = initialOrders.filter(o => o.stage === "Completed" || o.stage === "Closed").length;
+  const activeJobs = countQueueViews(initialOrders, parsedEntryStage).current;
+  const completedJobs = countQueueViews(initialOrders, parsedEntryStage).completed;
 
-  const filteredOrders = initialOrders.filter(order => {
+  const filteredOrders = queueScopedOrders.filter(order => {
     const matchesSearch = 
       (order.clientName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
       (order.businessName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -81,6 +99,15 @@ export function ProductionDashboardClient({
         <p className="text-sm text-slate-500 font-medium">
           Monitor and update active workshop signage orders post-design approval.
         </p>
+        <div className="mt-4">
+          <QueueViewToggle
+            value={queueView}
+            onChange={setQueueView}
+            incomingCount={queueViewCounts.incoming}
+            currentCount={queueViewCounts.current}
+            completedCount={queueViewCounts.completed}
+          />
+        </div>
       </div>
 
       {/* Stats row */}
@@ -89,28 +116,28 @@ export function ProductionDashboardClient({
         <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all duration-200">
           <div className="flex justify-between items-start mb-4">
             <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-              Active Fabrication
+              Current
             </span>
             <div className="w-8 height-8 bg-blue-50 rounded-lg flex items-center justify-center">
               <ClipboardList size={16} className="text-blue-600" />
             </div>
           </div>
           <div className="text-3xl font-black text-slate-800 mb-1">{activeJobs}</div>
-          <p className="text-xs text-slate-500 font-semibold">Orders in production or ready for installation</p>
+          <p className="text-xs text-slate-500 font-semibold">Orders currently in fabrication</p>
         </div>
 
         {/* Completed Jobs Card */}
         <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all duration-200">
           <div className="flex justify-between items-start mb-4">
             <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-              Total Completed
+              Completed
             </span>
             <div className="w-8 height-8 bg-emerald-50 rounded-lg flex items-center justify-center">
               <CheckCircle size={16} className="text-emerald-600" />
             </div>
           </div>
           <div className="text-3xl font-black text-slate-800 mb-1">{completedJobs}</div>
-          <p className="text-xs text-slate-500 font-semibold">Fabrication jobs successfully completed</p>
+          <p className="text-xs text-slate-500 font-semibold">Orders past the fabrication phase</p>
         </div>
       </div>
 

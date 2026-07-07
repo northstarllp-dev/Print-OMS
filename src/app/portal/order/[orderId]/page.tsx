@@ -9,7 +9,7 @@ import { checkRateLimit } from "@/utils/rate-limiter";
 import { Info, Clock, CheckCircle, Check, Loader2, PlayCircle, MapPin, Search } from "lucide-react";
 import { mapSiteVisitFromDb, mapSiteVisitMeasurementFromDb } from "@/features/orders/actions/siteVisitMapper";
 import { mapDesignFromDb } from "@/features/designs/actions/designMapper";
-import { getCustomerVisibleQuotationForOrder } from "@/features/quotations/actions/quotationActions";
+import { toCustomerVisibleQuotation } from "@/features/quotations/utils/quotationSecurity";
 import { OrderDetailClient } from "./OrderDetailClient";
 import React from "react";
 
@@ -131,7 +131,12 @@ export default async function OrderDetailPage({
   }
 
   // Fetch quotation for this order (service role; customer-visible statuses only)
-  const quotationData = await getCustomerVisibleQuotationForOrder(orderData.id);
+  const { data: quotationRow } = await admin
+    .from("quotations")
+    .select("*")
+    .eq("order_id", orderData.id)
+    .maybeSingle();
+  const quotationData = toCustomerVisibleQuotation(quotationRow as Record<string, unknown> | null);
 
   const quoteDetails = quotationData ? {
     id: quotationData.id,

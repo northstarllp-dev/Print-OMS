@@ -1,26 +1,13 @@
 import { getOrders } from "@/features/orders/actions/orderActions";
 import { getUserSession } from "@/features/auth/actions/authActions";
 import { ProductionDashboardClient } from "@/app/production/(dashboard)/orders/ProductionDashboardClient";
+import { filterStaffQueueOrders } from "@/features/orders/workspace/shared/staffQueueStages";
 
 export default async function StaffProductionPage() {
   const orders = await getOrders();
   const user = await getUserSession();
 
-  const productionReadyStages = [
-    "Design Approved",
-    "Production",
-    "Ready For Installation",
-    "Installation Scheduled",
-    "Completed",
-    "Closed",
-  ];
-
-  // Stage + assignment: orders in production stages AND assigned to this staff member
-  const filteredOrders = (orders || []).filter(
-    (o) =>
-      o.assigned_employees?.includes(user?.id) &&
-      productionReadyStages.includes(o.stage)
-  );
+  const filteredOrders = filterStaffQueueOrders(orders, user?.id, "production");
 
   const mappedOrders = filteredOrders.map((o) => ({
     id: o.id,

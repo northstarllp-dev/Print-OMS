@@ -1,21 +1,12 @@
 import React from "react";
 import { getOrders } from "@/features/orders/actions/orderActions";
 import { InstallationDashboardClient } from "./InstallationDashboardClient";
+import { filterFloorQueueOrders } from "@/features/orders/workspace/shared/staffQueueStages";
 
 export default async function InstallationOrdersPage() {
   const orders = await getOrders();
 
-  // Filter orders to only display those that are ready for or in installation
-  const installationStages = [
-    "Ready For Installation",
-    "Installation Scheduled",
-    "Completed",
-    "Closed"
-  ];
-
-  const filteredOrders = (orders || []).filter(o => 
-    installationStages.includes(o.stage)
-  );
+  const filteredOrders = filterFloorQueueOrders(orders, "installation");
 
   const mappedOrders = filteredOrders.map(o => ({
     id: o.id,
@@ -30,6 +21,6 @@ export default async function InstallationOrdersPage() {
   }));
 
   return (
-    <InstallationDashboardClient initialOrders={mappedOrders} />
+    <InstallationDashboardClient initialOrders={mappedOrders} entryStage="installation" />
   );
 }

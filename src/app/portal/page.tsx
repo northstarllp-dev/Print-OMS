@@ -7,11 +7,9 @@ import {
 import { checkRateLimit } from "@/utils/rate-limiter";
 import { PortalClient } from "./PortalClient";
 import React from "react";
-import { ShieldAlert, LogOut, Share2, ClipboardList, AlertCircle, FileText } from "lucide-react";
 import { mapSiteVisitFromDb, mapSiteVisitMeasurementFromDb } from "@/features/orders/actions/siteVisitMapper";
 import { mapDesignFromDb } from "@/features/designs/actions/designMapper";
 import { toCustomerVisibleDesign } from "@/features/designs/utils/customerVisibleDesign";
-import { getAppSettingsForCompany } from "@/features/settings/actions/settingsActions";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { isQuotationVisibleToCustomer } from "@/features/quotations/utils/lineAmount";
 
@@ -256,8 +254,17 @@ export default async function PortalPage({
     };
   });
 
-  // Fetch app settings using customer's company ID
-  const appSettings = await getAppSettingsForCompany(customerData.company_id);
+  // Fetch app settings using customer's company ID (admin client — portal has no staff session)
+  const { data: settingsRow } = await admin
+    .from("app_settings")
+    .select("site_visit_scheduling_enabled, installation_scheduling_enabled")
+    .eq("company_id", customerData.company_id)
+    .maybeSingle();
+
+  const appSettings = {
+    siteVisitSchedulingEnabled: settingsRow?.site_visit_scheduling_enabled ?? true,
+    installationSchedulingEnabled: settingsRow?.installation_scheduling_enabled ?? true,
+  };
 
   return (
     <PortalClient

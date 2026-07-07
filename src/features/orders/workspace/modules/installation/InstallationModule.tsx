@@ -140,12 +140,21 @@ export function InstallationModule({ data, permission, callbacks, embedded = fal
 
   const handleMarkCompleted = async () => {
     if (!canEdit) return;
-    if (!window.confirm("Are you sure you want to mark this installation as COMPLETED? This will update the main order status.")) return;
-    
+    if (
+      !window.confirm(
+        "Submit installation to admin for review? The order will stay open until admin confirms payments and marks it completed."
+      )
+    ) {
+      return;
+    }
+
     setSaving(true);
     try {
       await markInstallationCompleted(order.id, checklist, afterPhotos, notes);
-      setAlert({ message: "Installation successfully marked as completed!", type: "success" });
+      setAlert({
+        message: "Installation submitted to admin. Awaiting payment review and order completion.",
+        type: "success",
+      });
       setTimeout(() => {
         onCompleted();
       }, 2000);
@@ -171,7 +180,11 @@ export function InstallationModule({ data, permission, callbacks, embedded = fal
     }
   };
 
-  const isCompleted = order.stage === "Completed" || order.stage === "Closed";
+  const isSubmittedToAdmin = order.stageStatus === "Pending Admin Approval: Job Done";
+  const isCompleted =
+    order.stage === "Completed" ||
+    order.stage === "Closed" ||
+    isSubmittedToAdmin;
   // RBAC (canEdit) + workflow (isCompleted): authority vs actionable
   const canAct = canEdit && !isCompleted;
 
@@ -392,8 +405,13 @@ export function InstallationModule({ data, permission, callbacks, embedded = fal
                   className="inline-flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white border border-green-700 rounded-xl text-sm font-bold shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {saving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
-                  Mark Installation as Completed
+                  Submit Installation to Admin
                 </button>
+              </div>
+            )}
+            {isSubmittedToAdmin && (
+              <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs font-semibold text-amber-800">
+                Submitted to admin for payment review. The order will be marked completed after admin approval.
               </div>
             )}
           </div>

@@ -26,9 +26,11 @@ import { CustomerDetailsDrawer } from "./CustomerDetailsDrawer";
 import { WorkflowChoiceModal } from "./WorkflowChoiceModal";
 import { ProductionModule } from "@/features/orders/workspace/modules/production/ProductionModule";
 import { InstallationModule } from "@/features/orders/workspace/modules/installation/InstallationModule";
+import { InstallationPaymentApprovalModal } from "./InstallationPaymentApprovalModal";
 
 import { resolveStagePermission, isTimelineStageAccessible } from "@/features/orders/workspace/shared/permissions";
-import type { OrderStage } from "@/features/orders/workspace/shared/types";
+import type { OrderStage, StagePermission } from "@/features/orders/workspace/shared/types";
+import { isStaffQueueCompleted } from "@/features/orders/workspace/shared/staffQueueStages";
 import {
   updateSiteVisitDetailsAction,
   updateProductionDetailsAction,
@@ -280,6 +282,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   const [activeRightPanel, setActiveRightPanel] = useState<"logs" | "chat" | null>(null);
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [isWorkflowChoiceOpen, setIsWorkflowChoiceOpen] = useState(false);
+  const [isInstallationPaymentModalOpen, setIsInstallationPaymentModalOpen] = useState(false);
   const [adminOverrideUnlocked, setAdminOverrideUnlocked] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -301,8 +304,14 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     setTimeout(() => setLocalAlert(null), 3500);
   }, []);
 
+  const entryStageRef = useRef(entryStage);
+  entryStageRef.current = entryStage;
+
   useEffect(() => { setOrder(initialOrder); }, [initialOrder]);
-  useEffect(() => { setActiveStepTab(stageToTabIndex(order.stage, order.workflow_type)); }, [order.stage, order.workflow_type]);
+  useEffect(() => {
+    if (entryStageRef.current != null) return;
+    setActiveStepTab(stageToTabIndex(order.stage, order.workflow_type));
+  }, [order.stage, order.workflow_type]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -368,6 +377,15 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     staff_role: currentEmployee?.role ?? null,
     company_id: companyId ?? null,
   };
+  const isStaffQueueReadOnly =
+    isEmployee &&
+    entryStage != null &&
+    isStaffQueueCompleted(order.stage, entryStage);
+  const effectiveStagePermission = (stage: OrderStage): StagePermission => {
+    const base = resolveStagePermission(stage, actor);
+    if (isStaffQueueReadOnly) return { canView: base.canView, canEdit: false };
+    return base;
+  };
   /**
    * Workflow progression gate (Phase 6): separate from resolveStagePermission (RBAC).
    * A staff member's granted stage only becomes accessible once the order has actually
@@ -429,7 +447,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     await markInstallationCompleted(orderId, checklist, photos, notes);
     setOrder((prev) => ({
       ...prev,
-      stage: "Completed" as PipelineStage,
+      stageStatus: "Pending Admin Approval: Job Done",
       installationDetails: {
         ...(prev.installationDetails || {}),
         checklist,
@@ -438,13 +456,22 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
         notes,
       } as InstallationDetails,
     }));
+    router.refresh();
   };
 
   const executeAdminApprove = async () => {
+    const wasJobDonePending = order.stageStatus === "Pending Admin Approval: Job Done";
     await adminApproveStageAction(order.id);
-    setOrder(prev => ({ ...prev, stageStatus: "Normal" }));
+    setOrder((prev) => ({
+      ...prev,
+      stage: wasJobDonePending ? ("Completed" as PipelineStage) : prev.stage,
+      stageStatus: "Normal",
+    }));
     router.refresh();
-    triggerLocalAlert("Stage approved and advanced.", "success");
+    triggerLocalAlert(
+      wasJobDonePending ? "Order marked as completed." : "Stage approved and advanced.",
+      "success"
+    );
   };
 
   const handleAdminApprove = async () => {
@@ -464,6 +491,11 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
         order.stageStatus !== "Normal"
       ) {
         setIsWorkflowChoiceOpen(true);
+        setIsProcessing(false);
+        return;
+      }
+      if (order.stageStatus === "Pending Admin Approval: Job Done") {
+        setIsInstallationPaymentModalOpen(true);
         setIsProcessing(false);
         return;
       }
@@ -673,6 +705,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     !adminOverrideUnlocked;
 
   const isCurrentTabFrozen =
+    isStaffQueueReadOnly ||
     (activeStepTab === 0 && isSiteVisitFrozen) ||
     (activeStepTab === designTab && isDesignPending && !adminOverrideUnlocked && currentUserRole !== "Admin");
 
@@ -693,6 +726,17 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     siteVisitAdvanceTooltip = !canAdvanceSiteVisit ? "All designs must be approved and final production files must be uploaded." : "";
   }
 
+  const isJobDonePending = order.stageStatus === "Pending Admin Approval: Job Done";
+  const showAdminApproveButton =
+    !isEmployee &&
+    currentStageIndex === activeStepTab &&
+    (order.stageStatus === "Normal" || isJobDonePending);
+  const adminApproveLabel = isJobDonePending
+    ? "Review Payments & Complete"
+    : "Approve & Advance";
+  const hideStaffAdvanceRequest =
+    isJobDonePending && currentStageIndex === activeStepTab;
+
   const actionButtonsNode = (
     <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" }}>
       {order.health && order.health !== "Active" ? (
@@ -711,13 +755,15 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
               {activeStepTab === designTab ? <><Send size={13} /> Send to Customer</> : <><Save size={13} /> Save Draft</>}
             </button>
             {isEmployee ? (
+              !hideStaffAdvanceRequest && (
               <button onClick={handleRequestAdvancement} style={{ padding: "6px 14px", background: "#22C55E", border: "none", color: "white", borderRadius: "6px", fontSize: "12px", fontWeight: "800", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", transition: "color 0.15s, background-color 0.15s" }}>
                 <CheckCircle2 size={13} /> Request Admin Approval
               </button>
+              )
             ) : (
-              currentStageIndex === activeStepTab && order.stageStatus === "Normal" && (
+              showAdminApproveButton && (
                 <button onClick={handleAdminApprove} style={{ padding: "6px 14px", background: "#22C55E", border: "none", color: "white", borderRadius: "6px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", transition: "color 0.15s, background-color 0.15s" }}>
-                  <Check size={13} /> Approve & Advance
+                  <Check size={13} /> {adminApproveLabel}
                 </button>
               )
             )}
@@ -842,7 +888,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
             quotation: initialQuotation,
             siteVisitItems,
           }}
-          permission={resolveStagePermission("production", actor)}
+          permission={effectiveStagePermission("production")}
           callbacks={{
             updateProductionDetails,
             onBack: () => {},
@@ -857,13 +903,13 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
             customers,
             installation: installationRecord,
           }}
-          permission={resolveStagePermission("installation", actor)}
+          permission={effectiveStagePermission("installation")}
           callbacks={{
             updateInstallationDetails,
             markInstallationCompleted: handleMarkInstallationCompleted,
             requestInstallationLocationAction,
             onBack: () => {},
-            onCompleted: () => {},
+            onCompleted: () => router.refresh(),
           }}
         />
       ),
@@ -1377,6 +1423,11 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                   </>
                 ) : (
                   <>
+                    {isStaffQueueReadOnly && (
+                      <span style={{ fontSize: "12px", fontWeight: "700", color: "#64748B", display: "flex", alignItems: "center", gap: "6px" }}>
+                        <Lock size={13} /> View only — completed in your queue
+                      </span>
+                    )}
                     {!isCurrentTabFrozen && (
                       <>
                         {/* Save Draft button */}
@@ -1386,13 +1437,15 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     
                         {/* Advance stage / Staff section approval push */}
                         {isEmployee ? (
+                          !hideStaffAdvanceRequest && (
                           <div style={{ display: "inline-block" }}>
                             <button onClick={handleRequestAdvancement} style={{ padding: "8px 18px", background: "#22C55E", border: "none", color: "white", borderRadius: "8px", fontSize: "12px", fontWeight: "800", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
                               <CheckCircle2 size={13} /> Request Admin Approval for {activeModuleTitle}
                             </button>
                           </div>
+                          )
                         ) : (
-                          currentStageIndex === activeStepTab && order.stageStatus === "Normal" && (
+                          showAdminApproveButton && (
                             <div style={{ display: "inline-block" }}>
                               <button onClick={() => {
                                 if ((activeStepTab === 0 || activeStepTab === designTab) && !canAdvanceSiteVisit) {
@@ -1401,7 +1454,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                                 }
                                 handleAdminApprove();
                               }} style={{ padding: "7px 16px", background: "#22C55E", border: "none", color: "white", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
-                                <Check size={13} /> Approve & Advance
+                                <Check size={13} /> {adminApproveLabel}
                               </button>
                             </div>
                           )
@@ -1550,6 +1603,23 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
             } catch (err) {
               console.error(err);
               triggerLocalAlert("Failed to confirm site visit.", "error");
+            }
+          }}
+        />
+      )}
+
+      {isInstallationPaymentModalOpen && (
+        <InstallationPaymentApprovalModal
+          orderId={order.id}
+          orderLabel={`${order.businessName || ""} - ${order.clientName || ""}`.trim() || order.orderId || ""}
+          onClose={() => setIsInstallationPaymentModalOpen(false)}
+          onConfirm={async () => {
+            setIsProcessing(true);
+            try {
+              await executeAdminApprove();
+              setIsInstallationPaymentModalOpen(false);
+            } finally {
+              setIsProcessing(false);
             }
           }}
         />

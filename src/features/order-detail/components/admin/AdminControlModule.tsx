@@ -125,6 +125,8 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
     }
   };
 
+  const isJobDonePending = order.stageStatus === "Pending Admin Approval: Job Done";
+
 
   return (
     <>
@@ -154,7 +156,17 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
                   Pending Stage Approval
                 </h4>
                 <p className="text-xs text-amber-700 mt-1">
-                  Staff has requested to advance from <span className="font-bold">{order.stage}</span>. Review the attached work in the respective tabs before approving.
+                  {isJobDonePending ? (
+                    <>
+                      Installation team has marked the job as done. Review payments in the{" "}
+                      <span className="font-bold">Payments</span> tab, then approve to mark the order{" "}
+                      <span className="font-bold">Completed</span>.
+                    </>
+                  ) : (
+                    <>
+                      Staff has requested to advance from <span className="font-bold">{order.stage}</span>. Review the attached work in the respective tabs before approving.
+                    </>
+                  )}
                 </p>
               </div>
               
@@ -182,7 +194,7 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
                       className="px-4 py-2 bg-emerald-500 text-white rounded-lg text-xs font-bold hover:bg-emerald-600 transition-colors flex items-center gap-1.5"
                     >
                       <CheckCircle2 size={16} />
-                      Approve Stage
+                      {isJobDonePending ? "Review Payments & Complete" : "Approve Stage"}
                     </button>
                   )}
                 </div>

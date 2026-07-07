@@ -4,6 +4,7 @@ import { getCustomers } from "@/features/customers/actions/customerActions";
 import { getEnquiries } from "@/features/enquiries/actions/enquiryActions";
 import { getUserSession } from "@/features/auth/actions/authActions";
 import { getEmployees } from "@/features/employees/actions/employeeActions";
+import { filterStaffQueueOrders } from "@/features/orders/workspace/shared/staffQueueStages";
 
 export default async function StaffOrdersPage() {
   const orders = await getOrders();
@@ -15,10 +16,7 @@ export default async function StaffOrdersPage() {
   // Find current employee info
   const currentEmployee = employeesData?.find(e => e.id === user?.id);
   
-  // Filter orders allotted to this staff member
-  const allottedOrders = orders?.filter(o => 
-    o.assigned_employees?.includes(user?.id)
-  ) || [];
+  const allottedOrders = filterStaffQueueOrders(orders, user?.id, "quotation");
   
   const mappedOrders = allottedOrders.map(o => ({
     id: o.id,
@@ -66,6 +64,8 @@ export default async function StaffOrdersPage() {
       initialEnquiries={mappedEnquiries}
       userRole="Employee"
       currentEmployeeName={currentEmployee?.name || ""}
+      orderDetailBasePath="/staff/orders"
+      entryStage="quotation"
     />
   );
 }

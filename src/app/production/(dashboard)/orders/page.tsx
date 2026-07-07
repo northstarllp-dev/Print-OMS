@@ -1,23 +1,12 @@
 import React from "react";
 import { getOrders } from "@/features/orders/actions/orderActions";
 import { ProductionDashboardClient } from "./ProductionDashboardClient";
+import { filterFloorQueueOrders } from "@/features/orders/workspace/shared/staffQueueStages";
 
 export default async function ProductionOrdersPage() {
   const orders = await getOrders();
 
-  // Filter orders to only display those that have crossed the design stage
-  const productionReadyStages = [
-    "Design Approved",
-    "Production",
-    "Ready For Installation",
-    "Installation Scheduled",
-    "Completed",
-    "Closed"
-  ];
-
-  const filteredOrders = (orders || []).filter(o => 
-    productionReadyStages.includes(o.stage)
-  );
+  const filteredOrders = filterFloorQueueOrders(orders, "production");
 
   const mappedOrders = filteredOrders.map(o => ({
     id: o.id,
@@ -32,6 +21,6 @@ export default async function ProductionOrdersPage() {
   }));
 
   return (
-    <ProductionDashboardClient initialOrders={mappedOrders} />
+    <ProductionDashboardClient initialOrders={mappedOrders} entryStage="production" />
   );
 }
