@@ -54,8 +54,7 @@ export interface DesignTabProps {
 
 export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabProps) {
   const isLocked =
-    order.stageStatus != null &&
-    order.stageStatus !== "Normal" &&
+    Boolean(order.stageStatus && order.stageStatus !== "Normal") &&
     (order.stage === "Design In Progress" || order.stage === "Design Approved");
 
   const dd: DesignRecord = order.design || {

@@ -14,8 +14,7 @@ import {
 } from "@/features/orders/workspace/shared/serverPermissions";
 import {
   revalidateOrderDetailPaths,
-  revalidateStaffQueuePaths,
-} from "@/features/orders/actions/orderActions";
+} from "@/features/orders/actions/revalidateOrderPaths";
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -55,8 +54,7 @@ async function resolveOrderUuid(supabase: SupabaseClient, idOrOrderId: string): 
 }
 
 async function revalidateDesignPaths(orderId: string) {
-  await revalidateStaffQueuePaths();
-  await revalidateOrderDetailPaths(orderId);
+  revalidateOrderDetailPaths(orderId);
 }
 
 async function updateOrderStage(supabase: SupabaseClient, orderUuid: string, stage: string) {

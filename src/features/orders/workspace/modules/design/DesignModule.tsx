@@ -72,7 +72,8 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
   const activeItem = itemsList.find(i => i.id === selectedItemId) || itemsList[0];
   const localVersions = activeItem?.versions || [];
   const activeVersion = localVersions.find(v => v.id === selectedVersionId) || localVersions[localVersions.length - 1];
-  const isReadOnly = isFrozen && !adminOverrideUnlocked;
+  const isReadOnly =
+    isFrozen && currentUserRole !== "Admin" && !adminOverrideUnlocked;
 
   const handleUpdateItemVersions = async (newVersions: DesignVersion[]) => {
     const updatedItems = itemsList.map(item => {

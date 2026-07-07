@@ -385,7 +385,11 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   };
   // Quote details are now managed entirely by QuotationModule via quotationActions.
   const updateDesignDetails = async (orderId: string, details: Partial<DesignRecord>) => {
-    const updated = await updateDesignDetailsAction(orderId, details, order.design?.updated_at);
+    const updated = await updateDesignDetailsAction(
+      orderId,
+      details,
+      orderRef.current.design?.updated_at
+    );
     setOrder((prev) => ({ ...prev, design: updated }));
   };
   const updateProductionDetails = async (orderId: string, details: Partial<ProductionDetails>) => {
@@ -661,7 +665,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   const quoteTab  = isDesignFirst ? 2 : 1;
 
   const isDesignPending =
-    order.stageStatus !== "Normal" &&
+    Boolean(order.stageStatus && order.stageStatus !== "Normal") &&
     (order.stage === "Design In Progress" || order.stage === "Design Approved");
 
   const isSiteVisitFrozen =
@@ -670,7 +674,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
 
   const isCurrentTabFrozen =
     (activeStepTab === 0 && isSiteVisitFrozen) ||
-    (activeStepTab === designTab && isDesignPending && !adminOverrideUnlocked);
+    (activeStepTab === designTab && isDesignPending && !adminOverrideUnlocked && currentUserRole !== "Admin");
 
   // Strict Site Visit Validations
   const isSiteVisitScheduled = !!(sv.auditDate && sv.auditTime);
@@ -820,7 +824,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           isEmployee={isStaffOrAdmin}
           updateDesignDetails={updateDesignDetails}
           siteVisitItems={siteVisitItems}
-          isFrozen={isDesignPending && !adminOverrideUnlocked}
+          isFrozen={isDesignPending}
           adminOverrideUnlocked={adminOverrideUnlocked}
           setAdminOverrideUnlocked={setAdminOverrideUnlocked}
           stageAdminNotes={order.stageAdminNotes}

@@ -32,7 +32,7 @@ function isDesignStageLocked(stage: string, stageStatus: string | null): boolean
  */
 export async function assertDesignStageUnlocked(orderId: string): Promise<void> {
   const profile = await getCurrentUser();
-  if (profile?.role === "admin") return;
+  if (profile?.role?.toLowerCase() === "admin") return;
 
   const cookieStore = await cookies();
   const supabase = createServerClient(
