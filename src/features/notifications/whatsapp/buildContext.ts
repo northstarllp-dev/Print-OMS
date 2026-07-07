@@ -69,7 +69,7 @@ async function loadOrderContext(
   if (order.customer_id) {
     const { data: c } = await supabase
       .from("customers")
-      .select("id, customer_id, name, business_name, whatsapp, phone")
+      .select("id, customer_id, name, whatsapp, phone")
       .eq("id", order.customer_id)
       .maybeSingle();
     customer = c;
@@ -99,7 +99,6 @@ function businessLabel(
 ): string {
   return (
     (order?.business_name as string) ||
-    (customer?.business_name as string) ||
     (customer?.name as string) ||
     enquiry?.business_name ||
     enquiry?.lead_name ||
@@ -138,7 +137,7 @@ export async function buildNotificationContext(
   } else if (input.customerUuid) {
     const { data: c } = await supabase
       .from("customers")
-      .select("id, customer_id, name, business_name, whatsapp, phone, company_id")
+      .select("id, customer_id, name, whatsapp, phone, company_id")
       .eq("id", input.customerUuid)
       .maybeSingle();
     customer = c;
@@ -156,10 +155,12 @@ export async function buildNotificationContext(
       "Customer";
   }
 
-  const rawPhone = pickPhone(customer, input.enquiryRow);
-  if (!rawPhone) return null;
-
   const testMode = isWhatsAppTestMode();
+
+  const rawPhone =
+    pickPhone(customer, input.enquiryRow) ||
+    (testMode ? process.env.WHATSAPP_TEST_PHONE?.trim() || null : null);
+  if (!rawPhone) return null;
 
   if (!friendlyCustomerId && !testMode) return null;
 

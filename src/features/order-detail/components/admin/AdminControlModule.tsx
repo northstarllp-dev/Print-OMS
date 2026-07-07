@@ -9,6 +9,7 @@ interface AdminControlModuleProps {
   customers: Customer[];
   employees: Employee[];
   onAdminApprove: () => Promise<void>;
+  onAdminReject?: (notes: string) => Promise<void>;
   onApproveWithWorkflowChoice?: () => void;
   updateSiteVisitDetails: (orderId: string, details: Partial<SiteVisitDetails>) => Promise<void>;
   updateOrderStage: (orderId: string, stage: string) => Promise<void>;
@@ -36,11 +37,15 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
   customers,
   employees,
   onAdminApprove,
+  onAdminReject,
   onApproveWithWorkflowChoice,
   updateSiteVisitDetails,
   updateOrderStage
 }) => {
   const [savingNotes, setSavingNotes] = useState(false);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectNotes, setRejectNotes] = useState("");
+  const [rejecting, setRejecting] = useState(false);
 
   // Employee stats for assignment
   const [employeeStats, setEmployeeStats] = useState<any[]>([]);
@@ -106,7 +111,23 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
   };
 
 
+  const handleRejectSubmit = async () => {
+    if (!onAdminReject || !rejectNotes.trim()) return;
+    setRejecting(true);
+    try {
+      await onAdminReject(rejectNotes.trim());
+      setShowRejectModal(false);
+      setRejectNotes("");
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setRejecting(false);
+    }
+  };
+
+
   return (
+    <>
     <div className="space-y-6 max-w-none">
       
       {/* ── APPROVALS AND STAGE OVERRIDE ── */}
@@ -138,6 +159,15 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
               </div>
               
                 <div className="flex gap-2 shrink-0">
+                  {onAdminReject && (
+                    <button
+                      onClick={() => setShowRejectModal(true)}
+                      className="px-4 py-2 bg-white border border-amber-300 text-amber-800 rounded-lg text-xs font-bold hover:bg-amber-100 transition-colors flex items-center gap-1.5"
+                    >
+                      <XCircle size={16} />
+                      Request Changes
+                    </button>
+                  )}
                   {order.stage.startsWith("Site Visit") && onApproveWithWorkflowChoice ? (
                     <button
                       onClick={onApproveWithWorkflowChoice}
@@ -268,5 +298,46 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
 
 
     </div>
+
+    {showRejectModal && (
+      <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-4">
+        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100 bg-slate-50">
+            <h3 className="text-sm font-extrabold text-slate-800 uppercase tracking-wider">Request Changes</h3>
+            <p className="text-xs text-slate-500 mt-1">Send the order back to staff with mandatory feedback.</p>
+          </div>
+          <div className="p-5 space-y-4">
+            <textarea
+              value={rejectNotes}
+              onChange={(e) => setRejectNotes(e.target.value)}
+              placeholder="Describe what needs to be revised..."
+              rows={4}
+              className="w-full p-3 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+              autoFocus
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => {
+                  setShowRejectModal(false);
+                  setRejectNotes("");
+                }}
+                disabled={rejecting}
+                className="px-4 py-2 text-slate-600 text-xs font-bold hover:bg-slate-100 rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRejectSubmit}
+                disabled={rejecting || !rejectNotes.trim()}
+                className="px-4 py-2 bg-amber-600 text-white text-xs font-bold rounded-lg hover:bg-amber-700 disabled:opacity-50"
+              >
+                {rejecting ? "Sending..." : "Send Back to Staff"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 };

@@ -10,6 +10,7 @@ import { getRequestBaseUrl } from "@/features/notifications/whatsapp/requestBase
 import {
   assertStageEditOrPortalOrder,
   assertStageEditPermission,
+  assertDesignStageUnlocked,
 } from "@/features/orders/workspace/shared/serverPermissions";
 import {
   revalidateOrderDetailPaths,
@@ -104,6 +105,7 @@ export async function updateDesignDetailsAction(
   expectedUpdatedAt?: string
 ): Promise<DesignRecord> {
   await assertStageEditOrPortalOrder("design", orderId);
+  await assertDesignStageUnlocked(orderId);
   const supabase = await getSupabase();
   const orderUuid = await resolveOrderUuid(supabase, orderId);
 
@@ -160,6 +162,7 @@ export async function updateDesignDetailsAction(
 
 export async function sendDesignToCustomerAction(orderId: string): Promise<DesignRecord> {
   await assertStageEditPermission("design");
+  await assertDesignStageUnlocked(orderId);
   const design = await getDesignByOrderId(orderId);
   if (!design) throw new Error("Design not found");
 
@@ -198,6 +201,7 @@ export async function transitionDesignOrderStageAction(
   stage: string
 ): Promise<void> {
   await assertStageEditOrPortalOrder("design", orderId);
+  await assertDesignStageUnlocked(orderId);
   const supabase = await getSupabase();
   const orderUuid = await resolveOrderUuid(supabase, orderId);
   await updateOrderStage(supabase, orderUuid, stage);

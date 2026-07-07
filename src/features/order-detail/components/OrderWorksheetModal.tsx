@@ -35,6 +35,7 @@ import {
   updateInstallationDetailsAction,
   requestStageAdvancementAction,
   adminApproveStageAction,
+  adminRejectStageAction,
   updateOrderStageAction,
   addChatMessageAction,
   updateOrderHealthAction,
@@ -81,6 +82,44 @@ const STAGE_LABEL: Record<string, { label: string; color: string }> = {
 /** Payments tab sits next to Admin Controls (not a pipeline stage). */
 const PAYMENTS_TAB = 98;
 const ADMIN_TAB = 99;
+
+function computePendingStageStatus(
+  stage: string,
+  workflowType: "quote_first" | "design_first" = "quote_first"
+): string {
+  const isDesignFirst = workflowType === "design_first";
+  if (stage === "Site Visit Pending" || stage === "Site Visit Scheduled") {
+    return "Pending Admin Approval: Site Visit Completed";
+  }
+  if (stage === "Site Visit Completed") {
+    return isDesignFirst
+      ? "Pending Admin Approval: Design Stage"
+      : "Pending Admin Approval: Quote Stage";
+  }
+  if (stage === "Quotation In Progress" || stage === "Quotation Sent" || stage === "Quotation Negotiation") {
+    return "Pending Admin Approval: Quote Approval";
+  }
+  if (stage === "Quotation Approved") {
+    return isDesignFirst
+      ? "Pending Admin Approval: Production Ready"
+      : "Pending Admin Approval: Design Approval";
+  }
+  if (stage === "Design In Progress") {
+    return "Pending Admin Approval: Design Approval";
+  }
+  if (stage === "Design Approved") {
+    return isDesignFirst
+      ? "Pending Admin Approval: Quote Stage"
+      : "Pending Admin Approval: Production Ready";
+  }
+  if (stage === "Production") {
+    return "Pending Admin Approval: Production Ready";
+  }
+  if (stage === "Ready For Installation" || stage === "Installation Scheduled") {
+    return "Pending Admin Approval: Job Done";
+  }
+  return "Normal";
+}
 
 const WORKFLOW_STEPS = [
   { label: "Enquiry", tab: -1, icon: "📋" },
@@ -445,27 +484,53 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     } finally { setIsProcessing(false); }
   };
   const handleRequestAdvancement = async () => {
-    if ((activeStepTab === 0 || activeStepTab === designTab) && !canAdvanceSiteVisit) {
+    const workflowType = order.workflow_type || "quote_first";
+    const isDesignFirst = workflowType === "design_first";
+    const designTabIndex = isDesignFirst ? 1 : 2;
+
+    if ((activeStepTab === 0 || activeStepTab === designTabIndex) && !canAdvanceSiteVisit) {
       alert(siteVisitAdvanceTooltip);
       return;
     }
 
     setIsProcessing(true);
     try {
-      await handleSaveDraft();
+      if (activeStepTab !== designTabIndex) {
+        await handleSaveDraft();
+      }
       // If on the Site Visit tab, don't execute immediately; open the review modal instead.
       if (activeStepTab === 0) {
         setIsReviewModalOpen(true);
         setIsProcessing(false);
         return;
-      } else {
-        await requestStageAdvancementAction(order.id);
-        await addChatMessageAction(order.id, "System", `${currentEmployee?.name || "Staff"} requested stage advancement.`);
-        router.refresh();
-        triggerLocalAlert("Stage advancement requested.", "success");
       }
-    } catch (err) { triggerLocalAlert("Failed to submit.", "error"); }
-    finally { setIsProcessing(false); }
+
+      await requestStageAdvancementAction(order.id);
+      const nextStatus = computePendingStageStatus(order.stage, workflowType);
+      setOrder((prev) => ({ ...prev, stageStatus: nextStatus, stageAdminNotes: "" }));
+      await addChatMessageAction(order.id, "System", `${currentEmployee?.name || "Staff"} requested stage advancement.`);
+      router.refresh();
+      triggerLocalAlert("Stage advancement requested.", "success");
+    } catch (err: any) {
+      triggerLocalAlert(err?.message || "Failed to submit.", "error");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleAdminReject = async (notes: string) => {
+    setIsProcessing(true);
+    try {
+      await adminRejectStageAction(order.id, notes);
+      setOrder((prev) => ({ ...prev, stageStatus: "Normal", stageAdminNotes: notes }));
+      setAdminOverrideUnlocked(false);
+      router.refresh();
+      triggerLocalAlert("Changes requested. Staff can now revise.", "success");
+    } catch (err: any) {
+      triggerLocalAlert(err?.message || "Failed to request changes.", "error");
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   /** Quotation tab: staff requests approval; admin advances to Design/Production. */
@@ -595,9 +660,17 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   const designTab = isDesignFirst ? 1 : 2;
   const quoteTab  = isDesignFirst ? 2 : 1;
 
-  const isCurrentTabFrozen = activeStepTab === 0 
-    ? (!order.stage.startsWith("Site Visit") || (!!sv.completed && order.stageStatus !== "Normal")) && !adminOverrideUnlocked
-    : false;
+  const isDesignPending =
+    order.stageStatus !== "Normal" &&
+    (order.stage === "Design In Progress" || order.stage === "Design Approved");
+
+  const isSiteVisitFrozen =
+    (!order.stage.startsWith("Site Visit") || (!!sv.completed && order.stageStatus !== "Normal")) &&
+    !adminOverrideUnlocked;
+
+  const isCurrentTabFrozen =
+    (activeStepTab === 0 && isSiteVisitFrozen) ||
+    (activeStepTab === designTab && isDesignPending && !adminOverrideUnlocked);
 
   // Strict Site Visit Validations
   const isSiteVisitScheduled = !!(sv.auditDate && sv.auditTime);
@@ -741,7 +814,19 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           realtimeQuotation={quotationRealtimeRow}
         />
       ),
-      [designTab]: <DesignModule order={order} isEmployee={isStaffOrAdmin} updateDesignDetails={updateDesignDetails} siteVisitItems={siteVisitItems} />,
+      [designTab]: (
+        <DesignModule
+          order={order}
+          isEmployee={isStaffOrAdmin}
+          updateDesignDetails={updateDesignDetails}
+          siteVisitItems={siteVisitItems}
+          isFrozen={isDesignPending && !adminOverrideUnlocked}
+          adminOverrideUnlocked={adminOverrideUnlocked}
+          setAdminOverrideUnlocked={setAdminOverrideUnlocked}
+          stageAdminNotes={order.stageAdminNotes}
+          currentUserRole={currentUserRole}
+        />
+      ),
       3: (
         <ProductionModule
           embedded
@@ -787,6 +872,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           customers={customers}
           employees={employees}
           onAdminApprove={handleAdminApprove}
+          onAdminReject={handleAdminReject}
           onApproveWithWorkflowChoice={() => setIsWorkflowChoiceOpen(true)}
           updateSiteVisitDetails={updateSiteVisitDetails}
           updateOrderStage={handleUpdateOrderStage}

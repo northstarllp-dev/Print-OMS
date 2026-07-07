@@ -1,8 +1,68 @@
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
+import { SupabaseClient } from "@supabase/supabase-js";
 import { getCurrentUser } from "@/features/auth/actions/authActions";
 import { resolveStagePermission } from "./permissions";
 import type { OrderStage } from "./types";
+
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+async function resolveOrderUuidForLock(
+  supabase: SupabaseClient,
+  orderId: string
+): Promise<string> {
+  if (uuidPattern.test(orderId)) return orderId;
+  const { data, error } = await supabase
+    .from("orders")
+    .select("id")
+    .eq("order_id", orderId)
+    .maybeSingle();
+  if (error || !data) throw new Error(`Could not resolve order ID: ${orderId}`);
+  return data.id;
+}
+
+function isDesignStageLocked(stage: string, stageStatus: string | null): boolean {
+  if (!stageStatus || stageStatus === "Normal") return false;
+  return stage === "Design In Progress" || stage === "Design Approved";
+}
+
+/**
+ * Blocks design mutations when the order is pending admin approval on a design stage.
+ * Admins bypass this check.
+ */
+export async function assertDesignStageUnlocked(orderId: string): Promise<void> {
+  const profile = await getCurrentUser();
+  if (profile?.role === "admin") return;
+
+  const cookieStore = await cookies();
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll() {},
+      },
+    }
+  );
+
+  const orderUuid = await resolveOrderUuidForLock(supabase, orderId);
+  const { data: order, error } = await supabase
+    .from("orders")
+    .select("stage, stage_status")
+    .eq("id", orderUuid)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!order) throw new Error("Order not found");
+
+  if (isDesignStageLocked(order.stage, order.stage_status)) {
+    throw new Error(
+      "Design is locked pending admin approval. Please wait for admin review or requested changes."
+    );
+  }
+}
 
 /**
  * Server-side authority check (Layer 2 of RBAC — see plan).

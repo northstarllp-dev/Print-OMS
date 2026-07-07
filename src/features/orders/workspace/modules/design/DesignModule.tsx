@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { FileText, ZoomIn, ZoomOut, UploadCloud, Upload, X, Trash, RefreshCw, Download, Maximize, RotateCw } from "lucide-react";
+import { FileText, ZoomIn, ZoomOut, UploadCloud, Upload, X, Trash, RefreshCw, Download, Maximize, RotateCw, Shield, AlertTriangle } from "lucide-react";
 import { Order, DesignRecord, DesignVersion } from "@/types";
 import { createClient } from "@/utils/supabase/client";
 import { updateDesignDetailsAction } from "@/features/designs/actions/designActions";
@@ -11,6 +11,11 @@ interface DesignModuleProps {
   isEmployee: boolean;
   updateDesignDetails?: (orderId: string, details: Partial<DesignRecord>) => Promise<void>;
   siteVisitItems?: Array<{ id: string; name: string }>;
+  isFrozen?: boolean;
+  adminOverrideUnlocked?: boolean;
+  setAdminOverrideUnlocked?: (val: boolean) => void;
+  stageAdminNotes?: string;
+  currentUserRole?: "Admin" | "Employee";
 }
 
 export const DesignModule: React.FC<DesignModuleProps> = ({
@@ -18,6 +23,11 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
   isEmployee,
   updateDesignDetails,
   siteVisitItems = [],
+  isFrozen = false,
+  adminOverrideUnlocked = false,
+  setAdminOverrideUnlocked,
+  stageAdminNotes,
+  currentUserRole,
 }) => {
   const supabase = createClient();
   const dd: DesignRecord = order.design || {
@@ -62,6 +72,7 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
   const activeItem = itemsList.find(i => i.id === selectedItemId) || itemsList[0];
   const localVersions = activeItem?.versions || [];
   const activeVersion = localVersions.find(v => v.id === selectedVersionId) || localVersions[localVersions.length - 1];
+  const isReadOnly = isFrozen && !adminOverrideUnlocked;
 
   const handleUpdateItemVersions = async (newVersions: DesignVersion[]) => {
     const updatedItems = itemsList.map(item => {
@@ -314,6 +325,51 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
 
   return (
     <div className="space-y-6">
+      {isFrozen && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
+          <AlertTriangle size={18} className="text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <h4 className="text-sm font-bold text-amber-900">Pending Admin Review</h4>
+            <p className="text-xs text-amber-700 mt-1">
+              Design work is locked while awaiting admin approval. Editing will resume when an admin requests changes or approves the stage.
+            </p>
+            {stageAdminNotes && (
+              <p className="text-xs text-amber-800 mt-2 font-medium bg-white/60 border border-amber-200 rounded-lg p-2">
+                Admin feedback: {stageAdminNotes}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {isFrozen && currentUserRole === "Admin" && setAdminOverrideUnlocked && (
+        <div className={`p-4 rounded-xl border flex items-center justify-between transition-colors ${adminOverrideUnlocked ? "bg-amber-50 border-amber-200" : "bg-slate-50 border-slate-200"}`}>
+          <div className="flex items-center gap-3">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${adminOverrideUnlocked ? "bg-amber-100 text-amber-600" : "bg-slate-200 text-slate-500"}`}>
+              <Shield size={16} />
+            </div>
+            <div>
+              <h4 className={`text-sm font-bold ${adminOverrideUnlocked ? "text-amber-900" : "text-slate-700"}`}>Admin God Mode</h4>
+              <p className={`text-xs ${adminOverrideUnlocked ? "text-amber-700" : "text-slate-500"}`}>
+                {adminOverrideUnlocked
+                  ? "Module is unlocked for editing."
+                  : "This module is locked. Unlock it to forcefully edit details."}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setAdminOverrideUnlocked(!adminOverrideUnlocked)}
+            className={`px-4 py-2 rounded-lg text-xs font-bold transition-colors ${
+              adminOverrideUnlocked
+                ? "bg-amber-600 hover:bg-amber-700 text-white shadow-xs"
+                : "bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 shadow-3xs"
+            }`}
+          >
+            {adminOverrideUnlocked ? "Lock Module" : "Unlock for Editing"}
+          </button>
+        </div>
+      )}
+
       {/* Header removed as requested */}
 
       {/* Customer Resources Section */}
@@ -446,7 +502,7 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
               <div className="flex justify-between items-center bg-slate-50 p-3 rounded-lg border border-slate-200">
                 <span className="text-xs text-slate-500 font-mono flex items-center gap-2">
                   <FileText size={14} /> {activeVersion.fileName}
-                  {isEmployee && (
+                  {isEmployee && !isReadOnly && (
                     <button onClick={() => handleDeleteVersion(activeVersion.id)} className="ml-1 p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors" title="Delete this version">
                       <Trash size={14} />
                     </button>
@@ -481,7 +537,7 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
                     <h3 className="text-lg font-bold text-slate-800">Final Production Files for {activeItem.name}</h3>
                     <p className="text-xs text-slate-500">Upload final production files (.cdr, .dxf, .plt, .pdf, .svg, .png, .jpg) for fabrication.</p>
                   </div>
-                  {isEmployee && (
+                  {isEmployee && !isReadOnly && (
                     <label className="cursor-pointer bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all shadow-sm">
                       {uploading ? <RefreshCw size={14} className="animate-spin" /> : <Upload size={14} />}
                       {uploading ? "Uploading..." : "Upload File"}
@@ -501,7 +557,7 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
                         <a href={file.url} target="_blank" rel="noreferrer" className="mt-3 px-3 py-1.5 bg-slate-100 text-slate-600 rounded text-[10px] font-bold hover:bg-slate-200 transition-colors">
                           Download
                         </a>
-                        {isEmployee && (
+                        {isEmployee && !isReadOnly && (
                           <button 
                             onClick={() => handleDeleteProductionFile(file.id)}
                             className="absolute -top-2 -right-2 bg-white text-red-500 border border-slate-200 rounded-full p-1 opacity-0 group-hover:opacity-100 shadow-sm hover:bg-red-50 hover:border-red-200 transition-all"
@@ -529,7 +585,7 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
           </div>
           <h4 className="text-sm font-bold text-slate-700 mb-1">No Designs for {activeItem.name}</h4>
           <p className="text-xs text-slate-500 max-w-sm mb-6">Upload the first design proof for this item to share it with the customer.</p>
-          {isEmployee && (
+                        {isEmployee && !isReadOnly && (
             <label className="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm">
               {uploading ? (
                 <RefreshCw size={16} className="animate-spin" />
@@ -544,7 +600,7 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
       )}
 
       {/* Upload New Design Version */}
-      {isEmployee && localVersions.length > 0 && localVersions[localVersions.length - 1]?.status !== "Approved" && (
+      {isEmployee && !isReadOnly && localVersions.length > 0 && localVersions[localVersions.length - 1]?.status !== "Approved" && (
         <div className="border border-dashed border-slate-300 rounded-2xl p-6 flex flex-col items-center justify-center bg-white text-center space-y-3 cursor-pointer hover:bg-slate-50 transition-colors relative">
           <input type="file" multiple onChange={handleDesignerUpload} accept="image/*,.pdf" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" disabled={uploading} />
           <div className="p-3 bg-blue-50 border border-blue-100 rounded-full text-blue-500">

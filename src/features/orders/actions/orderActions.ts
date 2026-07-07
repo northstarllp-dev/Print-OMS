@@ -401,7 +401,7 @@ export async function requestStageAdvancementAction(orderId: string) {
     "Quotation Negotiation": "quotation",
     "Quotation Approved": isDesignFirst ? "quotation" : "design",
     "Design In Progress": "design",
-    "Design Approved": isDesignFirst ? "design" : "production",
+    "Design Approved": "design",
     "Production": "production",
     "Ready For Installation": "installation",
     "Installation Scheduled": "installation",
@@ -527,6 +527,43 @@ export async function adminApproveStageAction(orderId: string) {
   if (nextStage !== o.stage) {
     await dispatchWhatsAppForPipelineStage(supabase, orderUuid, nextStage);
   }
+
+  return result;
+}
+
+export async function adminRejectStageAction(orderId: string, notes: string) {
+  await assertAdminOnly();
+  const trimmed = notes.trim();
+  if (!trimmed) {
+    throw new Error("Notes are required when requesting changes.");
+  }
+
+  const supabase = await getSupabase();
+  const orderUuid = await resolveOrderUuid(supabase, orderId);
+  const { data: o, error: fetchError } = await supabase
+    .from("orders")
+    .select("stage, order_id, stage_status")
+    .eq("id", orderUuid)
+    .single();
+  if (fetchError) throw new Error(fetchError.message);
+
+  if (!o.stage_status || o.stage_status === "Normal") {
+    throw new Error("No pending admin approval to reject.");
+  }
+
+  const result = await updateOrder(orderUuid, {
+    stage_status: "Normal",
+    stage_admin_notes: trimmed,
+  });
+
+  await supabase.from("order_activity").insert({
+    order_id: o.order_id || orderId,
+    activity_type: "timeline",
+    actor_name: "Admin",
+    actor_role: "Admin",
+    content: `Admin requested changes at "${o.stage}": ${trimmed}`,
+    metadata: { action: "stage_rejected", stage: o.stage, notes: trimmed },
+  });
 
   return result;
 }

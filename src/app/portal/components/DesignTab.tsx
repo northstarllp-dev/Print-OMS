@@ -11,7 +11,8 @@ import {
   Loader2,
   Trash,
   Maximize,
-  Download
+  Download,
+  AlertTriangle,
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { DesignRecord } from "@/types";
@@ -38,6 +39,9 @@ interface Customer {
 interface Order {
   id: string;
   orderId?: string;
+  stage?: string;
+  stageStatus?: string;
+  stageAdminNotes?: string;
   design?: DesignRecord;
   [key: string]: any;
 }
@@ -49,6 +53,11 @@ export interface DesignTabProps {
 }
 
 export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabProps) {
+  const isLocked =
+    order.stageStatus != null &&
+    order.stageStatus !== "Normal" &&
+    (order.stage === "Design In Progress" || order.stage === "Design Approved");
+
   const dd: DesignRecord = order.design || {
     id: "",
     order_id: order.id,
@@ -162,7 +171,7 @@ export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabPro
   };
 
   const handleImageClick = (e: React.MouseEvent<HTMLImageElement>) => {
-    if (!activeVersion || activeVersion.status === "Approved") return;
+    if (isLocked || !activeVersion || activeVersion.status === "Approved") return;
     const rect = e.currentTarget.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
@@ -312,12 +321,30 @@ export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabPro
 
   return (
     <div className="space-y-6">
+      {isLocked && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
+          <AlertTriangle size={18} className="text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <h4 className="text-sm font-bold text-amber-900">Design Under Internal Review</h4>
+            <p className="text-xs text-amber-700 mt-1">
+              Your design is under internal review. We&apos;ll notify you when it&apos;s ready for the next step.
+            </p>
+            {order.stageAdminNotes && (
+              <p className="text-xs text-amber-800 mt-2 font-medium bg-white/60 border border-amber-200 rounded-lg p-2">
+                Update from our team: {order.stageAdminNotes}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="bg-white rounded-xl border border-gray-200 p-8 shadow-sm">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-extrabold text-gray-900">Design Preview</h2>
         </div>
         
         {/* Resources Upload */}
+        {!isLocked && (
         <div className="mb-6 p-4 border border-gray-200 rounded-xl bg-gray-50 flex items-center justify-between">
           <div>
             <h4 className="text-sm font-bold text-gray-800">Add Inspiration & Logos</h4>
@@ -329,6 +356,7 @@ export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabPro
             <input type="file" multiple onChange={handleResourceUpload} accept=".png,.pdf,.jpg,.jpeg,.cdr,.ai,.psd,.svg" className="hidden" disabled={uploading} />
           </label>
         </div>
+        )}
 
         {dd.resources && dd.resources.length > 0 && (
           <div className="mb-6 flex gap-3 flex-wrap">
@@ -338,9 +366,11 @@ export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabPro
                   <FileCheck size={14} />
                   <span className="text-xs font-medium truncate max-w-[150px]">{res.name}</span>
                 </a>
-                <button onClick={() => handleDeleteResource(res.id, res.url)} className="p-1 hover:bg-blue-200 rounded text-red-500 ml-1 transition-colors" title="Delete file">
-                  <Trash size={12} />
-                </button>
+                {!isLocked && (
+                  <button onClick={() => handleDeleteResource(res.id, res.url)} className="p-1 hover:bg-blue-200 rounded text-red-500 ml-1 transition-colors" title="Delete file">
+                    <Trash size={12} />
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -419,7 +449,7 @@ export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabPro
                   alt="Design Proof"
                   className="max-h-[60vh] object-contain transition-all"
                   onClick={handleImageClick}
-                  style={{ cursor: activeVersion.status !== "Approved" ? "crosshair" : "default", display: 'block' }}
+                  style={{ cursor: isLocked || activeVersion.status === "Approved" ? "default" : "crosshair", display: 'block' }}
                 />
                 
                 {/* Render Existing Comments */}
@@ -435,9 +465,11 @@ export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabPro
                           <span className="font-bold text-[10px] text-gray-400">
                             {comment.author} {comment.isDraft && <span className="text-amber-500">(Draft)</span>}
                           </span>
+                          {!isLocked && (
                           <button onClick={(e) => { e.stopPropagation(); handleDeleteComment(comment.id); }} className="text-red-500 hover:text-red-700 p-0.5" title="Delete comment">
                             <Trash size={12} />
                           </button>
+                          )}
                         </div>
                         {comment.content}
                       </div>
@@ -480,9 +512,13 @@ export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabPro
 
             <div className="flex flex-col md:flex-row items-center justify-between bg-gray-50 p-4 rounded-xl border border-gray-200 gap-4">
               <span className="text-xs text-gray-500">
-                {activeVersion.status === "Approved" ? "Design approved for production." : "Click anywhere on the design to leave pinpoint feedback."}
+                {isLocked
+                  ? "Design is under internal review. View-only mode."
+                  : activeVersion.status === "Approved"
+                    ? "Design approved for production."
+                    : "Click anywhere on the design to leave pinpoint feedback."}
               </span>
-              {activeVersion.status !== "Approved" && (
+              {!isLocked && activeVersion.status !== "Approved" && (
                 <div className="flex gap-2 w-full md:w-auto">
                   <button
                     onClick={() => setShowGeneralFeedback(!showGeneralFeedback)}
@@ -501,7 +537,7 @@ export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabPro
             </div>
 
             {/* General Feedback Textarea */}
-            {showGeneralFeedback && activeVersion.status !== "Approved" && (
+            {!isLocked && showGeneralFeedback && activeVersion.status !== "Approved" && (
               <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mt-4 space-y-3">
                 <textarea 
                   rows={3} 
