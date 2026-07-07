@@ -35,12 +35,12 @@ import {
 import { QuotationTab } from "@/app/portal/components/QuotationTab";
 import { useQuotationActions } from "@/app/portal/hooks/useQuotationActions";
 import { GoogleMap, useJsApiLoader, Marker, Autocomplete } from "@react-google-maps/api";
-import { DesignTab } from "../../components/DesignTab";
-import { PaymentsTab } from "../../components/PaymentsTab";
+import { DesignTab } from "@/app/portal/components/DesignTab";
+import { PaymentsTab } from "@/app/portal/components/PaymentsTab";
 import {
   didStageAdvance,
   getTabForStage,
-} from "../../utils/portalStageNavigation";
+} from "@/app/portal/utils/portalStageNavigation";
 
 const libraries: ("places")[] = ["places"];
 

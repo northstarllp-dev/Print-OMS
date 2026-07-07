@@ -11,7 +11,6 @@ import {
   Wrench,
   LifeBuoy,
   XCircle,
-  FileText,
   Plus,
   Eye,
   MoreHorizontal,
@@ -229,19 +228,6 @@ export function AdminDashboardClient({ orders, enquiries }: AdminDashboardClient
           </p>
         </div>
         <div style={{ display: "flex", gap: "10px" }}>
-          <button
-            style={{
-              display: "flex", alignItems: "center", gap: "6px",
-              padding: "9px 16px", borderRadius: "8px",
-              border: "1px solid var(--color-secondary)", background: "white",
-              fontSize: "13px", fontWeight: "600", color: "var(--color-secondary)",
-              cursor: "pointer", transition: "all 0.15s",
-            }}
-            onMouseEnter={e => e.currentTarget.style.background = "var(--secondary-container)"}
-            onMouseLeave={e => e.currentTarget.style.background = "white"}
-          >
-            <FileText size={14} /> Generate Report
-          </button>
           <button
             onClick={() => setIsAddModalOpen(true)}
             style={{
