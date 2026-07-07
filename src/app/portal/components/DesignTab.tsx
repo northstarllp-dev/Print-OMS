@@ -49,7 +49,14 @@ export interface DesignTabProps {
 }
 
 export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabProps) {
-  const dd = order.design || { resources: [], items: [] };
+  const dd: DesignRecord = order.design || {
+    id: "",
+    order_id: order.id,
+    resources: [],
+    items: [],
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
   const [zoomLevel, setZoomLevel] = useState(100);
   
   const itemsList = React.useMemo(() => {
