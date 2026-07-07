@@ -83,15 +83,43 @@ export function ProductionModule({ data, permission, callbacks, embedded = false
   const [saving, setSaving] = useState(false);
   const [alert, setAlert] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
-  const client = customers.find(c => c.id === order.customerId);
-
-  // Fallbacks for sub-objects
   const pd = order.productionDetails || {
     procurementOfMaterials: false,
     acpAndAcrylicCutting: false,
     lightingAndWiring: false,
-    qualityCheck: false
+    qualityCheck: false,
+    deadline: null
   };
+
+  const [editingDeadline, setEditingDeadline] = useState(false);
+  const [deadlineValue, setDeadlineValue] = useState(
+    pd.deadline ? new Date(pd.deadline).toISOString().split("T")[0] : ""
+  );
+
+  const handleDeadlineSave = async () => {
+    if (!canEdit) return;
+    setSaving(true);
+    setAlert(null);
+    try {
+      const updatedPd = { ...pd, deadline: deadlineValue || null };
+      await updateProductionDetails(order.id, { deadline: deadlineValue || null });
+      setOrder((prev: any) => ({
+        ...prev,
+        productionDetails: updatedPd
+      }));
+      setAlert({ message: "Deadline updated successfully.", type: "success" });
+      setEditingDeadline(false);
+    } catch (err: any) {
+      console.error(err);
+      setAlert({ message: err.message || "Failed to update deadline.", type: "error" });
+    } finally {
+      setSaving(false);
+      setTimeout(() => setAlert(null), 3000);
+    }
+  };
+
+  const client = customers.find(c => c.id === order.customerId);
+
 
   const svDetails = order.siteVisitDetails || {};
   const locations: LocationMeasurement[] = svDetails.locations || [];
@@ -183,10 +211,47 @@ export function ProductionModule({ data, permission, callbacks, embedded = false
               <span className="text-[10px] font-black text-rose-500 uppercase tracking-widest mb-1.5 flex items-center gap-1">
                 Production Deadline
               </span>
-              <div className="bg-gradient-to-r from-rose-500 to-rose-600 text-white px-4 py-2 rounded-xl text-xs font-black shadow-md flex items-center gap-2 border-b-2 border-rose-700">
-                <Timer size={16} className="text-rose-100 animate-pulse" />
-                24 Oct 2026
-              </div>
+              {editingDeadline ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="date"
+                    value={deadlineValue}
+                    onChange={(e) => setDeadlineValue(e.target.value)}
+                    className="px-2 py-1 text-xs border border-rose-300 rounded text-slate-800"
+                  />
+                  <button
+                    onClick={handleDeadlineSave}
+                    disabled={saving}
+                    className="p-1.5 bg-rose-600 text-white rounded hover:bg-rose-700"
+                  >
+                    {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setEditingDeadline(false);
+                      setDeadlineValue(pd.deadline ? new Date(pd.deadline).toISOString().split("T")[0] : "");
+                    }}
+                    className="p-1.5 bg-slate-200 text-slate-700 rounded hover:bg-slate-300"
+                  >
+                    <ArrowLeft size={14} />
+                  </button>
+                </div>
+              ) : (
+                <div
+                  className={`bg-gradient-to-r from-rose-500 to-rose-600 text-white px-4 py-2 rounded-xl text-xs font-black shadow-md flex items-center gap-2 border-b-2 border-rose-700 ${canEdit ? 'cursor-pointer hover:from-rose-600 hover:to-rose-700' : ''}`}
+                  onClick={() => canEdit && setEditingDeadline(true)}
+                  title={canEdit ? "Click to edit deadline" : ""}
+                >
+                  <Timer size={16} className="text-rose-100 animate-pulse" />
+                  {pd.deadline
+                    ? new Date(pd.deadline).toLocaleDateString("en-IN", {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                      })
+                    : "Not Set"}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -215,15 +280,52 @@ export function ProductionModule({ data, permission, callbacks, embedded = false
                 </div>
               )}
 
-              <div className="flex flex-col items-end">
-                <span className="text-[10px] font-black text-rose-500 uppercase tracking-widest mb-1.5 flex items-center gap-1">
-                  Production Deadline
-                </span>
-                <div className="bg-gradient-to-r from-rose-500 to-rose-600 text-white px-4 py-2 rounded-xl text-xs font-black shadow-md flex items-center gap-2 border-b-2 border-rose-700">
-                  <Timer size={16} className="text-rose-100 animate-pulse" />
-                  24 Oct 2026
+            <div className="flex flex-col items-end">
+              <span className="text-[10px] font-black text-rose-500 uppercase tracking-widest mb-1.5 flex items-center gap-1">
+                Production Deadline
+              </span>
+              {editingDeadline ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="date"
+                    value={deadlineValue}
+                    onChange={(e) => setDeadlineValue(e.target.value)}
+                    className="px-2 py-1 text-xs border border-rose-300 rounded text-slate-800"
+                  />
+                  <button
+                    onClick={handleDeadlineSave}
+                    disabled={saving}
+                    className="p-1.5 bg-rose-600 text-white rounded hover:bg-rose-700"
+                  >
+                    {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setEditingDeadline(false);
+                      setDeadlineValue(pd.deadline ? new Date(pd.deadline).toISOString().split("T")[0] : "");
+                    }}
+                    className="p-1.5 bg-slate-200 text-slate-700 rounded hover:bg-slate-300"
+                  >
+                    <ArrowLeft size={14} />
+                  </button>
                 </div>
-              </div>
+              ) : (
+                <div
+                  className={`bg-gradient-to-r from-rose-500 to-rose-600 text-white px-4 py-2 rounded-xl text-xs font-black shadow-md flex items-center gap-2 border-b-2 border-rose-700 ${canEdit ? 'cursor-pointer hover:from-rose-600 hover:to-rose-700' : ''}`}
+                  onClick={() => canEdit && setEditingDeadline(true)}
+                  title={canEdit ? "Click to edit deadline" : ""}
+                >
+                  <Timer size={16} className="text-rose-100 animate-pulse" />
+                  {pd.deadline
+                    ? new Date(pd.deadline).toLocaleDateString("en-IN", {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                      })
+                    : "Not Set"}
+                </div>
+              )}
+            </div>
             </div>
           </div>
 

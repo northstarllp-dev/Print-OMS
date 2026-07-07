@@ -95,9 +95,31 @@ export function AdminDashboardClient({ orders, enquiries }: AdminDashboardClient
   const newEnquiries = enquiries.filter((e) => e.status === "Pending" || e.status === "New").length;
   
   const pendingApprovals = orders.filter((o) => o.stageStatus && o.stageStatus !== "Normal").length;
-  const siteVisitsPending = orders.filter((o) => o.stage === "Site Visit Pending").length;
-  const ordersOnHold = orders.filter((o) => o.health === "On Hold").length;
   const lostOrders = orders.filter((o) => o.health === "Lost").length;
+
+  let revenue = 0;
+  let outstandingAmount = 0;
+
+  orders.forEach((o) => {
+    let orderRevenue = 0;
+    let orderReceived = 0;
+
+    const quotes = Array.isArray(o.quotations) ? o.quotations : (o.quotations ? [o.quotations] : []);
+    const approvedQuote = quotes.find((q: any) => q.status === "Approved");
+    if (approvedQuote) {
+      orderRevenue = Number(approvedQuote.grand_total) || 0;
+    }
+
+    const payments = Array.isArray(o.payments) ? o.payments : (o.payments ? [o.payments] : []);
+    payments.forEach((p: any) => {
+      if (p.status === "received") {
+        orderReceived += Number(p.calculated_amount ?? p.amount ?? 0);
+      }
+    });
+
+    revenue += orderRevenue;
+    outstandingAmount += Math.max(0, orderRevenue - orderReceived);
+  });
 
   /* Stat card config */
   const STATS = [
@@ -147,19 +169,17 @@ export function AdminDashboardClient({ orders, enquiries }: AdminDashboardClient
       iconColor: "#D97706",
     },
     {
-      label: "Site Visits Pending",
-      value: siteVisitsPending,
-      sub: "Site visit pending stage",
-      filterKey: "sitevisit",
-      icon: MapPin,
+      label: "Revenue",
+      value: `₹${revenue.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`,
+      sub: "Total booked",
+      icon: DollarSign,
       iconBg: "#EEF2FF",
       iconColor: "#4F46E5",
     },
     {
-      label: "Orders On Hold",
-      value: ordersOnHold,
-      sub: "Currently paused",
-      filterKey: "onhold",
+      label: "Outstanding",
+      value: `₹${outstandingAmount.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`,
+      sub: "Pending collection",
       icon: AlertCircle,
       iconBg: "#FEF2F2",
       iconColor: "#DC2626",
@@ -196,8 +216,22 @@ export function AdminDashboardClient({ orders, enquiries }: AdminDashboardClient
     if (selectedKpi === "active")     return { type: "orders" as const, data: orders.filter(o => o.stage !== "Completed" && o.stage !== "Closed") };
     if (selectedKpi === "enquiries")  return { type: "enquiries" as const, data: enquiries.filter(e => e.status === "Pending" || e.status === "New") };
     if (selectedKpi === "approvals")  return { type: "orders" as const, data: orders.filter(o => o.stageStatus && o.stageStatus !== "Normal") };
-    if (selectedKpi === "sitevisit")  return { type: "orders" as const, data: orders.filter(o => o.stage === "Site Visit Pending") };
-    if (selectedKpi === "onhold")     return { type: "orders" as const, data: orders.filter(o => o.health === "On Hold") };
+    if (selectedKpi === "revenue")    return { type: "orders" as const, data: orders.filter(o => {
+      const quotes = Array.isArray(o.quotations) ? o.quotations : (o.quotations ? [o.quotations] : []);
+      return quotes.some((q: any) => q.status === "Approved");
+    }) };
+    if (selectedKpi === "outstanding") return { type: "orders" as const, data: orders.filter(o => {
+      let orderRev = 0;
+      let orderRec = 0;
+      const quotes = Array.isArray(o.quotations) ? o.quotations : (o.quotations ? [o.quotations] : []);
+      const approvedQuote = quotes.find((q: any) => q.status === "Approved");
+      if (approvedQuote) orderRev = Number(approvedQuote.grand_total) || 0;
+      const payments = Array.isArray(o.payments) ? o.payments : (o.payments ? [o.payments] : []);
+      payments.forEach((p: any) => {
+        if (p.status === "received") orderRec += Number(p.calculated_amount ?? p.amount ?? 0);
+      });
+      return (orderRev - orderRec) > 0;
+    }) };
     if (selectedKpi === "lost")       return { type: "orders" as const, data: orders.filter(o => o.health === "Lost") };
     return { type: "orders" as const, data: orders.slice(0, 5) };
   };
@@ -249,32 +283,36 @@ export function AdminDashboardClient({ orders, enquiries }: AdminDashboardClient
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px", marginBottom: "28px" }}>
         {STATS.map((stat, i) => {
           const Icon = stat.icon;
-          const isActive = selectedKpi === stat.filterKey;
+          const isActive = stat.filterKey ? selectedKpi === stat.filterKey : false;
           return (
             <div
               key={i}
               onClick={() => {
-                setSelectedKpi(isActive ? null : stat.filterKey);
-                setSelectedPipelineStage(null);
+                if (stat.filterKey) {
+                  setSelectedKpi(isActive ? null : stat.filterKey);
+                  setSelectedPipelineStage(null);
+                }
               }}
               style={{
                 background: isActive ? stat.iconBg : "white",
                 border: isActive ? `2px solid ${stat.iconColor}` : "1px solid #E2E8F0",
                 borderRadius: "12px",
                 padding: isActive ? "19px" : "20px",
-                cursor: "pointer",
+                cursor: stat.filterKey ? "pointer" : "default",
                 transition: "all 0.15s",
                 userSelect: "none",
               }}
               onMouseEnter={e => {
-                if (!isActive) {
+                if (!isActive && stat.filterKey) {
                   e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.08)";
                   e.currentTarget.style.transform = "translateY(-2px)";
                 }
               }}
               onMouseLeave={e => {
-                e.currentTarget.style.boxShadow = "none";
-                e.currentTarget.style.transform = "translateY(0)";
+                if (stat.filterKey) {
+                  e.currentTarget.style.boxShadow = "none";
+                  e.currentTarget.style.transform = "translateY(0)";
+                }
               }}
             >
               <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "12px" }}>

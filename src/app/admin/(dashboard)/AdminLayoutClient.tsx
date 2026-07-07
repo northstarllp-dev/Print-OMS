@@ -16,6 +16,7 @@ import {
   UserCheck,
   Factory,
   Wrench,
+  Ticket,
   BarChart2,
   Package,
   Settings,
@@ -52,6 +53,8 @@ const NAV_ITEMS = [
   { id: "/admin/employees", label: "Employees", icon: UserCheck },
   { id: "/admin/reports", label: "Reports", icon: BarChart2 },
   { id: "/production/orders", label: "Production", icon: Factory, countKey: "production" },
+  { id: "/installation/orders", label: "Installation", icon: Wrench, countKey: "installation" },
+  { id: "/admin/service-tickets", label: "Service Ticket", icon: Ticket, countKey: "support" },
   { id: "/admin/products", label: "Products", icon: Package },
   { id: "/admin/settings", label: "Settings", icon: Settings },
 ] as const;
@@ -62,6 +65,7 @@ const BADGE_COLORS: Record<string, { bg: string; text: string }> = {
   customers:    { bg: "#3B82F6", text: "#FFFFFF" },
   production:   { bg: "#F97316", text: "#FFFFFF" },
   installation: { bg: "#14B8A6", text: "#FFFFFF" },
+  support:      { bg: "#6366F1", text: "#FFFFFF" },
 };
 
 export function AdminLayoutClient({

@@ -22,6 +22,7 @@ interface OrderItem {
   dateCreated: string;
   orderId: string;
   orderCode: string;
+  productionDeadline?: string | null;
 }
 
 interface ProductionDashboardClientProps {
@@ -230,9 +231,15 @@ export function ProductionDashboardClient({
                         })}
                       </td>
 
-                      {/* Deadline Date Placeholder */}
-                      <td className="py-4 px-6 text-sm text-rose-500 font-bold">
-                        24 Oct 2026
+                      {/* Deadline Date */}
+                      <td className="py-4 px-6 text-sm font-bold text-rose-500">
+                        {order.productionDeadline
+                          ? new Date(order.productionDeadline).toLocaleDateString("en-IN", {
+                              day: "numeric",
+                              month: "short",
+                              year: "numeric"
+                            })
+                          : "Not Set"}
                       </td>
 
                       {/* Action */}

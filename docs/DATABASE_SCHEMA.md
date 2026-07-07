@@ -19,15 +19,14 @@
    - [enquiries](#6-enquiries)
    - [order_messages](#7-order_messages)
    - [portal_access_tokens](#8-portal_access_tokens)
-   - [order_files](#9-order_files)
-   - [site_visits](#10-site_visits)
-   - [site_visit_measurements](#11-site_visit_measurements)
-   - [products](#12-products)
-   - [quotations](#13-quotations)
-   - [quotation_material_preferences](#14-quotation_material_preferences)
-   - [audit_logs](#15-audit-logs)
-   - [designs](#16-designs)
-   - [payments](#17-payments)
+   - [site_visits](#9-site_visits)
+   - [site_visit_measurements](#10-site_visit_measurements)
+   - [products](#11-products)
+   - [quotations](#12-quotations)
+   - [quotation_material_preferences](#13-quotation_material_preferences)
+   - [audit_logs](#14-audit-logs)
+   - [designs](#15-designs)
+   - [payments](#16-payments)
 4. [Auth Schema](#auth-schema)
 5. [Storage & Realtime Schemas](#storage--realtime-schemas)
 6. [Database Functions](#database-functions)
@@ -118,6 +117,7 @@
 |--------|------|----------|---------|-------|
 | `id` | `uuid` | NO | — | Primary key (shared with auth.users) |
 | `company_id` | `uuid` | YES | — | FK → `companies.id` |
+| `employee_id`| `text` | NO | trigger | Sequential ID per company (e.g. `E001`) |
 | `name` | `text` | NO | — | Display name |
 | `role` | `text` | NO | — | `admin` or `staff` |
 | `phone` | `text` | NO | — | Contact phone |
@@ -313,17 +313,7 @@ Incoming leads. Created from contact forms, WhatsApp, phone calls. When converte
 | `expires_at` | `timestamptz` | NO | — | |
 | `revoked_at` | `timestamptz` | YES | — | |
 
-### 9. order_files
-| Column | Type | Nullable | Default | Notes |
-|--------|------|----------|---------|-------|
-| `id` | `uuid` | NO | `gen_random_uuid()` | Primary key |
-| `order_id` | `text` | NO | — | |
-| `category` | `text` | NO | — | |
-| `file_name` | `text` | NO | — | |
-| `file_path` | `text` | NO | — | |
-| `created_at` | `timestamptz` | YES | `now()` | |
-
-### 10. site_visits
+### 9. site_visits
 | Column | Type | Nullable | Default | Notes |
 |--------|------|----------|---------|-------|
 | `id` | `uuid` | NO | `gen_random_uuid()` | Primary key |
@@ -337,7 +327,7 @@ Incoming leads. Created from contact forms, WhatsApp, phone calls. When converte
 | `notes` | `text` | YES | null | |
 | `review_status` | `text` | YES | null | |
 
-### 11. site_visit_measurements
+### 10. site_visit_measurements
 | Column | Type | Nullable | Default | Notes |
 |--------|------|----------|---------|-------|
 | `id` | `uuid` | NO | `gen_random_uuid()` | Primary key |
@@ -353,7 +343,7 @@ Incoming leads. Created from contact forms, WhatsApp, phone calls. When converte
 | `ground_clearance_unit` | `text` | YES | `'ft'` | |
 | `photos` | `jsonb` | YES | — | |
 
-### 12. products
+### 11. products
 | Column | Type | Nullable | Default | Notes |
 |--------|------|----------|---------|-------|
 | `id` | `uuid` | NO | `gen_random_uuid()` | Primary key |
@@ -364,7 +354,7 @@ Incoming leads. Created from contact forms, WhatsApp, phone calls. When converte
 | `price_per_sqft` | `numeric` | YES | — | |
 | `price_per_unit` | `numeric` | YES | — | |
 
-### 13. quotations
+### 12. quotations
 | Column | Type | Nullable | Default | Notes |
 |--------|------|----------|---------|-------|
 | `id` | `uuid` | NO | `gen_random_uuid()` | Primary key |
@@ -391,7 +381,7 @@ Incoming leads. Created from contact forms, WhatsApp, phone calls. When converte
 
 **Triggers:** `trigger_generate_quotation_id` → `generate_quotation_id()` assigns `quotation_id` per `company_id` on insert.
 
-### 14. quotation_material_preferences
+### 13. quotation_material_preferences
 | Column | Type | Nullable | Default | Notes |
 |--------|------|----------|---------|-------|
 | `id` | `uuid` | NO | `gen_random_uuid()` | Primary key |
@@ -399,7 +389,7 @@ Incoming leads. Created from contact forms, WhatsApp, phone calls. When converte
 | `signage_item_id` | `text` | NO | — | |
 | `preferences` | `jsonb` | YES | `'{}'` | |
 
-### 15. audit_logs
+### 14. audit_logs
 | Column | Type | Nullable | Default | Notes |
 |--------|------|----------|---------|-------|
 | `id` | `uuid` | NO | `gen_random_uuid()` | Primary key |
@@ -411,7 +401,7 @@ Incoming leads. Created from contact forms, WhatsApp, phone calls. When converte
 | `description` | `text` | NO | — | |
 | `created_at` | `timestamptz` | YES | `now()` | |
 
-### 16. designs
+### 15. designs
 One row per order (extracted from legacy `orders.design_details`).
 
 | Column | Type | Nullable | Default | Notes |
@@ -423,7 +413,7 @@ One row per order (extracted from legacy `orders.design_details`).
 | `created_at` | `timestamptz` | NO | `now()` | |
 | `updated_at` | `timestamptz` | NO | `now()` | Trigger-maintained |
 
-### 17. payments
+### 16. payments
 Financial tracking only (does not block stage progression).
 
 | Column | Type | Nullable | Default | Notes |
@@ -444,8 +434,8 @@ Financial tracking only (does not block stage progression).
 
 Indexes: `order_id`, `status`, `trigger_stage`.
 
-### 18. productions / installations
-Dedicated tables for workshop and field work (extracted from legacy order JSONB). See application code for full column lists.
+### 17. productions / installations
+Dedicated tables for workshop and field work. `productions` includes milestones and a `deadline` (timestamptz) column.
 
 ---
 

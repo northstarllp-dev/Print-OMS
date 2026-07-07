@@ -8,7 +8,7 @@
 
 ## Workflow
 
-1. **Pipeline Overview**: Admin logs in and views a Kanban-style or list-view board of all active orders mapped across `PipelineStage` (Enquiry → Site Visit → Quote → Design → Production → Installation → Completed).
+1. **Pipeline Overview**: Admin logs in and views a Dashboard of active metrics (including total Revenue and Outstanding Amounts derived from `quotations` and `payments` tables) and a Kanban-style or list-view board of all active orders mapped across `PipelineStage` (Enquiry → Site Visit → Quote → Design → Production → Installation → Completed).
 2. **Alerts & Locks**: Orders requiring admin intervention (e.g., `stage_status` starts with "Pending Admin Approval") are highlighted with alerts.
 3. **Stage Approval (Gatekeeping)**:
    * Staff completes a phase (e.g., finishes physical site visit).

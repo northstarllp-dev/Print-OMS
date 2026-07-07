@@ -14,8 +14,8 @@
    * Procurement of Materials
    * ACP & Acrylic Cutting
    * Lighting & Wiring
-   * Quality Check (QC)
-4. **Completion**: Once all checkboxes are checked, the staff clicks "Submit/Request Stage Advancement".
+4. **Deadline Tracking**: Admin can set and edit a production deadline which dictates when fabrication must be complete.
+5. **Completion**: Once all checkboxes are checked, the staff clicks "Submit/Request Stage Advancement".
 5. **Admin Approval**: Admin verifies the production completion, clears the lock, and transitions the order to `Installation Pending`.
 
 ## Workflow States
@@ -48,6 +48,7 @@ Permissions:
 Permissions:
 * All Workshop Staff permissions.
 * Approve the stage progression from Production to Installation.
+* Set and edit the production deadline.
 
 ### Customer
 
@@ -68,6 +69,7 @@ Permissions:
 | acpAndAcrylicCutting | boolean | Milestone flag |
 | lightingAndWiring | boolean | Milestone flag |
 | qualityCheck | boolean | Milestone flag |
+| deadline | timestamptz | Admin-editable deadline for production |
 
 *(Note: Data is mapped to `productionDetails` on the Order object in the frontend.)*
 

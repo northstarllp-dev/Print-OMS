@@ -455,6 +455,7 @@ Groups all data under a single tenant.
 Internal staff details linked to auth identities.
 * `id` (uuid, PK): Linked to Supabase Auth `users.id`.
 * `company_id` (uuid, FK -> `companies.id`): Tenant isolation key.
+* `employee_id` (varchar): Sequential ID scoped per company (e.g. E001).
 * `name` (varchar): Full name.
 * `staff_role` (varchar): "Admin", "Designer", "Estimator", "Field Agent", "Installer".
 * `phone` (varchar)
@@ -592,6 +593,7 @@ Server actions: `src/features/payments/actions/paymentActions.ts`.
 * `id` (uuid, PK)
 * `order_id` (uuid, FK -> `orders.id`)
 * `milestones` (jsonb): Key-value state of fabrication checks.
+* `deadline` (timestamptz): Admin-editable deadline for production.
 * `status` (varchar): "Pending", "In Progress", "Completed".
 * `notes` (text)
 * `completed_at` (timestamp)

@@ -25,16 +25,15 @@ Payments are a visibility module only.
 Payments can be recorded at any time (advance after quote, after design, during production, final settlement, etc.).
 
 1. Staff open the order header **Payment** tab.
-2. Staff **Add Payment** (installment name, fixed / % / rest of amount).
-3. Optionally check **Mark as received now**, or later click **Received**.
+2. Staff **Add Payment** (installment name, fixed / % / rest of amount). The "GST / Without GST" dropdown has been removed for simplicity.
+3. Payments added are considered logged/received. The "Expected" button and status toggling have been removed.
 4. Customer portal **Payments** tab shows the same records as information only.
 
 ## Payment statuses
 
 | Status | Meaning |
 | ------ | ------- |
-| `expected` | Amount planned / due (not yet received) |
-| `received` | Staff marked as received |
+| `received` | Amount has been received |
 
 ## Amount types
 
@@ -58,7 +57,7 @@ Installment names auto-number: `1st installment`, `2nd installment`, …
 | `trigger_stage` | text | Optional note of order stage when recorded |
 | `amount_type` | text | `fixed` \| `percentage` |
 | `amount` / `percentage` / `calculated_amount` | numeric | |
-| `status` | text | `expected` \| `received` |
+| `status` | text | `received` |
 | `notes` | text | Optional |
 | `paid_at` | timestamptz | Set when marked received |
 | `created_at` / `updated_at` | timestamptz | |
@@ -97,15 +96,14 @@ Installment names auto-number: `1st installment`, `2nd installment`, …
 
 | Surface | Purpose |
 | ------- | ------- |
-| Order header **Payment** | Staff tracking: add, mark received, delete |
+| Order header **Payment** | Staff tracking: add, delete |
 | Portal **Payments** tab | Customer read-only: totals + installment list |
 | Quotation **Move to Design/Production** | Advances stage only (no payment popup) |
 
 ## Data flow
 
 ```
-Staff: Add Payment → status = expected (or received if checked)
-Staff: Received → status = received, paid_at set
+Staff: Add Payment → status = received, paid_at set
 Customer: view totals and line items only
 Stage advance: never checks payments
 ```

@@ -62,7 +62,9 @@ export async function getOrders() {
     ),
     installations(*),
     productions(*),
-    designs(*)
+    designs(*),
+    quotations(grand_total, status),
+    payments(amount, calculated_amount, status)
   `).order("date_created", { ascending: false });
   if (error) throw new Error(error.message);
   
@@ -80,7 +82,9 @@ export async function getOrders() {
       siteVisitDetails: mapSiteVisitFromDb(sv),
       design: designRow ? mapDesignFromDb(designRow) : null,
       installationDetails: Array.isArray(order.installations) ? order.installations[0] : order.installations,
-      productionDetails: Array.isArray(order.productions) ? order.productions[0] : order.productions
+      productionDetails: Array.isArray(order.productions) ? order.productions[0] : order.productions,
+      quotations: order.quotations,
+      payments: order.payments
     };
   });
 }
@@ -97,7 +101,9 @@ export async function getOrderById(id: string) {
     ),
     installations(*),
     productions(*),
-    designs(*)
+    designs(*),
+    quotations(grand_total, status),
+    payments(amount, calculated_amount, status)
   `).eq("id", id).maybeSingle();
   
   // If not found, try by friendly order_id column
@@ -112,7 +118,9 @@ export async function getOrderById(id: string) {
         ),
         installations(*),
         productions(*),
-        designs(*)
+        designs(*),
+        quotations(grand_total, status),
+        payments(amount, calculated_amount, status)
       `)
       .eq("order_id", id)
       .maybeSingle();
@@ -145,7 +153,9 @@ export async function getOrderById(id: string) {
     siteVisitDetails: mapSiteVisitFromDb(sv),
     design: designRow ? mapDesignFromDb(designRow) : null,
     installationDetails: Array.isArray(data.installations) && data.installations.length > 0 ? data.installations[0] : (data.installations || null),
-    productionDetails: Array.isArray(data.productions) && data.productions.length > 0 ? data.productions[0] : (data.productions || null)
+    productionDetails: Array.isArray(data.productions) && data.productions.length > 0 ? data.productions[0] : (data.productions || null),
+    quotations: data.quotations,
+    payments: data.payments
   };
 }
 

@@ -19,6 +19,8 @@ export default async function AdminDashboardPage() {
     dateCreated: o.date_created,
     orderCode: o.order_id || o.id,
     orderId: o.order_id || o.id,
+    quotations: o.quotations,
+    payments: o.payments
   }));
 
   const enquiries = (enquiriesData || []).map((e: any) => ({

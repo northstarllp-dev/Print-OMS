@@ -53,7 +53,7 @@ export const PaymentsModule: React.FC<PaymentsModuleProps> = ({
   const [newType, setNewType] = useState<PaymentAmountType>("percentage");
   const [newValue, setNewValue] = useState("50");
   const [restOfAmount, setRestOfAmount] = useState(false);
-  const [withGst, setWithGst] = useState(true);
+  const withGst = true;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -204,28 +204,6 @@ export const PaymentsModule: React.FC<PaymentsModuleProps> = ({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-4">
-              <div>
-                <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Calculation Base</label>
-                <div className="flex gap-4 pt-1 flex-wrap">
-                  <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 cursor-pointer">
-                    <input 
-                      type="radio" 
-                      checked={withGst} 
-                      onChange={() => setWithGst(true)} 
-                    />
-                    With GST
-                  </label>
-                  <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 cursor-pointer">
-                    <input 
-                      type="radio" 
-                      checked={!withGst} 
-                      onChange={() => setWithGst(false)} 
-                    />
-                    Without GST
-                  </label>
-                </div>
-              </div>
-
               <div>
                 <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Type</label>
                 <div className="flex gap-4 pt-1 flex-wrap">
@@ -397,16 +375,7 @@ export const PaymentsModule: React.FC<PaymentsModuleProps> = ({
 
                 {canEdit && (
                   <div className="flex items-center gap-2">
-                    {received ? (
-                      <button
-                        type="button"
-                        disabled={isPending}
-                        onClick={() => run(async () => { await markPaymentExpected(p.id); })}
-                        className="px-3 py-1.5 text-[11px] font-bold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50"
-                      >
-                        Mark expected
-                      </button>
-                    ) : (
+                    {!received && (
                       <button
                         type="button"
                         disabled={isPending}

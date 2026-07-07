@@ -19,6 +19,7 @@ export default async function StaffProductionPage() {
     dateCreated: o.date_created,
     orderId: o.order_id || o.id,
     orderCode: o.order_id || o.id,
+    productionDeadline: o.productionDetails?.deadline || null,
   }));
 
   return (
