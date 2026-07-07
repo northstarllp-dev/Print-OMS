@@ -357,10 +357,9 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
   const [saveMsg, setSaveMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [activeRowId, setActiveRowId] = useState<string | null>(null);
   const [sendingToCustomer, setSendingToCustomer] = useState(false);
-  const [pushingToAdmin, setPushingToAdmin] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   const [selectedProductInfo, setSelectedProductInfo] = useState<Product | null>(null);
-  const [pendingAction, setPendingAction] = useState<"admin" | "customer" | null>(null);
+  const [showSendConfirm, setShowSendConfirm] = useState(false);
   const isDirtyRef = useRef(false);
 
   useEffect(() => {
@@ -374,9 +373,6 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
   );
   const [rejectionReason, setRejectionReason] = useState(
     initialQuotation?.rejection_reason ?? ""
-  );
-  const [customerName, setCustomerName] = useState(
-    order.customerName ?? ""
   );
 
   // Redesigned: multi-section structure without options A/B
@@ -539,12 +535,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
     isDirtyRef.current = true;
   }
 
-  // For staff (Employee), lock it if it's sent, approved, or pending approval.
-  // For Admin, only lock it if it's Approved or Sent, but NOT when Pending Approval (Admin needs to edit/approve).
-  // Note: currentUserRole gives us exact role.
-  const isLocked = currentUserRole === "Admin"
-    ? (status === "Sent" || status === "Approved")
-    : (status === "Sent" || status === "Approved" || status === "Pending Approval");
+  const isLocked = status === "Sent" || status === "Approved";
   const orderStage = order.stage || "";
 
 
@@ -660,51 +651,6 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
     }
   };
 
-  const handlePushToAdmin = async () => {
-    setPushingToAdmin(true);
-    try {
-      const saved = await upsertQuotation(order.id, {
-        signage_options: sections,
-        discount: effectiveDiscount,
-        status: "Pending Approval",
-        notes,
-        terms,
-        shipping,
-      });
-      if (saved.quotation_id) setQuotationId(saved.quotation_id);
-      setStatus("Pending Approval");
-      isDirtyRef.current = false;
-      setSaveMsg({ text: "Quotation submitted to Admin for approval!", ok: true });
-      setTimeout(() => setSaveMsg(null), 4000);
-    } catch (err: any) {
-      setSaveMsg({ text: err.message || "Submission failed", ok: false });
-    } finally {
-      setPushingToAdmin(false);
-    }
-  };
-
-  const handleRejectToDraft = async () => {
-    startTransition(async () => {
-      try {
-        const saved = await upsertQuotation(order.id, {
-          signage_options: sections,
-          discount: effectiveDiscount,
-          status: "Draft",
-          notes,
-          terms,
-          shipping,
-        });
-        if (saved.quotation_id) setQuotationId(saved.quotation_id);
-        setStatus("Draft");
-        isDirtyRef.current = false;
-        setSaveMsg({ text: "Quotation returned to Draft status.", ok: true });
-        setTimeout(() => setSaveMsg(null), 4000);
-      } catch (err: any) {
-        setSaveMsg({ text: err.message || "Failed to return to draft", ok: false });
-      }
-    });
-  };
-
   const inputCls = "border border-slate-200 rounded-lg text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500";
 
   return (
@@ -739,20 +685,6 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
         </div>
       </div>
 
-      {status === "Pending Approval" && (
-        <div className={`p-4 rounded-2xl border flex items-center gap-3 shadow-sm ${isEmployee
-            ? "bg-blue-50 border-blue-200 text-blue-800"
-            : "bg-amber-50 border-amber-200 text-amber-800"
-          }`}>
-          <Info size={16} className={isEmployee ? "text-blue-600" : "text-amber-600"} />
-          <div className="text-xs font-semibold">
-            {isEmployee
-              ? "Submitted for Approval: This quotation is pending review by Admin and is locked for editing."
-              : "Pending Review: This quotation was submitted by staff. Please review the details, then approve and send it to the customer."}
-          </div>
-        </div>
-      )}
-
       {status === "Rejected" && (
         <div className="p-4 rounded-2xl border flex items-center gap-3 shadow-sm bg-rose-50 border-rose-200 text-rose-800">
           <AlertCircle size={16} className="text-rose-600 shrink-0" />
@@ -771,15 +703,9 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
       <div className="bg-white rounded-2xl px-5 py-4 border border-slate-200 flex justify-between items-start text-xs shadow-sm">
         <div className="space-y-1.5 flex-1 max-w-[60%]">
           <div className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Bill To</div>
-          <input
-            type="text"
-            value={customerName}
-            disabled={isLocked}
-            onChange={(e) => setCustomerName(e.target.value)}
-            placeholder="Customer Name..."
-            className="w-full font-black text-slate-800 bg-transparent border-b border-dashed border-slate-200 focus:outline-none focus:border-blue-500 py-0.5"
-          />
-          <div className="text-slate-500 font-medium">{order.businessName} - {order.clientName}</div>
+          <div className="font-black text-slate-800 py-0.5">
+            {order.businessName} - {order.clientName}
+          </div>
         </div>
         <div className="text-right">
           <div className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-0.5">Date</div>
@@ -1267,6 +1193,13 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
           isAdmin &&
           isQuotationStage &&
           status === "Sent";
+        const canSendToCustomer =
+          status === "Draft" ||
+          status === "Rejected" ||
+          status === "Pending Approval";
+        const advanceButtonLabel = isEmployeeRole
+          ? `Request Advance to ${nextStageLabel}`
+          : `Move to ${nextStageLabel}`;
 
         const actionButtons = (
           <>
@@ -1282,47 +1215,19 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                   Save Draft
                 </button>
 
-                {isEmployeeRole && (
+                {canSendToCustomer && (
                   <button
                     type="button"
-                    onClick={() => setPendingAction("admin")}
-                    disabled={isPending || sections.length === 0}
-                    className="py-2 px-4 bg-[#22c55e] hover:bg-[#16a34a] text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <Check size={14} /> Push to Admin
-                  </button>
-                )}
-
-                {isAdmin && status === "Draft" && (
-                  <button
-                    type="button"
-                    onClick={() => setPendingAction("admin")}
-                    disabled={isPending || sections.length === 0}
-                    className="py-2 px-4 bg-[#22c55e] hover:bg-[#16a34a] text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <Check size={14} /> Submit for Review
-                  </button>
-                )}
-
-                {isAdmin && status === "Pending Approval" && (
-                  <button
-                    type="button"
-                    onClick={handleRejectToDraft}
-                    disabled={isPending}
-                    className="py-2 px-4 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <AlertCircle size={14} /> Request Changes
-                  </button>
-                )}
-
-                {isAdmin && (status === "Pending Approval" || status === "Rejected") && (
-                  <button
-                    type="button"
-                    onClick={() => setPendingAction("customer")}
-                    disabled={isPending || sections.length === 0}
+                    onClick={() => setShowSendConfirm(true)}
+                    disabled={isPending || sendingToCustomer || sections.length === 0}
                     className="py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <Check size={14} /> Push to Customer
+                    {sendingToCustomer ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <Check size={14} />
+                    )}
+                    Send to Customer
                   </button>
                 )}
               </div>
@@ -1349,7 +1254,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                     className="py-2 px-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm"
                   >
                     <Sparkles size={13} />
-                    Move to {nextStageLabel}
+                    {advanceButtonLabel}
                   </button>
                 )}
               </div>
@@ -1376,9 +1281,8 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
         />
       )}
 
-      {pendingAction && (
+      {showSendConfirm && (
         <QuotationConfirmModal
-          actionType={pendingAction}
           subtotal={subtotal}
           discount={effectiveDiscount}
           tax={tax}
@@ -1396,14 +1300,10 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
             }))
           }))}
           onConfirm={() => {
-            if (pendingAction === "admin") {
-              handlePushToAdmin();
-            } else if (pendingAction === "customer") {
-              handleSendToCustomer();
-            }
-            setPendingAction(null);
+            handleSendToCustomer();
+            setShowSendConfirm(false);
           }}
-          onClose={() => setPendingAction(null)}
+          onClose={() => setShowSendConfirm(false)}
         />
       )}
     </div>
@@ -1631,7 +1531,6 @@ function ProductInfoModal({ product, onClose }: { product: Product; onClose: () 
 // Quotation Confirm Modal Component
 // ─────────────────────────────────────────────────────────────────────────────
 function QuotationConfirmModal({
-  actionType,
   subtotal,
   discount,
   tax,
@@ -1641,7 +1540,6 @@ function QuotationConfirmModal({
   onConfirm,
   onClose,
 }: {
-  actionType: "admin" | "customer";
   subtotal: number;
   discount: number;
   tax: number;
@@ -1691,7 +1589,7 @@ function QuotationConfirmModal({
               Confirm Quotation
             </h4>
             <span style={{ fontSize: "10px", color: "#64748b", fontWeight: 600 }}>
-              {actionType === "admin" ? "Sending to Admin for Review" : "Sending to Customer for Approval"}
+              Sending to Customer for Approval
             </span>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600">

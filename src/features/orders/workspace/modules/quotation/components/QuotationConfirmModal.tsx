@@ -2,7 +2,6 @@ import React from "react";
 import { Check, X } from "lucide-react";
 
 export function QuotationConfirmModal({
-  actionType,
   subtotal,
   discount,
   tax,
@@ -12,7 +11,6 @@ export function QuotationConfirmModal({
   onConfirm,
   onClose,
 }: {
-  actionType: "admin" | "customer";
   subtotal: number;
   discount: number;
   tax: number;
@@ -62,7 +60,7 @@ export function QuotationConfirmModal({
               Confirm Quotation
             </h4>
             <span style={{ fontSize: "10px", color: "#64748b", fontWeight: 600 }}>
-              {actionType === "admin" ? "Sending to Admin for Review" : "Sending to Customer for Approval"}
+              Sending to Customer for Approval
             </span>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600">

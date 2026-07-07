@@ -10,11 +10,12 @@ const ALLOWED_STATUSES = new Set([
 
 const UPSERT_LOCKED_STATUSES = new Set(["Sent", "Approved"]);
 
-/** Statuses that may only be set by dedicated workflow actions, not upsertQuotation. */
-const UPSERT_FORBIDDEN_TARGET_STATUSES = new Set(["Approved", "Rejected"]);
-
-/** Admin may send to customer only after staff review or customer revision. */
-export const SEND_TO_CUSTOMER_FROM_STATUSES = new Set(["Pending Approval", "Rejected"]);
+/** Staff or admin may send from draft, legacy pending review, or after customer revision. */
+export const SEND_TO_CUSTOMER_FROM_STATUSES = new Set([
+  "Draft",
+  "Pending Approval",
+  "Rejected",
+]);
 
 export function assertValidQuotationStatus(status: string | undefined): string {
   const value = status || "Draft";
@@ -33,7 +34,7 @@ export function assertQuotationEditable(existingStatus: string | undefined): voi
 export function assertCanSendQuotationToCustomer(status: string): void {
   if (!SEND_TO_CUSTOMER_FROM_STATUSES.has(status)) {
     throw new Error(
-      `Cannot send quotation in status "${status}". Submit for review or wait for customer revision.`
+      `Cannot send quotation in status "${status}". Save as draft or wait for customer revision before sending.`
     );
   }
 }
@@ -42,7 +43,10 @@ export function assertUpsertStatusTransition(
   existingStatus: string | undefined,
   nextStatus: string
 ): void {
-  if (UPSERT_FORBIDDEN_TARGET_STATUSES.has(nextStatus)) {
+  if (nextStatus === "Approved") {
+    throw new Error(`Status "${nextStatus}" cannot be set via save — use the workflow action`);
+  }
+  if (nextStatus === "Rejected" && existingStatus !== "Rejected") {
     throw new Error(`Status "${nextStatus}" cannot be set via save — use the workflow action`);
   }
   if (existingStatus && UPSERT_LOCKED_STATUSES.has(existingStatus)) {

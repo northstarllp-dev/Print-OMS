@@ -424,6 +424,17 @@ export async function adminApproveStageAction(orderId: string) {
     .single();
   if (fetchError) throw new Error(fetchError.message);
 
+  const midQuotationStages = new Set([
+    "Quotation In Progress",
+    "Quotation Sent",
+    "Quotation Negotiation",
+  ]);
+  if (midQuotationStages.has(o.stage)) {
+    throw new Error(
+      `Cannot advance from "${o.stage}" via generic stage approval. Use Send to Customer or the quotation workflow actions in the Quotation tab.`
+    );
+  }
+
   const isDesignFirst = (o.workflow_type || "quote_first") === "design_first";
 
   // Build the next-stage map dynamically based on workflow type
