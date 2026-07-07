@@ -360,6 +360,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
   const [isMounted, setIsMounted] = useState(false);
   const [selectedProductInfo, setSelectedProductInfo] = useState<Product | null>(null);
   const [showSendConfirm, setShowSendConfirm] = useState(false);
+  const [advanceConfirmType, setAdvanceConfirmType] = useState<"override" | "advance" | null>(null);
   const isDirtyRef = useRef(false);
 
   useEffect(() => {
@@ -535,7 +536,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
     isDirtyRef.current = true;
   }
 
-  const isLocked = status === "Sent" || status === "Approved";
+  const isLocked = status === "Approved";
   const orderStage = order.stage || "";
 
 
@@ -1195,6 +1196,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
           status === "Sent";
         const canSendToCustomer =
           status === "Draft" ||
+          status === "Sent" ||
           status === "Rejected" ||
           status === "Pending Approval";
         const advanceButtonLabel = isEmployeeRole
@@ -1230,6 +1232,18 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                     Send to Customer
                   </button>
                 )}
+
+                {canAdminApproveWithoutCustomer && (
+                  <button
+                    type="button"
+                    onClick={() => setAdvanceConfirmType("override")}
+                    disabled={isPending}
+                    className="py-2 px-5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50"
+                  >
+                    <Sparkles size={13} />
+                    Approve without Customer & Advance
+                  </button>
+                )}
               </div>
             ) : (
               <div className="flex items-center gap-2">
@@ -1239,7 +1253,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                 {canAdminApproveWithoutCustomer && (
                   <button
                     type="button"
-                    onClick={onRequestAdvance}
+                    onClick={() => setAdvanceConfirmType("override")}
                     disabled={isPending}
                     className="py-2 px-5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50"
                   >
@@ -1250,7 +1264,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                 {canMoveToNextStage && (
                   <button
                     type="button"
-                    onClick={onRequestAdvance}
+                    onClick={() => setAdvanceConfirmType("advance")}
                     className="py-2 px-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm"
                   >
                     <Sparkles size={13} />
@@ -1306,9 +1320,26 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
           onClose={() => setShowSendConfirm(false)}
         />
       )}
+
+      {advanceConfirmType && (
+        <WorkflowAdvanceConfirmModal
+          mode={advanceConfirmType}
+          isEmployee={isEmployee}
+          nextStageLabel={nextStageLabelFromWorkflow(order.workflow_type)}
+          onConfirm={() => {
+            onRequestAdvance?.();
+            setAdvanceConfirmType(null);
+          }}
+          onClose={() => setAdvanceConfirmType(null)}
+        />
+      )}
     </div>
   );
 };
+
+function nextStageLabelFromWorkflow(workflowType?: "quote_first" | "design_first"): string {
+  return workflowType === "design_first" ? "Production" : "Design";
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Product Info Popup Modal Component
@@ -1675,6 +1706,80 @@ function QuotationConfirmModal({
             onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "#22c55e"}
           >
             <Check size={14} /> Confirm & Proceed
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function WorkflowAdvanceConfirmModal({
+  mode,
+  isEmployee,
+  nextStageLabel,
+  onConfirm,
+  onClose,
+}: {
+  mode: "override" | "advance";
+  isEmployee: boolean;
+  nextStageLabel: string;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  const title =
+    mode === "override" ? "Approve Without Customer?" : isEmployee ? "Request Admin Approval?" : `Move to ${nextStageLabel}?`;
+  const description =
+    mode === "override"
+      ? `This will mark the quotation approved on behalf of the customer and move the order to ${nextStageLabel}.`
+      : isEmployee
+        ? `This sends an admin approval request to move the order to ${nextStageLabel}. The stage will not advance immediately.`
+        : `This will move the order to ${nextStageLabel}.`;
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        backgroundColor: "rgba(0, 0, 0, 0.5)",
+        backdropFilter: "blur(2px)",
+        zIndex: 99999,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "16px",
+      }}
+    >
+      <div
+        style={{
+          backgroundColor: "white",
+          borderRadius: "14px",
+          maxWidth: "420px",
+          width: "100%",
+          overflow: "hidden",
+          boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+          border: "1px solid #f1f5f9",
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        <div style={{ padding: "16px 20px", borderBottom: "1px solid #f1f5f9", backgroundColor: "#f8fafc" }}>
+          <h4 style={{ margin: 0, fontSize: "14px", fontWeight: 800, color: "#0f172a", textTransform: "uppercase" }}>
+            {title}
+          </h4>
+          <p style={{ margin: "8px 0 0", fontSize: "12px", color: "#64748b", lineHeight: 1.5 }}>{description}</p>
+        </div>
+        <div style={{ padding: "16px 20px", borderTop: "1px solid #f1f5f9", backgroundColor: "#f8fafc", display: "flex", justifyContent: "flex-end", gap: "8px" }}>
+          <button
+            onClick={onClose}
+            style={{ padding: "8px 16px", backgroundColor: "white", color: "#475569", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            style={{ padding: "8px 16px", backgroundColor: mode === "override" ? "#d97706" : "#16a34a", color: "white", border: "none", borderRadius: "8px", fontSize: "12px", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}
+          >
+            <Check size={14} /> Confirm
           </button>
         </div>
       </div>

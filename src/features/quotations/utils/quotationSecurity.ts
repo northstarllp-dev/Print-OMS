@@ -8,12 +8,13 @@ const ALLOWED_STATUSES = new Set([
   "Rejected",
 ]);
 
-const UPSERT_LOCKED_STATUSES = new Set(["Sent", "Approved"]);
+const UPSERT_LOCKED_STATUSES = new Set(["Approved"]);
 
 /** Staff or admin may send from draft, legacy pending review, or after customer revision. */
 export const SEND_TO_CUSTOMER_FROM_STATUSES = new Set([
   "Draft",
   "Pending Approval",
+  "Sent",
   "Rejected",
 ]);
 
@@ -34,7 +35,7 @@ export function assertQuotationEditable(existingStatus: string | undefined): voi
 export function assertCanSendQuotationToCustomer(status: string): void {
   if (!SEND_TO_CUSTOMER_FROM_STATUSES.has(status)) {
     throw new Error(
-      `Cannot send quotation in status "${status}". Save as draft or wait for customer revision before sending.`
+      `Cannot send quotation in status "${status}". Only draft, sent, or revision statuses can be sent.`
     );
   }
 }

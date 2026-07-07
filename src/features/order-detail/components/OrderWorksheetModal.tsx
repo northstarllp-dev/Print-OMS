@@ -640,7 +640,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
             </button>
             {isEmployee ? (
               <button onClick={handleRequestAdvancement} style={{ padding: "6px 14px", background: "#22C55E", border: "none", color: "white", borderRadius: "6px", fontSize: "12px", fontWeight: "800", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", transition: "color 0.15s, background-color 0.15s" }}>
-                <CheckCircle2 size={13} /> Push for Approval
+                <CheckCircle2 size={13} /> Request Admin Approval
               </button>
             ) : (
               currentStageIndex === activeStepTab && order.stageStatus === "Normal" && (
@@ -1281,7 +1281,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                         {isEmployee ? (
                           <div style={{ display: "inline-block" }}>
                             <button onClick={handleRequestAdvancement} style={{ padding: "8px 18px", background: "#22C55E", border: "none", color: "white", borderRadius: "8px", fontSize: "12px", fontWeight: "800", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
-                              <CheckCircle2 size={13} /> Push {activeModuleTitle} to Admin for Approval
+                              <CheckCircle2 size={13} /> Request Admin Approval for {activeModuleTitle}
                             </button>
                           </div>
                         ) : (

@@ -434,6 +434,11 @@ export async function adminApproveStageAction(orderId: string) {
       `Cannot advance from "${o.stage}" via generic stage approval. Use Send to Customer or the quotation workflow actions in the Quotation tab.`
     );
   }
+  if (o.stage === "Site Visit Completed") {
+    throw new Error(
+      "Cannot advance from Site Visit Completed via generic stage approval. Choose workflow (Quote First or Design First) from Site Visit review."
+    );
+  }
 
   const isDesignFirst = (o.workflow_type || "quote_first") === "design_first";
 
