@@ -93,7 +93,7 @@ async function resolveOrderId(
 }
 
 async function assertPortalOrderOwnership(orderUuid: string): Promise<void> {
-  await assertValidPortalSessionForOrder(orderUuid);
+  await assertValidPortalSessionForOrder(orderUuid, "approve_quote");
 
   const cookieStore = await cookies();
   const sessionCookie = cookieStore.get("portal_session")?.value;

@@ -3,7 +3,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
-import { DesignRecord, DesignComment, DesignVersion } from "@/types";
+import { DesignRecord } from "@/types";
 import { mapDesignFromDb } from "./designMapper";
 import { dispatchWhatsAppNotification } from "@/features/notifications/actions/dispatchNotification";
 import { getRequestBaseUrl } from "@/features/notifications/whatsapp/requestBaseUrl";
@@ -98,27 +98,10 @@ export async function getDesignByOrderId(orderId: string): Promise<DesignRecord 
   return mapDesignFromDb(data);
 }
 
-export async function createDesignForOrderAction(orderId: string): Promise<DesignRecord> {
-  await assertStageEditPermission("design");
-  const supabase = await getSupabase();
-  const orderUuid = await resolveOrderUuid(supabase, orderId);
-  const { data, error } = await supabase
-    .from("designs")
-    .upsert({
-      order_id: orderUuid,
-      resources: [],
-      items: [],
-    }, { onConflict: "order_id" })
-    .select()
-    .single();
-  if (error) throw new Error(error.message);
-  await revalidateDesignPaths(orderId);
-  return mapDesignFromDb(data);
-}
-
 export async function updateDesignDetailsAction(
   orderId: string,
-  details: Partial<DesignRecord>
+  details: Partial<DesignRecord>,
+  expectedUpdatedAt?: string
 ): Promise<DesignRecord> {
   await assertStageEditOrPortalOrder("design", orderId);
   const supabase = await getSupabase();
@@ -131,7 +114,7 @@ export async function updateDesignDetailsAction(
     .maybeSingle();
   if (fetchError) throw new Error(fetchError.message);
 
-  const payload = {
+  const payload: Record<string, unknown> = {
     order_id: orderUuid,
     resources: current?.resources || [],
     items: current?.items || [],
@@ -139,79 +122,40 @@ export async function updateDesignDetailsAction(
   };
   payload.order_id = orderUuid;
 
-  const { data, error } = await supabase
-    .from("designs")
-    .upsert(payload, { onConflict: "order_id" })
-    .select()
-    .single();
+  let data: Record<string, unknown> | null = null;
+  let error: Error | null = null;
+
+  if (!current) {
+    const { data: inserted, error: insertError } = await supabase
+      .from("designs")
+      .upsert(payload, { onConflict: "order_id" })
+      .select()
+      .single();
+    data = inserted;
+    error = insertError;
+  } else {
+    let query = supabase
+      .from("designs")
+      .update(payload)
+      .eq("order_id", orderUuid);
+    if (expectedUpdatedAt) {
+      query = query.eq("updated_at", expectedUpdatedAt);
+    }
+    const { data: updated, error: updateError } = await query
+      .select()
+      .maybeSingle();
+    data = updated;
+    error = updateError;
+    if (!updateError && expectedUpdatedAt && !updated) {
+      throw new Error("Design was updated by another user. Please refresh and try again.");
+    }
+  }
+
   if (error) throw new Error(error.message);
+  if (!data) throw new Error("Failed to update design.");
 
   await revalidateDesignPaths(orderId);
   return mapDesignFromDb(data);
-}
-
-export async function updateDesignItemStatusAction(
-  orderId: string,
-  itemId: string,
-  versionId: string,
-  status: DesignVersion["status"],
-  updateStage?: string
-): Promise<DesignRecord> {
-  await assertStageEditOrPortalOrder("design", orderId);
-  const design = await getDesignByOrderId(orderId);
-  if (!design) throw new Error("Design not found");
-
-  const items = design.items.map((item) => {
-    if (item.id !== itemId) return item;
-    const versions = item.versions.map((v) =>
-      v.id === versionId ? { ...v, status } : v
-    );
-    const currentVersion = versions.length > 0 ? versions[versions.length - 1].versionNumber : 0;
-    return { ...item, versions, currentVersion };
-  });
-
-  const result = await updateDesignDetailsAction(orderId, { items });
-
-  if (updateStage) {
-    const supabase = await getSupabase();
-    const orderUuid = await resolveOrderUuid(supabase, orderId);
-    await updateOrderStage(supabase, orderUuid, updateStage);
-    await revalidateDesignPaths(orderId);
-  }
-
-  return result;
-}
-
-export async function addDesignCommentAction(
-  orderId: string,
-  itemId: string,
-  versionId: string,
-  comment: DesignComment,
-  updateStage?: string
-): Promise<DesignRecord> {
-  await assertStageEditOrPortalOrder("design", orderId);
-  const design = await getDesignByOrderId(orderId);
-  if (!design) throw new Error("Design not found");
-
-  const items = design.items.map((item) => {
-    if (item.id !== itemId) return item;
-    const versions = item.versions.map((v) => {
-      if (v.id !== versionId) return v;
-      return { ...v, comments: [...(v.comments || []), comment] };
-    });
-    return { ...item, versions };
-  });
-
-  const result = await updateDesignDetailsAction(orderId, { items });
-
-  if (updateStage) {
-    const supabase = await getSupabase();
-    const orderUuid = await resolveOrderUuid(supabase, orderId);
-    await updateOrderStage(supabase, orderUuid, updateStage);
-    await revalidateDesignPaths(orderId);
-  }
-
-  return result;
 }
 
 export async function sendDesignToCustomerAction(orderId: string): Promise<DesignRecord> {
@@ -232,7 +176,7 @@ export async function sendDesignToCustomerAction(orderId: string): Promise<Desig
     )
   }));
 
-  const result = await updateDesignDetailsAction(orderId, { items });
+  const result = await updateDesignDetailsAction(orderId, { items }, design.updated_at);
 
   const supabase = await getSupabase();
   const orderUuid = await resolveOrderUuid(supabase, orderId);
@@ -249,38 +193,13 @@ export async function sendDesignToCustomerAction(orderId: string): Promise<Desig
   return result;
 }
 
-export async function approveAllDesignItemsAction(orderId: string): Promise<DesignRecord> {
+export async function transitionDesignOrderStageAction(
+  orderId: string,
+  stage: string
+): Promise<void> {
   await assertStageEditOrPortalOrder("design", orderId);
-  const design = await getDesignByOrderId(orderId);
-  if (!design) throw new Error("Design not found");
-
-  const items = design.items.map((item) => {
-    const versions = item.versions.map((v, idx) =>
-      idx === item.versions.length - 1 ? { ...v, status: "Approved" as const } : v
-    );
-    return { ...item, versions };
-  });
-
-  const result = await updateDesignDetailsAction(orderId, { items });
-
-  const allApproved = items.length > 0 && items.every((item) => {
-    const latest = item.versions[item.versions.length - 1];
-    return latest && latest.status === "Approved";
-  });
-
-  if (allApproved) {
-    const supabase = await getSupabase();
-    const orderUuid = await resolveOrderUuid(supabase, orderId);
-    await updateOrderStage(supabase, orderUuid, "Design Approved");
-    const baseUrl = await getRequestBaseUrl();
-    await dispatchWhatsAppNotification(supabase, {
-      templateKey: "design_approved",
-      orderUuid,
-      idempotencyKey: `design_approved:${orderUuid}`,
-      baseUrl,
-    });
-    await revalidateDesignPaths(orderId);
-  }
-
-  return result;
+  const supabase = await getSupabase();
+  const orderUuid = await resolveOrderUuid(supabase, orderId);
+  await updateOrderStage(supabase, orderUuid, stage);
+  await revalidateDesignPaths(orderId);
 }

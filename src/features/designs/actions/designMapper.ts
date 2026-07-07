@@ -26,12 +26,3 @@ export function mapDesignFromDb(d: unknown): DesignRecord {
     updated_at: record.updated_at as string
   };
 }
-
-export function mapDesignToDb(design: Partial<DesignRecord>): Record<string, unknown> {
-  return {
-    ...(design.id ? { id: design.id } : {}),
-    ...(design.order_id ? { order_id: design.order_id } : {}),
-    ...(design.resources !== undefined ? { resources: design.resources } : {}),
-    ...(design.items !== undefined ? { items: design.items } : {})
-  };
-}

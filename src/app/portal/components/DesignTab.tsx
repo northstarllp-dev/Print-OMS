@@ -15,8 +15,11 @@ import {
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { DesignRecord } from "@/types";
-import { updateDesignDetailsAction } from "@/features/designs/actions/designActions";
-import { revalidateOrderPathsAction } from "@/features/orders/actions/orderActions";
+import {
+  transitionDesignOrderStageAction,
+  updateDesignDetailsAction,
+} from "@/features/designs/actions/designActions";
+import { areAllDesignItemsApproved } from "@/features/designs/utils/designApproval";
 
 interface Customer {
   id: string;
@@ -92,11 +95,10 @@ export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabPro
       return item;
     });
 
-    await updateDesignDetailsAction(order.id, { items: updatedItems });
+    await updateDesignDetailsAction(order.id, { items: updatedItems }, dd.updated_at);
 
     if (updateStage) {
-      await supabase.from("orders").update({ stage: updateStage }).eq("id", order.id);
-      await revalidateOrderPathsAction(order.id);
+      await transitionDesignOrderStageAction(order.id, updateStage);
     }
   };
 
@@ -126,7 +128,7 @@ export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabPro
       
       await updateDesignDetailsAction(order.id, {
         resources: [...(dd.resources || []), ...newResources]
-      });
+      }, dd.updated_at);
     } catch (err: any) {
       console.error("Upload error:", err);
       alert("Upload failed: " + (err.message || JSON.stringify(err)));
@@ -140,7 +142,7 @@ export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabPro
     if (!confirm("Are you sure you want to delete this file?")) return;
     try {
       const updatedResources = (dd.resources || []).filter((r: any) => r.id !== resourceId);
-      await updateDesignDetailsAction(order.id, { resources: updatedResources });
+      await updateDesignDetailsAction(order.id, { resources: updatedResources }, dd.updated_at);
 
       const pathPart = resourceUrl.split("/public/site-visit-photos/")[1];
       if (pathPart) {
@@ -261,9 +263,10 @@ export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabPro
   };
 
   const handleApproveDesign = async () => {
-    if (!activeVersion) return;
+    const latestVersion = localVersions[localVersions.length - 1];
+    if (!latestVersion) return;
     const updatedVersions = localVersions.map((v: any) => 
-      v.id === activeVersion.id ? { ...v, status: "Approved" } : v
+      v.id === latestVersion.id ? { ...v, status: "Approved" } : v
     );
 
     const updatedItems = itemsList.map(item => {
@@ -273,12 +276,7 @@ export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabPro
       return item;
     });
 
-    const allApproved = updatedItems.length > 0 && updatedItems.every(item => {
-      const versions = item.versions || [];
-      if (versions.length === 0) return false;
-      const latestV = versions[versions.length - 1];
-      return latestV.status === "Approved";
-    });
+    const allApproved = areAllDesignItemsApproved(updatedItems as any);
 
     const nextStage = allApproved ? "Design Approved" : undefined;
     

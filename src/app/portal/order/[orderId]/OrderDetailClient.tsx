@@ -37,6 +37,10 @@ import { useQuotationActions } from "@/app/portal/hooks/useQuotationActions";
 import { GoogleMap, useJsApiLoader, Marker, Autocomplete } from "@react-google-maps/api";
 import { DesignTab } from "../../components/DesignTab";
 import { PaymentsTab } from "../../components/PaymentsTab";
+import {
+  didStageAdvance,
+  getTabForStage,
+} from "../../utils/portalStageNavigation";
 
 const libraries: ("places")[] = ["places"];
 
@@ -121,29 +125,35 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
         { id: "chat", label: "Chat", icon: MessageSquare },
       ];
 
-  // Determine initial tab based on order stage
-  const getInitialTab = () => {
-    if (!initialOrder.stage) return "site_visit";
-    if (initialOrder.stage.includes("Site Visit")) return "site_visit";
-    if (initialOrder.stage.includes("Quotation")) return "quotation";
-    if (initialOrder.stage.includes("Design")) return "design";
-    if (initialOrder.stage.includes("Production") || initialOrder.stage.includes("Ready For")) return "billing";
-    if (initialOrder.stage.includes("Installation") || initialOrder.stage.includes("Completed") || initialOrder.stage.includes("Closed")) return "chat";
-    return "site_visit";
-  };
-  
-  const [activeTab, setActiveTab] = useState(getInitialTab());
+  // Initial tab follows server-rendered stage; realtime advances switch forward only (below).
+  const [activeTab, setActiveTab] = useState(() =>
+    getTabForStage(initialOrder.stage || "", workflowType)
+  );
   const [order, setOrder] = useState(initialOrder);
   const orderRef = useRef(order);
   orderRef.current = order;
+  const prevStageRef = useRef(order.stage);
 
   useEffect(() => {
     setOrder(initialOrder);
   }, [initialOrder]);
 
+  // Follow pipeline forward when staff advances stage (realtime or refresh).
+  useEffect(() => {
+    const prevStage = prevStageRef.current || "";
+    const nextStage = order.stage || "";
+    if (!didStageAdvance(prevStage, nextStage, workflowType)) {
+      prevStageRef.current = nextStage;
+      return;
+    }
+    prevStageRef.current = nextStage;
+    setActiveTab(getTabForStage(nextStage, workflowType));
+  }, [order.stage, workflowType]);
+
   useOrderDetailSync({
     orderId: order.id,
     businessOrderId: order.orderId || order.orderCode || order.id,
+    enabled: false,
     getOrderSnapshot: () => orderRef.current as unknown as Record<string, unknown>,
     onPatch: (patch) => {
       setOrder((prev) => mergeOrderDetailPatch(prev, patch));
@@ -162,8 +172,6 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
     handleApproveQuote,
     handleDeclineQuote,
   } = useQuotationActions(order?.id ?? "", customer.name, setOrder);
-
-  const [designFeedback, setDesignFeedback] = useState("");
 
   useEffect(() => {
     const supabase = createClient();
@@ -291,11 +299,6 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
     }
   }, [order.id, order.siteVisitDetails]);
 
-  // Debug active tab
-  useEffect(() => {
-    console.log("Active tab changed to:", activeTab);
-  }, [activeTab]);
-
   const getBusinessDays = () => {
     const days: Date[] = [];
     const cur = new Date();
@@ -393,10 +396,7 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
               return (
                 <React.Fragment key={idx}>
                   <button
-                    onClick={() => {
-                      console.log("CLICKED", stage, "setting to", targetTab);
-                      setActiveTab(targetTab);
-                    }}
+                    onClick={() => setActiveTab(targetTab)}
                     className="flex flex-col items-center gap-2 focus:outline-none focus:ring-4 focus:ring-blue-200 rounded-xl p-2"
                     style={{ cursor: "pointer" }}
                   >

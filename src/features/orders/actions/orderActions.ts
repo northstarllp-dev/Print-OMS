@@ -12,7 +12,10 @@ import {
   notifyOrderStageChange,
 } from "@/features/notifications/actions/dispatchNotification";
 import { getRequestBaseUrl } from "@/features/notifications/whatsapp/requestBaseUrl";
-import { assertStageEditPermission } from "@/features/orders/workspace/shared/serverPermissions";
+import {
+  assertAdminOnly,
+  assertStageEditPermission,
+} from "@/features/orders/workspace/shared/serverPermissions";
 import {
   revalidateOrderDetailPaths,
   revalidateStaffOrderDetailPaths,
@@ -380,12 +383,39 @@ export async function updateInstallationDetailsAction(orderId: string, details: 
 
 export async function requestStageAdvancementAction(orderId: string) {
   const supabase = await getSupabase();
-  const { data: current, error: fetchError } = await supabase.from("orders").select("stage, workflow_type").eq("id", orderId).single();
+  const orderUuid = await resolveOrderUuid(supabase, orderId);
+  const { data: current, error: fetchError } = await supabase
+    .from("orders")
+    .select("stage, workflow_type")
+    .eq("id", orderUuid)
+    .single();
   if (fetchError) throw new Error(fetchError.message);
+
+  const isDesignFirst = (current.workflow_type || "quote_first") === "design_first";
+  const stageToPermission: Record<string, "site_visit" | "quotation" | "design" | "production" | "installation"> = {
+    "Site Visit Pending": "site_visit",
+    "Site Visit Scheduled": "site_visit",
+    "Site Visit Completed": "site_visit",
+    "Quotation In Progress": "quotation",
+    "Quotation Sent": "quotation",
+    "Quotation Negotiation": "quotation",
+    "Quotation Approved": isDesignFirst ? "quotation" : "design",
+    "Design In Progress": "design",
+    "Design Approved": isDesignFirst ? "design" : "production",
+    "Production": "production",
+    "Ready For Installation": "installation",
+    "Installation Scheduled": "installation",
+    "Completed": "installation",
+    "Closed": "installation",
+  };
+  const requiredStage = stageToPermission[current.stage];
+  if (!requiredStage) {
+    throw new Error(`Unsupported stage transition request from "${current.stage}"`);
+  }
+  await assertStageEditPermission(requiredStage);
 
   let nextStatus = "Normal";
   const stage = current.stage;
-  const isDesignFirst = (current.workflow_type || "quote_first") === "design_first";
   
   if (stage === "Site Visit Pending" || stage === "Site Visit Scheduled") {
     nextStatus = "Pending Admin Approval: Site Visit Completed";
@@ -415,6 +445,7 @@ export async function requestStageAdvancementAction(orderId: string) {
 }
 
 export async function adminApproveStageAction(orderId: string) {
+  await assertAdminOnly();
   const supabase = await getSupabase();
   const orderUuid = await resolveOrderUuid(supabase, orderId);
   const { data: o, error: fetchError } = await supabase
@@ -508,6 +539,7 @@ export async function setWorkflowTypeAction(
   orderId: string,
   workflowType: "quote_first" | "design_first"
 ) {
+  await assertAdminOnly();
   const supabase = await getSupabase();
   const orderUuid = await resolveOrderUuid(supabase, orderId);
   const { data: o, error: fetchError } = await supabase
@@ -544,6 +576,7 @@ export async function setWorkflowTypeAction(
 
 
 export async function updateOrderStageAction(id: string, stage: string) {
+  await assertAdminOnly();
   const supabase = await getSupabase();
   const orderUuid = await resolveOrderUuid(supabase, id);
   const { data: o, error: fetchError } = await supabase

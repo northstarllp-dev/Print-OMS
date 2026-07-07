@@ -30,7 +30,10 @@ export async function assertStageEditPermission(stage: OrderStage): Promise<void
 }
 
 /** Valid customer portal session for the given order (uuid or friendly order_id). */
-export async function assertValidPortalSessionForOrder(orderId: string): Promise<void> {
+export async function assertValidPortalSessionForOrder(
+  orderId: string,
+  requiredScope?: string
+): Promise<void> {
   const cookieStore = await cookies();
   const sessionCookie = cookieStore.get("portal_session")?.value;
   if (!sessionCookie) {
@@ -52,6 +55,9 @@ export async function assertValidPortalSessionForOrder(orderId: string): Promise
   const now = Math.floor(Date.now() / 1000);
   if (!session.exp || session.exp < now) {
     throw new Error("Unauthorized");
+  }
+  if (requiredScope && (!session.scopes || !session.scopes.includes(requiredScope))) {
+    throw new Error(`Forbidden: missing portal scope "${requiredScope}"`);
   }
 
   // Direct match on uuid or friendly order code in the session.
@@ -120,7 +126,8 @@ export async function assertValidPortalSessionForOrder(orderId: string): Promise
  */
 export async function assertStageEditOrPortalOrder(
   stage: OrderStage,
-  orderId: string
+  orderId: string,
+  requiredPortalScope?: string
 ): Promise<void> {
   const profile = await getCurrentUser();
   if (profile) {
@@ -136,7 +143,15 @@ export async function assertStageEditOrPortalOrder(
     return;
   }
 
-  await assertValidPortalSessionForOrder(orderId);
+  const stageScope: Partial<Record<OrderStage, string>> = {
+    site_visit: "schedule_visit",
+    quotation: "approve_quote",
+    design: "approve_design",
+  };
+  await assertValidPortalSessionForOrder(
+    orderId,
+    requiredPortalScope ?? stageScope[stage]
+  );
 }
 
 /**

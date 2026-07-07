@@ -56,6 +56,7 @@ import {
   mergeOrderDetailPatch,
   useOrderDetailSync,
 } from "@/features/orders/realtime/useOrderDetailSync";
+import { areAllDesignItemsApproved } from "@/features/designs/utils/designApproval";
 
 /* ─── helpers ──────────────────────────────────────────────────── */
 const STAGE_LABEL: Record<string, { label: string; color: string }> = {
@@ -345,7 +346,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   };
   // Quote details are now managed entirely by QuotationModule via quotationActions.
   const updateDesignDetails = async (orderId: string, details: Partial<DesignRecord>) => {
-    const updated = await updateDesignDetailsAction(orderId, details);
+    const updated = await updateDesignDetailsAction(orderId, details, order.design?.updated_at);
     setOrder((prev) => ({ ...prev, design: updated }));
   };
   const updateProductionDetails = async (orderId: string, details: Partial<ProductionDetails>) => {
@@ -444,7 +445,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     } finally { setIsProcessing(false); }
   };
   const handleRequestAdvancement = async () => {
-    if ((activeStepTab === 0 || activeStepTab === 2) && !canAdvanceSiteVisit) {
+    if ((activeStepTab === 0 || activeStepTab === designTab) && !canAdvanceSiteVisit) {
       alert(siteVisitAdvanceTooltip);
       return;
     }
@@ -608,13 +609,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     siteVisitAdvanceTooltip = !canAdvanceSiteVisit ? "Schedule the visit and add at least one location item to unlock approval." : "";
   } else if (activeStepTab === designTab) {
     const itemsList = dd.items || [];
-    const activeDesignItems = itemsList.filter((item: any) => item.versions && item.versions.length > 0);
-    
-    const allDesignItemsApproved = activeDesignItems.length > 0 && activeDesignItems.every((item: any) => {
-      const latestV = item.versions[item.versions.length - 1];
-      return latestV && latestV.status === "Approved";
-    });
-    
+    const allDesignItemsApproved = areAllDesignItemsApproved(itemsList as any);
     const hasProductionFiles = itemsList.some((item: any) => item.productionFiles && item.productionFiles.length > 0);
     
     canAdvanceSiteVisit = allDesignItemsApproved && hasProductionFiles;

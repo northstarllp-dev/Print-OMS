@@ -2,7 +2,6 @@
 
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import { updateOrderStageAction } from "@/features/orders/actions/orderActions";
 import { dispatchWhatsAppNotification } from "@/features/notifications/actions/dispatchNotification";
 import { getRequestBaseUrl } from "@/features/notifications/whatsapp/requestBaseUrl";
 import { assertStageEditPermission } from "@/features/orders/workspace/shared/serverPermissions";
@@ -88,8 +87,12 @@ export async function markInstallationCompleted(orderId: string, checklist: any[
 
   if (error) throw error;
   
-  // Update the order stage to "Completed"
-  await updateOrderStageAction(orderId, "Completed");
+  // Installation team can complete the installation stage directly.
+  const { error: orderError } = await supabase
+    .from("orders")
+    .update({ stage: "Completed" })
+    .eq("id", orderId);
+  if (orderError) throw orderError;
   
   return { success: true };
 }

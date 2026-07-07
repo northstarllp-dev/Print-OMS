@@ -25,7 +25,7 @@ import {
   Download
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
-import { scheduleSiteVisitAction, revalidateOrderPathsAction } from "@/features/orders/actions/orderActions";
+import { scheduleSiteVisitAction } from "@/features/orders/actions/orderActions";
 import { formatSiteMeasurementLabel } from "@/features/orders/actions/siteVisitMapper";
 import {
   mergeOrderDetailPatch,
@@ -34,11 +34,9 @@ import {
 import { PaymentsTab } from "./components/PaymentsTab";
 import { QuotationTab } from "./components/QuotationTab";
 import { useQuotationActions } from "./hooks/useQuotationActions";
-import { usePortalOrderRealtime } from "./hooks/usePortalOrderRealtime";
 import { provideInstallationLocationAction, scheduleInstallationAction } from "@/features/installations/actions/installationActions";
 import { InstallationScheduleModule } from "@/features/installations/components/InstallationScheduleModule";
 import { DesignTab } from "./components/DesignTab";
-import { approveAllDesignItemsAction, updateDesignDetailsAction } from "@/features/designs/actions/designActions";
 
 interface Customer {
   id: string;
@@ -151,7 +149,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
   useOrderDetailSync({
     orderId: activeOrder?.id ?? "",
     businessOrderId: activeOrder?.orderId || activeOrder?.orderCode || activeOrder?.id,
-    enabled: !!activeOrder?.id,
+    enabled: false,
     getOrderSnapshot: () => (activeOrderRef.current || {}) as unknown as Record<string, unknown>,
     onPatch: (patch) => {
       const targetId = activeOrderRef.current?.id;
@@ -292,11 +290,6 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
     }
   };
 
-  // Quote / design states
-  const [designFeedback, setDesignFeedback] = useState("");
-  const [showDesignDeclineInput, setShowDesignDeclineInput] = useState(false);
-  const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
-
   const {
     quoteFeedback,
     setQuoteFeedback,
@@ -320,8 +313,6 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
     }
     loadProducts();
   }, []);
-
-  const [unreadCount, setUnreadCount] = useState(0);
 
   // Photo viewer states for Customer Portal
   const [viewerPhotos, setViewerPhotos] = useState<string[]>([]);
@@ -360,14 +351,24 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
 
 
   const currentStep = activeOrder ? getStepIndex(activeOrder.stage, activeOrder.workflow_type) : 0;
-  
+
   const [viewedStep, setViewedStep] = useState<number | null>(null);
   const activeStepToRender = viewedStep !== null ? viewedStep : currentStep;
+  const prevCurrentStepRef = useRef(currentStep);
 
   // Reset viewed step when order changes
   useEffect(() => {
     setViewedStep(null);
+    prevCurrentStepRef.current = currentStep;
   }, [activeOrderId]);
+
+  // When staff advances the pipeline, follow the new current step (clear history browse).
+  useEffect(() => {
+    if (currentStep > prevCurrentStepRef.current) {
+      setViewedStep(null);
+    }
+    prevCurrentStepRef.current = currentStep;
+  }, [currentStep]);
 
   // Sync site visit details
   useEffect(() => {
@@ -379,20 +380,6 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
       setGpsCoords(sv.gpsLocation || "12.9716° N, 77.5946° E");
     }
   }, [activeOrderId, activeOrder?.siteVisitDetails]);
-
-  const handlePortalOrderPatch = useCallback(
-    (orderUuid: string, patch: (prev: Order) => Order) => {
-      setOrders((prev) => prev.map((o) => (o.id === orderUuid ? patch(o) : o)));
-    },
-    []
-  );
-
-  usePortalOrderRealtime({
-    orderUuid: activeOrder?.id ?? "",
-    orderFriendlyId: activeOrder?.orderId || activeOrder?.id || "",
-    onOrderPatch: handlePortalOrderPatch,
-    onUnreadCount: setUnreadCount,
-  });
 
   const getBusinessDays = () => {
     const days: Date[] = [];
@@ -421,37 +408,6 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
     } catch (err) { console.error(err); }
     finally { setSchedulingLoading(false); }
   };
-
-  const handleApproveDesign = async () => {
-    if (!activeOrder) return;
-    setUpdatingStatus("design-approve");
-    const updated = await approveAllDesignItemsAction(activeOrder.id);
-    setOrders(prev => prev.map(o => o.id === activeOrder.id ? { ...o, stage: "Design Approved", design: updated } : o));
-    const supabase = createClient();
-    await supabase.from("order_activity").insert({ order_id: activeOrder.orderId || activeOrder.id, activity_type: "timeline", actor_name: "System", actor_role: "System", content: "Client approved the design proof layout.", metadata: { action: "design_approved_by_customer" } });
-    setUpdatingStatus(null);
-  };
-
-  const handleDeclineDesign = async () => {
-    if (!activeOrder || !designFeedback.trim()) return;
-    setUpdatingStatus("design-decline");
-    const design = activeOrder.design || { items: [] };
-    const items = (design.items || []).map((item: any) => {
-      const versions = item.versions || [];
-      if (versions.length === 0) return item;
-      const latest = versions[versions.length - 1];
-      return { ...item, versions: versions.map((v: any) => v.id === latest.id ? { ...v, status: "Draft" as const } : v) };
-    });
-    const updated = await updateDesignDetailsAction(activeOrder.id, { items });
-    setOrders(prev => prev.map(o => o.id === activeOrder.id ? { ...o, stage: "Design In Progress", design: updated } : o));
-    const supabase = createClient();
-    await supabase.from("order_activity").insert({ order_id: activeOrder.orderId || activeOrder.id, activity_type: "customer", actor_name: customer.name, actor_role: "Customer", content: `Design Revision Requested. Notes: ${designFeedback}`, metadata: { action: "design_revision_requested" } });
-    await supabase.from("orders").update({ stage: "Design In Progress" }).eq("id", activeOrder.id);
-    await revalidateOrderPathsAction(activeOrder.id);
-    setDesignFeedback(""); setShowDesignDeclineInput(false); setUpdatingStatus(null);
-  };
-
-
 
   const sv = activeOrder?.siteVisitDetails || {};
 

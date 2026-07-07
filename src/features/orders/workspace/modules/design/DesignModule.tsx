@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { FileText, ZoomIn, ZoomOut, UploadCloud, MessageSquare, CheckCircle, Upload, X, Trash, RefreshCw, Download, Maximize, RotateCw } from "lucide-react";
-import { Order, DesignRecord, DesignVersion, DesignComment, DesignResource } from "@/types";
+import { FileText, ZoomIn, ZoomOut, UploadCloud, Upload, X, Trash, RefreshCw, Download, Maximize, RotateCw } from "lucide-react";
+import { Order, DesignRecord, DesignVersion } from "@/types";
 import { createClient } from "@/utils/supabase/client";
 import { updateDesignDetailsAction } from "@/features/designs/actions/designActions";
 
@@ -74,7 +74,7 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
     if (updateDesignDetails) {
       await updateDesignDetails(order.id, details);
     } else {
-      await updateDesignDetailsAction(order.id, details);
+      await updateDesignDetailsAction(order.id, details, dd.updated_at);
     }
   };
 
@@ -242,7 +242,7 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
       if (updateDesignDetails) {
         await updateDesignDetails(order.id, details);
       } else {
-        await updateDesignDetailsAction(order.id, details);
+        await updateDesignDetailsAction(order.id, details, dd.updated_at);
       }
     } catch (err: any) {
       alert("Upload failed: " + err.message);
@@ -265,16 +265,11 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
       if (updateDesignDetails) {
         await updateDesignDetails(order.id, details);
       } else {
-        await updateDesignDetailsAction(order.id, details);
+        await updateDesignDetailsAction(order.id, details, dd.updated_at);
       }
     } catch (err: any) {
       alert("Delete failed: " + err.message);
     }
-  };
-
-  const handleUpdateVersionStatus = async (versionId: string, newStatus: DesignVersion["status"]) => {
-    const newVersions = localVersions.map(v => v.id === versionId ? { ...v, status: newStatus } : v);
-    await handleUpdateItemVersions(newVersions);
   };
 
   const handleDeleteVersion = async (versionId: string) => {
@@ -316,13 +311,6 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
       alert("Failed to download file");
     }
   };
-
-  const allItemsApproved = itemsList.length > 0 && itemsList.every(item => {
-    const latestV = item.versions[item.versions.length - 1];
-    return latestV && latestV.status === "Approved";
-  });
-
-  const hasProductionFiles = itemsList.some((item: any) => item.productionFiles && item.productionFiles.length > 0);
 
   return (
     <div className="space-y-6">
