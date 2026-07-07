@@ -84,7 +84,7 @@ export function OrdersManagementDashboard({
   const [selectedKpi, setSelectedKpi] = useState<string | null>(null);
   
   // Custom Date Range Filter
-  const [dateFilterType, setDateFilterType] = useState<"all" | "range">("all");
+  const [dateFilterType, setDateFilterType] = useState<"all" | "range">("range");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
@@ -222,7 +222,8 @@ export function OrdersManagementDashboard({
       const cust = customers.find((c: any) => c.id === order.customerId);
       const custName = (cust?.name || order.customerName || "").toLowerCase();
       const matches =
-        (order.projectName || "").toLowerCase().includes(q) ||
+        (order.clientName || "").toLowerCase().includes(q) ||
+        (order.businessName || "").toLowerCase().includes(q) ||
         (order.orderCode || order.id || "").toLowerCase().includes(q) ||
         custName.includes(q);
       if (!matches) return false;
@@ -367,34 +368,22 @@ export function OrdersManagementDashboard({
               )}
             </div>
 
-            {/* Date Filter Type */}
-            <select
-              value={dateFilterType}
-              onChange={(e) => setDateFilterType(e.target.value as any)}
-              style={{ padding: "9px 12px", background: "white", border: "1px solid #e2e8f0", borderRadius: "8px", cursor: "pointer", fontSize: "13px", fontWeight: "500", color: "#475569", outline: "none" }}
-            >
-              <option value="all">All Dates</option>
-              <option value="range">Custom Range</option>
-            </select>
-
-            {/* Conditional Date inputs */}
-            {dateFilterType === "range" && (
-              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  style={{ padding: "8px 12px", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "13px", color: "#475569", outline: "none" }}
-                />
-                <span style={{ fontSize: "12px", color: "#64748b" }}>to</span>
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  style={{ padding: "8px 12px", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "13px", color: "#475569", outline: "none" }}
-                />
-              </div>
-            )}
+            {/* Custom Date inputs */}
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                style={{ padding: "8px 12px", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "13px", color: "#475569", outline: "none" }}
+              />
+              <span style={{ fontSize: "12px", color: "#64748b" }}>to</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                style={{ padding: "8px 12px", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "13px", color: "#475569", outline: "none" }}
+              />
+            </div>
 
             {/* Stage filter */}
             <select value={stageFilter} onChange={(e) => setStageFilter(e.target.value)} style={{ padding: "9px 12px", background: "white", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "13px", fontWeight: "500", color: "#475569", cursor: "pointer", outline: "none" }}>
@@ -419,11 +408,11 @@ export function OrdersManagementDashboard({
           </div>
 
           {/* Reset Button */}
-          {(dateFilterType !== "all" || stageFilter !== "ALL" || healthFilter !== "ALL" || searchTerm !== "" || selectedKpi !== null) && (
+          {(startDate !== "" || endDate !== "" || stageFilter !== "ALL" || healthFilter !== "ALL" || searchTerm !== "" || selectedKpi !== null) && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "10px" }}>
               <button
                 onClick={() => {
-                  setDateFilterType("all");
+                  setDateFilterType("range");
                   setStartDate("");
                   setEndDate("");
                   setStageFilter("ALL");
@@ -451,10 +440,10 @@ export function OrdersManagementDashboard({
                   DATE
                 </th>
                 <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                  PROJECT NAME
+                  CLIENT NAME
                 </th>
                 <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                  CUSTOMER
+                  BUSINESS NAME
                 </th>
                 <th style={{ padding: "14px 20px", textAlign: "center", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                   SITE VISIT
@@ -505,11 +494,11 @@ export function OrdersManagementDashboard({
                     </td>
                     <td style={{ padding: "16px 20px" }}>
                       <div style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>
-                        {order.projectName}
+                        {order.clientName}
                       </div>
                     </td>
                     <td style={{ padding: "16px 20px", fontSize: "13px", color: "#0f172a", fontWeight: "500" }}>
-                      {customerName}
+                      {order.businessName}
                     </td>
                     <td style={{ padding: "16px 20px", textAlign: "left" }}>
                       {order.siteVisitDetails?.auditDate && order.siteVisitDetails?.auditTime ? (
@@ -518,8 +507,18 @@ export function OrdersManagementDashboard({
                             {order.siteVisitDetails.auditDate} • {order.siteVisitDetails.auditTime}
                           </div>
                           {order.siteVisitDetails.customerAddress && (
-                            <div style={{ fontSize: "11px", color: "#64748b", marginTop: "2px" }}>
-                              {order.siteVisitDetails.customerAddress}
+                            <div style={{ fontSize: "11px", marginTop: "2px" }}>
+                              <a
+                                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.siteVisitDetails.customerAddress)}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{ color: "#64748b", textDecoration: "none", cursor: "pointer" }}
+                                onMouseEnter={(e) => e.currentTarget.style.textDecoration = "underline"}
+                                onMouseLeave={(e) => e.currentTarget.style.textDecoration = "none"}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {order.siteVisitDetails.customerAddress}
+                              </a>
                             </div>
                           )}
                         </div>
@@ -539,6 +538,7 @@ export function OrdersManagementDashboard({
                           borderRadius: "6px",
                           fontSize: "11px",
                           fontWeight: "700",
+                          whiteSpace: "nowrap"
                         }}
                       >
                         {statusColor.label}
@@ -546,7 +546,7 @@ export function OrdersManagementDashboard({
                     </td>
                     <td style={{ padding: "16px 20px", textAlign: "center" }}>
                       <span
-                        className={`inline-block px-3 py-1 rounded-full text-xs font-bold border ${getHealthBadgeColor(order.health || "Active")}`}
+                        className={`inline-block px-3 py-1 rounded-full text-xs font-bold border whitespace-nowrap ${getHealthBadgeColor(order.health || "Active")}`}
                       >
                         {order.health || "Active"}
                       </span>
@@ -612,6 +612,7 @@ export function OrdersManagementDashboard({
                           alignItems: "center",
                           gap: "6px",
                           transition: "all 0.2s",
+                          whiteSpace: "nowrap",
                         }}
                         onMouseEnter={(e) => {
                           e.currentTarget.style.background = "var(--color-primary-container)";
@@ -669,7 +670,7 @@ export function OrdersManagementDashboard({
                   </div>
                   
                   <div style={{ padding: "16px", background: "#f8fafc", borderRadius: "8px", marginBottom: "24px" }}>
-                    <div style={{ fontSize: "14px", fontWeight: "600", color: "#0f172a", marginBottom: "4px" }}>{assignOrder.projectName}</div>
+                    <div style={{ fontSize: "14px", fontWeight: "600", color: "#0f172a", marginBottom: "4px" }}>{assignOrder.businessName} - {assignOrder.clientName}</div>
                     <div style={{ fontSize: "12px", color: "#64748b" }}>Order ID: {assignOrder.id}</div>
                   </div>
                   

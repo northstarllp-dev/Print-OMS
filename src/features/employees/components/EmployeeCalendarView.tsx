@@ -21,8 +21,8 @@ export const EmployeeCalendarView: React.FC<EmployeeCalendarViewProps> = ({ orde
       const isSiteVisit = o.stage === "Site Visit Pending" || o.stage === "Site Visit Scheduled" || o.stage === "Site Visit Completed";
       return {
         id: o.id,
-        projectName: o.projectName,
-        clientName: client ? client.name : "Unknown Client",
+        projectName: o.businessName,
+        clientName: o.clientName || (client ? client.name : "Unknown Client"),
         clientPhone: client ? client.phone : "",
         stage: o.stage,
         type: isSiteVisit ? "Site Survey & Audits" : "Signage Installation",

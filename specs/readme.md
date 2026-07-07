@@ -374,33 +374,15 @@ Site visit dimensions under each signage section show units from `site_visit_mea
 Shared helpers live in `src/features/quotations/utils/lineAmount.ts`.
 
 #### Global Calculation Sequence
+Server and client share `computeQuotationTotals()` in `lineAmount.ts`:
+
 ```typescript
-export function computeQuotationSummary(lines: any[], discountVal: number, shippingVal: number) {
-  let subtotal = 0;
-  let taxTotal = 0;
-
-  lines.forEach((line) => {
-    const measurement = getLineMeasurement(line); // quantity or legacy totalSqFt
-    const lineSubtotal = measurement * (Number(line.unitPrice) || 0);
-    const lineGst = lineSubtotal * ((Number(line.gstRate) || 0) / 100);
-
-    subtotal += lineSubtotal;
-    taxTotal += lineGst;
-  });
-
-  const discount = Number(discountVal) || 0;
-  const shipping = Number(shippingVal) || 0;
-  const grandTotal = subtotal - discount + taxTotal + shipping;
-
-  return {
-    subtotal,
-    tax: taxTotal,
-    discount,
-    shipping,
-    grandTotal
-  };
-}
+// subtotal = sum of line amounts (ex-GST)
+// tax = totalGst * (1 - discount/subtotal) when subtotal > 0; discount clamped to [0, subtotal]
+// grand_total = subtotal - discount + tax + shipping
 ```
+
+`upsertQuotation` always persists server-computed totals; client preview uses the same formulas.
 
 ---
 
@@ -408,12 +390,14 @@ export function computeQuotationSummary(lines: any[], discountVal: number, shipp
 
 When a customer declines a quotation:
 1. **Submit Feedback**: Click "Decline / Revise", input revision details, and submit.
-2. **Database Update**: Quotation status changes to `Rejected`. Order stage changes to `Quotation Negotiation`.
+2. **Server Action**: `customerRequestRevision` validates portal session, requires `status === "Sent"`, sets `Rejected`, `rejection_reason`, `customer_response = "Revision"`, and `orders.stage = "Quotation Negotiation"`.
 3. **UI Updates (Client)**:
-   * Action buttons are hidden to prevent duplicate submissions.
+   * Action buttons hidden after submission.
    * Status badges update to `"Sent for Revision"`.
-   * Banner displayed: `"Sent for Revision: We have received your feedback and are revising..."`
-4. **UI Updates (Staff)**: Order shows as active in `Quotation Negotiation` on the admin panel.
+   * Banner: `"Sent for Revision: We have received your feedback and are revising..."`
+4. **UI Updates (Staff)**: Order shows in `Quotation Negotiation` on the admin panel.
+
+Portal quotation reads and writes use **service role** after token/session validation — no anon RLS on `quotations`.
 
 ---
 
@@ -661,35 +645,20 @@ Below is the complete catalog of all Server Actions implemented in the system, p
 ### 6.1 Quotation Module Actions
 Defined in `src/features/quotations/actions/quotationActions.ts`.
 
-#### `getQuotationByOrderId`
-Fetches the quotation linked to an order.
-```typescript
-export async function getQuotationByOrderId(orderId: string): Promise<Quotation | null>;
-```
+| Action | Purpose |
+| ------ | ------- |
+| `getQuotationByOrderId` | Staff read single quotation by order |
+| `getCustomerVisibleQuotationForOrder` | Portal SSR — returns null for Draft / Pending Approval |
+| `getSiteVisitMeasurementsForOrder` | Site visit measurements for quotation sections |
+| `upsertQuotation` | Create/update quotation; server recomputes totals via `computeQuotationTotals` |
+| `sendQuotationToCustomer` | Admin send — requires `Pending Approval` or `Rejected` |
+| `adminMarkQuotationApprovedAction` | Admin override approve without customer |
+| `customerApproveQuotation` | Portal approve when `Sent` (session + service role) |
+| `customerRequestRevision` | Portal decline/revise when `Sent` (session + service role) |
 
-#### `upsertQuotation`
-Creates or updates a quotation record.
-```typescript
-export async function upsertQuotation(payload: QuotationPayload): Promise<{ success: boolean; data?: any; error?: string }>;
-```
+Path revalidation: `src/features/orders/actions/revalidateOrderPaths.ts` (sync helpers); `revalidateOrderPathsAction` in `orderActions.ts` for portal mutations.
 
-#### `sendQuotationToCustomer`
-Sends a quotation draft to the customer portal.
-```typescript
-export async function sendQuotationToCustomer(quotationId: string, orderId: string): Promise<boolean>;
-```
-
-#### `declineQuotation`
-Submits revision feedback from the client portal.
-```typescript
-export async function declineQuotation(quotationId: string, orderId: string, feedback: string): Promise<boolean>;
-```
-
-#### `approveQuotation`
-Finalizes costs and saves client approval.
-```typescript
-export async function approveQuotation(quotationId: string, orderId: string, signatureUrl: string): Promise<boolean>;
-```
+Removed: `getAllQuotations`, legacy `approveQuotation` / `declineQuotation` direct portal updates.
 
 ---
 
@@ -1051,6 +1020,7 @@ npm run test
 | 1.1 | 2026-07-03 | Lead Architect | Added Quotation Calculations, GST Tax Rules, and Stage Locks. |
 | 1.2 | 2026-07-04 | Core Developer | Documented the merged Measurement/Qty column, dynamic site units mapping, vector file uploads bucket fix, and the Portal revision state warning panel. |
 | 1.3 | 2026-07-04 | Core Developer | Designs extracted to `designs` table (`order.design`); site measurement units on quotation; unified Qty/Measurement (removed running feet); payments as financial tracking only (`expected` / `received`, no stage gates). |
+| 1.4 | 2026-07-07 | Core Developer | Quotation security pass: server-side totals, portal server actions, anon RLS removed from `quotations`, unified `QuotationTab`, admin review gate, scoped path revalidation. See `specs/quotation.md` v2.2. |
 
 ---
 *End of Master Specification Document.*

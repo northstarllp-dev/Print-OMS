@@ -196,7 +196,7 @@ export function ProductionModule({ data, permission, callbacks, embedded = false
             <div>
               <div className="flex items-center gap-3 mb-1">
                 <h1 className="text-2xl font-black text-slate-900 tracking-tight">
-                  {order.projectName}
+                  {order.businessName} - {order.clientName}
                 </h1>
               </div>
               <p className="text-xs text-slate-500 font-semibold">
@@ -237,12 +237,12 @@ export function ProductionModule({ data, permission, callbacks, embedded = false
                 <div className="font-bold text-slate-800">{order.orderCode}</div>
               </div>
               <div>
-                <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Customer Name</div>
-                <div className="font-bold text-slate-800">{client?.name || order.customerName || "—"}</div>
+                <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Client Name</div>
+                <div className="font-bold text-slate-800">{order.clientName || "—"}</div>
               </div>
               <div>
-                <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Project Name</div>
-                <div className="font-bold text-slate-800">{order.projectName}</div>
+                <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Business Name</div>
+                <div className="font-bold text-slate-800">{order.businessName || "—"}</div>
               </div>
               <div>
                 <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Priority</div>

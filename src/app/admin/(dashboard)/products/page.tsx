@@ -19,6 +19,7 @@ export default async function ProductsPage() {
     price_per_sqft: p.price_per_sqft != null ? Number(p.price_per_sqft) : null,
     price_per_unit: p.price_per_unit != null ? Number(p.price_per_unit) : null,
     images: Array.isArray(p.images) ? p.images : [],
+    final_prdt: p.final_prdt ?? false,
   }));
 
   const mappedCategories = (categoriesData || []).map((c: any) => ({

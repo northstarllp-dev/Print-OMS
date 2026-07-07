@@ -22,7 +22,8 @@ export default async function CustomersPage() {
 
   const mappedOrders = orders?.map(o => ({
     id: o.id,
-    projectName: o.project_name,
+    clientName: o.client_name,
+    businessName: o.business_name || "",
     customerId: o.customer_id,
     stage: o.stage,
     health: o.health || "Active",

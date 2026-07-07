@@ -10,6 +10,7 @@ interface InstallationScheduleModuleProps {
   initialScheduledTime?: string;
   isCompleted?: boolean;
   isCustomerView?: boolean;
+  customerSchedulingEnabled?: boolean;
 }
 
 export const InstallationScheduleModule: React.FC<InstallationScheduleModuleProps> = ({
@@ -18,6 +19,7 @@ export const InstallationScheduleModule: React.FC<InstallationScheduleModuleProp
   initialScheduledTime = "",
   isCompleted = false,
   isCustomerView = false,
+  customerSchedulingEnabled = true,
 }) => {
   // confirmedDate/Time track the *saved* value — updated after a successful save
   const [confirmedDate, setConfirmedDate] = useState(initialScheduledDate);
@@ -138,8 +140,8 @@ export const InstallationScheduleModule: React.FC<InstallationScheduleModuleProp
         </div>
       ) : (
         /* Scheduling form */
-        isCustomerView ? (
-          // Customer sees a read-only pending message — scheduling is done by staff
+        isCustomerView && !customerSchedulingEnabled ? (
+          // Customer sees a read-only pending message if customer scheduling is disabled
           <div className="py-6 text-center text-slate-500 text-sm font-medium bg-slate-50 rounded-xl border border-dashed border-slate-200">
             <Calendar size={24} className="mx-auto mb-2 opacity-30" />
             Your installation schedule is pending confirmation from our team.

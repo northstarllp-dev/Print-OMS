@@ -2,9 +2,15 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { Save, MoreVertical, Bell, Lock, Palette, MessageCircle } from "lucide-react";
+import { Save, MoreVertical, Bell, Lock, Palette, MessageCircle, Calendar } from "lucide-react";
+import { updateAppSettings, AppSettings } from "@/features/settings/actions/settingsActions";
 
-export function SettingsViewNew() {
+interface SettingsViewNewProps {
+  initialAppSettings?: AppSettings;
+}
+
+export function SettingsViewNew({ initialAppSettings }: SettingsViewNewProps) {
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [settings, setSettings] = useState({
     companyName: "Printoms",
     email: "admin@printoms.com",
@@ -13,6 +19,8 @@ export function SettingsViewNew() {
     notifications: true,
     twoFactorAuth: true,
     theme: "light",
+    siteVisitSchedulingEnabled: initialAppSettings?.siteVisitSchedulingEnabled ?? true,
+    installationSchedulingEnabled: initialAppSettings?.installationSchedulingEnabled ?? true,
   });
 
   const sections = [
@@ -28,25 +36,27 @@ export function SettingsViewNew() {
       ],
     },
     {
-      title: "Notifications",
-      icon: <Bell size={20} />,
-      description: "Control how you receive alerts and updates",
+      title: "Customer Portal",
+      icon: <Calendar size={20} />,
+      description: "Control what customers can do in their portal",
       fields: [
-        { label: "Email Notifications", key: "notifications", type: "toggle" },
-      ],
-    },
-    {
-      title: "Security",
-      icon: <Lock size={20} />,
-      description: "Manage your account security and access",
-      fields: [
-        { label: "Two-Factor Authentication", key: "twoFactorAuth", type: "toggle" },
+        { label: "Site Visit Self-Scheduling", key: "siteVisitSchedulingEnabled", type: "toggle", description: "Allow customers to book their site visit slots." },
+        { label: "Installation Self-Scheduling", key: "installationSchedulingEnabled", type: "toggle", description: "Allow customers to book their installation slots." },
       ],
     },
   ];
 
-  const handleChange = (key: string, value: any) => {
+  const handleChange = async (key: string, value: any) => {
     setSettings({ ...settings, [key]: value });
+    if (key === "siteVisitSchedulingEnabled" || key === "installationSchedulingEnabled") {
+      try {
+        await updateAppSettings({ [key]: value });
+      } catch (e) {
+        console.error("Failed to save app settings", e);
+        // revert local state on failure
+        setSettings({ ...settings, [key]: !value });
+      }
+    }
   };
 
   return (
@@ -140,18 +150,32 @@ export function SettingsViewNew() {
                     <button
                       onClick={() => handleChange(field.key, !settings[field.key as keyof typeof settings])}
                       style={{
-                        padding: "8px 16px",
-                        background: settings[field.key as keyof typeof settings] ? "var(--color-primary)" : "#e2e8f0",
-                        color: settings[field.key as keyof typeof settings] ? "white" : "#475569",
+                        position: "relative",
+                        width: "48px",
+                        height: "26px",
+                        background: settings[field.key as keyof typeof settings] ? "var(--color-primary)" : "#cbd5e1",
                         border: "none",
-                        borderRadius: "8px",
+                        borderRadius: "9999px",
                         cursor: "pointer",
-                        fontWeight: "600",
-                        fontSize: "12px",
-                        transition: "all 0.2s",
+                        transition: "background 0.3s ease",
+                        padding: 0,
+                        outline: "none",
+                        display: "flex",
+                        alignItems: "center"
                       }}
                     >
-                      {settings[field.key as keyof typeof settings] ? "Enabled" : "Disabled"}
+                      <div
+                        style={{
+                          position: "absolute",
+                          left: settings[field.key as keyof typeof settings] ? "24px" : "2px",
+                          width: "22px",
+                          height: "22px",
+                          background: "white",
+                          borderRadius: "50%",
+                          transition: "left 0.3s cubic-bezier(0.4, 0.0, 0.2, 1)",
+                          boxShadow: "0 1px 3px rgba(0,0,0,0.15), 0 1px 2px rgba(0,0,0,0.1)"
+                        }}
+                      />
                     </button>
                   ) : (
                     <input
@@ -186,31 +210,71 @@ export function SettingsViewNew() {
 
         {/* Save Button */}
         <button
+          onClick={() => {
+            setSaveStatus("saving");
+            setTimeout(() => {
+              setSaveStatus("saved");
+              setTimeout(() => setSaveStatus("idle"), 3000);
+            }, 800);
+          }}
+          disabled={saveStatus === "saving"}
           style={{
             width: "100%",
             padding: "14px",
-            background: "var(--color-primary)",
+            background: saveStatus === "saved" ? "#10b981" : "var(--color-primary)",
             color: "white",
             border: "none",
             borderRadius: "8px",
             fontSize: "14px",
             fontWeight: "700",
-            cursor: "pointer",
+            cursor: saveStatus === "saving" ? "not-allowed" : "pointer",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             gap: "8px",
-            transition: "all 0.2s",
+            transition: "all 0.3s",
+            opacity: saveStatus === "saving" ? 0.7 : 1,
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = "var(--color-primary-container)";
+            if (saveStatus !== "saved") e.currentTarget.style.background = "var(--color-primary-container)";
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.background = "var(--color-primary)";
+            if (saveStatus !== "saved") e.currentTarget.style.background = "var(--color-primary)";
           }}
         >
-          <Save size={16} /> Save Settings
+          {saveStatus === "saving" ? (
+            <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>Saving...</span>
+          ) : saveStatus === "saved" ? (
+            <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>✓ Settings Saved</span>
+          ) : (
+            <span style={{ display: "flex", alignItems: "center", gap: "8px" }}><Save size={16} /> Save Settings</span>
+          )}
         </button>
+      </div>
+
+      {/* Floating Notification Toast */}
+      <div style={{
+        position: "fixed",
+        bottom: saveStatus === "saved" ? "32px" : "-100px",
+        left: "50%",
+        transform: "translateX(-50%)",
+        background: "#0f172a",
+        color: "white",
+        padding: "12px 24px",
+        borderRadius: "9999px",
+        fontSize: "14px",
+        fontWeight: "600",
+        display: "flex",
+        alignItems: "center",
+        gap: "8px",
+        boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
+        transition: "bottom 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
+        zIndex: 50
+      }}>
+        <div style={{ width: "20px", height: "20px", background: "#10b981", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        </div>
+        Settings successfully saved!
       </div>
     </div>
   );

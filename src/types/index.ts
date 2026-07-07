@@ -126,31 +126,6 @@ export interface SiteVisitDetails {
   civilWorkRequired?: boolean;
 }
 
-export interface QuoteItem {
-  id: string;
-  productId?: string;          // links to products.id
-  description: string;
-  quantity: number;
-  pricingType?: "per_unit" | "per_sqft";
-  unit?: string;               // "nos" | "sqft"
-  unitPrice: number;           // base rate from catalogue (editable)
-  totalSqFt?: number;          // kept in sync with quantity (Qty/Measurement)
-  gstRate: number;             // 0 | 5 | 12 | 18 | 28
-}
-
-export interface QuoteDetails {
-  items: QuoteItem[];
-  discount: number;
-  subtotal: number;
-  tax: number;
-  grandTotal: number;
-  status?: "Draft" | "Sent" | "Approved" | "Rejected";
-  notes?: string;
-  terms?: string;
-  validUntil?: string;
-  quotationId?: string;        // e.g. "QT-001"
-}
-
 export interface DesignResource {
   id: string;
   url: string;
@@ -222,7 +197,8 @@ export interface InstallationDetails {
 
 export interface Order {
   id: string;
-  projectName: string;
+  clientName: string;
+  businessName: string;
   customerId: string;
   customerName?: string;
   stage: PipelineStage;

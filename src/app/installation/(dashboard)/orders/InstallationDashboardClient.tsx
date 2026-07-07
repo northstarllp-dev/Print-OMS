@@ -7,7 +7,8 @@ import Link from "next/link";
 
 interface OrderItem {
   id: string;
-  projectName: string;
+  clientName: string;
+  businessName: string;
   customerId: string;
   customerName: string;
   stage: string;
@@ -54,9 +55,9 @@ export function InstallationDashboardClient({
 
   const filteredOrders = initialOrders.filter(order => {
     const matchesSearch = 
-      order.projectName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.orderCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.customerName.toLowerCase().includes(searchTerm.toLowerCase());
+      (order.clientName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (order.businessName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      order.orderCode.toLowerCase().includes(searchTerm.toLowerCase());
       
     if (!matchesSearch) return false;
 
@@ -146,8 +147,8 @@ export function InstallationDashboardClient({
             <thead>
               <tr className="bg-slate-50/70 border-b border-slate-200/80">
                 <th className="text-left py-4 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Order ID</th>
-                <th className="text-left py-4 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Project Name</th>
-                <th className="text-left py-4 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Customer</th>
+                <th className="text-left py-4 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Client Name</th>
+                <th className="text-left py-4 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Business Name</th>
                 <th className="text-left py-4 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Current Stage</th>
                 <th className="text-left py-4 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Date Initiated</th>
                 <th className="text-left py-4 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Installation Date</th>
@@ -169,14 +170,14 @@ export function InstallationDashboardClient({
                         {order.orderCode}
                       </td>
 
-                      {/* Project Name */}
+                      {/* Client Name */}
                       <td className="py-4 px-6 text-sm font-extrabold text-slate-900">
-                        {order.projectName}
+                        {order.clientName}
                       </td>
 
-                      {/* Customer */}
+                      {/* Business Name */}
                       <td className="py-4 px-6 text-sm font-medium text-slate-600">
-                        {order.customerName}
+                        {order.businessName}
                       </td>
 
                       {/* Current Stage */}

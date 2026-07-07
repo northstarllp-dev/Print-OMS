@@ -29,10 +29,12 @@ function InfoChip({
   icon,
   label,
   value,
+  href,
 }: {
   icon: React.ReactNode;
   label: string;
   value?: string | null;
+  href?: string;
 }) {
   if (!value) return null;
   return (
@@ -42,7 +44,18 @@ function InfoChip({
         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">
           {label}
         </p>
-        <p className="text-sm font-semibold text-slate-800">{value}</p>
+        {href ? (
+          <a
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm font-semibold text-indigo-600 hover:text-indigo-800 hover:underline break-words block"
+          >
+            {value}
+          </a>
+        ) : (
+          <p className="text-sm font-semibold text-slate-800">{value}</p>
+        )}
       </div>
     </div>
   );
@@ -292,6 +305,7 @@ export const SiteVisitReviewModal: React.FC<SiteVisitReviewModalProps> = ({
                 icon={<MapPin size={15} />}
                 label="Site Address"
                 value={siteVisit.customerAddress}
+                href={siteVisit.customerAddress ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(siteVisit.customerAddress)}` : undefined}
               />
               {siteVisit.landmark && (
                 <InfoChip

@@ -52,6 +52,7 @@ Permissions:
 | price_per_sqft | numeric | Base price if applicable |
 | price_per_unit | numeric | Base price if applicable |
 | is_active | boolean | Determines visibility in quotes |
+| final_prdt | boolean | Marks whether the product is a "Final Product" |
 | images | jsonb | Array of product image URLs (optional) |
 
 ## API Endpoints
@@ -96,3 +97,7 @@ Summary: Initial specification for the Product Catalog.
 Version: 1.1
 Date: 2026-07-04
 Summary: Removed running-feet pricing (`price_per_running_ft` / `per_running_ft`).
+
+Version: 1.2
+Date: 2026-07-06
+Summary: Added `final_prdt` property to distinguish final packaged products.

@@ -251,6 +251,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   const [messages, setMessages] = useState<any[]>([]);
   const orderRef = useRef(order);
   orderRef.current = order;
+  const [quotationRealtimeRow, setQuotationRealtimeRow] = useState<Record<string, unknown> | null>(null);
 
   const triggerLocalAlert = useCallback((
     message: string,
@@ -283,6 +284,17 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     getOrderSnapshot: () => orderRef.current as unknown as Record<string, unknown>,
     onPatch: (patch) => {
       setOrder((prev) => mergeOrderDetailPatch(prev, patch));
+      if (patch.quoteDetails) {
+        const qd = patch.quoteDetails;
+        setQuotationRealtimeRow({
+          quotation_id: qd.quotationId,
+          status: qd.status,
+          notes: qd.notes,
+          terms: qd.terms,
+          shipping: qd.shipping,
+          signage_options: qd.signageOptions,
+        });
+      }
     },
     onActivityChange: (payload) => {
       if (payload.eventType === "INSERT" && payload.new) {
@@ -646,8 +658,8 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   /* ── Filtered order list for left panel ── */
   const filteredOrders = allOrders.filter((o) => {
     const matchesSearch =
-      o.projectName?.toLowerCase().includes(orderSearch.toLowerCase()) ||
-      o.customerName?.toLowerCase().includes(orderSearch.toLowerCase()) ||
+      o.clientName?.toLowerCase().includes(orderSearch.toLowerCase()) ||
+      o.businessName?.toLowerCase().includes(orderSearch.toLowerCase()) ||
       o.orderCode?.toLowerCase().includes(orderSearch.toLowerCase());
     if (!matchesSearch) return false;
     if (orderTab === "active") return o.stage !== "Completed" && o.stage !== "Closed";
@@ -715,7 +727,8 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           order={{
             id: order.id,
             orderId: order.orderId,
-            projectName: order.projectName,
+            clientName: order.clientName,
+            businessName: order.businessName,
             customerName: order.customerName,
             customerId: order.customerId,
             stage: order.stage,
@@ -724,11 +737,13 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           }}
           isEmployee={isStaffOrAdmin}
           currentUserRole={currentUserRole}
+          currentUserName={currentEmployee?.name || currentUserRole}
           products={products as any}
           initialQuotation={initialQuotation}
-          realtimeQuotation={(order as Order & { quoteDetails?: Record<string, unknown> }).quoteDetails}
           siteVisitItems={siteVisitItems}
           onRequestAdvance={handleQuotationAdvance}
+          externalRealtime
+          realtimeQuotation={quotationRealtimeRow}
         />
       ),
       [designTab]: <DesignModule order={order} isEmployee={isStaffOrAdmin} updateDesignDetails={updateDesignDetails} siteVisitItems={siteVisitItems} />,
@@ -947,12 +962,12 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                   >
                     <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "4px", marginBottom: "3px" }}>
                       <span style={{ fontSize: "13px", fontWeight: "700", color: "#0F172A", lineHeight: 1.3, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {o.projectName}
+                        {o.clientName}
                       </span>
 
                     </div>
                     <div style={{ fontSize: "11px", color: "#94A3B8", marginBottom: "6px" }}>
-                      {o.orderCode} • {o.customerName || "—"}
+                      {o.orderCode} • {o.businessName || o.customerName || "—"}
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px" }}>
                       <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: stageInfo.color, flexShrink: 0 }} />
@@ -993,7 +1008,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
                   <h2 style={{ margin: 0, fontSize: "18px", fontWeight: "800", color: "#0F172A", lineHeight: 1.2 }}>
-                    {order.projectName}
+                    {order.businessName} - {order.clientName}
                   </h2>
                 </div>
               </div>
@@ -1409,7 +1424,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
       {isReviewModalOpen && (
         <SiteVisitReviewModal
           siteVisit={sv}
-          orderName={order.projectName || order.orderId || ""}
+          orderName={`${order.businessName || ""} - ${order.clientName || ""}`.trim() || order.orderId || ""}
           onClose={() => setIsReviewModalOpen(false)}
           onConfirm={async () => {
             try {

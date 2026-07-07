@@ -1,6 +1,6 @@
 # Printoms Database Schema
 
-> **Last Updated:** 2026-07-04
+> **Last Updated:** 2026-07-07
 > **Platform:** Supabase (PostgreSQL 17)
 > **Total Tables:** 18+ (public) including `designs`, `productions`, `installations`, `payments`
 
@@ -368,14 +368,28 @@ Incoming leads. Created from contact forms, WhatsApp, phone calls. When converte
 | Column | Type | Nullable | Default | Notes |
 |--------|------|----------|---------|-------|
 | `id` | `uuid` | NO | `gen_random_uuid()` | Primary key |
-| `quotation_id` | `text` | NO | — | |
-| `order_id` | `uuid` | NO | — | FK → `orders.id` |
+| `quotation_id` | `text` | NO | trigger | Friendly `QT-NNN`; unique per `(company_id, quotation_id)` |
+| `order_id` | `uuid` | NO | — | FK → `orders.id` (one row per order) |
 | `company_id` | `uuid` | YES | — | FK → `companies.id` |
 | `customer_id` | `uuid` | YES | — | FK → `customers.id` |
-| `status` | `text` | NO | `'Draft'` | |
-| `items` | `jsonb` | NO | `'[]'` | |
-| `grand_total` | `numeric` | NO | `0` | |
-| `payment_status` | `text` | YES | `'Pending'` | |
+| `status` | `text` | NO | `'Draft'` | `Draft`, `Pending Approval`, `Sent`, `Approved`, `Rejected` |
+| `signage_options` | `jsonb` | YES | — | Sectioned line items (replaces legacy `items`) |
+| `subtotal` | `numeric` | YES | — | Pre-discount ex-GST sum |
+| `discount` | `numeric` | YES | `0` | Flat ₹ discount |
+| `tax` | `numeric` | YES | — | GST total after proportional discount |
+| `shipping` | `numeric` | YES | `0` | Flat ₹ shipping |
+| `grand_total` | `numeric` | NO | `0` | Final payable |
+| `notes` | `text` | YES | — | Customer-facing notes |
+| `terms` | `text` | YES | — | Terms & conditions |
+| `rejection_reason` | `text` | YES | — | Customer revision feedback |
+| `admin_approved_at` | `timestamptz` | YES | — | Set on send to customer |
+| `admin_approved_by` | `text` | YES | — | Actor name on send |
+| `customer_response` | `text` | YES | — | `Yes`, `Revision`, or `Admin` |
+| `created_at` | `timestamptz` | YES | `now()` | |
+
+**Dropped columns:** `items`, `customer_name`, `valid_until`, `payment_status`, advance payment columns.
+
+**Triggers:** `trigger_generate_quotation_id` → `generate_quotation_id()` assigns `quotation_id` per `company_id` on insert.
 
 ### 14. quotation_material_preferences
 | Column | Type | Nullable | Default | Notes |
@@ -456,6 +470,9 @@ Supabase Realtime with daily-partitioned message tables.
 ### generate_order_id_field()
 Trigger function that runs `BEFORE INSERT` on `orders` to auto-generate the human-friendly `order_id`.
 
+### generate_quotation_id()
+Trigger function that runs `BEFORE INSERT` on `quotations` to auto-generate `quotation_id` (`QT-NNN`) scoped to `company_id`. Enforced unique via `quotations_company_quotation_id_key`.
+
 ---
 
 ## Sequences
@@ -469,7 +486,18 @@ Trigger function that runs `BEFORE INSERT` on `orders` to auto-generate the huma
 
 ## Row Level Security
 
-All public tables have RLS enabled. Most have policies that allow authenticated users full access. There are some specific anonymous access policies for `orders` and `order_files` which should be audited for security.
+All public tables have RLS enabled.
+
+### quotations
+| Role | Policies | Notes |
+|------|----------|-------|
+| `authenticated` | Company-scoped full access (`company_id = current_company_id()`) | From `20260704000011_tenant_isolation_rls.sql` |
+| `anon` | **None** | All anon policies dropped in `20260706130000_quotation_revoke_anon_access.sql` |
+
+Portal quotation reads/writes use the **service role** in server actions after portal token/session validation — not anon RLS.
+
+### Other tables
+Some tables still have permissive anon policies (`orders`, `order_files`, `site_visits`, `payments` SELECT) that should be audited separately.
 
 ---
 
@@ -485,7 +513,7 @@ All public tables have RLS enabled. Most have policies that allow authenticated 
 ## Key Design Decisions
 
 ### 1. Hybrid JSONB + Relational Model
-The schema makes extensive use of JSONB for arrays or stage-specific details (e.g. `items` in `quotations`, `photos` in `site_visits`, `chat_history` in `orders`). This avoids excessive junction tables but limits deep querying.
+The schema makes extensive use of JSONB for arrays or stage-specific details (e.g. `signage_options` in `quotations`, `photos` in `site_visits`, `chat_history` in `orders`). This avoids excessive junction tables but limits deep querying.
 
 ### 2. Extracted Relational Tables
 Recently, several models were extracted from pure JSONB to true relational tables:

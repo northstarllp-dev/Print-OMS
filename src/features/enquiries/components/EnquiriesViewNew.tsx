@@ -91,7 +91,7 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
   const [selectedKpi, setSelectedKpi] = useState<string | null>(null);
   
   // Custom Date Range Filter States
-  const [dateFilterType, setDateFilterType] = useState<"all" | "range">("all");
+  const [dateFilterType, setDateFilterType] = useState<"all" | "range">("range");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [addedByFilter, setAddedByFilter] = useState("All");
@@ -171,9 +171,9 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
     }
   };
   
-  const convertEnquiryToOrderLocal = async (enquiryId: string, projectName: string, productType?: string, requirements?: string) => {
+  const convertEnquiryToOrderLocal = async (enquiryId: string, clientName: string, businessName: string, productType?: string, requirements?: string) => {
     try {
-      const res = await convertEnquiryToOrderAction(enquiryId, projectName, productType, requirements);
+      const res = await convertEnquiryToOrderAction(enquiryId, clientName, businessName, productType, requirements);
       if (res && res.success) {
         setEnquiries(prev => prev.map(e => e.id === enquiryId ? { 
           ...e, 
@@ -343,34 +343,22 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
               )}
             </div>
 
-            {/* Date Filter Type */}
-            <select
-              value={dateFilterType}
-              onChange={(e) => setDateFilterType(e.target.value as any)}
-              style={{ padding: "9px 12px", background: "white", border: "1px solid #e2e8f0", borderRadius: "8px", cursor: "pointer", fontSize: "13px", fontWeight: "500", color: "#475569", outline: "none" }}
-            >
-              <option value="all">All Dates</option>
-              <option value="range">Custom Range</option>
-            </select>
-
-            {/* Conditional Date inputs */}
-            {dateFilterType === "range" && (
-              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  style={{ padding: "8px 12px", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "13px", color: "#475569", outline: "none" }}
-                />
-                <span style={{ fontSize: "12px", color: "#64748b" }}>to</span>
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  style={{ padding: "8px 12px", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "13px", color: "#475569", outline: "none" }}
-                />
-              </div>
-            )}
+            {/* Custom Date inputs */}
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                style={{ padding: "8px 12px", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "13px", color: "#475569", outline: "none" }}
+              />
+              <span style={{ fontSize: "12px", color: "#64748b" }}>to</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                style={{ padding: "8px 12px", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "13px", color: "#475569", outline: "none" }}
+              />
+            </div>
 
             {/* Added By filter */}
             <select
@@ -401,10 +389,10 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
             </select>
 
             {/* Reset Button */}
-            {(dateFilterType !== "all" || addedByFilter !== "All" || sourceFilter !== "All" || searchTerm !== "" || selectedKpi !== null) && (
+            {(startDate !== "" || endDate !== "" || addedByFilter !== "All" || sourceFilter !== "All" || searchTerm !== "" || selectedKpi !== null) && (
               <button
                 onClick={() => {
-                  setDateFilterType("all");
+                  setDateFilterType("range");
                   setStartDate("");
                   setEndDate("");
                   setAddedByFilter("All");
@@ -568,11 +556,12 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
             setConvertModalOpen(false);
             setSelectedEnquiry(null);
           }}
-          defaultProjectName={`New Project for ${selectedEnquiry.businessName}`}
+          defaultClientName={selectedEnquiry.leadName || ""}
+          defaultBusinessName={selectedEnquiry.businessName || ""}
           defaultRequirements={selectedEnquiry.notes || ""}
-          onSubmit={async (projectName, productType, requirements) => {
+          onSubmit={async (clientName, businessName, productType, requirements) => {
             const enq = enquiries.find(e => e.id === selectedEnquiry.id);
-            const res = await convertEnquiryToOrderLocal(selectedEnquiry.id, projectName, productType, requirements);
+            const res = await convertEnquiryToOrderLocal(selectedEnquiry.id, clientName, businessName, productType, requirements);
             setConvertModalOpen(false);
             
             if (res && res.success) {

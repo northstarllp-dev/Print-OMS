@@ -130,7 +130,11 @@ export function OrdersEnhancedDashboard({ onAddOrder }: OrdersEnhancedDashboardP
   // Calculate metrics
   const totalActive = orders.filter(o => o.stage !== "completed").length;
   const ordersInProduction = orders.filter(o => o.stage === "production").length;
-  const quotePending = orders.filter(o => o.stage === "quotation").length;
+  const quotePending = orders.filter(
+    (o) =>
+      o.stage === "quotation" ||
+      (typeof o.stage === "string" && o.stage.toLowerCase().includes("quotation"))
+  ).length;
   const leftAfterQuote = orders.filter(o => o.isOutstanding).length;
   const totalRevenue = orders.reduce((sum, o) => sum + (o.revenue || 0), 0);
   const outstanding = orders.reduce((sum, o) => sum + (o.isOutstanding ? o.budget - (o.revenue || 0) : 0), 0);

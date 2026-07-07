@@ -61,7 +61,8 @@ export default async function InstallationOrderDetailPage({
 
   const mappedOrder = {
     id: order.id,
-    projectName: order.project_name,
+    clientName: order.client_name,
+    businessName: order.business_name || "",
     customerId: order.customer_id,
     stage: order.stage,
     productType: order.product_type,

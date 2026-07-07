@@ -10,6 +10,9 @@ import React from "react";
 import { ShieldAlert, LogOut, Share2, ClipboardList, AlertCircle, FileText } from "lucide-react";
 import { mapSiteVisitFromDb, mapSiteVisitMeasurementFromDb } from "@/features/orders/actions/siteVisitMapper";
 import { mapDesignFromDb } from "@/features/designs/actions/designMapper";
+import { getAppSettingsForCompany } from "@/features/settings/actions/settingsActions";
+import { createAdminClient } from "@/utils/supabase/admin";
+import { isQuotationVisibleToCustomer } from "@/features/quotations/utils/lineAmount";
 
 export const dynamic = "force-dynamic";
 
@@ -111,11 +114,18 @@ export default async function PortalPage({
   let siteVisitMeasurementsData: any[] = [];
 
   if (orderIds.length > 0) {
+    const admin = createAdminClient();
     const [qtsRes, svsRes] = await Promise.all([
-      supabase.from("quotations").select("*").in("order_id", orderIds),
+      admin
+        ? admin.from("quotations").select("*").in("order_id", orderIds)
+        : Promise.resolve({ data: [], error: null }),
       supabase.from("site_visits").select("id, order_id").in("order_id", orderIds),
     ]);
-    if (!qtsRes.error && qtsRes.data) quotationsData = qtsRes.data;
+    if (!qtsRes.error && qtsRes.data) {
+      quotationsData = qtsRes.data.filter((q) =>
+        isQuotationVisibleToCustomer(q.status)
+      );
+    }
     if (!svsRes.error && svsRes.data) siteVisitsData = svsRes.data;
 
     if (siteVisitsData.length > 0) {
@@ -161,7 +171,6 @@ export default async function PortalPage({
     id: q.id,
     quotationId: q.quotation_id,
     orderId: q.order_id,
-    items: q.items || [],
     signageOptions: q.signage_options || [],
     discount: Number(q.discount || 0),
     shipping: Number(q.shipping || 0),
@@ -184,7 +193,8 @@ export default async function PortalPage({
 
     return {
       id: o.id,
-      projectName: o.project_name,
+      clientName: o.client_name,
+      businessName: o.business_name || "",
       customerId: o.customer_id,
       customerName: o.business_name,
       stage: o.stage,
@@ -208,7 +218,6 @@ export default async function PortalPage({
       quoteDetails: q ? {
         id: q.id,
         quotationId: q.quotation_id,
-        items: q.items || [],
         signageOptions: q.signage_options || [],
         discount: Number(q.discount || 0),
         shipping: Number(q.shipping || 0),
@@ -231,6 +240,8 @@ export default async function PortalPage({
     };
   });
 
+  // Fetch app settings using customer's company ID
+  const appSettings = await getAppSettingsForCompany(customerData.company_id);
 
   return (
     <PortalClient
@@ -240,6 +251,7 @@ export default async function PortalPage({
       initialActiveOrderId={payload.orderId || null}
       initialToken={tokenParam}
       token={tokenParam}
+      appSettings={appSettings}
     />
   );
 }

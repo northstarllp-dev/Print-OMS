@@ -44,6 +44,15 @@ next-env.d.ts
 supabase/.temp/
 CLAUDE.md
 .CLAUDE
-.agents\skills
+.claudecodeignore
+
+# AI & IDE files
+.agents/
+AGENTS.md
+skills-lock.json
+.mcp.json
+.cursor/
+.VSCodeCounter/
+scratch-clear-storage.js
 
 __pycache__/

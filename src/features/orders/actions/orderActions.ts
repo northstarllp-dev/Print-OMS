@@ -13,6 +13,12 @@ import {
 } from "@/features/notifications/actions/dispatchNotification";
 import { getRequestBaseUrl } from "@/features/notifications/whatsapp/requestBaseUrl";
 import { assertStageEditPermission } from "@/features/orders/workspace/shared/serverPermissions";
+import {
+  revalidateOrderDetailPaths,
+  revalidateStaffOrderDetailPaths,
+} from "@/features/orders/actions/revalidateOrderPaths";
+
+export { revalidateOrderDetailPaths, revalidateStaffOrderDetailPaths };
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -175,7 +181,7 @@ export async function createOrder(formData: any) {
     activity_type: "timeline",
     actor_name: "System",
     actor_role: "System",
-    content: `Order "${createdOrder.project_name}" created manually by Admin.`,
+    content: `Order for Client "${createdOrder.client_name}" created manually by Admin.`,
     metadata: { action: "order_created", method: "manual" }
   });
 
@@ -573,19 +579,19 @@ export async function assignEmployeesToOrderAction(orderId: string, employeeIds:
 }
 
 /**
- * Server action callable from the customer portal (client component) after it
- * directly writes to the orders table. Triggers full revalidation of all
- * staff/admin/floor queue pages so staff see the stage change immediately.
+ * Server action for portal client mutations. Scoped to the affected order —
+ * does not invalidate every staff queue page.
  */
 export async function revalidateOrderPathsAction(orderId?: string) {
-  "use server";
-  await revalidateStaffQueuePaths();
-  if (orderId) {
-    revalidatePath(`/admin/orders/${orderId}`);
-    revalidatePath(`/staff/orders/${orderId}`);
-    revalidatePath(`/portal/order/${orderId}`);
-  }
-  revalidatePath("/portal");
+  if (!orderId) return;
+  const supabase = await getSupabase();
+  const orderUuid = await resolveOrderUuid(supabase, orderId);
+  const { data } = await supabase
+    .from("orders")
+    .select("order_id")
+    .eq("id", orderUuid)
+    .maybeSingle();
+  revalidateOrderDetailPaths(data?.order_id || orderId);
 }
 
 /** Invalidate all staff/floor queue pages after assignment or order creation. */
@@ -601,14 +607,6 @@ export async function revalidateStaffQueuePaths() {
   revalidatePath("/installation/site-visit");
 }
 
-/** Invalidate order detail routes (admin, staff, portal) after a mutation. */
-export async function revalidateOrderDetailPaths(orderId: string) {
-  revalidatePath(`/admin/orders/${orderId}`);
-  revalidatePath(`/staff/orders/${orderId}`);
-  revalidatePath("/portal");
-  revalidatePath(`/portal/order/${orderId}`);
-}
-
 export async function fetchEmployeeStats() {
   const supabase = await getSupabase();
   
@@ -622,7 +620,7 @@ export async function fetchEmployeeStats() {
   // Load active assignments from order_assignments joined to active orders
   const { data: assignments, error: assignError } = await supabase
     .from("order_assignments")
-    .select("employee_id, orders!inner(id, project_name, stage)")
+    .select("employee_id, orders!inner(id, client_name, business_name, stage)")
     .neq("orders.stage", "Completed")
     .neq("orders.stage", "Closed");
   if (assignError) throw new Error(assignError.message);
@@ -634,7 +632,10 @@ export async function fetchEmployeeStats() {
       name: emp.name,
       staff_role: emp.staff_role,
       activeJobs: myAssignments.length,
-      jobTitles: myAssignments.map(a => (a.orders as any)?.project_name).filter(Boolean)
+      jobTitles: myAssignments.map(a => {
+        const ord = (a.orders as any);
+        return ord ? `${ord.business_name || ""} - ${ord.client_name || ""}`.trim() : "";
+      }).filter(Boolean)
     };
   });
   

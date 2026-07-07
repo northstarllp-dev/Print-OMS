@@ -29,7 +29,8 @@ export async function assertStageEditPermission(stage: OrderStage): Promise<void
   }
 }
 
-async function assertValidPortalSessionForOrder(orderId: string): Promise<void> {
+/** Valid customer portal session for the given order (uuid or friendly order_id). */
+export async function assertValidPortalSessionForOrder(orderId: string): Promise<void> {
   const cookieStore = await cookies();
   const sessionCookie = cookieStore.get("portal_session")?.value;
   if (!sessionCookie) {

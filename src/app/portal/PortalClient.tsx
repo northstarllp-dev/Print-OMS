@@ -27,12 +27,14 @@ import {
 import { createClient } from "@/utils/supabase/client";
 import { scheduleSiteVisitAction, revalidateOrderPathsAction } from "@/features/orders/actions/orderActions";
 import { formatSiteMeasurementLabel } from "@/features/orders/actions/siteVisitMapper";
-import { calcLineAmount, getLineMeasurement, normalizePricingType } from "@/features/quotations/utils/lineAmount";
 import {
   mergeOrderDetailPatch,
   useOrderDetailSync,
 } from "@/features/orders/realtime/useOrderDetailSync";
 import { PaymentsTab } from "./components/PaymentsTab";
+import { QuotationTab } from "./components/QuotationTab";
+import { useQuotationActions } from "./hooks/useQuotationActions";
+import { usePortalOrderRealtime } from "./hooks/usePortalOrderRealtime";
 import { provideInstallationLocationAction, scheduleInstallationAction } from "@/features/installations/actions/installationActions";
 import { InstallationScheduleModule } from "@/features/installations/components/InstallationScheduleModule";
 import { DesignTab } from "./components/DesignTab";
@@ -54,7 +56,8 @@ interface Customer {
 
 interface Order {
   id: string;
-  projectName: string;
+  clientName: string;
+  businessName: string;
   customerId: string;
   customerName?: string;
   stage: string;
@@ -102,6 +105,10 @@ interface PortalClientProps {
   initialToken: string;
   initialActiveOrderId: string | null;
   token: string;
+  appSettings?: {
+    siteVisitSchedulingEnabled: boolean;
+    installationSchedulingEnabled: boolean;
+  };
 }
 
 // We moved STEPS inside the component to be dynamic
@@ -122,7 +129,7 @@ function getStepIndex(stage: string, workflowType: string = "quote_first"): numb
   return 0;
 }
 
-export function PortalClient({ customer, orders: initialOrders, quotations = [], initialActiveOrderId, token }: PortalClientProps) {
+export function PortalClient({ customer, orders: initialOrders, quotations = [], initialActiveOrderId, token, appSettings }: PortalClientProps) {
   const [orders, setOrders] = useState<Order[]>(initialOrders);
 
   useEffect(() => {
@@ -286,12 +293,21 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
   };
 
   // Quote / design states
-  const [quoteFeedback, setQuoteFeedback] = useState("");
   const [designFeedback, setDesignFeedback] = useState("");
-  const [showQuoteDeclineInput, setShowQuoteDeclineInput] = useState(false);
   const [showDesignDeclineInput, setShowDesignDeclineInput] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
-  const [zoomLevel, setZoomLevel] = useState(100);
+
+  const {
+    quoteFeedback,
+    setQuoteFeedback,
+    showQuoteDeclineInput,
+    setShowQuoteDeclineInput,
+    updatingStatus: quoteUpdatingStatus,
+    handleApproveQuote,
+    handleDeclineQuote,
+  } = useQuotationActions(activeOrderId, customer.name, (updater) => {
+    setOrders((prev) => prev.map((o) => (o.id === activeOrderId ? updater(o) : o)));
+  });
 
   const [products, setProducts] = useState<any[]>([]);
   const [selectedProductInfo, setSelectedProductInfo] = useState<any | null>(null);
@@ -364,31 +380,19 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
     }
   }, [activeOrderId, activeOrder?.siteVisitDetails]);
 
-  // Unread count
-  useEffect(() => {
-    if (!activeOrder) return;
-    const supabase = createClient();
-    async function loadUnread() {
-      const { count } = await supabase
-        .from("order_activity")
-        .select("*", { count: "exact", head: true })
-        .eq("order_id", activeOrder!.orderId || activeOrder!.id)
-        .eq("activity_type", "customer")
-        .eq("is_read", false);
-      if (count !== null) setUnreadCount(count);
-    }
-    loadUnread();
-    const channelName = `unread-${activeOrder.id}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    const ch = supabase
-      .channel(channelName)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "order_activity", filter: `order_id=eq.${activeOrder.orderId || activeOrder.id}` }, (p) => {
-        const msg = p.new as any;
-        if (msg.activity_type === "customer" && msg.actor_role !== "Customer") {
-          setUnreadCount(prev => prev + 1);
-        }
-      })
-      .subscribe();
-  }, [activeOrder?.id]);
+  const handlePortalOrderPatch = useCallback(
+    (orderUuid: string, patch: (prev: Order) => Order) => {
+      setOrders((prev) => prev.map((o) => (o.id === orderUuid ? patch(o) : o)));
+    },
+    []
+  );
+
+  usePortalOrderRealtime({
+    orderUuid: activeOrder?.id ?? "",
+    orderFriendlyId: activeOrder?.orderId || activeOrder?.id || "",
+    onOrderPatch: handlePortalOrderPatch,
+    onUnreadCount: setUnreadCount,
+  });
 
   const getBusinessDays = () => {
     const days: Date[] = [];
@@ -416,32 +420,6 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
       }
     } catch (err) { console.error(err); }
     finally { setSchedulingLoading(false); }
-  };
-
-  const handleApproveQuote = async () => {
-    if (!activeOrder) return;
-    setUpdatingStatus("quote-approve");
-    const supabase = createClient();
-    const updatedQuote = { ...activeOrder.quoteDetails, status: "Approved" };
-    setOrders(prev => prev.map(o => o.id === activeOrder.id ? { ...o, stage: "Quotation Approved", quoteDetails: updatedQuote } : o));
-    await supabase.from("order_activity").insert({ order_id: activeOrder.orderId || activeOrder.id, activity_type: "timeline", actor_name: "System", actor_role: "System", content: "Client approved the quotation details.", metadata: { action: "quotation_approved_by_customer" } });
-    await supabase.from("quotations").update({ status: "Approved" }).eq("order_id", activeOrder.id);
-    await supabase.from("orders").update({ stage: "Quotation Approved" }).eq("id", activeOrder.id);
-    await revalidateOrderPathsAction(activeOrder.id);
-    setUpdatingStatus(null);
-  };
-
-  const handleDeclineQuote = async () => {
-    if (!activeOrder || !quoteFeedback.trim()) return;
-    setUpdatingStatus("quote-decline");
-    const supabase = createClient();
-    const updatedQuote = { ...activeOrder.quoteDetails, status: "Rejected", rejectionReason: quoteFeedback };
-    setOrders(prev => prev.map(o => o.id === activeOrder.id ? { ...o, stage: "Quotation Negotiation", quoteDetails: updatedQuote } : o));
-    await supabase.from("order_activity").insert({ order_id: activeOrder.orderId || activeOrder.id, activity_type: "customer", actor_name: customer.name, actor_role: "Customer", content: `Quotation Declined. Feedback: ${quoteFeedback}`, metadata: { action: "quotation_declined" } });
-    await supabase.from("quotations").update({ status: "Rejected", rejection_reason: quoteFeedback }).eq("order_id", activeOrder.id);
-    await supabase.from("orders").update({ stage: "Quotation Negotiation" }).eq("id", activeOrder.id);
-    await revalidateOrderPathsAction(activeOrder.id);
-    setQuoteFeedback(""); setShowQuoteDeclineInput(false); setUpdatingStatus(null);
   };
 
   const handleApproveDesign = async () => {
@@ -486,7 +464,6 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
     return Array.from(new Set(allPhotos));
   }, [sv]);
 
-  const qd = activeOrder?.quoteDetails || {};
   const pd = activeOrder?.productionDetails || {};
   const inst = activeOrder?.installationDetails || {};
 
@@ -542,8 +519,8 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                   <span>Call Manager</span>
                 </a>
               </div>
-              <p className="text-[11px] text-slate-500 mt-1">
-                Client: {customer.name} | {activeOrder?.projectName || "Signage Project"}
+              <p className="text-slate-500 mt-1">
+                Client: {activeOrder?.clientName || customer.name} | {activeOrder?.businessName || "Signage Project"}
               </p>
             </div>
           </div>
@@ -653,8 +630,12 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                     <div className="p-5 border border-slate-200 rounded-2xl bg-white shadow-sm space-y-4">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="bg-slate-50 rounded-lg p-4 border border-slate-100">
-                          <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block mb-1">Project Name</span>
-                          <p className="font-semibold text-slate-800">{activeOrder.projectName}</p>
+                          <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block mb-1">Client Name</span>
+                          <p className="font-semibold text-slate-800">{activeOrder.clientName}</p>
+                        </div>
+                        <div className="bg-slate-50 rounded-lg p-4 border border-slate-100">
+                          <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block mb-1">Business Name</span>
+                          <p className="font-semibold text-slate-800">{activeOrder.businessName}</p>
                         </div>
                         <div className="bg-slate-50 rounded-lg p-4 border border-slate-100">
                           <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block mb-1">Product Type</span>
@@ -689,6 +670,12 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                         </p>
                       </div>
                     ) : currentStep <= 1 && (!sv.auditDate || isRescheduling) ? (
+                      appSettings?.siteVisitSchedulingEnabled === false ? (
+                        <div className="py-6 text-center text-slate-500 text-sm font-medium bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                          <Calendar size={24} className="mx-auto mb-2 opacity-30" />
+                          Your site visit schedule is pending confirmation from our team.
+                        </div>
+                      ) : (
                       <div className="space-y-6">
                         <div>
                           <h2 className="text-xl font-black text-[#0b1c30] mb-1.5">Schedule Your Physical Site Audit</h2>
@@ -830,6 +817,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                           </div>
                         </form>
                       </div>
+                      )
                     ) : currentStep <= 1 && sv.completed === false ? (
                       // Scheduled confirmation
                       <div className="text-center space-y-5 py-4">
@@ -843,11 +831,23 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                         <div className="max-w-sm mx-auto bg-slate-50 border border-slate-200 rounded-xl p-4 text-left grid grid-cols-2 gap-3 text-xs">
                           <div><span className="text-[10px] text-slate-400 uppercase font-bold block">Date</span><p className="font-bold text-slate-800 font-mono mt-0.5">{sv.auditDate}</p></div>
                           <div><span className="text-[10px] text-slate-400 uppercase font-bold block">Time</span><p className="font-bold text-slate-800 font-mono mt-0.5">{sv.auditTime}</p></div>
-                          <div className="col-span-2"><span className="text-[10px] text-slate-400 uppercase font-bold block">Address</span><p className="font-medium text-slate-800 mt-0.5">{sv.customerAddress}</p></div>
+                          <div className="col-span-2">
+                            <span className="text-[10px] text-slate-400 uppercase font-bold block">Address</span>
+                            <a
+                              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(sv.customerAddress || "")}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-medium text-blue-600 hover:text-blue-800 hover:underline mt-0.5 block"
+                            >
+                              {sv.customerAddress}
+                            </a>
+                          </div>
                         </div>
-                        <button onClick={() => setIsRescheduling(true)} className="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50 transition-all flex items-center gap-2 mx-auto">
-                          <RefreshCw size={12} /> Reschedule Appointment
-                        </button>
+                        {appSettings?.siteVisitSchedulingEnabled !== false && (
+                          <button onClick={() => setIsRescheduling(true)} className="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50 transition-all flex items-center gap-2 mx-auto">
+                            <RefreshCw size={12} /> Reschedule Appointment
+                          </button>
+                        )}
                       </div>
                     ) : (
                       // Completed or pending approval
@@ -1030,250 +1030,25 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                       <h2 className="text-xl font-black text-[#0b1c30] mb-1">Quotation</h2>
                       <p className="text-sm text-slate-500">Review pricing options, set material preferences, and approve to proceed.</p>
                     </div>
-                    {(!qd.status || qd.status === "Draft") ? (
-                      <div className="flex flex-col items-center justify-center py-16 px-4 bg-slate-50 border border-slate-200 border-dashed rounded-2xl text-center">
-                        <div className="w-16 h-16 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center mb-4">
-                          <BarChart3 size={24} />
-                        </div>
-                        <h3 className="text-lg font-bold text-slate-800 mb-2">Quotation is being prepared</h3>
-                        <p className="text-sm text-slate-500 max-w-sm">
-                          Our team is currently working on your quotation based on the site visit and requirements. You will be notified once it is ready for your review.
-                        </p>
-                      </div>
-                    ) : qd.signageOptions && qd.signageOptions.length > 0 ? (
-                      <div className="space-y-6">
-                        {/* Invoice Header Details */}
-                        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
-                          <div>
-                            <span className="text-[10px] text-slate-400 font-bold uppercase block">Quote ID</span>
-                            <span className="font-mono font-bold text-slate-800">{qd.quotationId || "—"}</span>
-                          </div>
-                          <div>
-                            <span className="text-[10px] text-slate-400 font-bold uppercase block">Project Name</span>
-                            <span className="font-bold text-slate-800">{activeOrder.projectName}</span>
-                          </div>
-                          <div>
-                             <span className="text-[10px] text-slate-400 font-bold uppercase block">Status</span>
-                             <span className={`inline-block text-[9px] font-black uppercase px-2 py-0.5 rounded-md border ${
-                               qd.status === "Approved" ? "bg-emerald-50 border-emerald-200 text-emerald-700" :
-                               qd.status === "Rejected" || qd.status === "Negotiation" ? "bg-amber-50 border-amber-200 text-amber-700" :
-                               qd.status === "Sent" ? "bg-blue-50 border-blue-200 text-blue-700" :
-                               "bg-slate-100 border-slate-200 text-slate-600"
-                             }`}>
-                               {qd.status === "Rejected" || qd.status === "Negotiation" ? "Sent for Revision" : qd.status}
-                             </span>
-                           </div>
-                        </div>
-
-                        {/* Signage Sections */}
-                        <div className="space-y-5">
-                          {qd.signageOptions.map((section: any, sIdx: number) => {
-                            const itemTotal = (section.lines || []).reduce((sum: number, line: any) => {
-                              return sum + calcLineAmount(line) * (1 + (line.gstRate || 0) / 100);
-                            }, 0);
-                            const svItem = (activeOrder?.siteVisitItems || []).find(
-                              (sv: any) => sv.id === section.siteVisitItemId
-                            );
-                            const measurementLabel = formatSiteMeasurementLabel(svItem);
-
-                            return (
-                              <div key={sIdx} className="border border-slate-200 rounded-2xl bg-white overflow-hidden shadow-sm">
-                                {/* Section Header */}
-                                <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
-                                  <div className="flex flex-col gap-0.5">
-                                    <span className="text-xs font-black text-slate-800 uppercase tracking-wider">{section.itemLabel}</span>
-                                    {measurementLabel && (
-                                      <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
-                                        {measurementLabel}
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="text-[10px] text-slate-400 font-black uppercase">Total (incl. GST):</span>
-                                    <span className="text-xs font-black text-blue-700 font-mono">
-                                      ₹{itemTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                                    </span>
-                                  </div>
-                                </div>
-
-                                {/* Table */}
-                                <div className="overflow-x-auto">
-                                  <table className="w-full text-xs text-left">
-                                    <thead>
-                                      <tr className="bg-slate-50/50 border-b border-slate-200 text-[10px] text-slate-400 font-black uppercase tracking-wider">
-                                        <th className="px-4 py-2.5">Item Description</th>
-                                        <th className="text-center px-4 py-2.5">Unit</th>
-                                        <th className="text-center px-4 py-2.5">Measurement/Qty</th>
-                                        <th className="text-right px-4 py-2.5">Rate</th>
-                                        <th className="text-center px-4 py-2.5">GST</th>
-                                        <th className="text-right px-4 py-2.5">Amount</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-100 font-medium text-slate-600">
-                                      {(section.lines || []).map((line: any, lIdx: number) => {
-                                        const lineAmt = calcLineAmount(line) * (1 + (line.gstRate || 0) / 100);
-                                        const measurement = getLineMeasurement(line);
-                                        const pricingType = normalizePricingType(line.pricingType);
-
-                                        return (
-                                          <tr key={lIdx} className="hover:bg-slate-50/30">
-                                            <td className="px-4 py-3 text-slate-800 font-bold">
-                                              <div className="flex items-center gap-1.5">
-                                                <span>{line.description}</span>
-                                                {line.productId && (
-                                                  <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                      const prod = products.find((p: any) => p.id === line.productId);
-                                                      if (prod) setSelectedProductInfo(prod);
-                                                    }}
-                                                    className="p-0.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors shrink-0"
-                                                    title="Product Details"
-                                                  >
-                                                    <Info size={12} className="stroke-[2.5]" />
-                                                  </button>
-                                                )}
-                                              </div>
-                                            </td>
-                                            <td className="text-center px-4 py-3 capitalize">{pricingType.replace("per_", "")}</td>
-                                            <td className="text-center px-4 py-3 font-mono">
-                                              {measurement} {pricingType === "per_sqft" ? (line.unit || "sqft") : (line.unit || "nos")}
-                                            </td>
-                                            <td className="text-right px-4 py-3 font-mono">₹{line.unitPrice.toLocaleString("en-IN")}</td>
-                                            <td className="text-center px-4 py-3 font-mono">{line.gstRate}%</td>
-                                            <td className="text-right px-4 py-3 font-mono text-slate-800 font-bold">₹{lineAmt.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                          </tr>
-                                        );
-                                      })}
-                                    </tbody>
-                                  </table>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-
-                        {/* Summary Block */}
-                        <div className="bg-[#f8fafc] border border-slate-200 rounded-3xl p-6 space-y-4 max-w-md ml-auto">
-                          <div className="flex justify-between items-center text-xs font-bold text-slate-500 uppercase tracking-wider pb-3 border-b border-slate-200/50">
-                            <span>Subtotal</span>
-                            <span className="font-mono text-slate-800">
-                              ₹{(qd.subtotal || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                            </span>
-                          </div>
-                          {qd.discount > 0 && (
-                            <div className="flex justify-between items-center text-xs font-bold text-slate-500 uppercase tracking-wider pb-3 border-b border-slate-200/50">
-                              <span>Discount</span>
-                              <span className="font-mono text-rose-600">
-                                - ₹{qd.discount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                              </span>
-                            </div>
-                          )}
-                          {qd.shipping > 0 && (
-                            <div className="flex justify-between items-center text-xs font-bold text-slate-500 uppercase tracking-wider pb-3 border-b border-slate-200/50">
-                              <span>Shipping</span>
-                              <span className="font-mono text-slate-800">
-                                ₹{qd.shipping.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                              </span>
-                            </div>
-                          )}
-                          <div className="flex justify-between items-center text-xs font-bold text-slate-500 uppercase tracking-wider pb-3 border-b border-slate-200/50">
-                            <span>Tax Amount</span>
-                            <span className="font-mono text-slate-800">
-                              ₹{(qd.tax || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                            </span>
-                          </div>
-                          <div className="flex justify-between items-center py-2 border-b border-slate-200">
-                            <span className="font-black text-slate-900 text-sm uppercase tracking-wider">Total</span>
-                            <span className="font-black text-[#0f172a] text-lg font-mono">
-                              ₹{(qd.grandTotal || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Notes & Terms */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-200 text-xs text-slate-500 text-left">
-                          {qd.notes && (
-                            <div>
-                              <span className="font-bold text-slate-700 block mb-1">Notes</span>
-                              <p className="bg-slate-50 border border-slate-100 rounded-xl p-3 leading-relaxed">{qd.notes}</p>
-                            </div>
-                          )}
-                          {qd.terms && (
-                            <div>
-                              <span className="font-bold text-slate-700 block mb-1">Terms & Conditions</span>
-                              <p className="bg-slate-50 border border-slate-100 rounded-xl p-3 leading-relaxed">{qd.terms}</p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="border border-slate-200 rounded-xl overflow-hidden">
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="bg-slate-50 border-b border-slate-200">
-                              <th className="text-left px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wide">Item</th>
-                              <th className="text-right px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wide">Amount</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100">
-                            {[
-                              { label: "Signage Type", val: qd.signageType || "ACP Panels" },
-                              { label: "Materials", val: qd.material || "Brushed Aluminium" },
-                              { label: "Mounting", val: qd.mounting || "Standoffs" },
-                              { label: "Base Fabrication", val: `₹${(qd.baseACPPrice || 0).toLocaleString("en-IN")}` },
-                              { label: "Hardware & Fittings", val: `₹${(qd.hardwarePrice || 0).toLocaleString("en-IN")}` },
-                              { label: "Subtotal", val: `₹${(qd.subtotal || 0).toLocaleString("en-IN")}` },
-                              { label: "GST (18%)", val: `₹${(qd.tax || 0).toLocaleString("en-IN")}` },
-                            ].map((row, i) => (
-                              <tr key={i}>
-                                <td className="px-4 py-3 text-slate-500 text-xs">{row.label}</td>
-                                <td className="px-4 py-3 text-right text-slate-800 font-bold text-xs">{row.val}</td>
-                              </tr>
-                            ))}
-                            <tr className="bg-slate-50">
-                              <td className="px-4 py-3.5 font-black text-[#1E40AF] text-sm">Grand Total</td>
-                              <td className="px-4 py-3.5 text-right font-black text-emerald-700 text-sm font-mono">₹{(qd.grandTotal || activeOrder?.budget || 0).toLocaleString("en-IN")}</td>
-                            </tr>
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-
-                    {(qd.status === "Rejected" || qd.status === "Negotiation") ? (
-                      <div className="mt-8 bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3">
-                        <div className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
-                        <div className="text-xs text-amber-850">
-                          <span className="font-bold">Sent for Revision:</span> We have received your feedback and are revising the quotation. We will notify you once the revised quotation is ready for your review.
-                        </div>
-                      </div>
-                    ) : qd.status === "Sent" && (
-                      <div className="mt-8 bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
-                        <p className="text-xs font-bold text-[#1E40AF]">{isDesignFirst ? "Approve this quotation to proceed to Production" : "Approve this quotation to proceed to Design"}</p>
-                        {showQuoteDeclineInput ? (
-                          <div className="space-y-2">
-                            <textarea rows={3} value={quoteFeedback} onChange={e => setQuoteFeedback(e.target.value)} placeholder="Your revision feedback..." className="w-full p-2.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-red-500" />
-                            <div className="flex gap-2">
-                              <button onClick={() => setShowQuoteDeclineInput(false)} className="px-3 py-1.5 border border-slate-200 text-slate-500 rounded-lg text-xs font-bold">Cancel</button>
-                              <button onClick={handleDeclineQuote} disabled={!quoteFeedback.trim() || !!updatingStatus} className="px-3.5 py-1.5 bg-red-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">Submit</button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="flex gap-2">
-                            <button onClick={() => setShowQuoteDeclineInput(true)} className="px-4 py-2 border border-slate-300 bg-white text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-50">Decline / Revise</button>
-                            <button onClick={handleApproveQuote} disabled={!!updatingStatus} className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 flex items-center gap-1.5 disabled:opacity-50">
-                              <Check size={13} /> Approve Quotation
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    {qd.status === "Approved" && (
-                      <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center gap-2">
-                        <Check size={16} className="text-emerald-600 stroke-[2.5]" />
-                        <span className="text-sm font-bold text-emerald-700">Quotation Approved</span>
-                      </div>
-                    )}
+                    <QuotationTab
+                      layout="portal-step"
+                      order={{
+                        businessName: activeOrder.businessName,
+                        clientName: activeOrder.clientName,
+                        workflow_type: activeOrder.workflow_type,
+                        quoteDetails: activeOrder.quoteDetails,
+                      }}
+                      products={products}
+                      siteVisitItems={activeOrder.siteVisitItems || []}
+                      setSelectedProductInfo={setSelectedProductInfo}
+                      showQuoteDeclineInput={showQuoteDeclineInput}
+                      setShowQuoteDeclineInput={setShowQuoteDeclineInput}
+                      quoteFeedback={quoteFeedback}
+                      setQuoteFeedback={setQuoteFeedback}
+                      updatingStatus={quoteUpdatingStatus}
+                      handleApproveQuote={handleApproveQuote}
+                      handleDeclineQuote={handleDeclineQuote}
+                    />
                   </div>
                 )}
 
@@ -1321,6 +1096,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                         initialScheduledTime={inst.scheduledTime}
                         isCompleted={activeOrder.stage === "Completed" || activeOrder.stage === "Closed"}
                         isCustomerView={true}
+                        customerSchedulingEnabled={appSettings?.installationSchedulingEnabled !== false}
                       />
                     </div>
 
