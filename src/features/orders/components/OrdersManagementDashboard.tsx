@@ -69,6 +69,7 @@ export function OrdersManagementDashboard({
   currentEmployeeName,
   orderDetailBasePath,
   entryStage,
+  currentUserId,
 }: { 
   initialOrders: any[];
   initialCustomers: any[];
@@ -78,6 +79,8 @@ export function OrdersManagementDashboard({
   currentEmployeeName: string;
   /** Base path for order detail links (e.g. `/staff/orders`). Defaults by role. */
   orderDetailBasePath?: string;
+  /** Optional current user ID for admin assigned filter */
+  currentUserId?: string;
   /** Optional entryStage query param (e.g. staff queue lock). */
   entryStage?: string;
 }) {
@@ -88,6 +91,7 @@ export function OrdersManagementDashboard({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [stageFilter, setStageFilter] = useState("ALL");
   const [healthFilter, setHealthFilter] = useState("ALL");
+  const [adminAssignedFilter, setAdminAssignedFilter] = useState<"ALL" | "MINE">("ALL");
   const [selectedKpi, setSelectedKpi] = useState<string | null>(null);
   const parsedEntryStage = parseOrderStage(entryStage);
   const [queueView, setQueueView] = useState<QueueView>("current");
@@ -271,6 +275,11 @@ export function OrdersManagementDashboard({
     if (currentUserRole === "Employee" && !kpiFilteredOrders) {
       return order.assignedEmployees?.includes(employeeName) || order.assignedEmployees?.includes(currentEmployeeId);
     }
+    
+    if (currentUserRole === "Admin" && adminAssignedFilter === "MINE") {
+      if (!currentUserId) return false;
+      return order.assignedAdmins?.includes(currentUserId);
+    }
 
     return true;
   });
@@ -427,6 +436,13 @@ export function OrdersManagementDashboard({
               <option value="Completed">Completed</option>
             </select>
 
+            {currentUserRole === "Admin" && (
+              <select value={adminAssignedFilter} onChange={(e) => setAdminAssignedFilter(e.target.value as "ALL" | "MINE")} style={{ padding: "9px 12px", background: "white", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "13px", fontWeight: "500", color: "#475569", cursor: "pointer", outline: "none" }}>
+                <option value="ALL">All Assigned Admins</option>
+                <option value="MINE">My Assigned Orders</option>
+              </select>
+            )}
+
             {/* Health filter */}
             <select value={healthFilter} onChange={(e) => setHealthFilter(e.target.value)} style={{ padding: "9px 12px", background: "white", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "13px", fontWeight: "500", color: "#475569", cursor: "pointer", outline: "none" }}>
               <option value="ALL">All Health States</option>
@@ -448,6 +464,7 @@ export function OrdersManagementDashboard({
                   setEndDate("");
                   setStageFilter("ALL");
                   setHealthFilter("ALL");
+                  setAdminAssignedFilter("ALL");
                   setSearchTerm("");
                   setSelectedKpi(null);
                 }}
