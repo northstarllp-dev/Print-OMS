@@ -148,13 +148,9 @@ function stageToTabIndex(stage: PipelineStage, workflowType: "quote_first" | "de
       case "Quotation Approved":
         return 2;
       case "Production":
-      case "Production Pending":
-      case "Production In Progress":
       case "Ready For Installation":
         return 3;
       case "Installation Scheduled":
-      case "Installation Pending":
-      case "Installation In Progress":
       case "Completed":
       case "Closed":
         return 4;
@@ -177,13 +173,9 @@ function stageToTabIndex(stage: PipelineStage, workflowType: "quote_first" | "de
     case "Design Approved":
       return 2;
     case "Production":
-    case "Production Pending":
-    case "Production In Progress":
     case "Ready For Installation":
       return 3;
     case "Installation Scheduled":
-    case "Installation Pending":
-    case "Installation In Progress":
     case "Completed":
     case "Closed":
       return 4;
