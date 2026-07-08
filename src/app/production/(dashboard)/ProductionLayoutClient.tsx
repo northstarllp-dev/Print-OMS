@@ -328,45 +328,7 @@ export function ProductionLayoutClient({ children, profile }: ProductionLayoutCl
               flexShrink: 0,
             }}
           >
-            {/* Search Placeholder */}
-            <div style={{ flex: 1, maxWidth: "480px", position: "relative" }}>
-              <Search
-                size={14}
-                style={{
-                  position: "absolute",
-                  left: "12px",
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  color: "#94A3B8",
-                  pointerEvents: "none",
-                }}
-              />
-              <input
-                type="text"
-                placeholder="Search fabrication jobs..."
-                style={{
-                  width: "100%",
-                  height: "36px",
-                  padding: "0 12px 0 36px",
-                  border: "1px solid #E2E8F0",
-                  borderRadius: "8px",
-                  fontSize: "13px",
-                  background: "#F8FAFC",
-                  color: "#0F172A",
-                  outline: "none",
-                  fontFamily: "inherit",
-                  transition: "border-color 0.15s",
-                }}
-                onFocus={(e) => {
-                  e.currentTarget.style.borderColor = "#1e40af";
-                  e.currentTarget.style.background = "white";
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.borderColor = "#E2E8F0";
-                  e.currentTarget.style.background = "#F8FAFC";
-                }}
-              />
-            </div>
+
 
             {/* Actions */}
             <div style={{ display: "flex", alignItems: "center", gap: "4px", marginLeft: "auto" }}>

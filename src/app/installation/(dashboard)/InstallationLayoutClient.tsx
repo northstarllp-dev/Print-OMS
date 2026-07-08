@@ -5,7 +5,7 @@ import {
   Bell, CheckCircle, AlertCircle, Info, LogOut,
   History, RotateCcw, Lock, Loader2, Key,
   ShoppingBag, LifeBuoy, Settings,
-  ChevronLeft, ChevronRight, Search, Hammer, MapPin
+  ChevronLeft, ChevronRight, Search, Hammer, MapPin, Menu, X
 } from "lucide-react";
 import { Logo } from "@/components/ui/Logo";
 import { useRouter, usePathname } from "next/navigation";
@@ -31,6 +31,7 @@ export function InstallationLayoutClient({ children, profile }: InstallationLayo
 
   const [collapsed, setCollapsed] = useState(true);
   const [isHovered, setIsHovered] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const isExpanded = !collapsed || isHovered;
 
   const [isNotifOpen, setIsNotifOpen] = useState(false);
@@ -139,20 +140,13 @@ export function InstallationLayoutClient({ children, profile }: InstallationLayo
       <aside
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
+        className={`fixed inset-y-0 left-0 z-[60] transform ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"} md:sticky md:top-0 md:translate-x-0 transition-transform duration-300 md:transition-none flex flex-col flex-shrink-0 overflow-y-auto overflow-x-hidden`}
         style={{
-          width: sidebarW,
+          width: isMobileMenuOpen ? "240px" : sidebarW,
           minHeight: "100vh",
           background: "var(--sidebar-bg)",
-          display: "flex",
-          flexDirection: "column",
-          flexShrink: 0,
           transition: "width 0.25s cubic-bezier(0.4,0,0.2,1)",
-          position: "sticky",
-          top: 0,
           height: "100vh",
-          overflowY: "auto",
-          overflowX: "hidden",
-          zIndex: 50,
         }}
       >
         {/* Logo */}
@@ -315,61 +309,16 @@ export function InstallationLayoutClient({ children, profile }: InstallationLayo
         {/* Top Bar — hidden on worksheet pages */}
         {!isWorksheetPage && (
           <header
-            style={{
-              display: "flex",
-              alignItems: "center",
-              width: "100%",
-              height: "56px",
-              background: "white",
-              borderBottom: "1px solid #E2E8F0",
-              paddingLeft: "24px",
-              paddingRight: "24px",
-              position: "sticky",
-              top: 0,
-              zIndex: 40,
-              gap: "12px",
-              flexShrink: 0,
-            }}
+            className="flex items-center w-full h-[56px] bg-white border-b border-slate-200 px-4 md:px-6 sticky top-0 z-40 gap-3 shrink-0"
           >
-            {/* Search Placeholder */}
-            <div style={{ flex: 1, maxWidth: "480px", position: "relative" }}>
-              <Search
-                size={14}
-                style={{
-                  position: "absolute",
-                  left: "12px",
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  color: "#94A3B8",
-                  pointerEvents: "none",
-                }}
-              />
-              <input
-                type="text"
-                placeholder="Search installation jobs..."
-                style={{
-                  width: "100%",
-                  height: "36px",
-                  padding: "0 12px 0 36px",
-                  border: "1px solid #E2E8F0",
-                  borderRadius: "8px",
-                  fontSize: "13px",
-                  background: "#F8FAFC",
-                  color: "#0F172A",
-                  outline: "none",
-                  fontFamily: "inherit",
-                  transition: "border-color 0.15s",
-                }}
-                onFocus={(e) => {
-                  e.currentTarget.style.borderColor = "#16a34a";
-                  e.currentTarget.style.background = "white";
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.borderColor = "#E2E8F0";
-                  e.currentTarget.style.background = "#F8FAFC";
-                }}
-              />
-            </div>
+            {/* Mobile Menu Toggle */}
+            <button
+              className="md:hidden flex items-center justify-center p-2 rounded-md text-slate-500 hover:bg-slate-100"
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            >
+              <Menu size={20} />
+            </button>
+
 
             {/* Actions */}
             <div style={{ display: "flex", alignItems: "center", gap: "4px", marginLeft: "auto" }}>
@@ -490,6 +439,14 @@ export function InstallationLayoutClient({ children, profile }: InstallationLayo
           </div>
         </main>
       </div>
+
+      {/* Mobile Overlay */}
+      {isMobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-slate-900/50 z-50 md:hidden"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
 
       {isChangePasswordModalOpen && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(15, 23, 42, 0.6)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>

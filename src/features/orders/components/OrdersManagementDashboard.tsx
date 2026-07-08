@@ -287,7 +287,10 @@ export function OrdersManagementDashboard({
   });
 
   return (
-    <div style={{ padding: "32px", paddingRight: assignPanelOrderId ? "412px" : "32px", transition: "padding-right 0.3s cubic-bezier(0.4, 0, 0.2, 1)", background: "#f8fafc", minHeight: "100vh" }}>
+    <div 
+      className="p-4 md:p-8 bg-slate-50 min-h-screen transition-all duration-300"
+      style={{ paddingRight: assignPanelOrderId ? "412px" : undefined }}
+    >
       {/* Header Section */}
       <div style={{ marginBottom: "32px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "24px" }}>
@@ -336,7 +339,7 @@ export function OrdersManagementDashboard({
         )}
 
         {/* Stats Cards */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {stats.map((stat: any, idx) => {
             const Icon = stat.icon;
             const isActive = selectedKpi === stat.filterKey;
@@ -385,12 +388,12 @@ export function OrdersManagementDashboard({
       </div>
 
       {/* Main Content Area */}
-      <div style={{ display: "flex", gap: "24px", alignItems: "flex-start" }}>
+      <div className="flex flex-col lg:flex-row gap-6 items-start">
         {/* Table Section */}
-        <div style={{ flex: 1, background: "white", borderRadius: "12px", border: "1px solid #e2e8f0", overflow: "visible", minWidth: 0 }}>
+        <div className="w-full lg:flex-1 bg-white rounded-xl border border-slate-200 overflow-visible min-w-0">
           {/* Search & Filter Bar */}
-        <div style={{ padding: "16px 20px", borderBottom: "1px solid #e2e8f0", display: "flex", flexDirection: "column", gap: "10px" }}>
-          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+        <div className="p-4 border-b border-slate-200 flex flex-col gap-3">
+          <div className="flex flex-col md:flex-row gap-3 md:items-center">
             {/* Search */}
             <div style={{ flex: 1, position: "relative" }}>
               <Search size={15} style={{ position: "absolute", left: "11px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8", pointerEvents: "none" }} />
@@ -404,14 +407,14 @@ export function OrdersManagementDashboard({
                 onBlur={(e) => { e.currentTarget.style.borderColor = "#e2e8f0"; e.currentTarget.style.boxShadow = "none"; }}
               />
               {searchTerm && (
-                <button onClick={() => setSearchTerm("")} style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#94a3b8", padding: 0, display: "flex" }}>
+                <button onClick={() => setSearchTerm("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
                   <X size={14} />
                 </button>
               )}
             </div>
 
             {/* Custom Date inputs */}
-            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <div className="flex items-center gap-2">
               <input
                 type="date"
                 value={startDate}
@@ -479,8 +482,8 @@ export function OrdersManagementDashboard({
         </div>
 
         {/* Table View */}
-        <div style={{ overflow: "visible" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <div className="overflow-x-auto min-h-[300px]">
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "900px" }}>
             <thead style={{ position: "sticky", top: 0, background: "#f8fafc", zIndex: 10 }}>
               <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
                 <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>

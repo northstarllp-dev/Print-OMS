@@ -48,21 +48,23 @@ export default async function RootGateway() {
       </div>
 
       {/* Portal Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 320px)", justifyContent: "center", gap: 24, width: "100%", maxWidth: 1120 }}>
+      <div className="flex flex-col sm:flex-row justify-center items-stretch gap-6 w-full max-w-5xl">
 
         {/* Admin Card */}
         <Link
           href="/admin/login"
+          className="w-full sm:w-[320px]"
           style={{
             background: "var(--surface-container-lowest)",
             border: "1px solid var(--border)",
             borderRadius: "var(--radius-2xl)",
             padding: "28px 24px",
             cursor: "pointer",
-            textAlign: "left",
+            textAlign: "center",
             transition: "all 0.18s",
             display: "flex",
             flexDirection: "column",
+            alignItems: "center",
             gap: 0,
             textDecoration: "none",
             color: "inherit",
@@ -83,16 +85,18 @@ export default async function RootGateway() {
         {/* Staff Card */}
         <Link
           href="/staff/login"
+          className="w-full sm:w-[320px]"
           style={{
             background: "var(--surface-container-lowest)",
             border: "1px solid var(--border)",
             borderRadius: "var(--radius-2xl)",
             padding: "28px 24px",
             cursor: "pointer",
-            textAlign: "left",
+            textAlign: "center",
             transition: "all 0.18s",
             display: "flex",
             flexDirection: "column",
+            alignItems: "center",
             gap: 0,
             textDecoration: "none",
             color: "inherit",
