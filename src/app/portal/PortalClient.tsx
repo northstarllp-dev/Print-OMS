@@ -22,8 +22,9 @@ import {
   ChevronLeft, ChevronRight, Phone,
   Package, Wrench, Palette, BarChart3, CreditCard,
   RefreshCw, AlertTriangle, Loader2, Maximize2, Minimize2, CheckCheck,
-  Download
+  Download, CalendarDays, Hammer
 } from "lucide-react";
+import { Logo } from "@/components/ui/Logo";
 import { createClient } from "@/utils/supabase/client";
 import { scheduleSiteVisitAction } from "@/features/orders/actions/orderActions";
 import { formatSiteMeasurementLabel } from "@/features/orders/actions/siteVisitMapper";
@@ -454,12 +455,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
         <div className="max-w-7xl mx-auto px-6 py-3.5 flex items-center justify-between gap-4">
           {/* Left: Logo + Order Info */}
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 bg-[#1E40AF] rounded-lg flex items-center justify-center">
-                <Printer size={16} className="text-white" />
-              </div>
-              <span className="font-black text-[#0b1c30] text-sm tracking-tight">NORTHSTAR</span>
-            </div>
+            <Logo height={32} />
             <div className="w-px h-6 bg-slate-200" />
             <div>
               <div className="flex items-center gap-2">
