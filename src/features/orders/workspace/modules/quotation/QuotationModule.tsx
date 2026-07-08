@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useTransition } from "react";
 import { createPortal } from "react-dom";
 import {
   Plus, Trash2, Search, Check, ChevronDown, Info, X,
-  ClipboardList, IndianRupee, Loader2, AlertCircle, Package, Save, Sparkles
+  ClipboardList, IndianRupee, Loader2, AlertCircle, Package, Save, Sparkles, Shield
 } from "lucide-react";
 import {
   upsertQuotation,
@@ -107,6 +107,8 @@ interface QuotationModuleProps {
   realtimeQuotation?: Record<string, unknown> | null;
   /** Parent (OrderWorksheetModal) owns the quotations realtime channel. */
   externalRealtime?: boolean;
+  adminOverrideUnlocked?: boolean;
+  setAdminOverrideUnlocked?: (val: boolean) => void;
 }
 
 const GST_OPTIONS = [0, 5, 12, 18, 28];
@@ -352,6 +354,8 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
   onRequestAdvance,
   externalRealtime = false,
   realtimeQuotation = null,
+  adminOverrideUnlocked,
+  setAdminOverrideUnlocked,
 }) => {
   const [isPending, startTransition] = useTransition();
   const [saveMsg, setSaveMsg] = useState<{ text: string; ok: boolean } | null>(null);
@@ -536,8 +540,16 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
     isDirtyRef.current = true;
   }
 
-  const isLocked = status === "Approved";
   const orderStage = order.stage || "";
+  const isQuotationStage = [
+    "Quotation In Progress",
+    "Quotation Sent",
+    "Quotation Negotiation",
+    "Quotation Approved",
+  ].includes(orderStage);
+  
+  const baseFrozen = !isQuotationStage || status === "Approved";
+  const isLocked = baseFrozen && !adminOverrideUnlocked;
 
 
   // ── Section Actions ──
@@ -656,6 +668,35 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
 
   return (
     <div className="space-y-6" style={{ fontFamily: "inherit" }}>
+      {/* ── ADMIN OVERRIDE BANNER ── */}
+      {baseFrozen && currentUserRole === "Admin" && setAdminOverrideUnlocked && (
+        <div className={`p-4 rounded-xl border flex items-center justify-between transition-colors ${adminOverrideUnlocked ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}>
+          <div className="flex items-center gap-3">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${adminOverrideUnlocked ? 'bg-amber-100 text-amber-600' : 'bg-slate-200 text-slate-500'}`}>
+              <Shield size={16} />
+            </div>
+            <div>
+              <h4 className={`text-sm font-bold ${adminOverrideUnlocked ? 'text-amber-900' : 'text-slate-700'}`}>Admin God Mode</h4>
+              <p className={`text-xs ${adminOverrideUnlocked ? 'text-amber-700' : 'text-slate-500'}`}>
+                {adminOverrideUnlocked 
+                  ? "Module is currently unlocked. You can edit all details and click 'Save Draft' at the bottom." 
+                  : "This module is locked. Unlock it to forcefully edit details."}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setAdminOverrideUnlocked(!adminOverrideUnlocked)}
+            className={`px-4 py-2 rounded-lg text-xs font-bold transition-colors ${
+              adminOverrideUnlocked 
+                ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-xs' 
+                : 'bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 shadow-3xs'
+            }`}
+          >
+            {adminOverrideUnlocked ? "Lock Module" : "Unlock for Editing"}
+          </button>
+        </div>
+      )}
+
       {/* Header Row */}
       <div className="flex items-center justify-between bg-slate-50 p-4 border border-slate-200 rounded-2xl">
         <div className="flex flex-col gap-1.5">
@@ -1176,12 +1217,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
         const isAdmin = currentUserRole === "Admin";
         const nextStageLabel = nextStageLabelFromWorkflow(order.workflow_type);
         const quoteStage = order.stage || "";
-        const isQuotationStage = [
-          "Quotation In Progress",
-          "Quotation Sent",
-          "Quotation Negotiation",
-          "Quotation Approved",
-        ].includes(quoteStage);
+        // isQuotationStage is defined above now
         // Staff and admin advance only after customer approval; admin may bypass separately when Sent.
         const canMoveToNextStage =
           !!onRequestAdvance &&

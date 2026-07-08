@@ -12,6 +12,7 @@ interface DesignModuleProps {
   updateDesignDetails?: (orderId: string, details: Partial<DesignRecord>) => Promise<void>;
   siteVisitItems?: Array<{ id: string; name: string }>;
   isFrozen?: boolean;
+  isPendingReview?: boolean;
   adminOverrideUnlocked?: boolean;
   setAdminOverrideUnlocked?: (val: boolean) => void;
   stageAdminNotes?: string;
@@ -24,6 +25,7 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
   updateDesignDetails,
   siteVisitItems = [],
   isFrozen = false,
+  isPendingReview = false,
   adminOverrideUnlocked = false,
   setAdminOverrideUnlocked,
   stageAdminNotes,
@@ -326,7 +328,7 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
 
   return (
     <div className="space-y-6">
-      {isFrozen && (
+      {isPendingReview && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
           <AlertTriangle size={18} className="text-amber-600 shrink-0 mt-0.5" />
           <div>

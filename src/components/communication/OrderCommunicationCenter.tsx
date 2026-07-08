@@ -241,27 +241,9 @@ export function OrderCommunicationCenter({
       const { data: urlData } = supabase.storage.from("order-files").getPublicUrl(filePath);
       const publicUrl = urlData.publicUrl;
 
-      // 3. Save to order_files table
-      const { data: fileData, error: dbError } = await supabase
-        .from("order_files")
-        .insert({
-          order_id: orderId,
-          category: activeTab,
-          file_name: file.name,
-          file_path: filePath,
-          mime_type: file.type,
-          file_size: file.size,
-          uploaded_by: currentUserId || null
-        })
-        .select();
-
-      if (dbError) throw dbError;
-
-      const fileId = fileData?.[0]?.id;
-
-      // 4. Send Message with Attachment
+      // 3. Send Message with Attachment
       const attachment = {
-        id: fileId,
+        id: crypto.randomUUID(),
         name: file.name,
         path: filePath,
         url: publicUrl,

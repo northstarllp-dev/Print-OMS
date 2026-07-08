@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { ArrowLeft, MapPin, Sparkles, Check, Loader2, CheckCircle, Save, UploadCloud, Calendar, Clock } from "lucide-react";
+import { ArrowLeft, flexRender, MapPin, Sparkles, Check, Loader2, CheckCircle, Save, UploadCloud, Calendar, Clock, Shield } from "lucide-react";
 import { InstallationScheduleModule } from "@/features/installations/components/InstallationScheduleModule";
 import { createClient } from "@/utils/supabase/client";
 import type { StageModuleProps } from "../../shared/types";
@@ -26,9 +26,20 @@ type InstallationModuleProps = StageModuleProps<
 > & {
   /** When true, hide portal chrome (back button) and fit inside order detail panel. */
   embedded?: boolean;
+  adminOverrideUnlocked?: boolean;
+  setAdminOverrideUnlocked?: (val: boolean) => void;
+  currentUserRole?: string;
 };
 
-export function InstallationModule({ data, permission, callbacks, embedded = false }: InstallationModuleProps) {
+export function InstallationModule({ 
+  data, 
+  permission, 
+  callbacks, 
+  embedded = false,
+  adminOverrideUnlocked,
+  setAdminOverrideUnlocked,
+  currentUserRole 
+}: InstallationModuleProps) {
   const { order, customers, installation } = data;
   const {
     updateInstallationDetails,
@@ -37,7 +48,10 @@ export function InstallationModule({ data, permission, callbacks, embedded = fal
     onBack,
     onCompleted,
   } = callbacks;
-  const canEdit = permission?.canEdit ?? true;
+  
+  const isInstallationStage = ["Installation Scheduled", "Installation In Progress", "Installation Pending", "Installation"].includes(order.stage);
+  const baseFrozen = !isInstallationStage;
+  const canEdit = (permission?.canEdit ?? true) && (!baseFrozen || adminOverrideUnlocked);
 
   const [saving, setSaving] = useState(false);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
@@ -51,8 +65,9 @@ export function InstallationModule({ data, permission, callbacks, embedded = fal
   const designImage = order.imageMockup || dd.proofUrl;
   
   const installationDetails = installation || {};
-  const gmapLink = installationDetails.gmapLink;
+  const gmapLink = svDetails.gmap_link || svDetails.gmapLink || installationDetails.gmapLink;
   const gmapRequested = installationDetails.gmapRequested;
+  const siteAddress = svDetails.site_address || svDetails.siteAddress || client?.shippingAddress || "Installation Location";
 
   // Parse initial checklist from installation data
   const initialChecklist = Array.isArray(installation?.checklist) 
@@ -190,6 +205,35 @@ export function InstallationModule({ data, permission, callbacks, embedded = fal
 
   return (
     <div className={embedded ? "space-y-6" : "p-8 bg-slate-50/50 min-h-screen"}>
+      {/* ── ADMIN OVERRIDE BANNER ── */}
+      {baseFrozen && currentUserRole === "Admin" && setAdminOverrideUnlocked && (
+        <div className={`mb-6 p-4 rounded-xl border flex items-center justify-between transition-colors ${adminOverrideUnlocked ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}>
+          <div className="flex items-center gap-3">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${adminOverrideUnlocked ? 'bg-amber-100 text-amber-600' : 'bg-slate-200 text-slate-500'}`}>
+              <Shield size={16} />
+            </div>
+            <div>
+              <h4 className={`text-sm font-bold ${adminOverrideUnlocked ? 'text-amber-900' : 'text-slate-700'}`}>Admin God Mode</h4>
+              <p className={`text-xs ${adminOverrideUnlocked ? 'text-amber-700' : 'text-slate-500'}`}>
+                {adminOverrideUnlocked 
+                  ? "Module is currently unlocked. You can edit all details and submit updates." 
+                  : "This module is locked because it is not the active phase. Unlock it to forcefully edit details."}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setAdminOverrideUnlocked(!adminOverrideUnlocked)}
+            className={`px-4 py-2 rounded-lg text-xs font-bold transition-colors ${
+              adminOverrideUnlocked 
+                ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-xs' 
+                : 'bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 shadow-3xs'
+            }`}
+          >
+            {adminOverrideUnlocked ? "Lock Module" : "Unlock for Editing"}
+          </button>
+        </div>
+      )}
+
       {/* Top Navigation — portal only */}
       {!embedded && (
         <div className="flex items-center gap-4 mb-6">
@@ -283,6 +327,8 @@ export function InstallationModule({ data, permission, callbacks, embedded = fal
             initialScheduledDate={installationDetails.scheduledDate}
             initialScheduledTime={installationDetails.scheduledTime}
             isCompleted={!canAct}
+            locationLink={gmapLink}
+            locationText={siteAddress}
           />
           
           {/* CHECKLIST */}

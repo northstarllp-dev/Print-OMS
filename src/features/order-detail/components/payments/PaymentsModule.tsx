@@ -5,15 +5,14 @@ import {
   CreditCard,
   CheckCircle2,
   Loader2,
-  RefreshCw,
   IndianRupee,
   Trash2,
+  RefreshCw,
 } from "lucide-react";
 import { Payment, PaymentAmountType } from "@/types";
 import {
   getPaymentsByOrder,
   createPayment,
-  markPaymentReceived,
   markPaymentExpected,
   deletePayment,
   getPaymentBalanceSummary,
@@ -356,13 +355,9 @@ export const PaymentsModule: React.FC<PaymentsModuleProps> = ({
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-bold text-slate-800">{p.payment_name}</span>
                     <span
-                      className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md border ${
-                        received
-                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                          : "bg-amber-50 text-amber-700 border-amber-200"
-                      }`}
+                      className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md border bg-emerald-50 text-emerald-700 border-emerald-200"
                     >
-                      {received ? "Received" : "Expected"}
+                      Received
                     </span>
                   </div>
                   <div className="text-sm font-bold text-slate-700 mt-0.5">
@@ -375,16 +370,6 @@ export const PaymentsModule: React.FC<PaymentsModuleProps> = ({
 
                 {canEdit && (
                   <div className="flex items-center gap-2">
-                    {!received && (
-                      <button
-                        type="button"
-                        disabled={isPending}
-                        onClick={() => run(async () => { await markPaymentReceived(p.id); })}
-                        className="px-3 py-1.5 text-[11px] font-bold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 flex items-center gap-1"
-                      >
-                        <CheckCircle2 size={12} /> Received
-                      </button>
-                    )}
                     <button
                       type="button"
                       disabled={isPending}

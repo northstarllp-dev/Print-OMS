@@ -120,9 +120,7 @@ export async function getPaymentBalanceSummary(
     payments.reduce((s, p) => s + Number(p.calculated_amount ?? p.amount ?? 0), 0) * 100
   ) / 100;
   const receivedTotal = Math.round(
-    payments
-      .filter((p) => p.status === "received")
-      .reduce((s, p) => s + Number(p.calculated_amount ?? p.amount ?? 0), 0) * 100
+    payments.reduce((s, p) => s + Number(p.calculated_amount ?? p.amount ?? 0), 0) * 100
   ) / 100;
   const outstanding = Math.max(
     0,

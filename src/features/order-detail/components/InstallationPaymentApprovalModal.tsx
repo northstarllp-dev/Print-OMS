@@ -13,6 +13,7 @@ import type { Payment } from "@/types";
 import {
   getPaymentsByOrder,
   getPaymentBalanceSummary,
+  createPayment,
   type PaymentBalanceSummary,
 } from "@/features/payments/actions/paymentActions";
 
@@ -39,6 +40,7 @@ export function InstallationPaymentApprovalModal({
   const [confirming, setConfirming] = useState(false);
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [addingPayment, setAddingPayment] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -63,6 +65,7 @@ export function InstallationPaymentApprovalModal({
 
   const handleConfirm = async () => {
     if (!paymentConfirmed) return;
+
     setConfirming(true);
     setError(null);
     try {
@@ -75,6 +78,26 @@ export function InstallationPaymentApprovalModal({
 
   const outstanding = balance?.outstanding ?? 0;
   const allReceived = outstanding <= 0;
+
+  const handleAddRemainingPayment = async () => {
+    if (!outstanding || outstanding <= 0) return;
+    setAddingPayment(true);
+    setError(null);
+    try {
+      await createPayment(orderId, {
+        payment_name: "Final Payment",
+        amount_type: "fixed",
+        amount: outstanding,
+        received: true,
+        notes: "Automatically created to clear remaining balance on completion",
+      });
+      await load();
+    } catch (e: any) {
+      setError(e.message || "Failed to add payment");
+    } finally {
+      setAddingPayment(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
@@ -145,11 +168,22 @@ export function InstallationPaymentApprovalModal({
               </div>
 
               {!allReceived && (
-                <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-800">
-                  <AlertTriangle size={16} className="shrink-0 mt-0.5" />
-                  <span>
-                    There is still ₹{outstanding.toLocaleString("en-IN")} outstanding. You can still complete the order if payment has been received offline.
-                  </span>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+                  <div className="flex items-start gap-2 text-xs text-amber-800">
+                    <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+                    <span>
+                      There is still ₹{outstanding.toLocaleString("en-IN")} outstanding. You can still complete the order if payment has been received offline.
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAddRemainingPayment}
+                    disabled={addingPayment || loading}
+                    className="shrink-0 px-3 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-800 text-[10px] font-bold rounded-lg transition-colors disabled:opacity-50 inline-flex items-center justify-center gap-1.5 sm:self-center"
+                  >
+                    {addingPayment ? <Loader2 size={12} className="animate-spin" /> : <IndianRupee size={12} />}
+                    Record Rest (₹{outstanding.toLocaleString("en-IN")})
+                  </button>
                 </div>
               )}
 
@@ -176,13 +210,9 @@ export function InstallationPaymentApprovalModal({
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="text-sm font-bold text-slate-800">{p.payment_name}</span>
                               <span
-                                className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md border ${
-                                  received
-                                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                    : "bg-amber-50 text-amber-700 border-amber-200"
-                                }`}
+                                className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md border bg-emerald-50 text-emerald-700 border-emerald-200"
                               >
-                                {received ? "Received" : "Expected"}
+                                Received
                               </span>
                             </div>
                             <div className="text-sm font-bold text-slate-700 mt-0.5">
@@ -221,6 +251,14 @@ export function InstallationPaymentApprovalModal({
               {error}
             </div>
           )}
+
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4 mx-2 flex gap-3 items-start">
+            <AlertTriangle size={16} className="text-red-600 mt-0.5 shrink-0" />
+            <div className="text-xs text-red-800 font-semibold leading-relaxed">
+              <strong className="font-black text-red-900 block mb-1">WARNING: Irreversible Action</strong>
+              Closing this order means no more modifications can be done. God Mode will be permanently disabled, and the order will become strictly view-only.
+            </div>
+          </div>
         </div>
 
         <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex items-center justify-end gap-3">

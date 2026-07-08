@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Calendar, Clock, Save, Loader2, CheckCircle, RefreshCw } from "lucide-react";
+import { Calendar, Clock, Save, Loader2, CheckCircle, RefreshCw, MapPin } from "lucide-react";
 import { scheduleInstallationAction } from "@/features/installations/actions/installationActions";
 
 interface InstallationScheduleModuleProps {
@@ -11,6 +11,8 @@ interface InstallationScheduleModuleProps {
   isCompleted?: boolean;
   isCustomerView?: boolean;
   customerSchedulingEnabled?: boolean;
+  locationText?: string;
+  locationLink?: string;
 }
 
 export const InstallationScheduleModule: React.FC<InstallationScheduleModuleProps> = ({
@@ -20,6 +22,8 @@ export const InstallationScheduleModule: React.FC<InstallationScheduleModuleProp
   isCompleted = false,
   isCustomerView = false,
   customerSchedulingEnabled = true,
+  locationText = "",
+  locationLink = "",
 }) => {
   // confirmedDate/Time track the *saved* value — updated after a successful save
   const [confirmedDate, setConfirmedDate] = useState(initialScheduledDate);
@@ -124,6 +128,18 @@ export const InstallationScheduleModule: React.FC<InstallationScheduleModuleProp
                   })}{" "}
                   at {confirmedTime}
                 </p>
+                {(locationText || locationLink) && (
+                  <div className="flex items-center gap-1.5 mt-2">
+                    <MapPin size={12} className="text-blue-500" />
+                    {locationLink ? (
+                      <a href={locationLink} target="_blank" rel="noreferrer" className="text-[11px] font-bold text-blue-600 hover:underline">
+                        {locationText || "View on Map"}
+                      </a>
+                    ) : (
+                      <span className="text-[11px] font-bold text-blue-600">{locationText}</span>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 

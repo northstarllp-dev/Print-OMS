@@ -148,9 +148,13 @@ function stageToTabIndex(stage: PipelineStage, workflowType: "quote_first" | "de
       case "Quotation Approved":
         return 2;
       case "Production":
+      case "Production Pending":
+      case "Production In Progress":
       case "Ready For Installation":
         return 3;
       case "Installation Scheduled":
+      case "Installation Pending":
+      case "Installation In Progress":
       case "Completed":
       case "Closed":
         return 4;
@@ -173,9 +177,13 @@ function stageToTabIndex(stage: PipelineStage, workflowType: "quote_first" | "de
     case "Design Approved":
       return 2;
     case "Production":
+    case "Production Pending":
+    case "Production In Progress":
     case "Ready For Installation":
       return 3;
     case "Installation Scheduled":
+    case "Installation Pending":
+    case "Installation In Progress":
     case "Completed":
     case "Closed":
       return 4;
@@ -477,6 +485,16 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   const handleAdminApprove = async () => {
     setIsProcessing(true);
     try {
+      if (activeStepTab === 4 && order.stageStatus === "Normal") {
+        const confirmClose = window.confirm(
+          "WARNING: Closing this order means no more modifications can be done. God Mode will be permanently disabled, and the order will become strictly view-only.\n\nAre you sure you want to close this order?"
+        );
+        if (!confirmClose) {
+          setIsProcessing(false);
+          return;
+        }
+      }
+
       await handleSaveDraft();
       // On Site Visit tab with normal status, open review modal first.
       if (activeStepTab === 0 && order.stageStatus === "Normal") {
@@ -700,14 +718,25 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     Boolean(order.stageStatus && order.stageStatus !== "Normal") &&
     (order.stage === "Design In Progress" || order.stage === "Design Approved");
 
+  const isOrderClosed = order.stage === "Completed" || order.stage === "Closed";
+  const effectiveAdminOverrideUnlocked = isOrderClosed ? false : adminOverrideUnlocked;
+  const effectiveSetAdminOverrideUnlocked = isOrderClosed ? undefined : setAdminOverrideUnlocked;
+
   const isSiteVisitFrozen =
-    (!order.stage.startsWith("Site Visit") || (!!sv.completed && order.stageStatus !== "Normal")) &&
-    !adminOverrideUnlocked;
+    isOrderClosed ||
+    ((!order.stage.startsWith("Site Visit") || (!!sv.completed && order.stageStatus !== "Normal")) &&
+    !effectiveAdminOverrideUnlocked);
+
+  const isDesignFrozen =
+    isOrderClosed ||
+    ((currentStageIndex > designTab || isDesignPending) &&
+    !effectiveAdminOverrideUnlocked);
 
   const isCurrentTabFrozen =
+    isOrderClosed ||
     isStaffQueueReadOnly ||
     (activeStepTab === 0 && isSiteVisitFrozen) ||
-    (activeStepTab === designTab && isDesignPending && !adminOverrideUnlocked && currentUserRole !== "Admin");
+    (activeStepTab === designTab && isDesignFrozen);
 
   // Strict Site Visit Validations
   const isSiteVisitScheduled = !!(sv.auditDate && sv.auditTime);
@@ -733,6 +762,8 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     (order.stageStatus === "Normal" || isJobDonePending);
   const adminApproveLabel = isJobDonePending
     ? "Review Payments & Complete"
+    : activeStepTab === 4
+    ? "Close Order"
     : "Approve & Advance";
   const hideStaffAdvanceRequest =
     isJobDonePending && currentStageIndex === activeStepTab;
@@ -749,7 +780,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           </button>
         </>
       ) : (
-        (!isCurrentTabFrozen && (
+        (!isCurrentTabFrozen ? (
           <>
             <button onClick={handleSaveDraft} style={{ padding: "6px 14px", border: "1px solid #E2E8F0", background: "white", color: "#0F172A", borderRadius: "6px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", transition: "color 0.15s, background-color 0.15s" }}>
               {activeStepTab === designTab ? <><Send size={13} /> Send to Customer</> : <><Save size={13} /> Save Draft</>}
@@ -768,6 +799,10 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
               )
             )}
           </>
+        ) : (
+          <div style={{ padding: "6px 14px", border: "1px solid #E2E8F0", background: "#F1F5F9", color: "#64748B", borderRadius: "6px", fontSize: "12px", fontWeight: "700", display: "flex", alignItems: "center", gap: "4px" }}>
+            <Lock size={13} /> Submitted & Locked
+          </div>
         ))
       )}
     </div>
@@ -836,8 +871,8 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
             setOrder(prev => ({ ...prev, siteVisitDetails: newDetails as any }));
             await handleUpdateOrderStage(order.id, "Site Visit Scheduled");
           }}
-          adminOverrideUnlocked={adminOverrideUnlocked}
-          setAdminOverrideUnlocked={setAdminOverrideUnlocked}
+          adminOverrideUnlocked={effectiveAdminOverrideUnlocked}
+          setAdminOverrideUnlocked={effectiveSetAdminOverrideUnlocked}
         />
       ),
       [quoteTab]: (
@@ -862,6 +897,8 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           onRequestAdvance={handleQuotationAdvance}
           externalRealtime
           realtimeQuotation={quotationRealtimeRow}
+          adminOverrideUnlocked={effectiveAdminOverrideUnlocked}
+          setAdminOverrideUnlocked={effectiveSetAdminOverrideUnlocked}
         />
       ),
       [designTab]: (
@@ -870,9 +907,10 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           isEmployee={isStaffOrAdmin}
           updateDesignDetails={updateDesignDetails}
           siteVisitItems={siteVisitItems}
-          isFrozen={isDesignPending}
-          adminOverrideUnlocked={adminOverrideUnlocked}
-          setAdminOverrideUnlocked={setAdminOverrideUnlocked}
+          isFrozen={isDesignFrozen}
+          isPendingReview={isDesignPending}
+          adminOverrideUnlocked={effectiveAdminOverrideUnlocked}
+          setAdminOverrideUnlocked={effectiveSetAdminOverrideUnlocked}
           stageAdminNotes={order.stageAdminNotes}
           currentUserRole={currentUserRole}
         />
@@ -893,6 +931,9 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
             updateProductionDetails,
             onBack: () => {},
           }}
+          adminOverrideUnlocked={effectiveAdminOverrideUnlocked}
+          setAdminOverrideUnlocked={effectiveSetAdminOverrideUnlocked}
+          currentUserRole={currentUserRole}
         />
       ),
       4: (
@@ -911,6 +952,9 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
             onBack: () => {},
             onCompleted: () => router.refresh(),
           }}
+          adminOverrideUnlocked={effectiveAdminOverrideUnlocked}
+          setAdminOverrideUnlocked={effectiveSetAdminOverrideUnlocked}
+          currentUserRole={currentUserRole}
         />
       ),
     };

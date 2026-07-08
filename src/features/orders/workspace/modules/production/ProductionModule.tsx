@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import {
   ArrowLeft, CheckSquare, FileText, MapPin,
-  AlertOctagon, Check, Image as ImageIcon, Sparkles, Loader2, Save, Timer
+  AlertOctagon, Check, Image as ImageIcon, Sparkles, Loader2, Save, Timer, Shield
 } from "lucide-react";
 import type { StageModuleProps } from "../../shared/types";
 
@@ -50,6 +50,9 @@ type ProductionModuleProps = StageModuleProps<
 > & {
   /** When true, hide portal chrome (back button) and fit inside order detail panel. */
   embedded?: boolean;
+  adminOverrideUnlocked?: boolean;
+  setAdminOverrideUnlocked?: (val: boolean) => void;
+  currentUserRole?: string;
 };
 
 function maskPhone(phone: string) {
@@ -69,7 +72,15 @@ function maskEmail(email: string) {
   return `${name[0]}***${name[name.length - 1]}@${domain}`;
 }
 
-export function ProductionModule({ data, permission, callbacks, embedded = false }: ProductionModuleProps) {
+export function ProductionModule({ 
+  data, 
+  permission, 
+  callbacks, 
+  embedded = false, 
+  adminOverrideUnlocked, 
+  setAdminOverrideUnlocked, 
+  currentUserRole 
+}: ProductionModuleProps) {
   const {
     order: initialOrder,
     customers,
@@ -77,9 +88,13 @@ export function ProductionModule({ data, permission, callbacks, embedded = false
     siteVisitItems = []
   } = data;
   const { updateProductionDetails, onBack } = callbacks;
-  const canEdit = permission?.canEdit ?? true;
-
   const [order, setOrder] = useState(initialOrder);
+
+  const isProductionStage = ["Production In Progress", "Production Pending", "Production", "Ready For Installation"].includes(order.stage);
+  const baseFrozen = !isProductionStage;
+  const canEdit = (permission?.canEdit ?? true) && (!baseFrozen || adminOverrideUnlocked);
+  const canEditDeadline = canEdit;
+
   const [saving, setSaving] = useState(false);
   const [alert, setAlert] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
@@ -179,6 +194,35 @@ export function ProductionModule({ data, permission, callbacks, embedded = false
         </div>
       )}
 
+      {/* ── ADMIN OVERRIDE BANNER ── */}
+      {baseFrozen && currentUserRole === "Admin" && setAdminOverrideUnlocked && (
+        <div className={`mb-6 p-4 rounded-xl border flex items-center justify-between transition-colors ${adminOverrideUnlocked ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}>
+          <div className="flex items-center gap-3">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${adminOverrideUnlocked ? 'bg-amber-100 text-amber-600' : 'bg-slate-200 text-slate-500'}`}>
+              <Shield size={16} />
+            </div>
+            <div>
+              <h4 className={`text-sm font-bold ${adminOverrideUnlocked ? 'text-amber-900' : 'text-slate-700'}`}>Admin God Mode</h4>
+              <p className={`text-xs ${adminOverrideUnlocked ? 'text-amber-700' : 'text-slate-500'}`}>
+                {adminOverrideUnlocked 
+                  ? "Module is currently unlocked. You can edit all details and check off milestones." 
+                  : "This module is locked because it is not the active phase. Unlock it to forcefully edit details."}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setAdminOverrideUnlocked(!adminOverrideUnlocked)}
+            className={`px-4 py-2 rounded-lg text-xs font-bold transition-colors ${
+              adminOverrideUnlocked 
+                ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-xs' 
+                : 'bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 shadow-3xs'
+            }`}
+          >
+            {adminOverrideUnlocked ? "Lock Module" : "Unlock for Editing"}
+          </button>
+        </div>
+      )}
+
       {/* Embedded: only date started + deadline. Portal: full header + info cards. */}
       {embedded ? (
         <div className="flex flex-wrap items-end justify-between gap-4">
@@ -222,7 +266,7 @@ export function ProductionModule({ data, permission, callbacks, embedded = false
                   <button
                     onClick={handleDeadlineSave}
                     disabled={saving}
-                    className="p-1.5 bg-rose-600 text-white rounded hover:bg-rose-700"
+                    className="p-1.5 bg-emerald-600 text-white rounded hover:bg-emerald-700"
                   >
                     {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                   </button>
@@ -238,9 +282,9 @@ export function ProductionModule({ data, permission, callbacks, embedded = false
                 </div>
               ) : (
                 <div
-                  className={`bg-gradient-to-r from-rose-500 to-rose-600 text-white px-4 py-2 rounded-xl text-xs font-black shadow-md flex items-center gap-2 border-b-2 border-rose-700 ${canEdit ? 'cursor-pointer hover:from-rose-600 hover:to-rose-700' : ''}`}
-                  onClick={() => canEdit && setEditingDeadline(true)}
-                  title={canEdit ? "Click to edit deadline" : ""}
+                  className={`bg-gradient-to-r from-rose-500 to-rose-600 text-white px-4 py-2 rounded-xl text-xs font-black shadow-md flex items-center gap-2 border-b-2 border-rose-700 ${canEditDeadline ? 'cursor-pointer hover:from-rose-600 hover:to-rose-700' : ''}`}
+                  onClick={() => canEditDeadline && setEditingDeadline(true)}
+                  title={canEditDeadline ? "Click to edit deadline" : ""}
                 >
                   <Timer size={16} className="text-rose-100 animate-pulse" />
                   {pd.deadline
@@ -295,7 +339,7 @@ export function ProductionModule({ data, permission, callbacks, embedded = false
                   <button
                     onClick={handleDeadlineSave}
                     disabled={saving}
-                    className="p-1.5 bg-rose-600 text-white rounded hover:bg-rose-700"
+                    className="p-1.5 bg-emerald-600 text-white rounded hover:bg-emerald-700"
                   >
                     {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                   </button>
@@ -311,9 +355,9 @@ export function ProductionModule({ data, permission, callbacks, embedded = false
                 </div>
               ) : (
                 <div
-                  className={`bg-gradient-to-r from-rose-500 to-rose-600 text-white px-4 py-2 rounded-xl text-xs font-black shadow-md flex items-center gap-2 border-b-2 border-rose-700 ${canEdit ? 'cursor-pointer hover:from-rose-600 hover:to-rose-700' : ''}`}
-                  onClick={() => canEdit && setEditingDeadline(true)}
-                  title={canEdit ? "Click to edit deadline" : ""}
+                  className={`bg-gradient-to-r from-rose-500 to-rose-600 text-white px-4 py-2 rounded-xl text-xs font-black shadow-md flex items-center gap-2 border-b-2 border-rose-700 ${canEditDeadline ? 'cursor-pointer hover:from-rose-600 hover:to-rose-700' : ''}`}
+                  onClick={() => canEditDeadline && setEditingDeadline(true)}
+                  title={canEditDeadline ? "Click to edit deadline" : ""}
                 >
                   <Timer size={16} className="text-rose-100 animate-pulse" />
                   {pd.deadline

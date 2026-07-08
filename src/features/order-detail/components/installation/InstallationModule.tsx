@@ -80,6 +80,8 @@ export const InstallationModule: React.FC<InstallationModuleProps> = ({
         initialScheduledDate={inst.scheduledDate}
         initialScheduledTime={inst.scheduledTime}
         isCompleted={order.stage === "Completed" || order.stage === "Closed"}
+        locationLink={inst.gmapLink}
+        locationText={"Installation Location"}
       />
 
       <div className="space-y-4">
