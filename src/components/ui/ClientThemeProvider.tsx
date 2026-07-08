@@ -1,11 +1,11 @@
 "use client";
 
 import React, { useEffect } from "react";
-import { getActiveClient } from "@/config/clientConfig";
+import { loadClientConfig } from "@/config/loadClientConfig";
 
 export function ClientThemeProvider() {
   useEffect(() => {
-    const config = getActiveClient();
+    const config = loadClientConfig();
     const root = document.documentElement;
 
     root.style.setProperty("--color-primary", config.colors.primary);

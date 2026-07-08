@@ -188,8 +188,8 @@ export function AdminLayoutClient({
           <div style={{
             overflow: "hidden",
             width: isExpanded ? "180px" : "40px",
-            height: isExpanded ? "auto" : "40px",
-            transition: "width 0.25s cubic-bezier(0.4,0,0.2,1)",
+            height: isExpanded ? "56px" : "40px",
+            transition: "all 0.25s cubic-bezier(0.4,0,0.2,1)",
             display: "flex",
             background: "#ffffff",
             borderRadius: "8px",

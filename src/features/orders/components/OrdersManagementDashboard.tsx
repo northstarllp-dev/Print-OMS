@@ -21,6 +21,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { updateOrder, assignTeamToOrder } from "@/features/orders/actions/orderActions";
+import { loadClientConfig } from "@/config/loadClientConfig";
 import { parseOrderStage } from "@/features/orders/workspace/shared/stageGrants";
 import {
   countQueueViews,
@@ -93,6 +94,7 @@ export function OrdersManagementDashboard({
   const [healthFilter, setHealthFilter] = useState("ALL");
   const [adminAssignedFilter, setAdminAssignedFilter] = useState<"ALL" | "MINE">("ALL");
   const [selectedKpi, setSelectedKpi] = useState<string | null>(null);
+  const clientConfig = loadClientConfig();
   const parsedEntryStage = parseOrderStage(entryStage);
   const [queueView, setQueueView] = useState<QueueView>("current");
   
@@ -436,7 +438,7 @@ export function OrdersManagementDashboard({
               <option value="Completed">Completed</option>
             </select>
 
-            {currentUserRole === "Admin" && (
+            {currentUserRole === "Admin" && clientConfig.features.enableAdminAssignment && (
               <select value={adminAssignedFilter} onChange={(e) => setAdminAssignedFilter(e.target.value as "ALL" | "MINE")} style={{ padding: "9px 12px", background: "white", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "13px", fontWeight: "500", color: "#475569", cursor: "pointer", outline: "none" }}>
                 <option value="ALL">All Assigned Admins</option>
                 <option value="MINE">My Assigned Orders</option>

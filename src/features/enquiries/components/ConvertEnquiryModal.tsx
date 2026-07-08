@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { X, Search } from "lucide-react";
+import { loadClientConfig } from "@/config/loadClientConfig";
 import { getActiveProducts } from "@/features/products/actions/productActions";
 import { getAdmins } from "@/features/enquiries/actions/enquiryActions";
 
@@ -22,6 +23,7 @@ export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultClientNa
   const [selectedAdmins, setSelectedAdmins] = useState<string[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const clientConfig = loadClientConfig();
 
   useEffect(() => {
     if (isOpen) {
@@ -165,7 +167,8 @@ export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultClientNa
           </div>
 
           {/* Assigned Admins */}
-          <div>
+          {clientConfig.features.enableAdminAssignment && (
+            <div>
             <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#475569", marginBottom: "8px" }}>
               Assign Admins
             </label>
@@ -211,7 +214,7 @@ export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultClientNa
               )}
             </div>
           </div>
-
+          )}
 
           {/* Product Type */}
           <div ref={dropdownRef} style={{ position: "relative", zIndex: 20 }}>

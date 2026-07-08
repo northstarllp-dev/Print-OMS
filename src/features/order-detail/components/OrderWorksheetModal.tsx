@@ -19,7 +19,7 @@ import { SiteVisitModule } from "@/features/orders/workspace/modules/site-visit/
 import { SiteVisitReviewModal } from "@/features/orders/workspace/modules/site-visit/SiteVisitReviewModal";
 import { QuotationModule } from "@/features/orders/workspace/modules/quotation/QuotationModule";
 import { DesignModule } from "@/features/orders/workspace/modules/design/DesignModule";
-import LoadingLines from "@/components/ui/loading-lines";
+import { Logo } from "@/components/ui/Logo";
 import { AdminControlModule } from "./admin/AdminControlModule";
 import { PaymentsModule } from "./payments/PaymentsModule";
 import { CustomerDetailsDrawer } from "./CustomerDetailsDrawer";
@@ -1031,7 +1031,9 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     <div style={{ position: "relative", display: "flex", flexDirection: "column", flex: 1, height: "100%", maxHeight: "100%", overflow: "hidden", background: "#F8FAFC" }}>
       {isProcessing && (
         <div className="absolute inset-0 z-[9999] flex items-center justify-center bg-white/80 backdrop-blur-sm">
-          <LoadingLines />
+          <div className="animate-pulse flex items-center justify-center drop-shadow-xl">
+            <Logo width={400} height={100} align="center" />
+          </div>
         </div>
       )}
 

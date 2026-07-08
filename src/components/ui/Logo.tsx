@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import Image from "next/image";
-import { getActiveClient, ClientConfig } from "@/config/clientConfig";
+import { loadClientConfig, ClientConfig } from "@/config/loadClientConfig";
 
 interface LogoProps {
   className?: string;
@@ -17,7 +17,7 @@ export function Logo({ className = "", forceText = false, width = 200, height = 
 
   useEffect(() => {
     // Only resolve the active client on the client-side to prevent hydration mismatches
-    setClient(getActiveClient());
+    setClient(loadClientConfig());
   }, []);
 
   if (!client) {
@@ -27,14 +27,14 @@ export function Logo({ className = "", forceText = false, width = 200, height = 
 
   if (client.logoUrl && !forceText) {
     return (
-      <div className={`flex items-center ${className}`}>
+      <div className={`flex items-center ${className}`} style={{ width, transition: "all 0.25s cubic-bezier(0.4,0,0.2,1)" }}>
         <Image
           src={client.logoUrl}
           alt={`${client.name} Logo`}
           width={width}
           height={height}
           className="object-contain"
-          style={{ maxHeight: height, maxWidth: "100%", objectPosition: align }}
+          style={{ maxHeight: height, maxWidth: "100%", objectPosition: align, transition: "all 0.25s cubic-bezier(0.4,0,0.2,1)" }}
         />
       </div>
     );
