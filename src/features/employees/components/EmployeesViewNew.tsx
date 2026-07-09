@@ -4,17 +4,19 @@ import React, { useState } from "react";
 import { Search, Filter, Plus, MoreVertical, Users, Star, Clock, AlertCircle, Edit, Trash2, Briefcase, BarChart2 } from "lucide-react";
 import { Employee } from "@/types";
 import { EmployeeModal } from "./EmployeeModal";
-import { 
-  createEmployee as createEmployeeAction, 
-  updateEmployee as updateEmployeeAction, 
-  deleteEmployee as deleteEmployeeAction 
+import {
+  createEmployee as createEmployeeAction,
+  updateEmployee as updateEmployeeAction,
+  deleteEmployee as deleteEmployeeAction
 } from "@/features/employees/actions/employeeActions";
 
 interface EmployeesViewNewProps {
   initialEmployees: Employee[];
+  /** Tenant id — drives the available staff_role options in EmployeeModal. */
+  companyId?: string | null;
 }
 
-export function EmployeesViewNew({ initialEmployees }: EmployeesViewNewProps) {
+export function EmployeesViewNew({ initialEmployees, companyId = null }: EmployeesViewNewProps) {
   const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
   const [searchTerm, setSearchTerm] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -309,11 +311,12 @@ export function EmployeesViewNew({ initialEmployees }: EmployeesViewNewProps) {
         </div>
       </div>
 
-      <EmployeeModal 
-        isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)} 
-        onSubmit={handleModalSubmit} 
-        initialData={editingEmployee} 
+      <EmployeeModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSubmit={handleModalSubmit}
+        initialData={editingEmployee}
+        companyId={companyId}
       />
     </div>
   );

@@ -10,6 +10,7 @@ import { Info, Clock, CheckCircle, Check, Loader2, PlayCircle, MapPin, Search } 
 import { mapSiteVisitFromDb, mapSiteVisitMeasurementFromDb } from "@/features/orders/actions/siteVisitMapper";
 import { mapDesignFromDb } from "@/features/designs/actions/designMapper";
 import { toCustomerVisibleQuotation } from "@/features/quotations/utils/quotationSecurity";
+import { toCustomerVisibleDesign } from "@/features/designs/utils/customerVisibleDesign";
 import { OrderDetailClient } from "./OrderDetailClient";
 import React from "react";
 
@@ -206,7 +207,13 @@ export default async function OrderDetailPage({
         : (orderData.site_visits || null)
     ),
     quoteDetails,
-    design: (Array.isArray(orderData.designs) && orderData.designs.length > 0 ? mapDesignFromDb(orderData.designs[0]) : orderData.designs ? mapDesignFromDb(orderData.designs) : null),
+    design: toCustomerVisibleDesign(
+      Array.isArray(orderData.designs) && orderData.designs.length > 0
+        ? mapDesignFromDb(orderData.designs[0])
+        : orderData.designs
+          ? mapDesignFromDb(orderData.designs)
+          : null
+    ),
     productionDetails: Array.isArray(orderData.productions) && orderData.productions.length > 0 ? orderData.productions[0] : (orderData.productions || null),
     installationDetails: Array.isArray(orderData.installations) && orderData.installations.length > 0 ? orderData.installations[0] : (orderData.installations || null),
     stageStatus: orderData.stage_status || null,

@@ -33,6 +33,7 @@ import {
   SiteVisitDetails, 
   SignLocation 
 } from "@/types";
+import type { StagePermission } from "@/features/orders/workspace/shared/types";
 import { ScheduleVisitModal } from "./ScheduleVisitModal";
 import { scheduleSiteVisitAction } from "@/features/orders/actions/orderActions";
 import { GoogleMap, useJsApiLoader, Marker } from "@react-google-maps/api";
@@ -78,6 +79,8 @@ interface SiteVisitModuleProps {
   adminOverrideUnlocked?: boolean;
   setAdminOverrideUnlocked?: (val: boolean) => void;
   onSkipSiteVisit?: () => void;
+  /** RBAC — when canEdit is false the module renders read-only. */
+  permission?: StagePermission;
 }
 
 const defaultSignLocation: Omit<SignLocation, "id"> = {
@@ -99,8 +102,12 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
   actionsNode,
   adminOverrideUnlocked,
   setAdminOverrideUnlocked,
-  onSkipSiteVisit
+  onSkipSiteVisit,
+  permission,
 }) => {
+  // RBAC: when canEdit is false (e.g. Designer viewing Site Visit read-only),
+  // all write actions are disabled on top of the existing workflow freeze.
+  const canEdit = permission?.canEdit ?? true;
   // Current client
   const client = customers.find(c => c.id === order.customerId);
   
@@ -157,7 +164,8 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
   // Freeze flag — read-only if not in Site Visit stage, or if completed and pending admin approval.
   // It unfreezes if the admin requests changes (stageStatus becomes "Normal" while still in Site Visit stage).
   const baseFrozen = !order.stage.startsWith("Site Visit") || (!!siteVisit.completed && order.stageStatus !== "Normal");
-  const isFrozen = baseFrozen && !adminOverrideUnlocked;
+  // Effective lock also includes RBAC read-only grants (e.g. Designer viewing Site Visit).
+  const isFrozen = (baseFrozen && !adminOverrideUnlocked) || !canEdit;
   
   const [isConfirmSkipOpen, setIsConfirmSkipOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -512,6 +520,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
         onClose={() => setIsScheduleModalOpen(false)}
         defaultAddress={client?.shippingAddress}
         onSchedule={async (date, time, location, coords) => {
+          if (!canEdit) return;
           try {
             await scheduleSiteVisitAction(order.id, {
               auditDate: date,
@@ -556,6 +565,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
               <button
                 onClick={async () => {
                   setIsConfirmSkipOpen(false);
+                  if (!canEdit) return;
                   if (onSkipSiteVisit) {
                     await onSkipSiteVisit();
                   }

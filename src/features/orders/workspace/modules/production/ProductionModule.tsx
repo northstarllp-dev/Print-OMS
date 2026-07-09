@@ -373,7 +373,7 @@ export function ProductionModule({
             </div>
           </div>
 
-          <div className="mb-6 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
+          <div className="mb-6 prt-card p-6">
             <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider mb-4 border-b border-slate-100 pb-3 flex items-center gap-2">
               <FileText size={18} className="text-blue-600" /> Basic Information
             </h2>
@@ -402,7 +402,7 @@ export function ProductionModule({
           </div>
 
           {client && (
-            <div className="mb-6 bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm">
+            <div className="mb-6 prt-card p-6">
               <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
                 <Sparkles size={18} className="text-rose-600" />
                 <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider">
@@ -451,7 +451,7 @@ export function ProductionModule({
         <div className="lg:col-span-2 space-y-8">
 
           {/* SITE VISIT DETAILS */}
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm">
+          <div className="prt-card p-6">
             <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
               <MapPin size={18} className="text-indigo-600" />
               <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider">
@@ -494,7 +494,7 @@ export function ProductionModule({
           </div>
 
           {/* QUOTATION DETAILS */}
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm">
+          <div className="prt-card p-6">
             <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2">
                 <CheckSquare size={18} className="text-amber-600" />
@@ -548,7 +548,7 @@ export function ProductionModule({
           </div>
 
           {/* FINAL PRODUCTION FILES (Per Item) */}
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm">
+          <div className="prt-card p-6">
             <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
               <ImageIcon size={18} className="text-emerald-600" />
               <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider">
@@ -591,7 +591,7 @@ export function ProductionModule({
           </div>
 
           {/* PRODUCTION NOTES */}
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm">
+          <div className="prt-card p-6">
             <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
               <AlertOctagon size={18} className="text-rose-600" />
               <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider">
@@ -630,7 +630,7 @@ export function ProductionModule({
         <div className="space-y-8">
 
           {/* WORKSHOP PRODUCTION QUEUE CHECKLIST */}
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm sticky top-6">
+          <div className="prt-card p-6 sticky top-6">
             <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
               <CheckSquare size={18} className="text-blue-600" />
               <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider">

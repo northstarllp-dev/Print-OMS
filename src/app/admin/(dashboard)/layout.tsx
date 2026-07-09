@@ -5,6 +5,7 @@ import { getOrders } from "@/features/orders/actions/orderActions";
 import { getEnquiries } from "@/features/enquiries/actions/enquiryActions";
 import { getCustomers } from "@/features/customers/actions/customerActions";
 import { AdminLayoutClient } from "./AdminLayoutClient";
+import { getOpenServiceTicketCount } from "@/features/service-tickets/actions/serviceTicketActions";
 
 export default async function AdminLayout({
   children,
@@ -19,10 +20,11 @@ export default async function AdminLayout({
   }
 
   // Fetch counts for sidebar badges (parallel fetches for performance)
-  const [ordersData, enquiriesData, customersData] = await Promise.all([
+  const [ordersData, enquiriesData, customersData, openServiceTickets] = await Promise.all([
     getOrders().catch(() => []),
     getEnquiries().catch(() => []),
     getCustomers().catch(() => []),
+    getOpenServiceTicketCount().catch(() => 0),
   ]);
 
   const activeOrders = (ordersData || []).filter(
@@ -55,7 +57,7 @@ export default async function AdminLayout({
     production: productionCount,
     installation: installationCount,
     payments: 2, // placeholder
-    support: 1,  // placeholder
+    support: openServiceTickets,
   };
 
   return (

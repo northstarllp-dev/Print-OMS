@@ -1,19 +1,25 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { X } from "lucide-react";
 import { Employee } from "@/types";
+import { getStaffRolesForTenant } from "@/features/orders/workspace/shared/stageGrants";
 
 interface EmployeeModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (employee: Omit<Employee, "id">) => void;
   initialData?: Employee;
+  /** Tenant id — drives the available staff_role options. */
+  companyId?: string | null;
 }
 
-export function EmployeeModal({ isOpen, onClose, onSubmit, initialData }: EmployeeModalProps) {
+export function EmployeeModal({ isOpen, onClose, onSubmit, initialData, companyId = null }: EmployeeModalProps) {
   const [name, setName] = useState("");
   const [role, setRole] = useState("Designer");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
+
+  // Tenant-aware role list. Falls back to default role keys when no tenant config.
+  const roleOptions = useMemo(() => getStaffRolesForTenant(companyId), [companyId]);
 
   useEffect(() => {
     if (initialData) {
@@ -23,11 +29,11 @@ export function EmployeeModal({ isOpen, onClose, onSubmit, initialData }: Employ
       setEmail(initialData.email || "");
     } else {
       setName("");
-      setRole("Designer");
+      setRole(roleOptions[0] ?? "Designer");
       setPhone("");
       setEmail("");
     }
-  }, [initialData, isOpen]);
+  }, [initialData, isOpen, roleOptions]);
 
   if (!isOpen) return null;
 
@@ -63,9 +69,13 @@ export function EmployeeModal({ isOpen, onClose, onSubmit, initialData }: Employ
             <div>
               <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#475569", marginBottom: "6px" }}>Role</label>
               <select value={role} onChange={(e) => setRole(e.target.value)} style={{ width: "100%", padding: "10px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "14px", color: "#0f172a", outline: "none", background: "white", cursor: "pointer" }}>
-                <option value="Marketer">Marketer</option>
-                <option value="Designer">Designer</option>
-                <option value="Site Visitor">Site Visitor</option>
+                {roleOptions.map((r) => (
+                  <option key={r} value={r}>{r}</option>
+                ))}
+                {/* Keep the existing role selectable when editing a legacy employee whose role isn't in the tenant list */}
+                {initialData && initialData.role && !roleOptions.includes(initialData.role) && (
+                  <option value={initialData.role}>{initialData.role}</option>
+                )}
               </select>
             </div>
             <div>

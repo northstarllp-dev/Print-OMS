@@ -28,7 +28,10 @@ import { ProductionModule } from "@/features/orders/workspace/modules/production
 import { InstallationModule } from "@/features/orders/workspace/modules/installation/InstallationModule";
 import { InstallationPaymentApprovalModal } from "./InstallationPaymentApprovalModal";
 
-import { resolveStagePermission, isTimelineStageAccessible } from "@/features/orders/workspace/shared/permissions";
+import {
+  isTimelineStageAccessible,
+  getStagePermissionInContext,
+} from "@/features/orders/workspace/shared/permissions";
 import type { OrderStage, StagePermission } from "@/features/orders/workspace/shared/types";
 import { isStaffQueueCompleted } from "@/features/orders/workspace/shared/staffQueueStages";
 import {
@@ -54,6 +57,7 @@ import {
 import {
   updateDesignDetailsAction,
   sendDesignToCustomerAction,
+  getDesignByOrderId,
 } from "@/features/designs/actions/designActions";
 import {
   mergeOrderDetailPatch,
@@ -382,7 +386,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     entryStage != null &&
     isStaffQueueCompleted(order.stage, entryStage);
   const effectiveStagePermission = (stage: OrderStage): StagePermission => {
-    const base = resolveStagePermission(stage, actor);
+    const base = getStagePermissionInContext(stage, actor, entryStage);
     if (isStaffQueueReadOnly) return { canView: base.canView, canEdit: false };
     return base;
   };
@@ -403,12 +407,22 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   };
   // Quote details are now managed entirely by QuotationModule via quotationActions.
   const updateDesignDetails = async (orderId: string, details: Partial<DesignRecord>) => {
-    const updated = await updateDesignDetailsAction(
-      orderId,
-      details,
-      orderRef.current.design?.updated_at
-    );
-    setOrder((prev) => ({ ...prev, design: updated }));
+    const save = async (expectedUpdatedAt?: string) =>
+      updateDesignDetailsAction(orderId, details, expectedUpdatedAt);
+
+    try {
+      const updated = await save(orderRef.current.design?.updated_at);
+      setOrder((prev) => ({ ...prev, design: updated }));
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (message.includes("updated by another user")) {
+        const fresh = await getDesignByOrderId(orderId);
+        const updated = await save(fresh?.updated_at);
+        setOrder((prev) => ({ ...prev, design: updated }));
+        return;
+      }
+      throw err;
+    }
   };
   const updateProductionDetails = async (orderId: string, details: Partial<ProductionDetails>) => {
     setOrder((prev) => ({ ...prev, productionDetails: { ...(prev.productionDetails || {}), ...details } as ProductionDetails }));
@@ -774,22 +788,33 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
       ) : (
         (!isCurrentTabFrozen ? (
           <>
-            <button onClick={handleSaveDraft} style={{ padding: "6px 14px", border: "1px solid #E2E8F0", background: "white", color: "#0F172A", borderRadius: "6px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", transition: "color 0.15s, background-color 0.15s" }}>
-              {activeStepTab === designTab ? <><Send size={13} /> Send to Customer</> : <><Save size={13} /> Save Draft</>}
-            </button>
-            {isEmployee ? (
-              !hideStaffAdvanceRequest && (
-              <button onClick={handleRequestAdvancement} style={{ padding: "6px 14px", background: "#22C55E", border: "none", color: "white", borderRadius: "6px", fontSize: "12px", fontWeight: "800", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", transition: "color 0.15s, background-color 0.15s" }}>
-                <CheckCircle2 size={13} /> Request Admin Approval
-              </button>
-              )
-            ) : (
-              showAdminApproveButton && (
-                <button onClick={handleAdminApprove} style={{ padding: "6px 14px", background: "#22C55E", border: "none", color: "white", borderRadius: "6px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", transition: "color 0.15s, background-color 0.15s" }}>
-                  <Check size={13} /> {adminApproveLabel}
-                </button>
-              )
-            )}
+            {(() => {
+              const activeStageForPerm = tabIndexToOrderStage(activeStepTab, order.workflow_type);
+              const stageCanEdit = activeStageForPerm
+                ? getStagePermissionInContext(activeStageForPerm, actor, entryStage).canEdit
+                : true;
+              if (!stageCanEdit) return null;
+              return (
+                <>
+                  <button onClick={handleSaveDraft} style={{ padding: "6px 14px", border: "1px solid #E2E8F0", background: "white", color: "#0F172A", borderRadius: "6px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", transition: "color 0.15s, background-color 0.15s" }}>
+                    {activeStepTab === designTab ? <><Send size={13} /> Send to Customer</> : <><Save size={13} /> Save Draft</>}
+                  </button>
+                  {isEmployee ? (
+                    !hideStaffAdvanceRequest && (
+                      <button onClick={handleRequestAdvancement} style={{ padding: "6px 14px", background: "#22C55E", border: "none", color: "white", borderRadius: "6px", fontSize: "12px", fontWeight: "800", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", transition: "color 0.15s, background-color 0.15s" }}>
+                        <CheckCircle2 size={13} /> Request Admin Approval
+                      </button>
+                    )
+                  ) : (
+                    showAdminApproveButton && (
+                      <button onClick={handleAdminApprove} style={{ padding: "6px 14px", background: "#22C55E", border: "none", color: "white", borderRadius: "6px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", transition: "color 0.15s, background-color 0.15s" }}>
+                        <Check size={13} /> {adminApproveLabel}
+                      </button>
+                    )
+                  )}
+                </>
+              );
+            })()}
           </>
         ) : (
           <div style={{ padding: "6px 14px", border: "1px solid #E2E8F0", background: "#F1F5F9", color: "#64748B", borderRadius: "6px", fontSize: "12px", fontWeight: "700", display: "flex", alignItems: "center", gap: "4px" }}>
@@ -851,6 +876,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           onSubmitForApproval={handleRequestAdvancement}
           onAdminApprove={async (): Promise<void> => { await handleAdminApprove(); }}
           onSkipSiteVisit={async () => {
+            if (!getStagePermissionInContext("site_visit", actor, entryStage).canEdit) return;
             const now = new Date().toISOString();
             const newDetails = {
               ...(order.siteVisitDetails || {}),
@@ -865,6 +891,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           }}
           adminOverrideUnlocked={effectiveAdminOverrideUnlocked}
           setAdminOverrideUnlocked={effectiveSetAdminOverrideUnlocked}
+          permission={getStagePermissionInContext("site_visit", actor, entryStage)}
         />
       ),
       [quoteTab]: (
@@ -891,6 +918,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           realtimeQuotation={quotationRealtimeRow}
           adminOverrideUnlocked={effectiveAdminOverrideUnlocked}
           setAdminOverrideUnlocked={effectiveSetAdminOverrideUnlocked}
+          permission={getStagePermissionInContext("quotation", actor, entryStage)}
         />
       ),
       [designTab]: (
@@ -905,6 +933,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           setAdminOverrideUnlocked={effectiveSetAdminOverrideUnlocked}
           stageAdminNotes={order.stageAdminNotes}
           currentUserRole={currentUserRole}
+          permission={getStagePermissionInContext("design", actor, entryStage)}
         />
       ),
       3: (
@@ -1466,35 +1495,44 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                     )}
                     {!isCurrentTabFrozen && (
                       <>
-                        {/* Save Draft button */}
-                        <button onClick={handleSaveDraft} style={{ padding: "7px 16px", border: "1px solid #E2E8F0", background: "white", color: "#64748B", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
-                          {activeStepTab === designTab ? <><Send size={13} /> Send to Customer</> : <><Save size={13} /> Save Draft</>}
-                        </button>
-    
-                        {/* Advance stage / Staff section approval push */}
-                        {isEmployee ? (
-                          !hideStaffAdvanceRequest && (
-                          <div style={{ display: "inline-block" }}>
-                            <button onClick={handleRequestAdvancement} style={{ padding: "8px 18px", background: "#22C55E", border: "none", color: "white", borderRadius: "8px", fontSize: "12px", fontWeight: "800", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
-                              <CheckCircle2 size={13} /> Request Admin Approval for {activeModuleTitle}
-                            </button>
-                          </div>
-                          )
-                        ) : (
-                          showAdminApproveButton && (
-                            <div style={{ display: "inline-block" }}>
-                              <button onClick={() => {
-                                if ((activeStepTab === 0 || activeStepTab === designTab) && !canAdvanceSiteVisit) {
-                                  alert(siteVisitAdvanceTooltip);
-                                  return;
-                                }
-                                handleAdminApprove();
-                              }} style={{ padding: "7px 16px", background: "#22C55E", border: "none", color: "white", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
-                                <Check size={13} /> {adminApproveLabel}
+                        {(() => {
+                          const activeStageForPerm = tabIndexToOrderStage(activeStepTab, order.workflow_type);
+                          const stageCanEdit = activeStageForPerm
+                            ? getStagePermissionInContext(activeStageForPerm, actor, entryStage).canEdit
+                            : true;
+                          if (!stageCanEdit) return null;
+                          return (
+                            <>
+                              <button onClick={handleSaveDraft} style={{ padding: "7px 16px", border: "1px solid #E2E8F0", background: "white", color: "#64748B", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
+                                {activeStepTab === designTab ? <><Send size={13} /> Send to Customer</> : <><Save size={13} /> Save Draft</>}
                               </button>
-                            </div>
-                          )
-                        )}
+
+                              {isEmployee ? (
+                                !hideStaffAdvanceRequest && (
+                                  <div style={{ display: "inline-block" }}>
+                                    <button onClick={handleRequestAdvancement} style={{ padding: "8px 18px", background: "#22C55E", border: "none", color: "white", borderRadius: "8px", fontSize: "12px", fontWeight: "800", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
+                                      <CheckCircle2 size={13} /> Request Admin Approval for {activeModuleTitle}
+                                    </button>
+                                  </div>
+                                )
+                              ) : (
+                                showAdminApproveButton && (
+                                  <div style={{ display: "inline-block" }}>
+                                    <button onClick={() => {
+                                      if ((activeStepTab === 0 || activeStepTab === designTab) && !canAdvanceSiteVisit) {
+                                        alert(siteVisitAdvanceTooltip);
+                                        return;
+                                      }
+                                      handleAdminApprove();
+                                    }} style={{ padding: "7px 16px", background: "#22C55E", border: "none", color: "white", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
+                                      <Check size={13} /> {adminApproveLabel}
+                                    </button>
+                                  </div>
+                                )
+                              )}
+                            </>
+                          );
+                        })()}
                       </>
                     )}
                   </>

@@ -21,6 +21,7 @@ import {
   updateDesignDetailsAction,
 } from "@/features/designs/actions/designActions";
 import { areAllDesignItemsApproved } from "@/features/designs/utils/designApproval";
+import { toCustomerVisibleDesign } from "@/features/designs/utils/customerVisibleDesign";
 
 interface Customer {
   id: string;
@@ -57,7 +58,7 @@ export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabPro
     Boolean(order.stageStatus && order.stageStatus !== "Normal") &&
     (order.stage === "Design In Progress" || order.stage === "Design Approved");
 
-  const dd: DesignRecord = order.design || {
+  const dd: DesignRecord = toCustomerVisibleDesign(order.design) || {
     id: "",
     order_id: order.id,
     resources: [],

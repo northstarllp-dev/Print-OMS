@@ -1,10 +1,12 @@
 import React from "react";
 import { EmployeesViewNew } from "@/features/employees/components/EmployeesViewNew";
 import { getEmployees } from "@/features/employees/actions/employeeActions";
+import { getCurrentUser } from "@/features/auth/actions/authActions";
 
 export default async function EmployeesPage() {
   const employeesData = await getEmployees();
-  
+  const profile = await getCurrentUser();
+
   const mappedEmployees = employeesData?.map(e => ({
     id: e.id,
     employeeId: e.employeeId,
@@ -18,5 +20,5 @@ export default async function EmployeesPage() {
     jobsAssigned: e.jobsAssigned || 0
   })) || [];
 
-  return <EmployeesViewNew initialEmployees={mappedEmployees} />;
+  return <EmployeesViewNew initialEmployees={mappedEmployees} companyId={profile?.company_id ?? null} />;
 }

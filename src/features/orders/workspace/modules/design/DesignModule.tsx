@@ -5,6 +5,8 @@ import { FileText, ZoomIn, ZoomOut, UploadCloud, Upload, X, Trash, RefreshCw, Do
 import { Order, DesignRecord, DesignVersion } from "@/types";
 import { createClient } from "@/utils/supabase/client";
 import { updateDesignDetailsAction } from "@/features/designs/actions/designActions";
+import { getServerActionErrorMessage } from "@/lib/serverActionError";
+import type { StagePermission } from "@/features/orders/workspace/shared/types";
 
 interface DesignModuleProps {
   order: Order;
@@ -17,6 +19,8 @@ interface DesignModuleProps {
   setAdminOverrideUnlocked?: (val: boolean) => void;
   stageAdminNotes?: string;
   currentUserRole?: "Admin" | "Employee";
+  /** RBAC — when canEdit is false the module renders read-only (uploads/disabled). */
+  permission?: StagePermission;
 }
 
 export const DesignModule: React.FC<DesignModuleProps> = ({
@@ -30,8 +34,10 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
   setAdminOverrideUnlocked,
   stageAdminNotes,
   currentUserRole,
+  permission,
 }) => {
   const supabase = createClient();
+  const canEdit = permission?.canEdit ?? true;
   const dd: DesignRecord = order.design || {
     id: "",
     order_id: order.id,
@@ -75,7 +81,8 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
   const localVersions = activeItem?.versions || [];
   const activeVersion = localVersions.find(v => v.id === selectedVersionId) || localVersions[localVersions.length - 1];
   const isReadOnly =
-    isFrozen && currentUserRole !== "Admin" && !adminOverrideUnlocked;
+    !canEdit ||
+    (isFrozen && currentUserRole !== "Admin" && !adminOverrideUnlocked);
 
   const handleUpdateItemVersions = async (newVersions: DesignVersion[]) => {
     const updatedItems = itemsList.map(item => {
@@ -109,6 +116,7 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
   };
 
   const handleDesignerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!canEdit) return;
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
 
@@ -143,7 +151,7 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
         await handleUpdateItemVersions(currentVersions);
       }
     } catch (err: any) {
-      alert("Upload failed: " + err.message);
+      alert("Upload failed: " + getServerActionErrorMessage(err));
     } finally {
       setUploading(false);
       e.target.value = ''; // Reset input
@@ -167,7 +175,7 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
       setSelectedVersionId(newVersion.id);
       await handleUpdateItemVersions(newVersions);
     } catch (err: any) {
-      alert("Upload failed: " + err.message);
+      alert("Upload failed: " + getServerActionErrorMessage(err));
     } finally {
       setUploading(false);
       setPendingUploadFile(null);
@@ -232,6 +240,7 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
   };
 
   const handleProductionFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!canEdit) return;
     const files = Array.from(e.target.files || []);
     if (files.length === 0 || !activeItem) return;
     setUploading(true);
@@ -259,7 +268,7 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
         await updateDesignDetailsAction(order.id, details, dd.updated_at);
       }
     } catch (err: any) {
-      alert("Upload failed: " + err.message);
+      alert("Upload failed: " + getServerActionErrorMessage(err));
     } finally {
       setUploading(false);
       e.target.value = ''; // Reset input so same file can be uploaded again if needed
@@ -267,7 +276,7 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
   };
 
   const handleDeleteProductionFile = async (fileId: string) => {
-    if (!confirm("Are you sure you want to delete this production file?") || !activeItem) return;
+    if (!canEdit || !confirm("Are you sure you want to delete this production file?") || !activeItem) return;
     try {
       const newItems = itemsList.map(item => {
         if (item.id === activeItem.id) {
@@ -282,12 +291,12 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
         await updateDesignDetailsAction(order.id, details, dd.updated_at);
       }
     } catch (err: any) {
-      alert("Delete failed: " + err.message);
+      alert("Delete failed: " + getServerActionErrorMessage(err));
     }
   };
 
   const handleDeleteVersion = async (versionId: string) => {
-    if (!confirm("Are you sure you want to delete this design proof?")) return;
+    if (!canEdit || !confirm("Are you sure you want to delete this design proof?")) return;
     try {
       const versionToDelete = localVersions.find(v => v.id === versionId);
       const newVersions = localVersions.filter(v => v.id !== versionId);
@@ -304,7 +313,7 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
       }
     } catch (err: any) {
       console.error(err);
-      alert("Failed to delete design version.");
+      alert("Failed to delete design proof: " + getServerActionErrorMessage(err));
     }
   };
 
@@ -626,7 +635,7 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
       {/* Upload Preview & Rotate Modal */}
       {previewUrl && pendingUploadFile && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full flex flex-col overflow-hidden">
+          <div className="prt-card prt-animate-in max-w-2xl w-full flex flex-col overflow-hidden">
             <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
               <h3 className="font-bold text-slate-800">Preview & Rotate Image</h3>
               <button onClick={() => {
@@ -673,14 +682,14 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
                   setPreviewUrl(null);
                 }}
                 disabled={uploading}
-                className="px-4 py-2 text-slate-600 font-medium hover:bg-slate-200 rounded-lg text-sm"
+                className="prt-btn prt-btn-secondary"
               >
                 Cancel
               </button>
               <button 
                 onClick={handleConfirmUpload}
                 disabled={uploading}
-                className="px-6 py-2 bg-blue-600 text-white font-bold rounded-lg text-sm flex items-center gap-2 hover:bg-blue-700"
+                className="prt-btn prt-btn-primary flex items-center gap-2"
               >
                 {uploading ? (
                   <>

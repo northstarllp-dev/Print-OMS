@@ -32,6 +32,9 @@ import {
   mergeOrderDetailPatch,
   useOrderDetailSync,
 } from "@/features/orders/realtime/useOrderDetailSync";
+import { usePortalOrderSync } from "@/features/orders/realtime/usePortalOrderSync";
+import { toPortalOrderDetailPatch } from "@/features/orders/realtime/portalOrderPatch";
+import type { OrderDetailPatch } from "@/features/orders/realtime/orderDetailPatch";
 import { QuotationTab } from "@/app/portal/components/QuotationTab";
 import { useQuotationActions } from "@/app/portal/hooks/useQuotationActions";
 import { GoogleMap, useJsApiLoader, Marker, Autocomplete } from "@react-google-maps/api";
@@ -150,14 +153,26 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
     setActiveTab(getTabForStage(nextStage, workflowType));
   }, [order.stage, workflowType]);
 
+  const applyPortalPatch = useCallback((patch: OrderDetailPatch) => {
+    setOrder((prev) => mergeOrderDetailPatch(prev, toPortalOrderDetailPatch(patch)));
+  }, []);
+
+  // Supabase realtime (instant when portal anon RLS policies are present).
   useOrderDetailSync({
     orderId: order.id,
     businessOrderId: order.orderId || order.orderCode || order.id,
-    enabled: false,
+    enabled: Boolean(order.id),
     getOrderSnapshot: () => orderRef.current as unknown as Record<string, unknown>,
-    onPatch: (patch) => {
-      setOrder((prev) => mergeOrderDetailPatch(prev, patch));
-    },
+    onPatch: applyPortalPatch,
+  });
+
+  // Secure polling fallback (when anon realtime is blocked by RLS hardening).
+  usePortalOrderSync({
+    orderId: order.id,
+    token,
+    enabled: Boolean(token),
+    getOrderSnapshot: () => orderRef.current as unknown as Record<string, unknown>,
+    onPatch: applyPortalPatch,
   });
 
   const [products, setProducts] = useState<any[]>([]);

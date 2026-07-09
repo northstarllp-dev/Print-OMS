@@ -19,6 +19,7 @@ import {
   type PricingType,
 } from "@/features/quotations/utils/lineAmount";
 import { createClient } from "@/utils/supabase/client";
+import type { StagePermission } from "@/features/orders/workspace/shared/types";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -109,6 +110,8 @@ interface QuotationModuleProps {
   externalRealtime?: boolean;
   adminOverrideUnlocked?: boolean;
   setAdminOverrideUnlocked?: (val: boolean) => void;
+  /** RBAC — when canEdit is false the module renders read-only. */
+  permission?: StagePermission;
 }
 
 const GST_OPTIONS = [0, 5, 12, 18, 28];
@@ -356,7 +359,9 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
   realtimeQuotation = null,
   adminOverrideUnlocked,
   setAdminOverrideUnlocked,
+  permission,
 }) => {
+  const canEdit = permission?.canEdit ?? true;
   const [isPending, startTransition] = useTransition();
   const [saveMsg, setSaveMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [activeRowId, setActiveRowId] = useState<string | null>(null);
@@ -618,6 +623,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
 
   // ── Save/Send Actions ──
   function handleSave() {
+    if (!canEdit) return;
     setSaveMsg(null);
     startTransition(async () => {
       try {
@@ -640,6 +646,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
   }
 
   const handleSendToCustomer = async () => {
+    if (!canEdit) return;
     setSendingToCustomer(true);
     try {
       const actorName = currentUserName || currentUserRole || "Admin";

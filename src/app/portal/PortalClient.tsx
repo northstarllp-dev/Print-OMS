@@ -31,6 +31,9 @@ import {
   mergeOrderDetailPatch,
   useOrderDetailSync,
 } from "@/features/orders/realtime/useOrderDetailSync";
+import { usePortalOrderSync } from "@/features/orders/realtime/usePortalOrderSync";
+import { toPortalOrderDetailPatch } from "@/features/orders/realtime/portalOrderPatch";
+import type { OrderDetailPatch } from "@/features/orders/realtime/orderDetailPatch";
 import { PaymentsTab } from "./components/PaymentsTab";
 import { QuotationTab } from "./components/QuotationTab";
 import { useQuotationActions } from "./hooks/useQuotationActions";
@@ -146,20 +149,31 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
   const activeOrderRef = useRef(activeOrder);
   activeOrderRef.current = activeOrder;
 
+  const applyPortalPatch = useCallback((patch: OrderDetailPatch) => {
+    const targetId = activeOrderRef.current?.id;
+    if (!targetId) return;
+    const portalPatch = toPortalOrderDetailPatch(patch);
+    setOrders((prev) =>
+      prev.map((o) =>
+        o.id === targetId ? mergeOrderDetailPatch(o, portalPatch) : o
+      )
+    );
+  }, []);
+
   useOrderDetailSync({
     orderId: activeOrder?.id ?? "",
     businessOrderId: activeOrder?.orderId || activeOrder?.orderCode || activeOrder?.id,
-    enabled: false,
+    enabled: Boolean(activeOrder?.id),
     getOrderSnapshot: () => (activeOrderRef.current || {}) as unknown as Record<string, unknown>,
-    onPatch: (patch) => {
-      const targetId = activeOrderRef.current?.id;
-      if (!targetId) return;
-      setOrders((prev) =>
-        prev.map((o) =>
-          o.id === targetId ? mergeOrderDetailPatch(o, patch) : o
-        )
-      );
-    },
+    onPatch: applyPortalPatch,
+  });
+
+  usePortalOrderSync({
+    orderId: activeOrder?.id ?? "",
+    token,
+    enabled: Boolean(activeOrder?.id && token),
+    getOrderSnapshot: () => (activeOrderRef.current || {}) as unknown as Record<string, unknown>,
+    onPatch: applyPortalPatch,
   });
 
   const workflowType = activeOrder?.workflow_type || "quote_first";

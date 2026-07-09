@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { 
   Bell, CheckCircle, AlertCircle, Info, LogOut,
   History, RotateCcw, Lock, Loader2, Key,
-  ShoppingBag, MapPin, Palette, Settings,
+  ShoppingBag, MapPin, Palette, Settings, Wrench,
   ChevronLeft, ChevronRight, Search, Hammer, Truck,
   type LucideIcon,
 } from "lucide-react";
@@ -15,6 +15,7 @@ import {
   type StaffNavIcon,
 } from "@/features/orders/workspace/shared/stageGrants";
 import type { StageActor } from "@/features/orders/workspace/shared/types";
+import { resolveTicketPermission } from "@/features/service-tickets/ticketGrants";
 
 interface StaffLayoutClientProps {
   children: React.ReactNode;
@@ -34,6 +35,7 @@ const NAV_ICON_MAP: Record<StaffNavIcon, LucideIcon> = {
   design: Palette,
   production: Hammer,
   installation: Truck,
+  support: Wrench,
   settings: Settings,
 };
 
@@ -49,7 +51,21 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
     staff_role: profile.staff_role,
     company_id: profile.company_id,
   };
-  const navItems = getNavItemsForActor(actor);
+  const navItems = React.useMemo(() => {
+    const baseItems = getNavItemsForActor(actor);
+    const ticketPerm = resolveTicketPermission(actor);
+    if (ticketPerm.canView) {
+      const settingsIdx = baseItems.findIndex((item) => item.href === "/staff/settings");
+      const supportItem = { href: "/staff/service-tickets", label: "Service Tickets", icon: "support" as const };
+      if (settingsIdx === -1) return [...baseItems, supportItem];
+      return [
+        ...baseItems.slice(0, settingsIdx),
+        supportItem,
+        ...baseItems.slice(settingsIdx),
+      ];
+    }
+    return baseItems;
+  }, [actor]);
 
   const [collapsed, setCollapsed] = useState(true);
   const [isHovered, setIsHovered] = useState(false);
