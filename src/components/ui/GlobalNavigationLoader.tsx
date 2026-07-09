@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
-import LoadingLines from "@/components/ui/loading-lines";
+import { Logo } from "@/components/ui/Logo";
 
 function NavigationLoaderInner() {
   const pathname = usePathname();
@@ -52,7 +52,9 @@ function NavigationLoaderInner() {
 
   return (
     <div className="fixed inset-0 z-[99999] flex flex-col items-center justify-center bg-white/90 backdrop-blur-sm transition-opacity duration-300">
-      <LoadingLines />
+      <div className="animate-pulse flex items-center justify-center drop-shadow-xl">
+        <Logo width={400} height={100} align="center" />
+      </div>
     </div>
   );
 }

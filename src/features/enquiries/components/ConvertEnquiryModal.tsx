@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from "react";
 import { X, Search } from "lucide-react";
+import { loadClientConfig } from "@/config/loadClientConfig";
 import { getActiveProducts } from "@/features/products/actions/productActions";
+import { getAdmins } from "@/features/enquiries/actions/enquiryActions";
 
 interface ConvertEnquiryModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (clientName: string, businessName: string, productType: string, requirements: string) => void;
+  onSubmit: (clientName: string, businessName: string, productType: string, requirements: string, assignedAdmins: string[]) => void;
   defaultClientName: string;
   defaultBusinessName: string;
   defaultRequirements?: string;
@@ -17,17 +19,24 @@ export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultClientNa
   const [productType, setProductType] = useState("");
   const [requirements, setRequirements] = useState(defaultRequirements);
   const [products, setProducts] = useState<{ id: string; name: string }[]>([]);
+  const [admins, setAdmins] = useState<{ id: string; name: string }[]>([]);
+  const [selectedAdmins, setSelectedAdmins] = useState<string[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const clientConfig = loadClientConfig();
 
   useEffect(() => {
     if (isOpen) {
       setClientName(defaultClientName);
       setBusinessName(defaultBusinessName);
       setRequirements(defaultRequirements);
+      setSelectedAdmins([]);
       getActiveProducts().then((data) => {
         const finalProducts = data.filter((p) => p.final_prdt === true);
         setProducts(finalProducts.map((p) => ({ id: p.id, name: p.name })));
+      }).catch(console.error);
+      getAdmins().then(data => {
+        setAdmins(data.map((a: any) => ({ id: a.id, name: a.name })));
       }).catch(console.error);
     }
   }, [isOpen, defaultClientName, defaultBusinessName, defaultRequirements]);
@@ -157,6 +166,56 @@ export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultClientNa
             />
           </div>
 
+          {/* Assigned Admins */}
+          {clientConfig.features.enableAdminAssignment && (
+            <div>
+            <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#475569", marginBottom: "8px" }}>
+              Assign Admins
+            </label>
+            <div style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: "8px",
+              padding: "10px",
+              border: "1px solid #cbd5e1",
+              borderRadius: "8px",
+              background: "#f8fafc"
+            }}>
+              {admins.length === 0 ? (
+                <span style={{ fontSize: "13px", color: "#94a3b8" }}>Loading admins...</span>
+              ) : (
+                admins.map(admin => (
+                  <label key={admin.id} style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    background: "white",
+                    padding: "4px 8px",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    fontSize: "13px",
+                    color: "#334155"
+                  }}>
+                    <input 
+                      type="checkbox"
+                      checked={selectedAdmins.includes(admin.id)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedAdmins([...selectedAdmins, admin.id]);
+                        } else {
+                          setSelectedAdmins(selectedAdmins.filter(id => id !== admin.id));
+                        }
+                      }}
+                    />
+                    {admin.name}
+                  </label>
+                ))
+              )}
+            </div>
+          </div>
+          )}
+
           {/* Product Type */}
           <div ref={dropdownRef} style={{ position: "relative", zIndex: 20 }}>
             <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#475569", marginBottom: "8px" }}>
@@ -282,7 +341,7 @@ export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultClientNa
             Cancel
           </button>
           <button 
-            onClick={() => onSubmit(clientName, businessName, productType, requirements)}
+            onClick={() => onSubmit(clientName, businessName, productType, requirements, selectedAdmins)}
             disabled={!clientName.trim() || !businessName.trim()}
             style={{
               padding: "10px 16px",

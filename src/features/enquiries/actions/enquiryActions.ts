@@ -218,7 +218,21 @@ export async function updateEnquiry(id: string, updates: any) {
   return data;
 }
 
-export async function convertEnquiryToOrderAction(enquiryId: string, clientName: string, businessName: string, productType?: string, requirements?: string) {
+export async function getAdmins() {
+  const supabase = await getSupabase();
+  const { data, error } = await supabase
+    .from("users")
+    .select("id, name, email")
+    .eq("role", "admin");
+    
+  if (error) {
+    console.error("Error fetching admins:", error);
+    return [];
+  }
+  return data || [];
+}
+
+export async function convertEnquiryToOrderAction(enquiryId: string, clientName: string, businessName: string, productType?: string, requirements?: string, assignedAdmins?: string[]) {
   const supabase = await getSupabase();
   
   // 1. Fetch enquiry
@@ -307,6 +321,7 @@ export async function convertEnquiryToOrderAction(enquiryId: string, clientName:
       health: "Active",
       product_type: productType || "",
       requirements: requirements || "",
+      assigned_admins: assignedAdmins || [],
     }])
     .select();
 

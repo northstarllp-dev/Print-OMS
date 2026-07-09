@@ -6,7 +6,7 @@ todos:
     content: "Phase 0: Migration — add companies.slug, seed 5 tenants, migrate Printec to new UUID, docs/printoms/clients.md"
     status: pending
   - id: phase-1-infra
-    content: "Phase 1: Scaffold config/schema, mergeConfig, registry, loadClientConfig, _default + the-board-company + stubs for other 4"
+    content: "Phase 1: Scaffold config/schema, mergeConfig, registry, loadClientConfig, _default + the-board-company + stubs; config/env templates + dev:{slug} scripts"
     status: pending
   - id: phase-2-provider
     content: "Phase 2: PrintOMSConfigProvider, applyTheme, wire root layout.tsx, replace hardcoded brand strings"
@@ -73,6 +73,199 @@ flowchart TB
 ```
 
 
+
+---
+
+## Per-client environment separation
+
+Env separation uses **one Vercel project per client** — not separate `.env` files in git. Each deployment gets its own env var set in the Vercel dashboard. Code config (`config/clients/{slug}/*`) handles non-secret behavior; env vars handle secrets and deployment identity.
+
+```mermaid
+flowchart LR
+  subgraph repo [Single Git Repo]
+    SharedExample["config/env/.env.shared.example"]
+    ClientExamples["config/env/{slug}.env.example"]
+    ClientConfig["config/clients/{slug}/*"]
+  end
+
+  subgraph vercel [Vercel — one project per client]
+    BoardProj["printoms-theboardcompany"]
+    PrintecProj["printoms-printec"]
+    SignworldProj["printoms-signworld"]
+  end
+
+  subgraph secrets [Never in git]
+    BoardEnv["Board env vars in Vercel UI"]
+    PrintecEnv["Printec env vars in Vercel UI"]
+  end
+
+  SharedExample --> BoardProj
+  SharedExample --> PrintecProj
+  ClientExamples --> BoardEnv
+  ClientExamples --> PrintecEnv
+  ClientConfig --> BoardProj
+```
+
+### Three layers — what goes where
+
+| Layer | Location | Contains | Per client? |
+|-------|----------|----------|-------------|
+| **Secrets + deploy identity** | Vercel env vars (prod) / `.env.local` (dev) | API keys, tokens, `CLIENT_SLUG`, `SITE_URL` | Yes — WhatsApp, domain, slug |
+| **Behavior config** | `config/clients/{slug}/*` | Theme, workflow, labels, features | Yes — committed to git |
+| **Shared infra** | Same Vercel value on every project | Supabase URL/keys, `PORTAL_SECRET` | Same value copied to all 5 projects |
+
+### Env var inventory
+
+**Shared — copy identical values into every Vercel project:**
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+PORTAL_SECRET=
+```
+
+**Per client — different on each Vercel project:**
+
+```env
+CLIENT_SLUG=the-board-company
+NEXT_PUBLIC_CLIENT_SLUG=the-board-company
+NEXT_PUBLIC_SITE_URL=https://theboardcompany.com
+
+WHATSAPP_ACCESS_TOKEN=
+WHATSAPP_PHONE_NUMBER_ID=
+META_WABA_ID=
+WHATSAPP_GRAPH_API_VERSION=v21.0
+WHATSAPP_ENABLED=true
+WHATSAPP_CLIENT_NAME=The Board Company
+
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=
+```
+
+**Optional / dev-only (do not set in prod unless needed):**
+
+```env
+WHATSAPP_TEST_MODE=true
+WHATSAPP_TEST_PHONE=
+WHATSAPP_TEST_SECRET=
+```
+
+### Repo env templates (committed, no secrets)
+
+Add under `config/env/`:
+
+```
+config/env/
+├── README.md                      # how to onboard env on Vercel
+├── .env.shared.example            # shared vars — paste into every project
+├── the-board-company.env.example  # per-client vars only (imports shared mentally)
+├── printec.env.example
+├── signworld.env.example
+├── hitech-vision.env.example
+└── indian-design.env.example
+```
+
+Each `{slug}.env.example` is a **checklist** for that Vercel project:
+
+```env
+# the-board-company.env.example
+# ── Identity (required) ──
+CLIENT_SLUG=the-board-company
+NEXT_PUBLIC_CLIENT_SLUG=the-board-company
+NEXT_PUBLIC_SITE_URL=https://theboardcompany.com
+
+# ── WhatsApp (this client's WABA) ──
+WHATSAPP_ACCESS_TOKEN=
+WHATSAPP_PHONE_NUMBER_ID=
+META_WABA_ID=
+WHATSAPP_CLIENT_NAME=The Board Company
+WHATSAPP_ENABLED=true
+
+# ── Maps (restrict key to this domain in Google Cloud) ──
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=
+
+# Also copy all vars from .env.shared.example into this Vercel project
+```
+
+### Vercel setup — step by step (per client)
+
+1. **Create project** — Vercel → New Project → same GitHub repo → name `printoms-{slug}`.
+2. **Set env vars** — Project → Settings → Environment Variables:
+   - Add all vars from `.env.shared.example` (Production + Preview + Development).
+   - Add all vars from `{slug}.env.example` with real secret values.
+3. **Custom domain** — Project → Domains → add client domain; set `NEXT_PUBLIC_SITE_URL` to match.
+4. **Redeploy** — Env vars are baked in at build time for `NEXT_PUBLIC_*`; redeploy after changes.
+5. **Repeat** for each client — 5 projects, same `main` branch, different env.
+
+**Vercel team tip:** If all projects sit under one team, you can define shared vars once at team level (Supabase keys) and only set per-client vars on each project.
+
+### Local dev — switching clients
+
+`.env.local` is gitignored. Use one of these patterns:
+
+**Option A — single file (simplest):**
+
+```env
+# .env.local — change slug to switch client locally
+CLIENT_SLUG=the-board-company
+NEXT_PUBLIC_CLIENT_SLUG=the-board-company
+NEXT_PUBLIC_SITE_URL=http://localhost:3001
+# ... rest of shared + client secrets
+```
+
+**Option B — per-client files + npm scripts (recommended for 5 clients):**
+
+```
+.env.shared.local          # Supabase + PORTAL_SECRET (gitignored)
+.env.the-board-company.local
+.env.printec.local
+```
+
+```json
+// package.json
+"scripts": {
+  "dev": "next dev -p 3001 --turbo",
+  "dev:board": "dotenv -e .env.shared.local -e .env.the-board-company.local -- next dev -p 3001 --turbo",
+  "dev:printec": "dotenv -e .env.shared.local -e .env.printec.local -- next dev -p 3001 --turbo"
+}
+```
+
+Install `dotenv-cli` as a dev dependency for Option B.
+
+### Build-time validation (add in Phase 1)
+
+Harden [`loadClientConfig.ts`](src/config/loadClientConfig.ts):
+
+```ts
+// Fail fast in production if slug is missing or unknown
+const slug = process.env.CLIENT_SLUG ?? process.env.NEXT_PUBLIC_CLIENT_SLUG;
+if (!slug) throw new Error("CLIENT_SLUG is required");
+if (!clientRegistry[slug]) throw new Error(`Unknown CLIENT_SLUG: ${slug}`);
+```
+
+- `CLIENT_SLUG` — server-only selector (preferred).
+- `NEXT_PUBLIC_CLIENT_SLUG` — exposed to client components; must match `CLIENT_SLUG`.
+- Remove silent fallback to `"the-board-company"` in production.
+
+### CI build matrix (Phase 7)
+
+```yaml
+# .github/workflows/build.yml (conceptual)
+strategy:
+  matrix:
+    client_slug: [the-board-company, printec, signworld, hitech-vision, indian-design]
+env:
+  CLIENT_SLUG: ${{ matrix.client_slug }}
+  NEXT_PUBLIC_CLIENT_SLUG: ${{ matrix.client_slug }}
+```
+
+Uses dummy values for secrets; only verifies each slug builds.
+
+### What env does NOT do
+
+- Env vars do **not** replace `config/clients/{slug}/*` for theme, workflow, or stage labels — those stay in code.
+- Env vars do **not** replace RLS — `company_id` isolation stays in Supabase.
+- Do **not** commit `.env`, `.env.local`, or per-client secret files — only `.env.example` templates.
 
 ---
 
@@ -161,11 +354,14 @@ export const CLIENT_REGISTRY = {
 
 - **Pilot config content (`the-board-company`):** Port existing behavior from `[stageGrants.ts](src/features/orders/workspace/shared/stageGrants.ts)` `BOARD_COMPANY_ID` block into `workflow.ts` and `tenant.ts`.
 - **Stub folders:** Create skeleton `index.ts` + empty overrides for `printec`, `signworld`, `hitech-vision`, `indian-design` (inherit `_default` only).
+- **Env templates:** Add full `config/env/` structure per [Per-client environment separation](#per-client-environment-separation) — `.env.shared.example` + one `{slug}.env.example` per client.
+- **npm scripts:** Add `dev:{slug}` scripts using `dotenv-cli` for local client switching (optional but recommended).
 
 ### Verify
 
 - Unit test: `mergeConfig(_default, boardOverrides)` returns expected shape.
 - Unit test: `loadClientConfig()` with `CLIENT_SLUG=the-board-company` resolves Board Company `companyIds`.
+- `loadClientConfig()` throws when `CLIENT_SLUG` is missing (production mode).
 - `npm run build` passes with `CLIENT_SLUG=the-board-company` set (even before app wiring).
 
 ---
@@ -310,27 +506,34 @@ For each client folder, populate all six override files + `index.ts` calling `me
 
 ## Phase 6 — Vercel rollout (Board Company first) (2–3 days)
 
-**Goal:** Production deployment on the pilot client before expanding.
+**Goal:** Production deployment on the pilot client before expanding. See [Per-client environment separation](#per-client-environment-separation) for the full env model.
 
 ### Per your rollout choice: The Board Company first
 
 1. Create Vercel project `printoms-theboardcompany` linked to this repo, `main` branch.
-2. Set env vars from `[config/env/the-board-company.env.example](config/env/the-board-company.env.example)`:
-  **Shared (same across all projects):**
-  - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `PORTAL_SECRET`
-   **Per project:**
-  - `CLIENT_SLUG=the-board-company`
-  - `NEXT_PUBLIC_CLIENT_SLUG=the-board-company`
-  - `NEXT_PUBLIC_SITE_URL=https://{board-domain}`
-  - `WHATSAPP_*` (Board Company's WABA credentials)
-  - `WHATSAPP_CLIENT_NAME=The Board Company`
-  - `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`
-3. Custom domain on Vercel project.
-4. Smoke test: login, order flow, portal link, WhatsApp test message.
+2. **Env vars** — in Vercel UI, not in git:
+   - Copy all vars from `config/env/.env.shared.example` (Supabase, `PORTAL_SECRET`).
+   - Copy all vars from `config/env/the-board-company.env.example` with real secrets.
+   - Key per-client vars: `CLIENT_SLUG`, `NEXT_PUBLIC_CLIENT_SLUG`, `NEXT_PUBLIC_SITE_URL`, `WHATSAPP_*`, `WHATSAPP_CLIENT_NAME`, `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`.
+3. Custom domain on Vercel project; ensure `NEXT_PUBLIC_SITE_URL` matches.
+4. Redeploy after env changes (required for `NEXT_PUBLIC_*` vars).
+5. Smoke test: login, order flow, portal link, WhatsApp test message.
+
+### Onboarding each additional client
+
+| Step | Action |
+|------|--------|
+| 1 | New Vercel project `printoms-{slug}` |
+| 2 | Paste shared vars from `.env.shared.example` |
+| 3 | Paste client vars from `{slug}.env.example` with that client's secrets |
+| 4 | Add custom domain |
+| 5 | Redeploy + smoke test |
+
+No code deploy needed beyond what's already on `main` — only env + domain differ.
 
 ### Docs
 
-- `[docs/printoms/vercel-onboarding.md](docs/printoms/vercel-onboarding.md)` — checklist cloned per new client.
+- [`docs/printoms/vercel-onboarding.md`](docs/printoms/vercel-onboarding.md) — copy-paste checklist per new client (references `config/env/` templates).
 
 ### Subsequent rollouts (after Board Company is stable)
 

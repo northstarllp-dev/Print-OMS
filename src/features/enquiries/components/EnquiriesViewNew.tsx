@@ -171,9 +171,9 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
     }
   };
   
-  const convertEnquiryToOrderLocal = async (enquiryId: string, clientName: string, businessName: string, productType?: string, requirements?: string) => {
+  const convertEnquiryToOrderLocal = async (enquiryId: string, clientName: string, businessName: string, productType?: string, requirements?: string, assignedAdmins?: string[]) => {
     try {
-      const res = await convertEnquiryToOrderAction(enquiryId, clientName, businessName, productType, requirements);
+      const res = await convertEnquiryToOrderAction(enquiryId, clientName, businessName, productType, requirements, assignedAdmins);
       if (res && res.success) {
         setEnquiries(prev => prev.map(e => e.id === enquiryId ? { 
           ...e, 

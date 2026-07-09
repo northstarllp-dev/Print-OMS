@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { staffSignIn } from "@/features/auth/actions/authActions";
+import { Logo } from "@/components/ui/Logo";
 
 interface StaffLoginFormProps {
   employees: {
@@ -16,8 +17,8 @@ interface StaffLoginFormProps {
 export function StaffLoginForm({ employees }: StaffLoginFormProps) {
   const router = useRouter();
 
-  const [email, setEmail] = useState("staff@printoms.com");
-  const [password, setPassword] = useState("staffpass");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -62,20 +63,8 @@ export function StaffLoginForm({ employees }: StaffLoginFormProps) {
         padding: "36px 36px 32px",
       }}>
         {/* Logo */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 28 }}>
-          <div style={{ width: 36, height: 36, background: "#0F172A", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <svg viewBox="0 0 24 24" style={{ width: 18, height: 18, color: "var(--color-secondary)" }} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 20h18" /><path d="M6 20V11" />
-              <circle cx="6" cy="11" r="1.2" fill="var(--color-secondary)" />
-              <path d="M6 11l6-4.5" />
-              <circle cx="12" cy="6.5" r="1.2" fill="var(--color-secondary)" />
-              <path d="M12 6.5l5 3.5" />
-            </svg>
-          </div>
-          <div>
-            <div style={{ fontSize: 16, fontWeight: 800, color: "#0F172A", letterSpacing: "0.05em" }}>NORTHSTAR</div>
-            <div style={{ fontSize: 11, color: "#64748B", fontWeight: 500 }}>Staff Portal</div>
-          </div>
+        <div style={{ marginBottom: 28 }}>
+          <Logo height={36} align="left" />
         </div>
 
         <h1 style={{ fontSize: 22, fontWeight: 800, color: "#0F172A", margin: "0 0 6px", letterSpacing: "-0.01em" }}>
@@ -144,29 +133,7 @@ export function StaffLoginForm({ employees }: StaffLoginFormProps) {
           </button>
         </form>
 
-        <div style={{ marginTop: 24, padding: "14px 16px", background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 10 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>
-            Registered Staff Login Options
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 110, overflowY: "auto", marginBottom: 10 }}>
-            {employees.map(emp => (
-              <div key={emp.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, fontFamily: "monospace", color: "#0F172A", background: "white", border: "1px solid #E2E8F0", borderRadius: 6, padding: "4px 8px" }}>
-                <span title={emp.name}>{emp.email}</span>
-                <button
-                  type="button"
-                  disabled={loading}
-                  onClick={() => { setEmail(emp.email); setPassword("staffpass"); setError(""); }}
-                  style={{ fontSize: 10, color: "var(--color-secondary)", fontWeight: 700, background: "none", border: "none", cursor: "pointer", padding: 0, textDecoration: "underline" }}
-                >
-                  Use
-                </button>
-              </div>
-            ))}
-          </div>
-          <div style={{ fontSize: 10, color: "#64748B" }}>
-            Note: All accounts use password: <strong style={{ color: "#0F172A" }}>staffpass</strong> (or their phone number).
-          </div>
-        </div>
+
 
         <div style={{ marginTop: 20, textAlign: "center" }}>
           <button

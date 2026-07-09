@@ -88,7 +88,7 @@ export function InstallationDashboardClient({
   });
 
   return (
-    <div className="p-8 bg-slate-50/50 min-h-screen">
+    <div className="p-4 md:p-8 bg-slate-50/50 min-h-screen">
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-3xl font-black text-slate-900 tracking-tight mb-2">

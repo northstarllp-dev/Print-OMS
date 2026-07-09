@@ -21,7 +21,9 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
+  Search,
 } from "lucide-react";
+import { Logo } from "@/components/ui/Logo";
 import { useRouter, usePathname } from "next/navigation";
 import { signOut } from "@/features/auth/actions/authActions";
 
@@ -173,78 +175,28 @@ export function AdminLayoutClient({
         {/* Logo */}
         <div
           style={{
-            padding: isExpanded ? "20px 20px" : "20px 16px",
+            padding: isExpanded ? "24px 20px" : "24px 12px",
             borderBottom: "1px solid var(--sidebar-border)",
             display: "flex",
             alignItems: "center",
+            justifyContent: "center",
             flexShrink: 0,
             transition: "padding 0.25s cubic-bezier(0.4,0,0.2,1)",
           }}
         >
-          <div
-            style={{
-              width: "32px",
-              height: "32px",
-              background: "var(--sidebar-active-bg)",
-              borderRadius: "8px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
-              border: "1px solid var(--sidebar-border)",
-            }}
-          >
-            <svg
-              viewBox="0 0 24 24"
-              style={{ width: "16px", height: "16px", color: "var(--sidebar-accent)" }}
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M3 20h18" />
-              <path d="M6 20V11" />
-              <circle cx="6" cy="11" r="1" fill="var(--sidebar-accent)" />
-              <path d="M6 11l6-4.5" />
-              <circle cx="12" cy="6.5" r="1" fill="var(--sidebar-accent)" />
-              <path d="M12 6.5l5 3.5" />
-            </svg>
-          </div>
           <div style={{
-            lineHeight: 1,
-            minWidth: 0,
-            opacity: isExpanded ? 1 : 0,
-            maxWidth: isExpanded ? "150px" : "0px",
-            transition: "opacity 0.15s ease, max-width 0.25s cubic-bezier(0.4,0,0.2,1), margin-left 0.25s cubic-bezier(0.4,0,0.2,1)",
             overflow: "hidden",
-            whiteSpace: "nowrap",
-            marginLeft: isExpanded ? "10px" : "0px",
+            width: isExpanded ? "180px" : "40px",
+            height: isExpanded ? "56px" : "40px",
+            transition: "all 0.25s cubic-bezier(0.4,0,0.2,1)",
+            display: "flex",
+            background: "#ffffff",
+            borderRadius: "8px",
+            padding: isExpanded ? "8px 16px" : "4px",
+            alignItems: "center",
+            justifyContent: "center"
           }}>
-            <span
-              style={{
-                fontSize: "13px",
-                fontWeight: "800",
-                color: "var(--sidebar-active-text)",
-                letterSpacing: "0.06em",
-                display: "block",
-              }}
-            >
-              NORTHSTAR
-            </span>
-            <span
-              style={{
-                fontSize: "9px",
-                color: "var(--sidebar-text)",
-                fontWeight: "700",
-                textTransform: "uppercase",
-                letterSpacing: "0.05em",
-                marginTop: "2px",
-                display: "block",
-              }}
-            >
-              Admin Portal 2
-            </span>
+            <Logo width={isExpanded ? 160 : 32} height={40} />
           </div>
         </div>
 
@@ -326,8 +278,8 @@ export function AdminLayoutClient({
                   {count !== undefined && count > 0 && countKey && (
                     <span
                       style={{
-                        background: BADGE_COLORS[countKey]?.bg || "#374151",
-                        color: BADGE_COLORS[countKey]?.text || "#FFF",
+                        background: "var(--sidebar-accent)",
+                        color: "#000000",
                         fontSize: "10px",
                         fontWeight: "800",
                         padding: "2px 7px",
