@@ -21,6 +21,7 @@ export const hitechVisionConfig: Partial<PrintOMSClientConfig> = {
     sidebarAccent: "#38bdf8",
   },
   logoUrl: null, // Update to actual logo if available
+  faviconUrl: null,
   loadingText: "HITECH VISION",
   features: {
     enableAdminAssignment: false,

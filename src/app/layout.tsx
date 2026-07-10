@@ -10,10 +10,19 @@ const inter = Inter({
   weight: ["300", "400", "500", "600", "700", "800", "900"],
 });
 
-export const metadata: Metadata = {
-  title: "Printoms Admin Operations Dashboard",
-  description: "Operations dashboard for custom signage and order management.",
-};
+import { loadClientConfig } from "@/config/loadClientConfig";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const config = loadClientConfig();
+  
+  return {
+    title: `${config.name} Admin Operations Dashboard`,
+    description: "Operations dashboard for custom signage and order management.",
+    icons: config.faviconUrl || config.logoUrl ? {
+      icon: config.faviconUrl || config.logoUrl || undefined,
+    } : undefined,
+  };
+}
 
 export default function RootLayout({
   children,
@@ -32,6 +41,7 @@ export default function RootLayout({
         <ClientThemeProvider />
         <GlobalNavigationLoader />
         {children}
+
       </body>
     </html>
   );

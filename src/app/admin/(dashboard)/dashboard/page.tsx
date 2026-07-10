@@ -1,11 +1,13 @@
 import { getOrders } from "@/features/orders/actions/orderActions";
 import { getEnquiries } from "@/features/enquiries/actions/enquiryActions";
+import { getServiceTickets } from "@/features/service-tickets/actions/serviceTicketActions";
 import { AdminDashboardClient } from "@/features/orders/components/AdminDashboardClient";
 
 export default async function AdminDashboardPage() {
-  const [ordersData, enquiriesData] = await Promise.all([
+  const [ordersData, enquiriesData, ticketsData] = await Promise.all([
     getOrders().catch(() => []),
     getEnquiries().catch(() => []),
+    getServiceTickets().catch(() => []),
   ]);
 
   const orders = (ordersData || []).map((o: any) => ({
@@ -27,7 +29,13 @@ export default async function AdminDashboardPage() {
     id: e.id,
     source: e.source,
     status: e.status,
+    business_name: e.business_name,
+    lead_name: e.lead_name,
+    phone: e.phone,
+    enquire_id: e.enquire_id,
   }));
 
-  return <AdminDashboardClient orders={orders} enquiries={enquiries} />;
+  const tickets = (ticketsData || []).filter((t: any) => t.status !== "closed");
+
+  return <AdminDashboardClient orders={orders} enquiries={enquiries} tickets={tickets} />;
 }

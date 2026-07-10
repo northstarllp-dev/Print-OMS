@@ -71,15 +71,15 @@ const STAGE_LABEL: Record<string, { label: string; color: string }> = {
   "Site Visit Scheduled": { label: "Scheduled", color: "#818CF8" },
   "Site Visit Completed": { label: "Site Done", color: "#818CF8" },
   "Quotation In Progress": { label: "Quoting", color: "#F97316" },
-  "Quotation Sent": { label: "Quote Sent", color: "#F97316" },
+  "Quotation Sent": { label: "Quotation", color: "#F97316" },
   "Quotation Negotiation": { label: "Negotiating", color: "#F97316" },
   "Quotation Approved": { label: "Quote OK", color: "#F97316" },
   "Design In Progress": { label: "Design", color: "#EC4899" },
-  "Design Approved": { label: "Design OK", color: "#EC4899" },
+  "Design Approved": { label: "Design", color: "#EC4899" },
   "Production": { label: "Production", color: "#3B82F6" },
   "Ready For Installation": { label: "Ready", color: "#3B82F6" },
   "Installation Scheduled": { label: "Install", color: "#0EA5E9" },
-  "Completed": { label: "Completed", color: "#22C55E" },
+  "Completed": { label: "Closed", color: "#22C55E" },
   "Closed": { label: "Closed", color: "#22C55E" },
 };
 

@@ -32,8 +32,6 @@ import {
   mergeOrderDetailPatch,
   useOrderDetailSync,
 } from "@/features/orders/realtime/useOrderDetailSync";
-import { usePortalOrderSync } from "@/features/orders/realtime/usePortalOrderSync";
-import { toPortalOrderDetailPatch } from "@/features/orders/realtime/portalOrderPatch";
 import type { OrderDetailPatch } from "@/features/orders/realtime/orderDetailPatch";
 import { PaymentsTab } from "./components/PaymentsTab";
 import { QuotationTab } from "./components/QuotationTab";
@@ -117,7 +115,7 @@ interface PortalClientProps {
 function getStepIndex(stage: string, workflowType: string = "quote_first"): number {
   const s = (stage || "").toLowerCase();
   const isDesignFirst = workflowType === "design_first";
-  
+
   if (s.includes("site visit")) return 1;
   if (isDesignFirst) {
     if (s.includes("design")) return 2;
@@ -145,7 +143,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
   const [activeOrderId, setActiveOrderId] = useState<string>(
     initialOrder?.id || ""
   );
-  
+
   const activeOrder = orders.find(o => o.id === activeOrderId) || orders[0];
   const activeOrderRef = useRef(activeOrder);
   activeOrderRef.current = activeOrder;
@@ -153,10 +151,9 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
   const applyPortalPatch = useCallback((patch: OrderDetailPatch) => {
     const targetId = activeOrderRef.current?.id;
     if (!targetId) return;
-    const portalPatch = toPortalOrderDetailPatch(patch);
     setOrders((prev) =>
       prev.map((o) =>
-        o.id === targetId ? mergeOrderDetailPatch(o, portalPatch) : o
+        o.id === targetId ? mergeOrderDetailPatch(o, patch) : o
       )
     );
   }, []);
@@ -169,36 +166,28 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
     onPatch: applyPortalPatch,
   });
 
-  usePortalOrderSync({
-    orderId: activeOrder?.id ?? "",
-    token,
-    enabled: Boolean(activeOrder?.id && token),
-    getOrderSnapshot: () => (activeOrderRef.current || {}) as unknown as Record<string, unknown>,
-    onPatch: applyPortalPatch,
-  });
-
   const workflowType = activeOrder?.workflow_type || "quote_first";
   const isDesignFirst = workflowType === "design_first";
 
-  const STEPS = isDesignFirst 
+  const STEPS = isDesignFirst
     ? [
-        { key: "enquiry", label: "Enquiries", icon: FileText },
-        { key: "site_visit", label: "Site Visit", icon: MapPin },
-        { key: "design", label: "Design", icon: Palette },
-        { key: "quotation", label: "Quotations", icon: BarChart3 },
-        { key: "production", label: "Production", icon: Package },
-        { key: "installation", label: "Installation", icon: Wrench },
-        { key: "payments", label: "Payments", icon: CreditCard },
-      ]
+      { key: "enquiry", label: "Enquiries", icon: FileText },
+      { key: "site_visit", label: "Site Visit", icon: MapPin },
+      { key: "design", label: "Design", icon: Palette },
+      { key: "quotation", label: "Quotations", icon: BarChart3 },
+      { key: "production", label: "Production", icon: Package },
+      { key: "installation", label: "Installation", icon: Wrench },
+      { key: "payments", label: "Payments", icon: CreditCard },
+    ]
     : [
-        { key: "enquiry", label: "Enquiries", icon: FileText },
-        { key: "site_visit", label: "Site Visit", icon: MapPin },
-        { key: "quotation", label: "Quotations", icon: BarChart3 },
-        { key: "design", label: "Design", icon: Palette },
-        { key: "production", label: "Production", icon: Package },
-        { key: "installation", label: "Installation", icon: Wrench },
-        { key: "payments", label: "Payments", icon: CreditCard },
-      ];
+      { key: "enquiry", label: "Enquiries", icon: FileText },
+      { key: "site_visit", label: "Site Visit", icon: MapPin },
+      { key: "quotation", label: "Quotations", icon: BarChart3 },
+      { key: "design", label: "Design", icon: Palette },
+      { key: "production", label: "Production", icon: Package },
+      { key: "installation", label: "Installation", icon: Wrench },
+      { key: "payments", label: "Payments", icon: CreditCard },
+    ];
 
   // Step 4: Establish session cookie on first load (avoids keeping token in URL)
   useEffect(() => {
@@ -229,7 +218,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
   const [isRescheduling, setIsRescheduling] = useState(false);
   const [schedulingLoading, setSchedulingLoading] = useState(false);
   const [mapsSearching, setMapsSearching] = useState(false);
-  const [activeTab, setActiveTab] = useState<"site"|"quote"|"design"|"production"|"installation">("site");
+  const [activeTab, setActiveTab] = useState<"site" | "quote" | "design" | "production" | "installation">("site");
 
   const [markerPosition, setMarkerPosition] = useState(defaultCenter);
   const [mapCenter, setMapCenter] = useState(defaultCenter);
@@ -469,7 +458,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
         <div className="max-w-7xl mx-auto px-6 py-3.5 flex items-center justify-between gap-4">
           {/* Left: Logo + Order Info */}
           <div className="flex items-center gap-4">
-            <Logo height={32} />
+            <Logo height={50} />
             <div className="w-px h-6 bg-slate-200" />
             <div>
               <div className="flex items-center gap-2">
@@ -530,8 +519,8 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
               const canOpen = isCompleted || isActive || isPaymentsTab || idx === currentStep || idx < currentStep;
 
               return (
-                <div 
-                  key={step.key} 
+                <div
+                  key={step.key}
                   className={`flex flex-col items-center text-center relative z-10 flex-1 ${canOpen ? 'cursor-pointer hover:opacity-80' : ''}`}
                   onClick={() => {
                     if (canOpen) {
@@ -545,7 +534,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                       ? "bg-emerald-500 border-emerald-500 text-white"
                       : isPaymentsTab
                         ? "bg-white border-blue-200 text-blue-500"
-                      : "bg-white border-slate-200 text-slate-400"
+                        : "bg-white border-slate-200 text-slate-400"
                     }`}>
                     {isCompleted && !isActive ? <Check size={14} className="stroke-[3]" /> : <Icon size={14} />}
                   </div>
@@ -575,7 +564,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                   {viewedStep !== null && viewedStep !== currentStep ? "PAST STAGE" : "CURRENT STAGE"}: {STEPS[activeStepToRender]?.label?.toUpperCase()}
                 </span>
                 {viewedStep !== null && viewedStep !== currentStep && (
-                  <button 
+                  <button
                     onClick={() => setViewedStep(null)}
                     className="text-[10px] font-bold text-[#1E40AF] hover:underline"
                   >
@@ -592,7 +581,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                       <h2 className="text-xl font-black text-[#0b1c30] mb-1">Enquiry Details</h2>
                       <p className="text-sm text-slate-500">Your original request and project requirements.</p>
                     </div>
-                    
+
                     <div className="p-5 border border-slate-200 rounded-2xl bg-white shadow-sm space-y-4">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="bg-slate-50 rounded-lg p-4 border border-slate-100">
@@ -642,67 +631,67 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                           Your site visit schedule is pending confirmation from our team.
                         </div>
                       ) : (
-                      <div className="space-y-6">
-                        <div>
-                          <h2 className="text-xl font-black text-[#0b1c30] mb-1.5">Schedule Your Physical Site Audit</h2>
-                          <p className="text-sm text-slate-500 leading-relaxed max-w-lg">
-                            Our technical survey team needs to verify dimensions and substrate conditions before we can finalize the structural design for your exterior month signs. Estimated duration: 45 mins.
-                          </p>
-                        </div>
-
-                        <form onSubmit={handleScheduleSiteVisit} className="space-y-5">
-                          {/* Date Picker */}
+                        <div className="space-y-6">
                           <div>
-                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
-                              Pick a Date
-                            </label>
-                            <div className="flex gap-2 overflow-x-auto pb-1">
-                              {getBusinessDays().map((day, idx) => {
-                                const ds = day.toISOString().split("T")[0];
-                                const dayName = day.toLocaleDateString("en-US", { weekday: "short" });
-                                const monthName = day.toLocaleDateString("en-US", { month: "short" });
-                                const selected = selectedDate === ds;
-                                return (
-                                  <button
-                                    key={idx}
-                                    type="button"
-                                    onClick={() => { setSelectedDate(ds); setSelectedTime(""); }}
-                                    className={`flex flex-col items-center p-3 rounded-xl border text-center min-w-[64px] transition-all cursor-pointer ${selected
-                                      ? "bg-[#eff4ff] border-[#1E40AF] text-[#1E40AF] ring-2 ring-blue-100"
-                                      : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
-                                      }`}
-                                  >
-                                    <span className="text-[9px] uppercase tracking-wider text-slate-400">{dayName}</span>
-                                    <span className="text-sm font-black mt-0.5">{day.getDate()}</span>
-                                    <span className="text-[9px] text-slate-400">{monthName}</span>
-                                  </button>
-                                );
-                              })}
-                            </div>
+                            <h2 className="text-xl font-black text-[#0b1c30] mb-1.5">Schedule Your Physical Site Audit</h2>
+                            <p className="text-sm text-slate-500 leading-relaxed max-w-lg">
+                              Our technical survey team needs to verify dimensions and substrate conditions before we can finalize the structural design for your exterior month signs. Estimated duration: 45 mins.
+                            </p>
+                          </div>
 
-                            {selectedDate && (
-                              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 mt-3">
-                                {["10 AM - 11 AM", "11 AM - 12 PM", "12 PM - 1 PM", "1 PM - 2 PM", "2 PM - 3 PM", "3 PM - 4 PM", "4 PM - 5 PM"].map(slot => {
-                                  const booked = isSlotBooked(selectedDate, slot);
-                                  const sel = selectedTime === slot;
+                          <form onSubmit={handleScheduleSiteVisit} className="space-y-5">
+                            {/* Date Picker */}
+                            <div>
+                              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
+                                Pick a Date
+                              </label>
+                              <div className="flex gap-2 overflow-x-auto pb-1">
+                                {getBusinessDays().map((day, idx) => {
+                                  const ds = day.toISOString().split("T")[0];
+                                  const dayName = day.toLocaleDateString("en-US", { weekday: "short" });
+                                  const monthName = day.toLocaleDateString("en-US", { month: "short" });
+                                  const selected = selectedDate === ds;
                                   return (
                                     <button
-                                      key={slot}
+                                      key={idx}
                                       type="button"
-                                      disabled={booked}
-                                      onClick={() => setSelectedTime(slot)}
-                                      className={`py-2.5 rounded-xl border text-xs font-bold transition-all ${booked ? "bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed"
-                                        : sel ? "bg-[#eff4ff] border-[#1E40AF] text-[#1E40AF] ring-2 ring-blue-100"
-                                          : "bg-white border-slate-200 text-slate-600 hover:border-slate-300 cursor-pointer"
+                                      onClick={() => { setSelectedDate(ds); setSelectedTime(""); }}
+                                      className={`flex flex-col items-center p-3 rounded-xl border text-center min-w-[64px] transition-all cursor-pointer ${selected
+                                        ? "bg-[#eff4ff] border-[#1E40AF] text-[#1E40AF] ring-2 ring-blue-100"
+                                        : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
                                         }`}
                                     >
-                                      {slot}
+                                      <span className="text-[9px] uppercase tracking-wider text-slate-400">{dayName}</span>
+                                      <span className="text-sm font-black mt-0.5">{day.getDate()}</span>
+                                      <span className="text-[9px] text-slate-400">{monthName}</span>
                                     </button>
                                   );
                                 })}
                               </div>
-                            )}
-                          </div>
+
+                              {selectedDate && (
+                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 mt-3">
+                                  {["10 AM - 11 AM", "11 AM - 12 PM", "12 PM - 1 PM", "1 PM - 2 PM", "2 PM - 3 PM", "3 PM - 4 PM", "4 PM - 5 PM"].map(slot => {
+                                    const booked = isSlotBooked(selectedDate, slot);
+                                    const sel = selectedTime === slot;
+                                    return (
+                                      <button
+                                        key={slot}
+                                        type="button"
+                                        disabled={booked}
+                                        onClick={() => setSelectedTime(slot)}
+                                        className={`py-2.5 rounded-xl border text-xs font-bold transition-all ${booked ? "bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed"
+                                          : sel ? "bg-[#eff4ff] border-[#1E40AF] text-[#1E40AF] ring-2 ring-blue-100"
+                                            : "bg-white border-slate-200 text-slate-600 hover:border-slate-300 cursor-pointer"
+                                          }`}
+                                      >
+                                        {slot}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
 
                             {/* Location */}
                             <div>
@@ -767,22 +756,22 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                               </div>
                             </div>
 
-                          <div className="flex items-center gap-3 pt-2">
-                            <button
-                              type="submit"
-                              disabled={!selectedDate || !selectedTime || schedulingLoading}
-                              className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition-all disabled:opacity-50 shadow-sm"
-                            >
-                              {schedulingLoading ? <Loader2 size={14} className="animate-spin" /> : null}
-                              Confirm Site Visit
-                              <Check size={14} />
-                            </button>
-                            <button type="button" className="px-4 py-2.5 border border-slate-200 text-slate-600 rounded-xl text-sm font-semibold hover:bg-slate-50 transition-colors">
-                              Request Callback
-                            </button>
-                          </div>
-                        </form>
-                      </div>
+                            <div className="flex items-center gap-3 pt-2">
+                              <button
+                                type="submit"
+                                disabled={!selectedDate || !selectedTime || schedulingLoading}
+                                className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition-all disabled:opacity-50 shadow-sm"
+                              >
+                                {schedulingLoading ? <Loader2 size={14} className="animate-spin" /> : null}
+                                Confirm Site Visit
+                                <Check size={14} />
+                              </button>
+                              <button type="button" className="px-4 py-2.5 border border-slate-200 text-slate-600 rounded-xl text-sm font-semibold hover:bg-slate-50 transition-colors">
+                                Request Callback
+                              </button>
+                            </div>
+                          </form>
+                        </div>
                       )
                     ) : currentStep <= 1 && sv.completed === false ? (
                       // Scheduled confirmation
@@ -843,7 +832,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                                       {loc.name || `Location ${idx + 1}`}
                                     </h4>
                                   </div>
-                                  
+
                                   {/* Body */}
                                   <div className="p-5 space-y-5">
                                     {/* Measurements */}
@@ -873,7 +862,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                                         </div>
                                       ) : null}
                                     </div>
-                                    
+
                                     {/* Notes */}
                                     {loc.notes && (
                                       <div className="bg-amber-50/50 rounded-lg p-3 border border-amber-100/50">
@@ -888,8 +877,8 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                                         <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block mb-3">Location Photos</span>
                                         <div className="flex flex-wrap gap-3">
                                           {loc.photos.map((photo: string, pIdx: number) => (
-                                            <div 
-                                              key={pIdx} 
+                                            <div
+                                              key={pIdx}
                                               onClick={() => openViewer(loc.photos, pIdx)}
                                               className="relative w-16 h-16 rounded-xl border border-slate-200 overflow-hidden cursor-pointer group/photo shadow-sm"
                                             >
@@ -1056,7 +1045,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
 
                     {/* INSTALLATION SCHEDULING (Customer Side) */}
                     <div className="mb-6">
-                      <InstallationScheduleModule 
+                      <InstallationScheduleModule
                         orderId={activeOrder.id}
                         initialScheduledDate={inst.scheduledDate}
                         initialScheduledTime={inst.scheduledTime}
@@ -1076,14 +1065,14 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                           Our installation team has requested the exact Google Map link of your location so they can arrive smoothly.
                         </p>
                         <div className="flex flex-col sm:flex-row gap-2 max-w-md mx-auto">
-                          <input 
-                            type="url" 
+                          <input
+                            type="url"
                             placeholder="Paste Google Maps URL here..."
                             value={customerMapLink}
                             onChange={(e) => setCustomerMapLink(e.target.value)}
                             className="flex-1 p-3 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none"
                           />
-                          <button 
+                          <button
                             onClick={handleProvideLocation}
                             disabled={!customerMapLink.trim() || submittingMap}
                             className="px-6 py-3 bg-amber-600 text-white font-bold rounded-xl hover:bg-amber-700 disabled:opacity-50 transition-colors"
@@ -1147,6 +1136,19 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
             )}
           </div>
         </div>
+
+        <div style={{
+          textAlign: "center",
+          padding: "24px 0",
+          marginTop: "48px",
+          borderTop: "1px solid #E2E8F0",
+          color: "#94A3B8",
+          fontSize: "13px",
+          fontWeight: "600",
+          width: "100%"
+        }}>
+          Made with <span style={{ color: "#EF4444", fontSize: "14px" }}>❤️</span> by Northstar
+        </div>
       </div>
 
 
@@ -1169,23 +1171,23 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
 
       {/* ── PHOTO VIEWER MODAL ── */}
       {viewerIndex !== null && viewerPhotos.length > 0 && (
-        <div 
+        <div
           className="fixed inset-0 z-[99999] bg-black/90 flex items-center justify-center backdrop-blur-sm"
           onClick={() => setViewerIndex(null)}
         >
           {/* Close button */}
-          <button 
+          <button
             className="absolute top-6 right-6 text-white/70 hover:text-white bg-black/50 hover:bg-black/80 rounded-full p-2.5 transition-all focus:outline-none"
             onClick={() => setViewerIndex(null)}
           >
             <X size={24} />
           </button>
-          
+
           {/* Download button */}
-          <a 
-            href={viewerPhotos[viewerIndex]} 
-            download 
-            target="_blank" 
+          <a
+            href={viewerPhotos[viewerIndex]}
+            download
+            target="_blank"
             rel="noopener noreferrer"
             className="absolute top-6 right-20 text-white/70 hover:text-white bg-black/50 hover:bg-black/80 rounded-xl px-4 py-2.5 transition-all focus:outline-none flex items-center gap-2 text-xs font-bold"
             onClick={(e) => e.stopPropagation()}
@@ -1193,17 +1195,17 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
             <Download size={16} />
             <span>Download</span>
           </a>
-          
+
           {/* Main Image */}
           <div className="relative max-w-4xl max-h-[80vh] w-full h-full flex items-center justify-center p-4">
-            <img 
-              src={viewerPhotos[viewerIndex]} 
+            <img
+              src={viewerPhotos[viewerIndex]}
               className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
               alt="Viewed full size"
               onClick={(e) => e.stopPropagation()}
             />
           </div>
-          
+
           {/* Previous button */}
           {viewerIndex > 0 && (
             <button
@@ -1213,7 +1215,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
               <ChevronLeft size={32} />
             </button>
           )}
-          
+
           {/* Next button */}
           {viewerIndex < viewerPhotos.length - 1 && (
             <button
@@ -1223,7 +1225,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
               <ChevronRight size={32} />
             </button>
           )}
-          
+
           {/* Image Counter */}
           <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-black/60 text-white text-sm font-medium px-4 py-1.5 rounded-full backdrop-blur-md">
             {viewerIndex + 1} / {viewerPhotos.length}
@@ -1667,7 +1669,7 @@ function ProductInfoModal({ product, onClose }: { product: any; onClose: () => v
   const images = product.images && product.images.length > 0 ? product.images : [];
 
   return (
-    <div 
+    <div
       style={{
         position: "fixed",
         inset: 0,
@@ -1680,7 +1682,7 @@ function ProductInfoModal({ product, onClose }: { product: any; onClose: () => v
         padding: "16px",
       }}
     >
-      <div 
+      <div
         style={{
           backgroundColor: "white",
           borderRadius: "24px",
@@ -1695,7 +1697,7 @@ function ProductInfoModal({ product, onClose }: { product: any; onClose: () => v
         }}
       >
         {/* Header */}
-        <div 
+        <div
           style={{
             padding: "16px 24px",
             borderBottom: "1px solid #f1f5f9",
@@ -1713,8 +1715,8 @@ function ProductInfoModal({ product, onClose }: { product: any; onClose: () => v
               {product.product_id} • {product.category || "General"}
             </span>
           </div>
-          <button 
-            onClick={onClose} 
+          <button
+            onClick={onClose}
             style={{
               padding: "6px",
               backgroundColor: "transparent",
@@ -1739,7 +1741,7 @@ function ProductInfoModal({ product, onClose }: { product: any; onClose: () => v
           {/* Images Section */}
           {images.length > 0 ? (
             <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-              <div 
+              <div
                 style={{
                   aspectRatio: "16/9",
                   backgroundColor: "#f8fafc",
@@ -1785,7 +1787,7 @@ function ProductInfoModal({ product, onClose }: { product: any; onClose: () => v
               )}
             </div>
           ) : (
-            <div 
+            <div
               style={{
                 aspectRatio: "16/9",
                 backgroundColor: "#f8fafc",
@@ -1805,7 +1807,7 @@ function ProductInfoModal({ product, onClose }: { product: any; onClose: () => v
           )}
 
           {/* Pricing Info */}
-          <div 
+          <div
             style={{
               backgroundColor: "rgba(219, 234, 254, 0.3)",
               border: "1px solid #dbeafe",
@@ -1843,7 +1845,7 @@ function ProductInfoModal({ product, onClose }: { product: any; onClose: () => v
         </div>
 
         {/* Footer */}
-        <div 
+        <div
           style={{
             padding: "12px 24px",
             borderTop: "1px solid #f1f5f9",

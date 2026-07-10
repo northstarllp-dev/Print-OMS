@@ -3,6 +3,8 @@
 import React, { useEffect } from "react";
 import { Loader2, Upload, CheckCircle2, AlertCircle, Calendar, Tag, Activity, Phone, FileText, X } from "lucide-react";
 
+import { Logo } from "@/components/ui/Logo";
+
 interface ServiceTicketPublicClientProps {
   companyId: string;
 }
@@ -149,7 +151,8 @@ export default function ServiceTicketPublicClient({
         padding: "40px",
         marginTop: "24px"
       }}>
-        <div style={{ textAlign: "center", marginBottom: "32px" }}>
+        <div style={{ textAlign: "center", marginBottom: "32px", display: "flex", flexDirection: "column", alignItems: "center" }}>
+          <Logo height={48} className="mb-6" />
           <h1 className="text-display-lg" style={{ margin: "0 0 12px", color: "var(--color-primary)" }}>
             Service Support
           </h1>

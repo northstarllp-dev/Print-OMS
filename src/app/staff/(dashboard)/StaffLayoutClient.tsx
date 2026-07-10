@@ -545,6 +545,21 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
             }
           >
             {children}
+
+            {!isWorksheetPage && (
+              <div style={{
+                textAlign: "center",
+                padding: "24px 0",
+                marginTop: "auto",
+                borderTop: "1px solid #E2E8F0",
+                color: "#94A3B8",
+                fontSize: "13px",
+                fontWeight: "600",
+                width: "100%"
+              }}>
+                Made with <span style={{ color: "#EF4444", fontSize: "14px" }}>❤️</span> by Northstar
+              </div>
+            )}
           </div>
         </main>
       </div>

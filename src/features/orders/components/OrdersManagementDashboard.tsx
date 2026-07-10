@@ -169,7 +169,7 @@ export function OrdersManagementDashboard({
   // Calculations for Admin
   const activeOrders = orders.filter(o => o.stage !== "Completed" && o.stage !== "Closed").length;
   const unassignedOrders = orders.filter(o => o.stage !== "Completed" && o.stage !== "Closed" && (!o.assignedEmployees || o.assignedEmployees.length === 0)).length;
-  const pendingCalls = enquiries ? enquiries.filter(e => e.status === "Pending" && e.source === "Phone Call").length : 0;
+  const pendingApprovals = orders.filter(o => o.stageStatus && o.stageStatus !== "Normal").length;
   const completedOrders = orders.filter(o => o.stage === "Completed" || o.stage === "Closed").length;
 
   // Calculations for Staff
@@ -211,10 +211,10 @@ export function OrdersManagementDashboard({
       color: "#ef4444",
     },
     {
-      label: "PENDING CALLS",
-      value: pendingCalls.toString(),
-      change: "Immediate action req.",
-      filterKey: "pendingcalls",
+      label: "APPROVALS REQ.",
+      value: pendingApprovals.toString(),
+      change: "Pending admin review",
+      filterKey: "approvals",
       icon: AlertCircle,
       color: "#F97316",
     },
@@ -231,7 +231,7 @@ export function OrdersManagementDashboard({
   const getKpiFilteredOrders = () => {
     if (selectedKpi === "active")       return queueScopedOrders.filter(o => o.stage !== "Completed" && o.stage !== "Closed");
     if (selectedKpi === "unassigned")   return queueScopedOrders.filter(o => o.stage !== "Completed" && o.stage !== "Closed" && (!o.assignedEmployees || o.assignedEmployees.length === 0));
-    if (selectedKpi === "pendingcalls") return queueScopedOrders.filter(o => enquiries?.find((e: any) => e.orderId === o.id && e.status === "Pending" && e.source === "Phone Call"));
+    if (selectedKpi === "approvals")    return queueScopedOrders.filter(o => o.stageStatus && o.stageStatus !== "Normal");
     if (selectedKpi === "completed")    return queueScopedOrders.filter(o => o.stage === "Completed" || o.stage === "Closed");
     if (selectedKpi === "myactive")     return queueScopedOrders.filter(o => o.stage !== "Completed" && o.stage !== "Closed" && (o.assignedEmployees?.includes(employeeName) || o.assignedEmployees?.includes(currentEmployeeId)));
     if (selectedKpi === "mycompleted")  return queueScopedOrders.filter(o => (o.stage === "Completed" || o.stage === "Closed") && (o.assignedEmployees?.includes(employeeName) || o.assignedEmployees?.includes(currentEmployeeId)));

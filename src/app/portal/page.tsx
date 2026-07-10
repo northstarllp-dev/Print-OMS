@@ -279,6 +279,8 @@ export default async function PortalPage({
   );
 }
 
+import { Logo } from "@/components/ui/Logo";
+
 function PortalError({ title, message }: { title: string; message: string }) {
   return (
     <div
@@ -304,6 +306,9 @@ function PortalError({ title, message }: { title: string; message: string }) {
           boxShadow: "0 8px 24px rgba(0, 0, 0, 0.08)",
         }}
       >
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: "24px" }}>
+          <Logo height={48} />
+        </div>
         <div
           style={{
             width: 56,

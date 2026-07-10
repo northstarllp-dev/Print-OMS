@@ -6,6 +6,7 @@ export interface PrintOMSClientConfig {
   name: string;
   colors: ThemeColors;
   logoUrl: string | null;
+  faviconUrl?: string | null;
   loadingText?: string;
   features: FeaturesConfig;
 }

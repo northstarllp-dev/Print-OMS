@@ -21,6 +21,7 @@ export const defaultConfig: PrintOMSClientConfig = {
     sidebarAccent: "#F97316",
   },
   logoUrl: null,
+  faviconUrl: null,
   loadingText: "PRINTOMS",
   features: {
     enableAdminAssignment: false,

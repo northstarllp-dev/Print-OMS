@@ -137,6 +137,10 @@ export default function InstallationLogin() {
           </button>
         </div>
       </div>
+
+      <div style={{ position: "absolute", bottom: 24, textAlign: "center", width: "100%", fontSize: 13, color: "#64748B", pointerEvents: "none" }}>
+        Made with ❤️ by Northstar
+      </div>
     </div>
   );
 }
