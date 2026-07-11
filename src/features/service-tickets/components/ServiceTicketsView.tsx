@@ -131,7 +131,7 @@ export function ServiceTicketsView({
                   cursor: "pointer",
                 }}
               >
-                <td style={tdStyle}>{new Date(ticket.created_at).toLocaleDateString()}</td>
+                <td style={tdStyle} suppressHydrationWarning>{new Date(ticket.created_at).toLocaleDateString()}</td>
                 <td style={tdStyle}>{ticket.ticket_id}</td>
                 <td style={tdStyle}>
                   {(ticket.customer_name || "-") + " / " + (ticket.customer_business_name || "-")}

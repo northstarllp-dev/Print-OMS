@@ -8,6 +8,8 @@ import {
   lookupOrdersByPhone,
   type TicketPhoto,
 } from "@/features/service-tickets/actions/serviceTicketActions";
+import { loadClientConfig } from "@/config/loadClientConfig";
+import { CopyLinkButton } from "./CopyLinkButton";
 
 interface CreateServiceTicketModalProps {
   onClose: () => void;
@@ -24,6 +26,7 @@ export function CreateServiceTicketModal({
   onClose,
   onCreated,
 }: CreateServiceTicketModalProps) {
+  const clientConfig = loadClientConfig();
   const [phone, setPhone] = React.useState("");
   const [description, setDescription] = React.useState("");
   const [resolutionNotes, setResolutionNotes] = React.useState("");
@@ -154,15 +157,20 @@ export function CreateServiceTicketModal({
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "32px" }}>
           <div>
+            {clientConfig?.logoUrl && (
+              <img src={clientConfig.logoUrl} alt="Logo" style={{ height: "32px", objectFit: "contain", marginBottom: "12px" }} />
+            )}
             <h2 className="text-display-sm" style={{ margin: 0, color: "var(--color-primary)" }}>
               Create Service Ticket
             </h2>
-            <p className="text-body-md" style={{ margin: "8px 0 0", color: "var(--color-on-surface-variant)" }}>
+            <p className="text-body-md" style={{ margin: "4px 0 0", color: "var(--color-on-surface-variant)" }}>
               Follow the steps below to record a new customer issue.
             </p>
           </div>
-          <button 
-            onClick={onClose} 
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <CopyLinkButton companyId={clientConfig?.id || "default"} />
+            <button 
+              onClick={onClose} 
             style={{ 
               border: "none", 
               background: "var(--color-surface-container-lowest)", 
@@ -181,6 +189,7 @@ export function CreateServiceTicketModal({
           >
             <X size={20} />
           </button>
+          </div>
         </div>
 
         {error && (

@@ -448,6 +448,46 @@ export function OrdersManagementDashboard({
               </select>
             )}
 
+            {/* Date Range Filter */}
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => {
+                  setDateFilterType("range");
+                  setStartDate(e.target.value);
+                }}
+                style={{ padding: "8px 12px", background: "white", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "13px", color: "#475569", outline: "none" }}
+              />
+              <span style={{ fontSize: "13px", color: "#64748b", fontWeight: "500" }}>to</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => {
+                  setDateFilterType("range");
+                  setEndDate(e.target.value);
+                }}
+                style={{ padding: "8px 12px", background: "white", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "13px", color: "#475569", outline: "none" }}
+              />
+              {(startDate || endDate) && (
+                <button
+                  onClick={() => {
+                    setStartDate("");
+                    setEndDate("");
+                    setDateFilterType("all");
+                  }}
+                  style={{
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    background: "white", border: "1px solid #e2e8f0", borderRadius: "8px", 
+                    cursor: "pointer", color: "#94A3B8", padding: "9px"
+                  }}
+                  title="Clear Dates"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+
             {/* Health filter */}
             <select value={healthFilter} onChange={(e) => setHealthFilter(e.target.value)} style={{ padding: "9px 12px", background: "white", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "13px", fontWeight: "500", color: "#475569", cursor: "pointer", outline: "none" }}>
               <option value="ALL">All Health States</option>

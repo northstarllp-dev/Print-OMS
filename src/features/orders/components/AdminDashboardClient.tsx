@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { AddEnquiryModal, EnquiryFormData } from "@/features/enquiries/components/AddEnquiryModal";
 import { createEnquiry } from "@/features/enquiries/actions/enquiryActions";
+import { CreateServiceTicketModal } from "@/features/service-tickets/components/CreateServiceTicketModal";
 
 /* ─── helpers ──────────────────────────────────────────────────── */
 const STAGE_LABEL: Record<string, { label: string; dot: string }> = {
@@ -84,12 +85,47 @@ interface AdminDashboardClientProps {
   tickets?: any[];
 }
 
-export function AdminDashboardClient({ orders, enquiries, tickets }: AdminDashboardClientProps) {
+export function AdminDashboardClient({ 
+  orders: rawOrders, 
+  enquiries: rawEnquiries, 
+  tickets: rawTickets 
+}: AdminDashboardClientProps) {
   const router = useRouter();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isTicketModalOpen, setIsTicketModalOpen] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [selectedPipelineStage, setSelectedPipelineStage] = useState<string | null>(null);
   const [selectedKpi, setSelectedKpi] = useState<string | null>(null);
+  const [startDate, setStartDate] = useState<string>("");
+  const [endDate, setEndDate] = useState<string>("");
+
+  /* Date Filtering */
+  const orders = rawOrders.filter((o) => {
+    if (!startDate && !endDate) return true;
+    if (!o.dateCreated) return true;
+    const itemDate = new Date(o.dateCreated).toISOString().split("T")[0];
+    if (startDate && itemDate < startDate) return false;
+    if (endDate && itemDate > endDate) return false;
+    return true;
+  });
+
+  const enquiries = rawEnquiries.filter((e) => {
+    if (!startDate && !endDate) return true;
+    if (!e.dateCreated) return true;
+    const itemDate = new Date(e.dateCreated).toISOString().split("T")[0];
+    if (startDate && itemDate < startDate) return false;
+    if (endDate && itemDate > endDate) return false;
+    return true;
+  });
+
+  const tickets = (rawTickets || []).filter((t) => {
+    if (!startDate && !endDate) return true;
+    if (!t.created_at) return true;
+    const itemDate = new Date(t.created_at).toISOString().split("T")[0];
+    if (startDate && itemDate < startDate) return false;
+    if (endDate && itemDate > endDate) return false;
+    return true;
+  });
 
   /* Stats calculations */
   const totalOrders = orders.length;
@@ -280,7 +316,49 @@ export function AdminDashboardClient({ orders, enquiries, tickets }: AdminDashbo
             Overview of your business performance
           </p>
         </div>
-        <div style={{ display: "flex", gap: "10px" }}>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", background: "white", padding: "4px 8px", borderRadius: "8px", border: "1px solid #E2E8F0" }}>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              style={{ border: "none", outline: "none", fontSize: "13px", color: "#475569", background: "transparent" }}
+            />
+            <span style={{ fontSize: "13px", color: "#94A3B8" }}>to</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              style={{ border: "none", outline: "none", fontSize: "13px", color: "#475569", background: "transparent" }}
+            />
+            {(startDate || endDate) && (
+              <button
+                onClick={() => { setStartDate(""); setEndDate(""); }}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  background: "transparent", border: "none", cursor: "pointer",
+                  color: "#94A3B8", padding: "0 2px"
+                }}
+                title="Clear Dates"
+              >
+                <XCircle size={14} />
+              </button>
+            )}
+          </div>
+          <button
+            onClick={() => setIsTicketModalOpen(true)}
+            style={{
+              display: "flex", alignItems: "center", gap: "6px",
+              padding: "9px 16px", borderRadius: "8px",
+              border: "none", background: "var(--color-primary)",
+              fontSize: "13px", fontWeight: "700", color: "white",
+              cursor: "pointer", transition: "all 0.15s",
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = "var(--color-primary-container)"}
+            onMouseLeave={e => e.currentTarget.style.background = "var(--color-primary)"}
+          >
+            <Plus size={14} /> Add Service Ticket
+          </button>
           <button
             onClick={() => setIsAddModalOpen(true)}
             style={{
@@ -707,6 +785,17 @@ export function AdminDashboardClient({ orders, enquiries, tickets }: AdminDashbo
           }
         }}
       />
+
+      {/* ── Add Service Ticket Modal ── */}
+      {isTicketModalOpen && (
+        <CreateServiceTicketModal
+          onClose={() => setIsTicketModalOpen(false)}
+          onCreated={() => {
+            setIsTicketModalOpen(false);
+            router.refresh();
+          }}
+        />
+      )}
     </div>
   );
 }
