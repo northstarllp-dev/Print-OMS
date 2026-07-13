@@ -61,6 +61,7 @@ export function ServiceTicketDetailModal({
   }
 
   async function handleSaveResolution() {
+    if (!ticket) return;
     setSaving(true);
     try {
       await updateTicketResolutionAction(ticket.id, {
@@ -74,6 +75,7 @@ export function ServiceTicketDetailModal({
   }
 
   async function handleComplete() {
+    if (!ticket) return;
     setSaving(true);
     try {
       await updateTicketResolutionAction(ticket.id, {

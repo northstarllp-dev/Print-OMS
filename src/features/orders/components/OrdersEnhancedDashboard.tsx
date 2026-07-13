@@ -36,6 +36,7 @@ interface Order {
   isOutstanding?: boolean;
   isDelayed?: boolean;
   orderCode?: string;
+  stageStatus?: string;
 }
 
 const generateMockOrders = (): Order[] => {
@@ -146,7 +147,7 @@ export function OrdersEnhancedDashboard({ onAddOrder }: OrdersEnhancedDashboardP
       order.id.toLowerCase().includes(debouncedSearchTerm.toLowerCase());
     let matchesStage = true;
     if (selectedStage === "pending_approval") {
-      matchesStage = order.stageStatus && order.stageStatus !== "Normal";
+      matchesStage = !!order.stageStatus && order.stageStatus !== "Normal";
     } else if (selectedStage) {
       matchesStage = order.stage === selectedStage;
     }
