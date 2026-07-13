@@ -153,7 +153,6 @@ export function InstallationLayoutClient({ children, profile }: InstallationLayo
         <div
           style={{
             padding: isExpanded ? "24px 20px" : "24px 12px",
-            borderBottom: "1px solid var(--sidebar-border)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -257,7 +256,6 @@ export function InstallationLayoutClient({ children, profile }: InstallationLayo
         {/* Collapse Button */}
         <div
           style={{
-            borderTop: "1px solid var(--sidebar-border)",
             padding: "12px",
             flexShrink: 0,
           }}

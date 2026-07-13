@@ -413,22 +413,6 @@ export function OrdersManagementDashboard({
               )}
             </div>
 
-            {/* Custom Date inputs */}
-            <div className="flex items-center gap-2">
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                style={{ padding: "8px 12px", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "13px", color: "#475569", outline: "none" }}
-              />
-              <span style={{ fontSize: "12px", color: "#64748b" }}>to</span>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                style={{ padding: "8px 12px", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "13px", color: "#475569", outline: "none" }}
-              />
-            </div>
 
             {/* Stage filter */}
             <select value={stageFilter} onChange={(e) => setStageFilter(e.target.value)} style={{ padding: "9px 12px", background: "white", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "13px", fontWeight: "500", color: "#475569", cursor: "pointer", outline: "none" }}>

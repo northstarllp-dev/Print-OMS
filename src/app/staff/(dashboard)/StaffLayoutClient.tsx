@@ -218,7 +218,6 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
         <div
           style={{
             padding: isExpanded ? "24px 20px" : "24px 12px",
-            borderBottom: "1px solid var(--sidebar-border)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -322,7 +321,6 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
         {/* Collapse Button */}
         <div
           style={{
-            borderTop: "1px solid var(--sidebar-border)",
             padding: "12px",
             flexShrink: 0,
           }}
