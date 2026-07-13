@@ -116,9 +116,10 @@ export function ReportCard({ title, description, type, data }: ReportCardProps) 
                 labelLine={false}
                 label={({ cx, cy, midAngle, innerRadius, outerRadius, value, index }) => {
                   const RADIAN = Math.PI / 180;
-                  const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
-                  const x = cx + radius * Math.cos(-midAngle * RADIAN);
-                  const y = cy + radius * Math.sin(-midAngle * RADIAN);
+                  const safeMidAngle = midAngle || 0;
+                  const radius = Number(innerRadius || 0) + (Number(outerRadius || 0) - Number(innerRadius || 0)) * 0.5;
+                  const x = Number(cx || 0) + radius * Math.cos(-safeMidAngle * RADIAN);
+                  const y = Number(cy || 0) + radius * Math.sin(-safeMidAngle * RADIAN);
                   return (
                     <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize={12} fontWeight="bold">
                       {value}

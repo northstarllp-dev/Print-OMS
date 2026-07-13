@@ -35,6 +35,7 @@ export function Logo({ className = "", forceText = false, width = 200, height = 
           height={height}
           className="object-contain"
           style={{ maxHeight: height, maxWidth: "100%", objectPosition: align, transition: "all 0.25s cubic-bezier(0.4,0,0.2,1)" }}
+          priority
         />
       </div>
     );

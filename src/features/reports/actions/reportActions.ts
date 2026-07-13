@@ -18,12 +18,12 @@ export async function getReportData(startDate?: string, endDate?: string) {
   if (startDate) {
     orders = orders?.filter(o => o.dateCreated && new Date(o.dateCreated).toISOString().split("T")[0] >= startDate);
     enquiries = enquiries?.filter(e => e.dateCreated && new Date(e.dateCreated).toISOString().split("T")[0] >= startDate);
-    tickets = tickets?.filter(t => t.dateCreated && new Date(t.dateCreated).toISOString().split("T")[0] >= startDate);
+    tickets = tickets?.filter(t => t.created_at && new Date(t.created_at).toISOString().split("T")[0] >= startDate);
   }
   if (endDate) {
     orders = orders?.filter(o => o.dateCreated && new Date(o.dateCreated).toISOString().split("T")[0] <= endDate);
     enquiries = enquiries?.filter(e => e.dateCreated && new Date(e.dateCreated).toISOString().split("T")[0] <= endDate);
-    tickets = tickets?.filter(t => t.dateCreated && new Date(t.dateCreated).toISOString().split("T")[0] <= endDate);
+    tickets = tickets?.filter(t => t.created_at && new Date(t.created_at).toISOString().split("T")[0] <= endDate);
   }
 
   // 1. Orders Over Time (Monthly)

@@ -77,7 +77,7 @@ function normalizePhotos(input: unknown): TicketPhoto[] {
         createdAt: typeof value.createdAt === "string" ? value.createdAt : undefined,
       };
     })
-    .filter((item): item is TicketPhoto => item !== null);
+    .filter((item) => item !== null) as TicketPhoto[];
 }
 
 type TicketRow = {

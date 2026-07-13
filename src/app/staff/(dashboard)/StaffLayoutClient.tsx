@@ -139,7 +139,7 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
       pathname.startsWith("/staff/orders/") && pathname.replace(/\/$/, "") !== "/staff/orders";
 
     if (isOrderDetail) {
-      if (item.orderDetailEntryStage) {
+      if ('orderDetailEntryStage' in item && item.orderDetailEntryStage) {
         return entryStage === item.orderDetailEntryStage;
       }
       if (item.href === "/staff/orders") {
