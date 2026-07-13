@@ -21,7 +21,7 @@ export const theBoardCompanyConfig: Partial<PrintOMSClientConfig> = {
     sidebarAccent: "#ead64a",
   },
   logoUrl: "/clients/theboardcompany/logo.png",
-  faviconUrl: "/clients/theboardcompany/logo.png",
+  faviconUrl: "/clients/theboardcompany/favicon_io/favicon.ico",
   loadingText: "THE BOARD COMPANY",
   features: {
     enableAdminAssignment: true,

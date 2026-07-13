@@ -2,7 +2,7 @@ import React from "react";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/features/auth/actions/authActions";
 import { getStaffHomePath } from "@/features/orders/workspace/shared/stageGrants";
-import { Shield, Users, ArrowRight, BarChart3, ClipboardList } from "lucide-react";
+import { Shield, Users, ArrowRight, BarChart3, ClipboardList, Heart } from "lucide-react";
 import Link from "next/link";
 import { Logo } from "@/components/ui/Logo";
 
@@ -38,12 +38,13 @@ export default async function RootGateway() {
       </div>
 
       {/* Heading */}
-      <div style={{ textAlign: "center", marginBottom: 40, maxWidth: 480 }}>
+      <div style={{ textAlign: "center", marginBottom: 40, maxWidth: 520 }}>
         <h1 style={{ fontSize: 32, fontWeight: 900, color: "var(--text-primary)", margin: "0 0 10px", letterSpacing: "-0.02em", lineHeight: 1.15 }}>
-          Sign Fabrication Portal
+          Operations management portal for signage business
         </h1>
         <p style={{ fontSize: 14, color: "var(--text-secondary)", margin: 0, lineHeight: 1.6 }}>
-          Select your access portal to authenticate and manage signage operations.
+          Select your access portal to authenticate and manage signage operations. 
+          A comprehensive operations management software for streamlining signage and fabrication workflows.
         </p>
       </div>
 
@@ -114,9 +115,14 @@ export default async function RootGateway() {
           </div>
         </Link>
 
-
       </div>
 
+      {/* Footer */}
+      <div style={{ marginTop: 80, textAlign: "center", color: "var(--text-secondary)", fontSize: 13 }}>
+        <p style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontWeight: 600, margin: 0 }}>
+          Made with <Heart size={14} fill="#ef4444" color="#ef4444" /> by Northstar
+        </p>
+      </div>
 
     </div>
   );

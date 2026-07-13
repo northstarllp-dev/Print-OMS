@@ -23,6 +23,7 @@ interface OrderItem {
   orderId: string;
   orderCode: string;
   productionDeadline?: string | null;
+  workflow_type?: string | null;
 }
 
 interface ProductionDashboardClientProps {

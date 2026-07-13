@@ -22,6 +22,7 @@ interface OrderItem {
   dateCreated: string;
   orderId: string;
   orderCode: string;
+  workflow_type?: string | null;
 }
 
 interface InstallationDashboardClientProps {

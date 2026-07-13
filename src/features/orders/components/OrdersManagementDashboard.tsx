@@ -26,6 +26,7 @@ import { parseOrderStage } from "@/features/orders/workspace/shared/stageGrants"
 import {
   countQueueViews,
   partitionQueueOrdersByView,
+  queueHasIncomingTab,
 } from "@/features/orders/workspace/shared/staffQueueStages";
 import { QueueViewToggle } from "./QueueViewToggle";
 import type { QueueView } from "@/features/orders/workspace/shared/staffQueueStages";
@@ -334,6 +335,7 @@ export function OrdersManagementDashboard({
               incomingCount={queueViewCounts.incoming}
               currentCount={queueViewCounts.current}
               completedCount={queueViewCounts.completed}
+              hideIncoming={!queueHasIncomingTab(parsedEntryStage)}
             />
           </div>
         )}

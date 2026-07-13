@@ -19,6 +19,7 @@ export default async function ProductionOrdersPage() {
     orderId: o.order_id || o.id,
     orderCode: o.order_id || o.id,
     productionDeadline: o.productionDetails?.deadline || null,
+    workflow_type: o.workflow_type,
   }));
 
   return (

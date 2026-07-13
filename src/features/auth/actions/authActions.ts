@@ -7,6 +7,7 @@ import {
   canAccessProductionPortal,
 } from "@/features/orders/workspace/shared/stageGrants";
 import { loadClientConfig } from "@/config/loadClientConfig";
+import { createAdminClient } from "@/utils/supabase/admin";
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -263,6 +264,22 @@ export async function getCurrentUser() {
 export async function updateUserPassword(password: string) {
   const supabase = await getSupabase();
   const { error } = await supabase.auth.updateUser({ password });
+  if (error) return { error: error.message };
+  return { success: true };
+}
+
+export async function adminResetUserPassword(userId: string, newPassword: string) {
+  const adminClient = createAdminClient();
+  if (!adminClient) return { error: "Admin client not configured." };
+  
+  const supabase = await getSupabase();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Unauthorized" };
+  
+  const { data: profile } = await supabase.from("users").select("role").eq("id", user.id).single();
+  if (profile?.role !== "admin") return { error: "Unauthorized. Admin only." };
+
+  const { error } = await adminClient.auth.admin.updateUserById(userId, { password: newPassword });
   if (error) return { error: error.message };
   return { success: true };
 }

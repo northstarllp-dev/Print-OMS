@@ -11,6 +11,7 @@ interface QueueViewToggleProps {
   incomingCount?: number;
   currentCount?: number;
   completedCount?: number;
+  hideIncoming?: boolean;
 }
 
 export function QueueViewToggle({
@@ -19,12 +20,13 @@ export function QueueViewToggle({
   incomingCount,
   currentCount,
   completedCount,
+  hideIncoming,
 }: QueueViewToggleProps) {
   const tabs: { id: QueueView; label: string; count?: number }[] = [
     { id: "incoming", label: "Incoming", count: incomingCount },
     { id: "current", label: "Current", count: currentCount },
     { id: "completed", label: "Completed", count: completedCount },
-  ];
+  ].filter(tab => !(hideIncoming && tab.id === "incoming"));
 
   return (
     <div
