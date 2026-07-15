@@ -43,7 +43,7 @@ export default async function RootGateway() {
           Operations management portal for signage business
         </h1>
         <p style={{ fontSize: 14, color: "var(--text-secondary)", margin: 0, lineHeight: 1.6 }}>
-          Select your access portal to authenticate and manage signage operations. 
+          Select your access portal to authenticate and manage signage operations.
           A comprehensive operations management software for streamlining signage and fabrication workflows.
         </p>
       </div>
@@ -119,9 +119,30 @@ export default async function RootGateway() {
 
       {/* Footer */}
       <div style={{ marginTop: 80, textAlign: "center", color: "var(--text-secondary)", fontSize: 13 }}>
-        <p style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontWeight: 600, margin: 0 }}>
-          Made with <Heart size={14} fill="#ef4444" color="#ef4444" /> by Northstar
-        </p>
+        <a
+          href="https://thepolarislabs.vercel.app/"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 6,
+            fontWeight: 600,
+            margin: 0,
+            color: "inherit",
+            textDecoration: "none",
+            cursor: "pointer",
+            transition: "opacity 0.15s ease",
+          }}
+        >
+          Made with <Heart size={14} fill="#ef4444" color="#ef4444" /> by
+          <img
+            src="/clients/light withoutbg.png"
+            alt="Polaris"
+            style={{ height: "80px", margin: "-35px" }}
+          />
+        </a>
       </div>
 
     </div>
