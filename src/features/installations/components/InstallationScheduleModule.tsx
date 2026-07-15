@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Calendar, Clock, Save, Loader2, CheckCircle, RefreshCw, MapPin } from "lucide-react";
 import { scheduleInstallationAction } from "@/features/installations/actions/installationActions";
 
@@ -36,6 +36,16 @@ export const InstallationScheduleModule: React.FC<InstallationScheduleModuleProp
   const [scheduling, setScheduling] = useState(false);
   const [isRescheduling, setIsRescheduling] = useState(false);
   const [alert, setAlert] = useState<{ message: string; type: "success" | "error" } | null>(null);
+
+  // Sync when parent/realtime updates scheduled date/time (don't clobber an open reschedule form).
+  useEffect(() => {
+    setConfirmedDate(initialScheduledDate);
+    setConfirmedTime(initialScheduledTime);
+    if (!isRescheduling) {
+      setSelectedDate(initialScheduledDate);
+      setSelectedTime(initialScheduledTime);
+    }
+  }, [initialScheduledDate, initialScheduledTime, isRescheduling]);
 
   const isScheduled = !!confirmedDate && !!confirmedTime;
   const showForm = !isScheduled || isRescheduling;

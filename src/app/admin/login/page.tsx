@@ -24,12 +24,12 @@ export default function AdminLogin() {
       const res = await adminSignIn(email, password);
       if (res.error) {
         setError(res.error);
+        setLoading(false);
       } else {
-        router.push("/admin/dashboard");
+        window.location.href = "/admin/dashboard";
       }
     } catch (err: any) {
       setError(err.message || "An unexpected error occurred.");
-    } finally {
       setLoading(false);
     }
   };

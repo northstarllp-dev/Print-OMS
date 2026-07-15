@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
-import type { RealtimeChannel } from "@supabase/supabase-js";
-import type { SiteVisitDetails } from "@/types";
+import { ensureRealtimeAuth } from "@/utils/supabase/ensureRealtimeAuth";
+import type { RealtimeChannel, RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import {
   mergeOrderDetailPatch,
   patchFromDesignRow,
@@ -34,6 +34,17 @@ export interface UseOrderDetailSyncOptions {
   onExternalStageChange?: (message: string) => void;
 }
 
+type Row = Record<string, unknown>;
+
+/**
+ * One channel per open order detail. Use event:"*" + server filters.
+ * Tables have REPLICA IDENTITY FULL so DELETE events still match filters
+ * on order_id / site_visit_id.
+ *
+ * Measurements use a separate channel so resolving siteVisitId after a
+ * schedule upsert does not tear down the site_visits/orders subscription
+ * (which would drop the concurrent stage UPDATE).
+ */
 export function useOrderDetailSync({
   orderId,
   businessOrderId,
@@ -60,192 +71,286 @@ export function useOrderDetailSync({
 
   useEffect(() => {
     if (siteVisitId) {
-      setResolvedSiteVisitId(siteVisitId);
+      setResolvedSiteVisitId((prev) =>
+        prev === siteVisitId ? prev : siteVisitId
+      );
       return;
     }
     if (!orderId) return;
     const supabase = createClient();
     let cancelled = false;
-    supabase
-      .from("site_visits")
-      .select("id")
-      .eq("order_id", orderId)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (!cancelled && data?.id) setResolvedSiteVisitId(data.id);
-      });
+    void (async () => {
+      await ensureRealtimeAuth(supabase);
+      if (cancelled) return;
+      const { data } = await supabase
+        .from("site_visits")
+        .select("id")
+        .eq("order_id", orderId)
+        .maybeSingle();
+      if (!cancelled && data?.id) {
+        const id = String(data.id);
+        setResolvedSiteVisitId((prev) => (prev === id ? prev : id));
+      }
+    })();
     return () => {
       cancelled = true;
     };
   }, [orderId, siteVisitId]);
 
+  // Core order / site-visit / stage tables — stable for the open order.
   useEffect(() => {
     if (!enabled || !orderId) return;
 
     const supabase = createClient();
-    const channelName = `order-detail-sync-${orderId}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const channelName = `order-detail-sync:${orderId}:${Math.random().toString(36).slice(2, 8)}`;
     const activityFilterId = businessOrderId || orderId;
+    let channel: RealtimeChannel | null = null;
+    let cancelled = false;
 
     const emitPatch = (patch: OrderDetailPatch) => {
       onPatchRef.current(patch);
     };
 
-    const handleOrdersUpdate = (payload: { new: Record<string, unknown> }) => {
-      const patch = patchFromOrdersRow(payload.new);
-      const prev = snapshotRef.current();
-      if (
-        onStageChangeRef.current &&
-        (patch.stage !== undefined && patch.stage !== prev.stage ||
-          patch.stageStatus !== undefined && patch.stageStatus !== (prev as { stageStatus?: string }).stageStatus)
-      ) {
-        onStageChangeRef.current("This order was updated by another user.");
-      }
-      emitPatch(patch);
-    };
+    const asRow = (
+      payload: RealtimePostgresChangesPayload<Row>
+    ): { eventType: string; newRow: Row | null; oldRow: Row | null } => ({
+      eventType: payload.eventType,
+      newRow:
+        payload.new && Object.keys(payload.new).length > 0
+          ? (payload.new as Row)
+          : null,
+      oldRow:
+        payload.old && Object.keys(payload.old).length > 0
+          ? (payload.old as Row)
+          : null,
+    });
 
-    const handleSiteVisit = (payload: {
-      eventType: string;
-      new: Record<string, unknown> | null;
-      old: Record<string, unknown> | null;
-    }) => {
-      if (payload.eventType === "DELETE") {
-        emitPatch({ siteVisitDetails: null });
-        return;
-      }
-      if (payload.new) {
-        const prevSv = (snapshotRef.current() as { siteVisitDetails?: SiteVisitDetails }).siteVisitDetails;
-        emitPatch(patchFromSiteVisitRow(payload.new, prevSv?.locations || []));
-      }
-    };
+    void (async () => {
+      await ensureRealtimeAuth(supabase);
+      if (cancelled) return;
 
-    const handleMeasurement = (payload: {
-      eventType: string;
-      new: Record<string, unknown> | null;
-      old: Record<string, unknown> | null;
-    }) => {
-      const prevSv = (snapshotRef.current() as { siteVisitDetails?: SiteVisitDetails }).siteVisitDetails;
-      const patch = patchFromMeasurementEvent(
-        payload.eventType,
-        payload.new,
-        payload.old,
-        prevSv?.locations || []
-      );
-      if (patch) emitPatch(patch);
-    };
+      channel = supabase.channel(channelName);
 
-    let channel: RealtimeChannel = supabase.channel(channelName);
-
-    channel = channel.on(
-      "postgres_changes",
-      { event: "UPDATE", schema: "public", table: "orders", filter: `id=eq.${orderId}` },
-      (payload) => handleOrdersUpdate(payload as { new: Record<string, unknown> })
-    );
-
-    channel = channel.on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "site_visits", filter: `order_id=eq.${orderId}` },
-      (payload) =>
-        handleSiteVisit(payload as {
-          eventType: string;
-          new: Record<string, unknown> | null;
-          old: Record<string, unknown> | null;
-        })
-    );
-
-    if (resolvedSiteVisitId) {
       channel = channel.on(
         "postgres_changes",
         {
-          event: "*",
+          event: "UPDATE",
           schema: "public",
-          table: "site_visit_measurements",
-          filter: `site_visit_id=eq.${resolvedSiteVisitId}`,
-        },
-        (payload) =>
-          handleMeasurement(payload as {
-            eventType: string;
-            new: Record<string, unknown> | null;
-            old: Record<string, unknown> | null;
-          })
-      );
-    }
-
-    channel = channel
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "quotations", filter: `order_id=eq.${orderId}` },
-        (payload) => {
-          if (payload.new) emitPatch(patchFromQuotationRow(payload.new as Record<string, unknown>));
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "quotations", filter: `order_id=eq.${orderId}` },
-        (payload) => {
-          if (payload.new) emitPatch(patchFromQuotationRow(payload.new as Record<string, unknown>));
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "designs", filter: `order_id=eq.${orderId}` },
-        (payload) => {
-          const p = payload as {
-            eventType: string;
-            new: Record<string, unknown> | null;
-          };
-          emitPatch(patchFromDesignRow(p.eventType, p.new));
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "productions", filter: `order_id=eq.${orderId}` },
-        (payload) => {
-          const p = payload as {
-            eventType: string;
-            new: Record<string, unknown> | null;
-          };
-          emitPatch(patchFromProductionRow(p.eventType, p.new));
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "installations", filter: `order_id=eq.${orderId}` },
-        (payload) => {
-          const p = payload as {
-            eventType: string;
-            new: Record<string, unknown> | null;
-          };
-          emitPatch(patchFromInstallationRow(p.eventType, p.new));
-        }
-      );
-
-    if (onActivityRef.current) {
-      channel = channel.on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "order_activity",
-          filter: `order_id=eq.${activityFilterId}`,
+          table: "orders",
+          filter: `id=eq.${orderId}`,
         },
         (payload) => {
-          onActivityRef.current?.(
-            payload as {
-              eventType: string;
-              new: Record<string, unknown> | null;
-              old: Record<string, unknown> | null;
-            }
+          const { newRow } = asRow(
+            payload as RealtimePostgresChangesPayload<Row>
           );
+          if (!newRow) return;
+          const patch = patchFromOrdersRow(newRow);
+          const prev = snapshotRef.current();
+          if (
+            onStageChangeRef.current &&
+            ((patch.stage !== undefined && patch.stage !== prev.stage) ||
+              (patch.stageStatus !== undefined &&
+                patch.stageStatus !==
+                  (prev as { stageStatus?: string }).stageStatus))
+          ) {
+            onStageChangeRef.current("This order was updated by another user.");
+          }
+          emitPatch(patch);
         }
       );
-    }
 
-    channel.subscribe();
+      channel = channel.on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "site_visits",
+          filter: `order_id=eq.${orderId}`,
+        },
+        (payload) => {
+          const { eventType, newRow } = asRow(
+            payload as RealtimePostgresChangesPayload<Row>
+          );
+          if (eventType === "DELETE") {
+            setResolvedSiteVisitId(null);
+            emitPatch({ siteVisitDetails: null });
+            return;
+          }
+          if (newRow) {
+            if (newRow.id) {
+              const id = String(newRow.id);
+              setResolvedSiteVisitId((prev) => (prev === id ? prev : id));
+            }
+            emitPatch(patchFromSiteVisitRow(newRow));
+          }
+        }
+      );
+
+      channel = channel
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "quotations",
+            filter: `order_id=eq.${orderId}`,
+          },
+          (payload) => {
+            const { eventType, newRow } = asRow(
+              payload as RealtimePostgresChangesPayload<Row>
+            );
+            if ((eventType === "INSERT" || eventType === "UPDATE") && newRow) {
+              emitPatch(patchFromQuotationRow(newRow));
+            }
+          }
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "designs",
+            filter: `order_id=eq.${orderId}`,
+          },
+          (payload) => {
+            const { eventType, newRow } = asRow(
+              payload as RealtimePostgresChangesPayload<Row>
+            );
+            emitPatch(patchFromDesignRow(eventType, newRow));
+          }
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "productions",
+            filter: `order_id=eq.${orderId}`,
+          },
+          (payload) => {
+            const { eventType, newRow } = asRow(
+              payload as RealtimePostgresChangesPayload<Row>
+            );
+            emitPatch(patchFromProductionRow(eventType, newRow));
+          }
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "installations",
+            filter: `order_id=eq.${orderId}`,
+          },
+          (payload) => {
+            const { eventType, newRow } = asRow(
+              payload as RealtimePostgresChangesPayload<Row>
+            );
+            emitPatch(patchFromInstallationRow(eventType, newRow));
+          }
+        );
+
+      if (onActivityRef.current) {
+        channel = channel.on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "order_activity",
+            filter: `order_id=eq.${activityFilterId}`,
+          },
+          (payload) => {
+            const { eventType, newRow, oldRow } = asRow(
+              payload as RealtimePostgresChangesPayload<Row>
+            );
+            onActivityRef.current?.({
+              eventType,
+              new: newRow,
+              old: oldRow,
+            });
+          }
+        );
+      }
+
+      channel.subscribe((status, err) => {
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          console.error("[useOrderDetailSync] channel error", {
+            orderId,
+            status,
+            err,
+          });
+        }
+      });
+    })();
 
     return () => {
-      supabase.removeChannel(channel);
+      cancelled = true;
+      if (channel) supabase.removeChannel(channel);
     };
-  }, [orderId, businessOrderId, resolvedSiteVisitId, enabled]);
+  }, [orderId, businessOrderId, enabled]);
+
+  // Measurements — separate channel so siteVisitId resolution doesn't drop schedule events.
+  useEffect(() => {
+    if (!enabled || !orderId || !resolvedSiteVisitId) return;
+
+    const supabase = createClient();
+    const channelName = `order-sv-measurements:${resolvedSiteVisitId}:${Math.random().toString(36).slice(2, 8)}`;
+    let channel: RealtimeChannel | null = null;
+    let cancelled = false;
+
+    const asRow = (
+      payload: RealtimePostgresChangesPayload<Row>
+    ): { eventType: string; newRow: Row | null; oldRow: Row | null } => ({
+      eventType: payload.eventType,
+      newRow:
+        payload.new && Object.keys(payload.new).length > 0
+          ? (payload.new as Row)
+          : null,
+      oldRow:
+        payload.old && Object.keys(payload.old).length > 0
+          ? (payload.old as Row)
+          : null,
+    });
+
+    void (async () => {
+      await ensureRealtimeAuth(supabase);
+      if (cancelled) return;
+
+      channel = supabase
+        .channel(channelName)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "site_visit_measurements",
+            filter: `site_visit_id=eq.${resolvedSiteVisitId}`,
+          },
+          (payload) => {
+            const { eventType, newRow, oldRow } = asRow(
+              payload as RealtimePostgresChangesPayload<Row>
+            );
+            onPatchRef.current(
+              patchFromMeasurementEvent(eventType, newRow, oldRow)
+            );
+          }
+        )
+        .subscribe((status, err) => {
+          if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+            console.error("[useOrderDetailSync] measurements channel error", {
+              siteVisitId: resolvedSiteVisitId,
+              status,
+              err,
+            });
+          }
+        });
+    })();
+
+    return () => {
+      cancelled = true;
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [orderId, resolvedSiteVisitId, enabled]);
 }
 
 export { mergeOrderDetailPatch };

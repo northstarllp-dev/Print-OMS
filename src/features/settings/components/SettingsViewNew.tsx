@@ -2,9 +2,18 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { Save, MoreVertical, Bell, Lock, Palette, MessageCircle, Calendar, Key, X } from "lucide-react";
-import { updateAppSettings, AppSettings } from "@/features/settings/actions/settingsActions";
+import { Save, Palette, MessageCircle, Calendar, Key, X, FileText } from "lucide-react";
+import {
+  updateAppSettings,
+  updateInvoiceProfile,
+  AppSettings,
+} from "@/features/settings/actions/settingsActions";
 import { updateUserPassword } from "@/features/auth/actions/authActions";
+import {
+  EMPTY_INVOICE_PROFILE,
+  type InvoiceProfile,
+  type InvoiceTaxSplit,
+} from "@/features/quotations/types/invoiceProfile";
 
 interface SettingsViewNewProps {
   initialAppSettings?: AppSettings;
@@ -12,6 +21,7 @@ interface SettingsViewNewProps {
 
 export function SettingsViewNew({ initialAppSettings }: SettingsViewNewProps) {
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const [invoiceSaveStatus, setInvoiceSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [settings, setSettings] = useState({
     companyName: "Printoms",
     email: "admin@printoms.com",
@@ -23,6 +33,9 @@ export function SettingsViewNew({ initialAppSettings }: SettingsViewNewProps) {
     siteVisitSchedulingEnabled: initialAppSettings?.siteVisitSchedulingEnabled ?? true,
     installationSchedulingEnabled: initialAppSettings?.installationSchedulingEnabled ?? true,
   });
+  const [invoiceProfile, setInvoiceProfile] = useState<InvoiceProfile>(
+    initialAppSettings?.invoiceProfile ?? EMPTY_INVOICE_PROFILE
+  );
 
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const [newPassword, setNewPassword] = useState("");
@@ -64,6 +77,47 @@ export function SettingsViewNew({ initialAppSettings }: SettingsViewNewProps) {
         setSettings({ ...settings, [key]: !value });
       }
     }
+  };
+
+  const setInvoiceField = (key: keyof InvoiceProfile, value: string) => {
+    setInvoiceProfile((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const setBankField = (key: keyof NonNullable<InvoiceProfile["bank"]>, value: string) => {
+    setInvoiceProfile((prev) => ({
+      ...prev,
+      bank: { ...(prev.bank || {}), [key]: value },
+    }));
+  };
+
+  const handleSaveInvoiceProfile = async () => {
+    setInvoiceSaveStatus("saving");
+    try {
+      await updateInvoiceProfile(invoiceProfile);
+      setInvoiceSaveStatus("saved");
+      setTimeout(() => setInvoiceSaveStatus("idle"), 2500);
+    } catch (e) {
+      console.error("Failed to save invoice profile", e);
+      setInvoiceSaveStatus("error");
+      setTimeout(() => setInvoiceSaveStatus("idle"), 3000);
+    }
+  };
+
+  const inputStyle: React.CSSProperties = {
+    width: "100%",
+    padding: "10px 12px",
+    border: "1px solid #e2e8f0",
+    borderRadius: "8px",
+    fontSize: "13px",
+    fontFamily: "inherit",
+  };
+
+  const labelStyle: React.CSSProperties = {
+    fontSize: "13px",
+    fontWeight: 600,
+    color: "#0f172a",
+    marginBottom: "6px",
+    display: "block",
   };
 
   const handlePasswordChange = async (e: React.FormEvent) => {
@@ -248,6 +302,158 @@ export function SettingsViewNew({ initialAppSettings }: SettingsViewNewProps) {
 
           </div>
         ))}
+
+        {/* Invoice / Quotation letterhead */}
+        <div
+          style={{
+            background: "white",
+            border: "1px solid #e2e8f0",
+            borderRadius: "12px",
+            padding: "24px",
+            marginBottom: "20px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "20px", paddingBottom: "16px", borderBottom: "1px solid #e2e8f0" }}>
+            <div style={{ width: "40px", height: "40px", background: "#eff6ff", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", color: "#2563eb" }}>
+              <FileText size={20} />
+            </div>
+            <div>
+              <div style={{ fontSize: "16px", fontWeight: "700", color: "#0f172a" }}>
+                Invoice / Quotation letterhead
+              </div>
+              <div style={{ fontSize: "12px", color: "#64748b", marginTop: "2px" }}>
+                Company details shown on customer portal quotations and printouts
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gap: "16px", gridTemplateColumns: "1fr 1fr" }}>
+            <div>
+              <label style={labelStyle}>Brand name</label>
+              <input style={inputStyle} value={invoiceProfile.brandName || ""} onChange={(e) => setInvoiceField("brandName", e.target.value)} placeholder="THE BOARD COMPANY" />
+            </div>
+            <div>
+              <label style={labelStyle}>Legal name</label>
+              <input style={inputStyle} value={invoiceProfile.legalName || ""} onChange={(e) => setInvoiceField("legalName", e.target.value)} placeholder="Length X Breadth Marketing Solutions LLP" />
+            </div>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label style={labelStyle}>Address</label>
+              <textarea
+                style={{ ...inputStyle, minHeight: 72, resize: "vertical" }}
+                value={invoiceProfile.address || ""}
+                onChange={(e) => setInvoiceField("address", e.target.value)}
+                placeholder="Business address"
+              />
+            </div>
+            <div>
+              <label style={labelStyle}>GSTIN</label>
+              <input style={inputStyle} value={invoiceProfile.gstin || ""} onChange={(e) => setInvoiceField("gstin", e.target.value)} />
+            </div>
+            <div>
+              <label style={labelStyle}>Place of supply (default)</label>
+              <input style={inputStyle} value={invoiceProfile.placeOfSupplyDefault || ""} onChange={(e) => setInvoiceField("placeOfSupplyDefault", e.target.value)} placeholder="Karnataka (29)" />
+            </div>
+            <div>
+              <label style={labelStyle}>Email</label>
+              <input style={inputStyle} type="email" value={invoiceProfile.email || ""} onChange={(e) => setInvoiceField("email", e.target.value)} />
+            </div>
+            <div>
+              <label style={labelStyle}>Website</label>
+              <input style={inputStyle} value={invoiceProfile.website || ""} onChange={(e) => setInvoiceField("website", e.target.value)} />
+            </div>
+            <div>
+              <label style={labelStyle}>Logo URL (optional)</label>
+              <input style={inputStyle} value={invoiceProfile.logoUrl || ""} onChange={(e) => setInvoiceField("logoUrl", e.target.value)} placeholder="https://..." />
+            </div>
+            <div>
+              <label style={labelStyle}>Tax split on quotes</label>
+              <select
+                style={inputStyle}
+                value={invoiceProfile.taxSplit || "cgst_sgst"}
+                onChange={(e) =>
+                  setInvoiceProfile((prev) => ({
+                    ...prev,
+                    taxSplit: e.target.value as InvoiceTaxSplit,
+                  }))
+                }
+              >
+                <option value="cgst_sgst">CGST + SGST (intra-state)</option>
+                <option value="igst">IGST (inter-state)</option>
+              </select>
+            </div>
+          </div>
+
+          <div style={{ marginTop: 24, marginBottom: 12, fontSize: 13, fontWeight: 700, color: "#0f172a" }}>
+            Bank details
+          </div>
+          <div style={{ display: "grid", gap: "16px", gridTemplateColumns: "1fr 1fr" }}>
+            <div>
+              <label style={labelStyle}>Account name</label>
+              <input style={inputStyle} value={invoiceProfile.bank?.accountName || ""} onChange={(e) => setBankField("accountName", e.target.value)} />
+            </div>
+            <div>
+              <label style={labelStyle}>Account type</label>
+              <input style={inputStyle} value={invoiceProfile.bank?.accountType || ""} onChange={(e) => setBankField("accountType", e.target.value)} />
+            </div>
+            <div>
+              <label style={labelStyle}>Account number</label>
+              <input style={inputStyle} value={invoiceProfile.bank?.accountNumber || ""} onChange={(e) => setBankField("accountNumber", e.target.value)} />
+            </div>
+            <div>
+              <label style={labelStyle}>IFSC</label>
+              <input style={inputStyle} value={invoiceProfile.bank?.ifsc || ""} onChange={(e) => setBankField("ifsc", e.target.value)} />
+            </div>
+            <div>
+              <label style={labelStyle}>Bank name</label>
+              <input style={inputStyle} value={invoiceProfile.bank?.bankName || ""} onChange={(e) => setBankField("bankName", e.target.value)} />
+            </div>
+            <div>
+              <label style={labelStyle}>Branch</label>
+              <input style={inputStyle} value={invoiceProfile.bank?.branch || ""} onChange={(e) => setBankField("branch", e.target.value)} />
+            </div>
+          </div>
+
+          <div style={{ marginTop: 24 }}>
+            <label style={labelStyle}>Default terms (optional seed for new quotes)</label>
+            <textarea
+              style={{ ...inputStyle, minHeight: 96, resize: "vertical" }}
+              value={invoiceProfile.defaultTerms || ""}
+              onChange={(e) => setInvoiceField("defaultTerms", e.target.value)}
+              placeholder="1. Warranty...&#10;2. Payment terms..."
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={handleSaveInvoiceProfile}
+            disabled={invoiceSaveStatus === "saving"}
+            style={{
+              marginTop: 20,
+              padding: "12px 20px",
+              background:
+                invoiceSaveStatus === "saved"
+                  ? "#10b981"
+                  : invoiceSaveStatus === "error"
+                    ? "#ef4444"
+                    : "var(--color-primary)",
+              color: "white",
+              border: "none",
+              borderRadius: "8px",
+              fontSize: "13px",
+              fontWeight: 700,
+              cursor: invoiceSaveStatus === "saving" ? "not-allowed" : "pointer",
+              opacity: invoiceSaveStatus === "saving" ? 0.7 : 1,
+            }}
+          >
+            {invoiceSaveStatus === "saving"
+              ? "Saving letterhead..."
+              : invoiceSaveStatus === "saved"
+                ? "Letterhead saved"
+                : invoiceSaveStatus === "error"
+                  ? "Save failed — retry"
+                  : "Save letterhead"}
+          </button>
+        </div>
 
         {/* Security Section */}
         <div

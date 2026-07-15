@@ -72,6 +72,9 @@ export function OrdersManagementDashboard({
   orderDetailBasePath,
   entryStage,
   currentUserId,
+  hideTitle,
+  title,
+  subtitle,
 }: { 
   initialOrders: any[];
   initialCustomers: any[];
@@ -85,6 +88,12 @@ export function OrdersManagementDashboard({
   currentUserId?: string;
   /** Optional entryStage query param (e.g. staff queue lock). */
   entryStage?: string;
+  /** Hides the default "Orders Management" title header if true */
+  hideTitle?: boolean;
+  /** Custom override for the main heading */
+  title?: string;
+  /** Custom override for the subtitle */
+  subtitle?: string;
 }) {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
@@ -296,12 +305,16 @@ export function OrdersManagementDashboard({
       <div style={{ marginBottom: "32px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "24px" }}>
           <div>
-            <h1 style={{ fontSize: "28px", fontWeight: "800", color: "#0f172a", margin: "0 0 8px" }}>
-              Orders Management
-            </h1>
-            <p style={{ fontSize: "14px", color: "#64748b", margin: 0 }}>
-              Track and process initial project requests
-            </p>
+            {!hideTitle && (
+              <>
+                <h1 style={{ fontSize: "28px", fontWeight: "800", color: "#0f172a", margin: "0 0 8px" }}>
+                  {title || "Orders Management"}
+                </h1>
+                <p style={{ fontSize: "14px", color: "#64748b", margin: 0 }}>
+                  {subtitle || "Track and process initial project requests"}
+                </p>
+              </>
+            )}
           </div>
           <button
             type="button"

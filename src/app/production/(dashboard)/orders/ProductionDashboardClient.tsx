@@ -10,7 +10,7 @@ import {
   partitionQueueOrdersByView,
 } from "@/features/orders/workspace/shared/staffQueueStages";
 import { QueueViewToggle } from "@/features/orders/components/QueueViewToggle";
-import type { QueueView } from "@/features/orders/workspace/shared/staffQueueStages";
+import type { QueueView, WorkflowType } from "@/features/orders/workspace/shared/staffQueueStages";
 
 interface OrderItem {
   id: string;
@@ -23,7 +23,7 @@ interface OrderItem {
   orderId: string;
   orderCode: string;
   productionDeadline?: string | null;
-  workflow_type?: string | null;
+  workflow_type?: WorkflowType | null;
 }
 
 interface ProductionDashboardClientProps {

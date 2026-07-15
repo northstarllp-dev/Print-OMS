@@ -32,13 +32,13 @@ export function StaffLoginForm({ employees }: StaffLoginFormProps) {
       const res = await staffSignIn(email, password);
       if (res.error) {
         setError(res.error);
+        setLoading(false);
       } else {
         // Let root gateway apply tenant/stage-grant based home routing.
-        router.push("/");
+        window.location.href = "/";
       }
     } catch (err: any) {
       setError(err.message || "An unexpected error occurred.");
-    } finally {
       setLoading(false);
     }
   };

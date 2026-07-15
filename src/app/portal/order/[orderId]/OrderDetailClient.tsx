@@ -42,6 +42,7 @@ import {
   didStageAdvance,
   getTabForStage,
 } from "@/app/portal/utils/portalStageNavigation";
+import type { InvoiceProfile } from "@/features/quotations/types/invoiceProfile";
 
 const libraries: ("places")[] = ["places"];
 
@@ -98,9 +99,10 @@ interface OrderDetailClientProps {
   order: Order;
   siteVisitItems?: any[];
   token: string;
+  invoiceProfile?: InvoiceProfile | null;
 }
 
-export function OrderDetailClient({ customer, order: initialOrder, siteVisitItems = [], token }: OrderDetailClientProps) {
+export function OrderDetailClient({ customer, order: initialOrder, siteVisitItems = [], token, invoiceProfile = null }: OrderDetailClientProps) {
   const workflowType = initialOrder.workflow_type || "quote_first";
   const isDesignFirst = workflowType === "design_first";
 
@@ -159,6 +161,7 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
   useOrderDetailSync({
     orderId: order.id,
     businessOrderId: order.orderId || order.orderCode || order.id,
+    siteVisitId: order.siteVisitDetails?.id ?? null,
     enabled: Boolean(order.id),
     getOrderSnapshot: () => orderRef.current as unknown as Record<string, unknown>,
     onPatch: applyPortalPatch,
@@ -795,6 +798,9 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
             updatingStatus={updatingStatus}
             handleApproveQuote={handleApproveQuote}
             handleDeclineQuote={handleDeclineQuote}
+            invoiceProfile={invoiceProfile}
+            billingAddress={customer.billingAddress}
+            customerCity={customer.city}
           />
         )}
         {activeTab === "design" && (

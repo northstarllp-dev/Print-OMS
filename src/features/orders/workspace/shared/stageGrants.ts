@@ -56,8 +56,8 @@ export const TENANT_ROLE_STAGE_GRANTS: Record<string, Record<string, RoleStageGr
     Installation: edit("installation"),
   },
   [BOARD_COMPANY_ID]: {
-    Designer: merge(view("site_visit"), edit("design")),
-    "Production & Service": edit("production"),
+    Designer: merge(view("site_visit"), edit("design", "quotation")),
+    "Production & Service": merge(view("site_visit"), edit("production")),
     "Recce & Installation": edit("site_visit", "installation"),
   },
 };
@@ -173,7 +173,7 @@ const STAGE_NAV: Record<OrderStage, StaffNavItem> = {
   },
   quotation: {
     href: "/staff/orders",
-    label: "Orders",
+    label: "Quotations",
     icon: "orders",
     orderDetailEntryStage: "quotation",
   },

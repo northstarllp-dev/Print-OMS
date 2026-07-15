@@ -35,6 +35,8 @@ import {
 } from "@/types";
 import type { StagePermission } from "@/features/orders/workspace/shared/types";
 import { ScheduleVisitModal } from "./ScheduleVisitModal";
+import { updateSiteVisitDetailsAction } from "@/features/orders/actions/orderActions";
+import { deleteStorageFilesAction } from "@/features/orders/actions/storageActions";
 import { scheduleSiteVisitAction } from "@/features/orders/actions/orderActions";
 import { GoogleMap, useJsApiLoader, Marker } from "@react-google-maps/api";
 
@@ -216,15 +218,18 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
 
   const removeSitePhoto = async (url: string) => {
     if (!selectedLocationId) return;
-    const supabase = createClient();
-    // Extract path from public URL
-    const path = url.split("/site-visit-photos/").pop();
-    if (path) await supabase.storage.from("site-visit-photos").remove([path]);
-    
-    const activeLoc = (siteVisit.locations || []).find(l => l.id === selectedLocationId);
-    const newUrls = (activeLoc?.photos || []).filter(u => u !== url);
-    
-    updateSignLocation(selectedLocationId, { photos: newUrls });
+    try {
+      const path = url.split("/site-visit-photos/").pop();
+      if (path) {
+        await deleteStorageFilesAction("site-visit-photos", [path]);
+      }
+      
+      const activeLoc = (siteVisit.locations || []).find(l => l.id === selectedLocationId);
+      const newUrls = (activeLoc?.photos || []).filter(u => u !== url);
+      updateSignLocation(selectedLocationId, { photos: newUrls });
+    } catch (err: any) {
+      alert("Failed to delete photo: " + (err?.message || "Unknown error"));
+    }
   };
 
   useEffect(() => {
@@ -239,9 +244,10 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
     } as any);
 
     const locs = baseDetails.locations || [];
-    if (locs.length > 0) {
-      setSelectedLocationId(prev => prev || locs[0].id);
-    }
+    setSelectedLocationId((prev) => {
+      if (prev && locs.some((loc) => loc.id === prev)) return prev;
+      return locs[0]?.id || null;
+    });
   }, [order.siteVisitDetails]);
   
   // State for selected sign location tab
@@ -292,13 +298,28 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
   };
   
   // Remove a sign location
-  const removeSignLocation = (id: string) => {
+  const removeSignLocation = async (id: string) => {
+    const locToDelete = (siteVisit.locations || []).find(loc => loc.id === id);
     const updatedLocations = (siteVisit.locations || []).filter(loc => loc.id !== id);
     const updatedDetails = { ...siteVisit, locations: updatedLocations };
+    
     setSiteVisit(updatedDetails);
     onUpdate(updatedDetails);
+    
     if (selectedLocationId === id) {
-      setSelectedLocationId(updatedLocations.length > 0 ? updatedLocations[0].id : null);
+      setSelectedLocationId(updatedLocations[0]?.id || null);
+    }
+    
+    // Clean up photos attached to this location in the background
+    if (locToDelete?.photos && locToDelete.photos.length > 0) {
+      const paths = locToDelete.photos
+        .map(url => url.split("/site-visit-photos/").pop())
+        .filter(Boolean) as string[];
+      if (paths.length > 0) {
+        deleteStorageFilesAction("site-visit-photos", paths).catch(err => {
+          console.error("Failed to clean up location photos:", err);
+        });
+      }
     }
   };
   
@@ -522,24 +543,24 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
         onSchedule={async (date, time, location, coords) => {
           if (!canEdit) return;
           try {
-            await scheduleSiteVisitAction(order.id, {
+            const res = await scheduleSiteVisitAction(order.id, {
               auditDate: date,
               auditTime: time,
               customerAddress: location,
               gpsLocation: coords
             });
-            await onUpdate({
+            const saved = (res?.order?.siteVisitDetails || {
+              ...siteVisit,
               auditDate: date,
               auditTime: time,
               customerAddress: location,
-              gpsLocation: coords
-            });
-            setSiteVisit(prev => ({
+              gpsLocation: coords,
+            }) as SiteVisitDetails;
+            await onUpdate(saved);
+            setSiteVisit((prev) => ({
               ...prev,
-              auditDate: date,
-              auditTime: time,
-              customerAddress: location,
-              gpsLocation: coords
+              ...saved,
+              locations: saved.locations ?? prev.locations,
             }));
           } catch (err) {
             console.error("Failed to schedule site visit", err);
@@ -599,7 +620,12 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
                   </button>
                   {!isFrozen && (
                     <button
-                      onClick={() => removeSignLocation(loc.id)}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        removeSignLocation(loc.id);
+                      }}
                       className={`ml-2 w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold transition-colors focus:outline-none ${isSelected ? "text-[var(--color-secondary)] hover:text-red-650 hover:bg-red-50" : "text-slate-400 hover:text-red-550 hover:bg-red-50"}`}
                       title="Remove item"
                     >

@@ -81,6 +81,15 @@ export async function markInstallationCompleted(orderId: string, checklist: any[
     .single();
   if (fetchError) throw fetchError;
 
+  if (order.stage !== "Installation Scheduled") {
+    throw new Error(
+      `Installation can only be submitted for admin review when the order is Installation Scheduled (current: "${order.stage}").`
+    );
+  }
+
+  // Ensure installations row exists before updating
+  await getInstallationByOrderId(orderId);
+
   const { error } = await supabase
     .from("installations")
     .update({
@@ -110,56 +119,6 @@ export async function markInstallationCompleted(orderId: string, checklist: any[
   });
 
   await revalidateStaffQueuePaths();
-
-  return { success: true };
-}
-
-export async function requestInstallationLocationAction(orderId: string) {
-  await assertStageEditPermission("installation");
-  const supabase = await getSupabase();
-  
-  // Get current order for activity log
-  const { data: order, error: fetchError } = await supabase.from("orders").select("order_id").eq("id", orderId).single();
-  if (fetchError) throw new Error(fetchError.message);
-  
-  const { error } = await supabase.from("installations").update({ gmapRequested: true }).eq("order_id", orderId);
-  if (error) throw new Error(error.message);
-
-  // Activity Log
-  await supabase.from("order_activity").insert({
-    order_id: order.order_id || orderId,
-    activity_type: "internal",
-    actor_name: "Installation Team",
-    actor_role: "Installation",
-    content: `Requested exact Google Map location from the customer.`,
-    metadata: { action: "request_location" }
-  });
-
-  return { success: true };
-}
-
-export async function provideInstallationLocationAction(orderId: string, mapLink: string) {
-  const supabase = await getSupabase();
-  
-  // Get current order for activity log
-  const { data: order, error: fetchError } = await supabase.from("orders").select("order_id").eq("id", orderId).single();
-  if (fetchError) throw new Error(fetchError.message);
-  
-  const { error } = await supabase.from("installations").update({ 
-    gmapLink: mapLink, 
-    gmapRequested: false 
-  }).eq("order_id", orderId);
-  if (error) throw new Error(error.message);
-
-  // Activity Log
-  await supabase.from("order_activity").insert({
-    order_id: order.order_id || orderId,
-    activity_type: "internal",
-    actor_name: "Customer",
-    actor_role: "Customer",
-    content: `Customer provided the exact Google Map location for installation.`,
-    metadata: { action: "provide_location" }
-  });
 
   return { success: true };
 }
@@ -204,6 +163,8 @@ export async function scheduleInstallationAction(orderId: string, payload: { sch
     idempotencyKey: `installation_scheduled:${orderId}:${payload.scheduledDate}:${payload.scheduledTime}`,
     baseUrl,
   });
+
+  await revalidateStaffQueuePaths();
 
   return { success: true };
 }

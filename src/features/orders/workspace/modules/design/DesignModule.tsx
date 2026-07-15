@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { FileText, ZoomIn, ZoomOut, UploadCloud, Upload, X, Trash, RefreshCw, Download, Maximize, RotateCw, Shield, AlertTriangle } from "lucide-react";
+import { FileText, ZoomIn, ZoomOut, UploadCloud, Upload, X, Trash, RefreshCw, Download, Maximize, RotateCw, Shield, AlertTriangle, CheckCircle } from "lucide-react";
 import { Order, DesignRecord, DesignVersion } from "@/types";
 import { createClient } from "@/utils/supabase/client";
 import { updateDesignDetailsAction } from "@/features/designs/actions/designActions";
+import { deleteStorageFilesAction } from "@/features/orders/actions/storageActions";
 import { getServerActionErrorMessage } from "@/lib/serverActionError";
 import type { StagePermission } from "@/features/orders/workspace/shared/types";
 
@@ -36,7 +37,6 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
   currentUserRole,
   permission,
 }) => {
-  const supabase = createClient();
   const canEdit = permission?.canEdit ?? true;
   const dd: DesignRecord = order.design || {
     id: "",
@@ -104,6 +104,7 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
   const handleResetZoom = () => setZoomLevel(100);
 
   const uploadFile = async (file: File | Blob, originalFileName?: string, folder: string = "designs") => {
+    const supabase = createClient();
     const fileName = file instanceof File ? file.name : (originalFileName || "image.png");
     const ext = fileName.split(".").pop() || "jpg";
     const path = `${order.id}/${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
@@ -308,7 +309,7 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
       if (versionToDelete?.proofUrl) {
         const pathPart = versionToDelete.proofUrl.split("/public/site-visit-photos/")[1];
         if (pathPart) {
-          await supabase.storage.from("site-visit-photos").remove([pathPart]);
+          await deleteStorageFilesAction("site-visit-photos", [pathPart]);
         }
       }
     } catch (err: any) {
@@ -414,27 +415,30 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
       {/* Item Selector */}
       {itemsList.length > 1 && (
         <div className="flex flex-wrap gap-2 mb-4 p-1 bg-slate-100/90 backdrop-blur-sm rounded-xl w-fit sticky top-0 z-20 shadow-sm border border-slate-200">
-          {itemsList.map(item => (
+          {itemsList.map(item => {
+            const isApproved = item.versions.length > 0 && item.versions[item.versions.length - 1].status === "Approved";
+            return (
             <button
               key={item.id}
               onClick={() => {
                 setSelectedItemId(item.id);
                 setSelectedVersionId(null);
               }}
-              className={`px-4 py-2 text-sm font-bold rounded-lg transition-all ${
+              className={`px-4 py-2 text-sm font-bold rounded-lg transition-all flex items-center ${
                 selectedItemId === item.id 
                   ? 'bg-white text-blue-600 shadow-sm' 
                   : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200'
               }`}
             >
               {item.name}
+              {isApproved && <CheckCircle size={14} className="ml-1.5 text-emerald-500" />}
               {item.versions.length > 0 && (
                 <span className="ml-2 px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded-full text-[10px]">
                   {item.versions.length}
                 </span>
               )}
             </button>
-          ))}
+          )})}
         </div>
       )}
 
@@ -468,7 +472,20 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
 
           {activeVersion && (
             <div className="space-y-4">
-              <div className="relative border border-slate-150 rounded-xl bg-slate-900 flex items-center justify-center p-6 overflow-hidden min-h-[300px]">
+              
+              {/* Banner for Approved Design */}
+              {activeVersion.status === "Approved" && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center gap-2 text-emerald-800 shadow-sm">
+                  <span className="text-xl">🎉</span>
+                  <span className="text-sm font-bold">This design has been approved by the customer for production.</span>
+                </div>
+              )}
+
+              <div className={`relative rounded-xl flex items-center justify-center p-6 overflow-hidden min-h-[300px] ${
+                activeVersion.status === "Approved" 
+                  ? "bg-slate-900 border-2 border-emerald-500/50 shadow-[0_0_15px_rgba(16,185,129,0.15)]" 
+                  : "bg-slate-900 border border-slate-150"
+              }`}>
                 
                 {/* Image Controls (Enlarge & Download) */}
                 <div className="absolute top-4 right-4 flex gap-2 z-50">
@@ -481,7 +498,16 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
                 </div>
 
                 <div className="relative inline-block" style={{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'center' }}>
-                  <img src={activeVersion.proofUrl} alt={`Version ${activeVersion.versionNumber}`} className="max-h-[400px] object-contain transition-all duration-300" style={{ display: 'block' }} />
+                  {/* WATERMARK STAMP for Approved Designs */}
+                  {activeVersion.status === "Approved" && (
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-40">
+                      <div className="border-8 border-emerald-500/60 text-emerald-500/60 font-black text-4xl md:text-6xl px-8 py-4 rounded-3xl -rotate-12 backdrop-blur-[2px] drop-shadow-xl select-none">
+                        APPROVED
+                      </div>
+                    </div>
+                  )}
+
+                  <img src={activeVersion.proofUrl} alt={`Version ${activeVersion.versionNumber}`} className="max-h-[400px] object-contain transition-all duration-300 relative z-0" style={{ display: 'block' }} />
                   
                   {/* Render Comments/Pins */}
                   {activeVersion.comments?.map((comment) => (
@@ -514,9 +540,9 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
               <div className="flex justify-between items-center bg-slate-50 p-3 rounded-lg border border-slate-200">
                 <span className="text-xs text-slate-500 font-mono flex items-center gap-2">
                   <FileText size={14} /> {activeVersion.fileName}
-                  {isEmployee && !isReadOnly && (
-                    <button onClick={() => handleDeleteVersion(activeVersion.id)} className="ml-1 p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors" title="Delete this version">
-                      <Trash size={14} />
+                  {isEmployee && !isReadOnly && (activeVersion.status === "Draft" || activeVersion.status === "Pending Admin") && (
+                    <button onClick={() => handleDeleteVersion(activeVersion.id)} className="ml-2 p-2 bg-red-50 text-red-600 hover:text-red-700 hover:bg-red-100 rounded-lg transition-colors border border-red-100 shadow-sm" title="Delete this version">
+                      <Trash size={18} />
                     </button>
                   )}
                 </span>

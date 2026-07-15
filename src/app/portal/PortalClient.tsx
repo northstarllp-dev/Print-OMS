@@ -36,9 +36,9 @@ import type { OrderDetailPatch } from "@/features/orders/realtime/orderDetailPat
 import { PaymentsTab } from "./components/PaymentsTab";
 import { QuotationTab } from "./components/QuotationTab";
 import { useQuotationActions } from "./hooks/useQuotationActions";
-import { provideInstallationLocationAction, scheduleInstallationAction } from "@/features/installations/actions/installationActions";
 import { InstallationScheduleModule } from "@/features/installations/components/InstallationScheduleModule";
 import { DesignTab } from "./components/DesignTab";
+import type { InvoiceProfile } from "@/features/quotations/types/invoiceProfile";
 
 interface Customer {
   id: string;
@@ -108,6 +108,7 @@ interface PortalClientProps {
   appSettings?: {
     siteVisitSchedulingEnabled: boolean;
     installationSchedulingEnabled: boolean;
+    invoiceProfile?: InvoiceProfile;
   };
 }
 
@@ -161,6 +162,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
   useOrderDetailSync({
     orderId: activeOrder?.id ?? "",
     businessOrderId: activeOrder?.orderId || activeOrder?.orderCode || activeOrder?.id,
+    siteVisitId: activeOrder?.siteVisitDetails?.id ?? null,
     enabled: Boolean(activeOrder?.id),
     getOrderSnapshot: () => (activeOrderRef.current || {}) as unknown as Record<string, unknown>,
     onPatch: applyPortalPatch,
@@ -322,37 +324,10 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
   const [viewerPhotos, setViewerPhotos] = useState<string[]>([]);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
 
-  const [customerMapLink, setCustomerMapLink] = useState("");
-  const [submittingMap, setSubmittingMap] = useState(false);
-
   const openViewer = (photosArray: string[], index: number) => {
     setViewerPhotos(photosArray);
     setViewerIndex(index);
   };
-
-  const handleProvideLocation = async () => {
-    if (!activeOrder || !customerMapLink.trim()) return;
-    setSubmittingMap(true);
-    try {
-      await provideInstallationLocationAction(activeOrder.id, customerMapLink);
-      // Optimistic update
-      setOrders(prev => prev.map(o => o.id === activeOrder.id ? {
-        ...o,
-        installationDetails: {
-          ...(o.installationDetails || {}),
-          gmapLink: customerMapLink,
-          gmapRequested: false
-        }
-      } : o));
-      setCustomerMapLink("");
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setSubmittingMap(false);
-    }
-  };
-
-
 
   const currentStep = activeOrder ? getStepIndex(activeOrder.stage, activeOrder.workflow_type) : 0;
 
@@ -1003,6 +978,9 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                       updatingStatus={quoteUpdatingStatus}
                       handleApproveQuote={handleApproveQuote}
                       handleDeclineQuote={handleDeclineQuote}
+                      invoiceProfile={appSettings?.invoiceProfile}
+                      billingAddress={customer.billingAddress}
+                      customerCity={customer.city}
                     />
                   </div>
                 )}
@@ -1055,42 +1033,6 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                       />
                     </div>
 
-                    {inst.gmapRequested && !inst.gmapLink && (
-                      <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-center shadow-sm">
-                        <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                          <MapPin size={24} className="text-amber-600" />
-                        </div>
-                        <h3 className="text-lg font-black text-amber-900 mb-2">Exact Location Requested</h3>
-                        <p className="text-sm text-amber-700 max-w-md mx-auto mb-4">
-                          Our installation team has requested the exact Google Map link of your location so they can arrive smoothly.
-                        </p>
-                        <div className="flex flex-col sm:flex-row gap-2 max-w-md mx-auto">
-                          <input
-                            type="url"
-                            placeholder="Paste Google Maps URL here..."
-                            value={customerMapLink}
-                            onChange={(e) => setCustomerMapLink(e.target.value)}
-                            className="flex-1 p-3 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none"
-                          />
-                          <button
-                            onClick={handleProvideLocation}
-                            disabled={!customerMapLink.trim() || submittingMap}
-                            className="px-6 py-3 bg-amber-600 text-white font-bold rounded-xl hover:bg-amber-700 disabled:opacity-50 transition-colors"
-                          >
-                            {submittingMap ? "Submitting..." : "Submit"}
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                    {inst.gmapLink && (
-                      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-center gap-3">
-                        <div className="p-2 bg-blue-100 rounded-lg"><CheckCircle2 className="text-[#1E40AF]" size={18} /></div>
-                        <div>
-                          <p className="text-sm font-bold text-[#1E40AF]">Exact Location Provided</p>
-                          <p className="text-xs text-blue-700 mt-0.5">Thank you! Our installation team will use this link to reach you.</p>
-                        </div>
-                      </div>
-                    )}
                     {inst.photoUrl ? (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="border border-slate-200 rounded-xl overflow-hidden aspect-video">

@@ -89,6 +89,7 @@ export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabPro
   const [commentText, setCommentText] = useState("");
   const [showGeneralFeedback, setShowGeneralFeedback] = useState(false);
   const [generalFeedbackText, setGeneralFeedbackText] = useState("");
+  const [showApproveModal, setShowApproveModal] = useState(false);
   const supabase = createClient();
   
   React.useEffect(() => {
@@ -101,6 +102,7 @@ export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabPro
   const localVersions = activeItem?.versions || [];
 
   const activeVersion = localVersions.find((v: any) => v.id === selectedVersionId) || localVersions[localVersions.length - 1];
+  const isLatestVersion = localVersions.length > 0 && activeVersion?.id === localVersions[localVersions.length - 1].id;
   const allComments = activeVersion?.comments || [];
 
   const handleUpdateItemVersions = async (newVersions: any[], updateStage?: string) => {
@@ -235,25 +237,6 @@ export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabPro
     setCommentText("");
   };
 
-  const handleDeleteComment = async (commentId: string) => {
-    const updatedVersions = localVersions.map((v: any) => {
-      if (v.id === activeVersion.id) {
-        const commentToDelete = (v.comments || []).find((c: any) => c.id === commentId);
-        let comments = (v.comments || []).filter((c: any) => c.id !== commentId);
-        
-        // Remove the linked general comment for pinpoint comments
-        if (commentToDelete && !commentToDelete.isGeneral) {
-          comments = comments.filter((c: any) => !(c.isGeneral && c.content.startsWith(`Pin #${commentToDelete.number}:`)));
-        }
-        
-        return { ...v, comments };
-      }
-      return v;
-    });
-    
-    await handleUpdateItemVersions(updatedVersions);
-  };
-
   const handleGeneralFeedbackSubmit = async () => {
     if (!generalFeedbackText.trim() || !activeVersion) return;
     
@@ -379,27 +362,30 @@ export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabPro
         {/* Item Selector */}
         {itemsList.length > 1 && (
           <div className="flex flex-wrap gap-2 mb-4 p-1 bg-gray-100 rounded-xl w-fit">
-            {itemsList.map(item => (
+            {itemsList.map(item => {
+              const isApproved = item.versions.length > 0 && item.versions[item.versions.length - 1].status === "Approved";
+              return (
               <button
                 key={item.id}
                 onClick={() => {
                   setSelectedItemId(item.id);
                   setSelectedVersionId(null);
                 }}
-                className={`px-4 py-2 text-sm font-bold rounded-lg transition-all ${
+                className={`px-4 py-2 text-sm font-bold rounded-lg transition-all flex items-center ${
                   selectedItemId === item.id 
                     ? 'bg-white text-blue-600 shadow-sm' 
                     : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200'
                 }`}
               >
                 {item.name}
+                {isApproved && <CheckCircle size={14} className="ml-1.5 text-emerald-500" />}
                 {item.versions.length > 0 && (
                   <span className="ml-2 px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded-full text-[10px]">
                     {item.versions.length}
                   </span>
                 )}
               </button>
-            ))}
+            )})}
           </div>
         )}
 
@@ -431,7 +417,9 @@ export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabPro
               )}
             </div>
 
-            <div className="bg-[#0b1c30] rounded-xl flex items-center justify-center mb-6 relative overflow-hidden group border border-gray-200 shadow-inner p-4 min-h-[40vh]">
+            <div className={`bg-[#0b1c30] rounded-xl flex items-center justify-center mb-6 relative overflow-hidden group border border-gray-200 shadow-inner p-4 min-h-[40vh] ${
+              activeVersion.status === "Approved" ? "ring-2 ring-emerald-500/50" : ""
+            }`}>
               
               {/* Image Controls (Enlarge & Download) */}
               <div className="absolute top-4 right-4 flex gap-2 z-50">
@@ -444,10 +432,19 @@ export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabPro
               </div>
 
               <div className="relative inline-block" style={{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'center' }}>
+                {/* WATERMARK STAMP for Approved Designs */}
+                {activeVersion.status === "Approved" && (
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-40">
+                    <div className="border-8 border-emerald-500/60 text-emerald-500/60 font-black text-4xl md:text-6xl px-8 py-4 rounded-3xl -rotate-12 backdrop-blur-[2px] drop-shadow-xl select-none">
+                      APPROVED
+                    </div>
+                  </div>
+                )}
+
                 <img
                   src={activeVersion.proofUrl}
                   alt="Design Proof"
-                  className="max-h-[60vh] object-contain transition-all"
+                  className="max-h-[60vh] object-contain transition-all relative z-0"
                   onClick={handleImageClick}
                   style={{ cursor: isLocked || activeVersion.status === "Approved" ? "default" : "crosshair", display: 'block' }}
                 />
@@ -465,11 +462,6 @@ export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabPro
                           <span className="font-bold text-[10px] text-gray-400">
                             {comment.author} {comment.isDraft && <span className="text-amber-500">(Draft)</span>}
                           </span>
-                          {!isLocked && (
-                          <button onClick={(e) => { e.stopPropagation(); handleDeleteComment(comment.id); }} className="text-red-500 hover:text-red-700 p-0.5" title="Delete comment">
-                            <Trash size={12} />
-                          </button>
-                          )}
                         </div>
                         {comment.content}
                       </div>
@@ -510,15 +502,20 @@ export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabPro
             </div>
 
 
-            <div className="flex flex-col md:flex-row items-center justify-between bg-gray-50 p-4 rounded-xl border border-gray-200 gap-4">
-              <span className="text-xs text-gray-500">
+            <div className={`flex flex-col md:flex-row items-center justify-between p-4 rounded-xl border gap-4 ${
+              activeVersion.status === "Approved" ? "bg-emerald-50 border-emerald-200" : "bg-gray-50 border-gray-200"
+            }`}>
+              <span className={`text-sm font-bold flex items-center gap-2 ${activeVersion.status === "Approved" ? "text-emerald-700" : "text-gray-500"}`}>
+                {activeVersion.status === "Approved" && <span className="text-xl">🎉</span>}
                 {isLocked
                   ? "Design is under internal review. View-only mode."
-                  : activeVersion.status === "Approved"
-                    ? "Design approved for production."
-                    : "Click anywhere on the design to leave pinpoint feedback."}
+                  : !isLatestVersion
+                    ? "You are viewing an older version. Actions are only available on the latest version."
+                    : activeVersion.status === "Approved"
+                      ? "This design has been approved for production."
+                      : "Click anywhere on the design to leave pinpoint feedback."}
               </span>
-              {!isLocked && activeVersion.status !== "Approved" && (
+              {!isLocked && activeVersion.status !== "Approved" && isLatestVersion && (
                 <div className="flex gap-2 w-full md:w-auto">
                   <button
                     onClick={() => setShowGeneralFeedback(!showGeneralFeedback)}
@@ -527,7 +524,7 @@ export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabPro
                     Add Feedback
                   </button>
                   <button
-                    onClick={handleApproveDesign}
+                    onClick={() => setShowApproveModal(true)}
                     className="px-6 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 flex items-center justify-center gap-2 shadow-sm flex-1 md:flex-none transition-colors"
                   >
                     <CheckCircle size={16} /> Approve Design
@@ -561,9 +558,6 @@ export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabPro
                 <h4 className="text-sm font-bold text-gray-800">General Feedback</h4>
                 {allComments.filter((c: any) => c.isGeneral).map((comment: any) => (
                   <div key={comment.id} className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm relative group">
-                    <button onClick={() => handleDeleteComment(comment.id)} className="absolute top-3 right-3 text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity p-1">
-                      <Trash size={12} />
-                    </button>
                     <div className="flex items-center justify-between mb-1 pr-6">
                       <span className="text-xs font-bold text-gray-800">{comment.author}</span>
                       <span className="text-[10px] text-gray-500" suppressHydrationWarning>{new Date(comment.createdAt).toLocaleString()}</span>
@@ -584,6 +578,43 @@ export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabPro
           </div>
         )}
       </div>
+      {/* Approve Confirmation Modal */}
+      {showApproveModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="bg-emerald-50 p-6 flex flex-col items-center border-b border-emerald-100 text-center">
+              <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mb-4 border border-emerald-200 text-emerald-600 shadow-sm">
+                <CheckCircle size={32} />
+              </div>
+              <h2 className="text-xl font-bold text-emerald-900">Confirm Design Approval</h2>
+            </div>
+            
+            <div className="p-6">
+              <p className="text-slate-600 text-center mb-6 leading-relaxed">
+                Are you sure you want to approve this design? Once approved, it will be marked as final for production and no further changes can be made.
+              </p>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowApproveModal(false)}
+                  className="flex-1 py-3 px-4 border-2 border-slate-200 text-slate-700 rounded-xl font-bold hover:bg-slate-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    setShowApproveModal(false);
+                    handleApproveDesign();
+                  }}
+                  className="flex-1 py-3 px-4 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 shadow-sm transition-colors flex items-center justify-center gap-2"
+                >
+                  <CheckCircle size={18} /> Confirm Approval
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

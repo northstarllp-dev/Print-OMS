@@ -4,7 +4,8 @@ import React, { useState, useEffect, useRef, useTransition } from "react";
 import { createPortal } from "react-dom";
 import {
   Plus, Trash2, Search, Check, ChevronDown, Info, X,
-  ClipboardList, IndianRupee, Loader2, AlertCircle, Package, Save, Sparkles, Shield
+  ClipboardList, IndianRupee, Loader2, AlertCircle, Package, Save, Sparkles, Shield,
+  Eye
 } from "lucide-react";
 import {
   upsertQuotation,
@@ -19,7 +20,12 @@ import {
   type PricingType,
 } from "@/features/quotations/utils/lineAmount";
 import { createClient } from "@/utils/supabase/client";
+import { ensureRealtimeAuth } from "@/utils/supabase/ensureRealtimeAuth";
 import type { StagePermission } from "@/features/orders/workspace/shared/types";
+import { QuotationDocument } from "@/features/quotations/components/QuotationDocument";
+import { getAppSettings } from "@/features/settings/actions/settingsActions";
+import type { InvoiceProfile } from "@/features/quotations/types/invoiceProfile";
+import { EMPTY_INVOICE_PROFILE } from "@/features/quotations/types/invoiceProfile";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -53,6 +59,8 @@ interface LineItem {
   id: string;
   productId?: string;
   description: string;
+  /** Optional HSN/SAC — stored in signage_options JSON only. */
+  hsn?: string;
   quantity: number;
   pricingType: PricingType;
   unit: string;
@@ -82,6 +90,8 @@ interface Quotation {
   shipping?: number;
   notes: string;
   terms: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 interface QuotationModuleProps {
@@ -124,6 +134,7 @@ function newItem(gstRate: number = 18): LineItem {
   return {
     id: crypto.randomUUID(),
     description: "",
+    hsn: "",
     quantity: 1,
     pricingType: "per_unit",
     unit: "nos",
@@ -327,22 +338,33 @@ function applyQuotationRealtimeRow(
     setNotes: (v: string) => void;
     setTerms: (v: string) => void;
     setShipping: (v: number) => void;
+    setDiscount: (v: number) => void;
     setRejectionReason: (v: string) => void;
     setSections: React.Dispatch<React.SetStateAction<SignageSection[]>>;
+    setQuoteCreatedAt?: (v: string | null) => void;
   }
 ) {
   if (newQuote.quotation_id) setters.setQuotationId(String(newQuote.quotation_id));
   if (newQuote.status) {
     setters.setStatus(newQuote.status as "Draft" | "Sent" | "Approved" | "Rejected" | "Pending Approval");
   }
+  if (setters.setQuoteCreatedAt) {
+    const created =
+      (typeof newQuote.created_at === "string" && newQuote.created_at) ||
+      (typeof newQuote.updated_at === "string" && newQuote.updated_at) ||
+      null;
+    if (created) setters.setQuoteCreatedAt(created);
+  }
   if (newQuote.notes !== undefined) setters.setNotes((newQuote.notes as string) ?? "");
   if (newQuote.terms !== undefined) setters.setTerms((newQuote.terms as string) ?? "");
   if (newQuote.shipping !== undefined) setters.setShipping(Number(newQuote.shipping) || 0);
+  if (newQuote.discount !== undefined) setters.setDiscount(Number(newQuote.discount) || 0);
   if (newQuote.rejection_reason !== undefined) {
     setters.setRejectionReason((newQuote.rejection_reason as string) ?? "");
   }
-  if (Array.isArray(newQuote.signage_options) && !isDirtyRef.current) {
-    setters.setSections(newQuote.signage_options as SignageSection[]);
+  const options = newQuote.signage_options;
+  if (Array.isArray(options) && !isDirtyRef.current) {
+    setters.setSections(options.map((section) => normalizeSection(section as SignageSection)));
   }
 }
 
@@ -369,8 +391,11 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
   const [isMounted, setIsMounted] = useState(false);
   const [selectedProductInfo, setSelectedProductInfo] = useState<Product | null>(null);
   const [showSendConfirm, setShowSendConfirm] = useState(false);
+  const [showDocumentPreview, setShowDocumentPreview] = useState(false);
+  const [invoiceProfile, setInvoiceProfile] = useState<InvoiceProfile>(EMPTY_INVOICE_PROFILE);
   const [advanceConfirmType, setAdvanceConfirmType] = useState<"override" | "advance" | null>(null);
   const isDirtyRef = useRef(false);
+  const lastRealtimeAtRef = useRef<string | null>(null);
 
   useEffect(() => {
     setIsMounted(true);
@@ -378,6 +403,9 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
 
   // Core metadata states
   const [quotationId, setQuotationId] = useState(initialQuotation?.quotation_id ?? "");
+  const [quoteCreatedAt, setQuoteCreatedAt] = useState<string | null>(
+    initialQuotation?.created_at ?? initialQuotation?.updated_at ?? null
+  );
   const [status, setStatus] = useState<"Draft" | "Sent" | "Approved" | "Rejected" | "Pending Approval">(
     initialQuotation?.status ?? "Draft"
   );
@@ -408,6 +436,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
             {
               id: crypto.randomUUID(),
               description: "",
+              hsn: "",
               quantity: defaultMeasurement,
               pricingType: "per_unit" as const,
               unit: "nos",
@@ -472,54 +501,95 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
   );
 
   useEffect(() => {
-    if (externalRealtime) return;
-
-    const supabase = createClient();
-    const channel = supabase
-      .channel(`quotation-sync-${order.id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "quotations",
-          filter: `order_id=eq.${order.id}`,
-        },
-        (payload: { eventType: string; new: Record<string, unknown> }) => {
-          if (payload.eventType === "INSERT" || payload.eventType === "UPDATE") {
-            const newQuote = payload.new as Record<string, unknown>;
-            if (newQuote) {
-              applyQuotationRealtimeRow(newQuote, isDirtyRef, {
-                setQuotationId,
-                setStatus,
-                setNotes,
-                setTerms,
-                setShipping,
-                setRejectionReason,
-                setSections,
-              });
-            }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const settings = await getAppSettings();
+        if (!cancelled) {
+          setInvoiceProfile(settings.invoiceProfile || EMPTY_INVOICE_PROFILE);
+          if (
+            !initialQuotation?.terms &&
+            settings.invoiceProfile?.defaultTerms?.trim()
+          ) {
+            setTerms(settings.invoiceProfile.defaultTerms);
           }
         }
-      )
-      .subscribe();
-
+      } catch {
+        // Letterhead optional for builder preview
+      }
+    })();
     return () => {
-      supabase.removeChannel(channel);
+      cancelled = true;
     };
-  }, [order.id, externalRealtime]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- seed once
+  }, []);
 
-  useEffect(() => {
-    if (!externalRealtime || !realtimeQuotation) return;
-    applyQuotationRealtimeRow(realtimeQuotation, isDirtyRef, {
+  const applyRealtimeQuote = (newQuote: Record<string, unknown>) => {
+    const stamp = typeof newQuote.updated_at === "string" ? newQuote.updated_at : null;
+    if (stamp && stamp === lastRealtimeAtRef.current) return;
+    if (stamp) lastRealtimeAtRef.current = stamp;
+    applyQuotationRealtimeRow(newQuote, isDirtyRef, {
       setQuotationId,
       setStatus,
       setNotes,
       setTerms,
       setShipping,
+      setDiscount,
       setRejectionReason,
       setSections,
+      setQuoteCreatedAt,
     });
+  };
+
+  // Own quotations channel for this module's UI state.
+  useEffect(() => {
+    if (!order.id) return;
+
+    const supabase = createClient();
+    let cancelled = false;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    void (async () => {
+      await ensureRealtimeAuth(supabase);
+      if (cancelled) return;
+
+      channel = supabase
+        .channel(`quotation-sync:${order.id}:${Math.random().toString(36).slice(2, 8)}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "quotations",
+            filter: `order_id=eq.${order.id}`,
+          },
+          (payload: { eventType: string; new: Record<string, unknown> }) => {
+            if (
+              (payload.eventType === "INSERT" || payload.eventType === "UPDATE") &&
+              payload.new
+            ) {
+              applyRealtimeQuote(payload.new);
+            }
+          }
+        )
+        .subscribe((status, err) => {
+          if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+            console.error("[QuotationModule] realtime error", { orderId: order.id, status, err });
+          }
+        });
+    })();
+
+    return () => {
+      cancelled = true;
+      if (channel) supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- bind once per order; setters are stable
+  }, [order.id]);
+
+  useEffect(() => {
+    if (!externalRealtime || !realtimeQuotation) return;
+    applyRealtimeQuote(realtimeQuotation);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [externalRealtime, realtimeQuotation]);
 
   // Calculations
@@ -630,12 +700,13 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
         const saved = await upsertQuotation(order.id, {
           signage_options: sections,
           discount: effectiveDiscount,
-          status,
+          status: "Draft",
           notes,
           terms,
           shipping,
         });
         if (saved.quotation_id) setQuotationId(saved.quotation_id);
+        setStatus("Draft");
         isDirtyRef.current = false;
         setSaveMsg({ text: "Quotation saved ✓", ok: true });
         setTimeout(() => setSaveMsg(null), 3000);
@@ -723,6 +794,14 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
           </div>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setShowDocumentPreview(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-bold text-slate-700 hover:bg-slate-50 shadow-sm"
+          >
+            <Eye size={13} />
+            Preview / Print
+          </button>
 
           <span className={`text-[10px] px-2.5 py-1 rounded-full font-black uppercase border ${status === "Approved" ? "bg-emerald-50 border-emerald-200 text-emerald-700" :
               status === "Sent" ? "bg-blue-50 border-blue-200 text-blue-700" :
@@ -734,11 +813,11 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
         </div>
       </div>
 
-      {status === "Rejected" && (
+      {(status === "Rejected" || (status === "Draft" && rejectionReason)) && (
         <div className="p-4 rounded-2xl border flex items-center gap-3 shadow-sm bg-rose-50 border-rose-200 text-rose-800">
           <AlertCircle size={16} className="text-rose-600 shrink-0" />
           <div className="text-xs font-semibold">
-            Quotation was rejected / declined by the customer.
+            {status === "Rejected" ? "Quotation was rejected / declined by the customer." : "Previous quotation was rejected by customer (drafting new version)."}
             {rejectionReason && (
               <span className="block mt-1 text-rose-700 bg-white/50 px-2 py-1 rounded border border-rose-100">
                 Reason: <span className="font-bold">"{rejectionReason}"</span>
@@ -812,10 +891,11 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
               <div
                 className="grid gap-2 px-4 py-2.5 text-[10px] font-black text-[#64748b] uppercase tracking-wider bg-slate-50 border-b border-slate-100"
                 style={{
-                  gridTemplateColumns: "1fr 105px 120px 105px 40px 90px 28px",
+                  gridTemplateColumns: "1fr 72px 105px 110px 95px 40px 90px 28px",
                 }}
               >
                 <div>Item Description</div>
+                <div className="text-center">HSN</div>
                 <div className="text-center">Unit Type</div>
                 <div className="text-center">Measurement/Qty</div>
                 <div className="text-right">Rate (₹)</div>
@@ -835,7 +915,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                       <div
                         className="grid gap-2 px-4 py-3.5 items-center overflow-visible"
                         style={{
-                          gridTemplateColumns: "1fr 105px 120px 105px 40px 90px 28px",
+                          gridTemplateColumns: "1fr 72px 105px 110px 95px 40px 90px 28px",
                           position: "relative",
                           zIndex: activeRowId === line.id ? 50 : 1,
                         }}
@@ -887,6 +967,21 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                             </button>
                           )}
                         </div>
+
+                        {/* HSN */}
+                        <input
+                          type="text"
+                          value={line.hsn || ""}
+                          disabled={isLocked}
+                          onChange={(e) =>
+                            updateLine(section.siteVisitItemId, line.id, {
+                              hsn: e.target.value,
+                            })
+                          }
+                          className={`${inputCls} w-full py-1.5 text-center font-mono`}
+                          placeholder="HSN"
+                          maxLength={12}
+                        />
 
                         {/* Unit Type Selector */}
                         <select
@@ -1335,6 +1430,52 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
           product={selectedProductInfo}
           onClose={() => setSelectedProductInfo(null)}
         />
+      )}
+
+      {showDocumentPreview && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[99999] flex items-start justify-center overflow-y-auto bg-black/50 p-4 quotation-no-print">
+          <div className="relative my-6 w-full max-w-4xl rounded-2xl bg-slate-100 shadow-2xl">
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 rounded-t-2xl quotation-no-print">
+              <div>
+                <h3 className="text-sm font-black text-slate-900">Customer quotation preview</h3>
+                <p className="text-[11px] text-slate-500">
+                  Same layout as the portal. Use Print / Save as PDF on the document.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowDocumentPreview(false)}
+                className="rounded-lg border border-slate-200 bg-white p-2 text-slate-500 hover:bg-slate-50"
+                aria-label="Close preview"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="p-4 sm:p-6">
+              <QuotationDocument
+                quotationId={quotationId}
+                quoteDate={quoteCreatedAt || new Date().toISOString()}
+                status={status}
+                showStatus
+                billToName={[order.businessName, order.clientName].filter(Boolean).join(" - ") || "—"}
+                billToAddress={null}
+                placeOfSupply={invoiceProfile.placeOfSupplyDefault}
+                sections={sections}
+                subtotal={subtotal}
+                discount={effectiveDiscount}
+                shipping={shipping}
+                tax={tax}
+                grandTotal={grandTotal}
+                notes={notes}
+                terms={terms}
+                invoiceProfile={invoiceProfile}
+                siteVisitItems={siteVisitItems}
+                showPrintButton
+              />
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
 
       {showSendConfirm && (

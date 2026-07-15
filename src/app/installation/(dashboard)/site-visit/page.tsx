@@ -32,6 +32,7 @@ export default async function InstallationSiteVisitPage() {
     customerName: o.business_name || "",
     orderCode: o.order_id || o.id,
     orderId: o.order_id || o.id,
+    workflow_type: o.workflow_type ?? null,
     siteVisitDetails: o.siteVisitDetails ?? null,
   }));
 
@@ -71,6 +72,7 @@ export default async function InstallationSiteVisitPage() {
         currentEmployeeName={currentEmployee?.name || ""}
         orderDetailBasePath="/installation/orders"
         entryStage="site_visit"
+        hideTitle={true}
       />
     </div>
   );

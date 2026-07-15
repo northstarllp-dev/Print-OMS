@@ -51,7 +51,6 @@ import {
 } from "@/features/orders/actions/orderActions";
 import {
   markInstallationCompleted,
-  requestInstallationLocationAction,
   updateInstallationDetails as updateInstallationDetailsServer,
 } from "@/features/installations/actions/installationActions";
 import {
@@ -108,7 +107,7 @@ function computePendingStageStatus(
   if (stage === "Quotation Approved") {
     return isDesignFirst
       ? "Pending Admin Approval: Production Ready"
-      : "Pending Admin Approval: Design Approval";
+      : "Pending Admin Approval: Design Stage";
   }
   if (stage === "Design In Progress") {
     return "Pending Admin Approval: Design Approval";
@@ -121,7 +120,7 @@ function computePendingStageStatus(
   if (stage === "Production") {
     return "Pending Admin Approval: Production Ready";
   }
-  if (stage === "Ready For Installation" || stage === "Installation Scheduled") {
+  if (stage === "Installation Scheduled") {
     return "Pending Admin Approval: Job Done";
   }
   return "Normal";
@@ -298,6 +297,8 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   const [messages, setMessages] = useState<any[]>([]);
   const orderRef = useRef(order);
   orderRef.current = order;
+  /** Sync ref so Save Draft always sends the latest locations, not a stale render snapshot. */
+  const siteVisitDetailsRef = useRef(initialOrder.siteVisitDetails);
   const [quotationRealtimeRow, setQuotationRealtimeRow] = useState<Record<string, unknown> | null>(null);
 
   const triggerLocalAlert = useCallback((
@@ -311,7 +312,10 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   const entryStageRef = useRef(entryStage);
   entryStageRef.current = entryStage;
 
-  useEffect(() => { setOrder(initialOrder); }, [initialOrder]);
+  useEffect(() => {
+    setOrder(initialOrder);
+    siteVisitDetailsRef.current = initialOrder.siteVisitDetails;
+  }, [initialOrder]);
   useEffect(() => {
     if (entryStageRef.current != null) return;
     setActiveStepTab(stageToTabIndex(order.stage, order.workflow_type));
@@ -333,11 +337,29 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   useOrderDetailSync({
     orderId: order.id,
     businessOrderId: order.orderId || order.id,
+    siteVisitId: order.siteVisitDetails?.id ?? null,
     enabled: isOpen,
     getOrderSnapshot: () => orderRef.current as unknown as Record<string, unknown>,
     onPatch: (patch) => {
-      setOrder((prev) => mergeOrderDetailPatch(prev, patch));
-      if (patch.quoteDetails) {
+      const prevStatus = orderRef.current.stageStatus;
+      setOrder((prev) => {
+        const next = mergeOrderDetailPatch(prev, patch);
+        if (next.siteVisitDetails !== undefined) {
+          siteVisitDetailsRef.current = next.siteVisitDetails as SiteVisitDetails | undefined;
+        }
+        return next;
+      });
+      // When staff submits Job Done, land admin on Admin Controls so pending review is visible immediately.
+      if (
+        currentUserRole === "Admin" &&
+        patch.stageStatus === "Pending Admin Approval: Job Done" &&
+        prevStatus !== "Pending Admin Approval: Job Done"
+      ) {
+        setActiveStepTab(ADMIN_TAB);
+      }
+      if (patch.quotationRow) {
+        setQuotationRealtimeRow(patch.quotationRow);
+      } else if (patch.quoteDetails) {
         const qd = patch.quoteDetails;
         setQuotationRealtimeRow({
           quotation_id: qd.quotationId,
@@ -345,7 +367,11 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           notes: qd.notes,
           terms: qd.terms,
           shipping: qd.shipping,
+          discount: qd.discount,
+          rejection_reason: qd.rejectionReason,
           signage_options: qd.signageOptions,
+          created_at: qd.createdAt,
+          updated_at: qd.updatedAt ?? Date.now(),
         });
       }
     },
@@ -384,7 +410,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   const isStaffQueueReadOnly =
     isEmployee &&
     entryStage != null &&
-    isStaffQueueCompleted(order.stage, entryStage);
+    isStaffQueueCompleted(order.stage, entryStage, order.workflow_type || undefined);
   const effectiveStagePermission = (stage: OrderStage): StagePermission => {
     const base = getStagePermissionInContext(stage, actor, entryStage);
     if (isStaffQueueReadOnly) return { canView: base.canView, canEdit: false };
@@ -403,7 +429,22 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
 
   /* ── Local State Wrappers ── */
   const updateSiteVisitDetails = async (orderId: string, details: Partial<SiteVisitDetails>) => {
-    setOrder((prev) => ({ ...prev, siteVisitDetails: { ...(prev.siteVisitDetails || {}), ...details } as SiteVisitDetails }));
+    setOrder((prev) => {
+      const merged = {
+        ...(prev.siteVisitDetails || {}),
+        ...details,
+      } as SiteVisitDetails;
+      siteVisitDetailsRef.current = merged;
+      const next: Order = { ...prev, siteVisitDetails: merged };
+      // Local schedule mirror — server also sets stage; realtime covers other clients.
+      if (
+        (details.auditDate || details.preferredDate) &&
+        prev.stage === "Site Visit Pending"
+      ) {
+        next.stage = "Site Visit Scheduled";
+      }
+      return next;
+    });
   };
   // Quote details are now managed entirely by QuotationModule via quotationActions.
   const updateDesignDetails = async (orderId: string, details: Partial<DesignRecord>) => {
@@ -475,10 +516,13 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
 
   const executeAdminApprove = async () => {
     const wasJobDonePending = order.stageStatus === "Pending Admin Approval: Job Done";
-    await adminApproveStageAction(order.id);
+    const result = await adminApproveStageAction(order.id);
+    const nextStage =
+      (Array.isArray(result) ? result[0]?.stage : (result as any)?.stage) ||
+      (wasJobDonePending ? "Completed" : undefined);
     setOrder((prev) => ({
       ...prev,
-      stage: wasJobDonePending ? ("Completed" as PipelineStage) : prev.stage,
+      ...(nextStage ? { stage: nextStage as PipelineStage } : {}),
       stageStatus: "Normal",
     }));
     router.refresh();
@@ -491,16 +535,6 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   const handleAdminApprove = async () => {
     setIsProcessing(true);
     try {
-      if (activeStepTab === 4 && order.stageStatus === "Normal") {
-        const confirmClose = window.confirm(
-          "WARNING: Closing this order means no more modifications can be done. God Mode will be permanently disabled, and the order will become strictly view-only.\n\nAre you sure you want to close this order?"
-        );
-        if (!confirmClose) {
-          setIsProcessing(false);
-          return;
-        }
-      }
-
       await handleSaveDraft();
       // On Site Visit tab with normal status, open review modal first.
       if (activeStepTab === 0 && order.stageStatus === "Normal") {
@@ -518,6 +552,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
         setIsProcessing(false);
         return;
       }
+      // Installation completion always goes through payment review — never skip Job Done.
       if (order.stageStatus === "Pending Admin Approval: Job Done") {
         setIsInstallationPaymentModalOpen(true);
         setIsProcessing(false);
@@ -548,6 +583,19 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     const isDesignFirst = workflowType === "design_first";
     const designTabIndex = isDesignFirst ? 1 : 2;
 
+    // Gate by order stage (not active tab) so Quote/other tabs cannot skip design readiness.
+    if (order.stage === "Design In Progress") {
+      const itemsList = (order.design as DesignRecord)?.items || [];
+      const allDesignItemsApproved = areAllDesignItemsApproved(itemsList as any);
+      const hasProductionFiles = itemsList.some(
+        (item: any) => item.productionFiles && item.productionFiles.length > 0
+      );
+      if (!allDesignItemsApproved || !hasProductionFiles) {
+        alert("All designs must be approved and final production files must be uploaded.");
+        return;
+      }
+    }
+
     if ((activeStepTab === 0 || activeStepTab === designTabIndex) && !canAdvanceSiteVisit) {
       alert(siteVisitAdvanceTooltip);
       return;
@@ -562,6 +610,30 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
       if (activeStepTab === 0) {
         setIsReviewModalOpen(true);
         setIsProcessing(false);
+        return;
+      }
+
+      // Installation: submit job-done package (checklist / photos / notes) for admin payment review.
+      if (activeStepTab === 4) {
+        if (
+          !window.confirm(
+            "Submit installation to admin for review? The order will stay open until admin confirms payments and marks it completed."
+          )
+        ) {
+          setIsProcessing(false);
+          return;
+        }
+        const details = orderRef.current.installationDetails || {};
+        await handleMarkInstallationCompleted(
+          order.id,
+          Array.isArray(details.checklist) ? details.checklist : [],
+          details.afterPhotos || [],
+          details.notes || ""
+        );
+        triggerLocalAlert(
+          "Installation submitted to admin. Awaiting payment review and order completion.",
+          "success"
+        );
         return;
       }
 
@@ -668,17 +740,28 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     const workflowType = order.workflow_type || "quote_first";
     // Tab indices depend on workflow:
     // quote_first:  0=SiteVisit, 1=Quote, 2=Design, 3=Production, 4=Installation
-    // design_first: 0=SiteVisit, 1=Design, 2=Quote,  3=Production, 4=Installation
+    // design_first:  0=SiteVisit, 1=Design, 2=Quote,  3=Production, 4=Installation
     const isDesignFirst = workflowType === "design_first";
     const designTab = isDesignFirst ? 1 : 2;
     const quoteTab = isDesignFirst ? 2 : 1;
     try {
       switch (activeStepTab) {
-        case 0: // Site Visit
-          if (order.siteVisitDetails) {
-            await updateSiteVisitDetailsAction(order.id, order.siteVisitDetails);
+        case 0: { // Site Visit
+          const details =
+            siteVisitDetailsRef.current ||
+            orderRef.current.siteVisitDetails;
+          if (details) {
+            const result = await updateSiteVisitDetailsAction(order.id, details);
+            if (result?.siteVisitDetails) {
+              siteVisitDetailsRef.current = result.siteVisitDetails as SiteVisitDetails;
+              setOrder((prev) => ({
+                ...prev,
+                siteVisitDetails: result.siteVisitDetails as SiteVisitDetails,
+              }));
+            }
           }
           break;
+        }
         case quoteTab: // Quotation — saved directly from QuotationModule
           break;
         case designTab: // Design
@@ -762,68 +845,34 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   }
 
   const isJobDonePending = order.stageStatus === "Pending Admin Approval: Job Done";
+  const designItemsForGate = ((order.design as DesignRecord)?.items || []) as any[];
+  const isDesignAdvanceReady =
+    areAllDesignItemsApproved(designItemsForGate) &&
+    designItemsForGate.some((item: any) => item.productionFiles && item.productionFiles.length > 0);
+  // Installation tab: only show complete CTA when staff has submitted Job Done (payment review gate).
   const showAdminApproveButton =
     !isEmployee &&
-    currentStageIndex === activeStepTab &&
-    (order.stageStatus === "Normal" || isJobDonePending);
+    (
+      isJobDonePending ||
+      (currentStageIndex === activeStepTab &&
+        order.stageStatus === "Normal" &&
+        activeStepTab !== 4 &&
+        !(order.stage === "Design In Progress" && !isDesignAdvanceReady))
+    );
   const adminApproveLabel = isJobDonePending
     ? "Review Payments & Complete"
-    : activeStepTab === 4
-    ? "Close Order"
     : "Approve & Advance";
+  // Hide staff advance while Job Done is pending, or while waiting to schedule (Ready For Installation).
   const hideStaffAdvanceRequest =
-    isJobDonePending && currentStageIndex === activeStepTab;
+    order.stage === "Ready For Installation" ||
+    (isJobDonePending && currentStageIndex === activeStepTab);
 
-  const actionButtonsNode = (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" }}>
-      {order.health && order.health !== "Active" ? (
-        <>
-          <span style={{ fontSize: "12px", color: "#64748B", fontWeight: "600", display: "none" }}>
-            Order is <strong style={{ color: "#DC2626" }}>{order.health}</strong>
-          </span>
-          <button onClick={handleReopen} style={{ padding: "6px 14px", background: "var(--color-secondary)", border: "none", color: "white", borderRadius: "6px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}>
-            <RefreshCw size={13} /> Reopen
-          </button>
-        </>
-      ) : (
-        (!isCurrentTabFrozen ? (
-          <>
-            {(() => {
-              const activeStageForPerm = tabIndexToOrderStage(activeStepTab, order.workflow_type);
-              const stageCanEdit = activeStageForPerm
-                ? getStagePermissionInContext(activeStageForPerm, actor, entryStage).canEdit
-                : true;
-              if (!stageCanEdit) return null;
-              return (
-                <>
-                  <button onClick={handleSaveDraft} style={{ padding: "6px 14px", border: "1px solid #E2E8F0", background: "white", color: "#0F172A", borderRadius: "6px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", transition: "color 0.15s, background-color 0.15s" }}>
-                    {activeStepTab === designTab ? <><Send size={13} /> Send to Customer</> : <><Save size={13} /> Save Draft</>}
-                  </button>
-                  {isEmployee ? (
-                    !hideStaffAdvanceRequest && (
-                      <button onClick={handleRequestAdvancement} style={{ padding: "6px 14px", background: "#22C55E", border: "none", color: "white", borderRadius: "6px", fontSize: "12px", fontWeight: "800", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", transition: "color 0.15s, background-color 0.15s" }}>
-                        <CheckCircle2 size={13} /> Request Admin Approval
-                      </button>
-                    )
-                  ) : (
-                    showAdminApproveButton && (
-                      <button onClick={handleAdminApprove} style={{ padding: "6px 14px", background: "#22C55E", border: "none", color: "white", borderRadius: "6px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", transition: "color 0.15s, background-color 0.15s" }}>
-                        <Check size={13} /> {adminApproveLabel}
-                      </button>
-                    )
-                  )}
-                </>
-              );
-            })()}
-          </>
-        ) : (
-          <div style={{ padding: "6px 14px", border: "1px solid #E2E8F0", background: "#F1F5F9", color: "#64748B", borderRadius: "6px", fontSize: "12px", fontWeight: "700", display: "flex", alignItems: "center", gap: "4px" }}>
-            <Lock size={13} /> Submitted & Locked
-          </div>
-        ))
-      )}
-    </div>
-  );
+  // Whether the active tab's stage is inaccessible to this actor (RBAC + workflow progress)
+  const isActiveStageInaccessible = (() => {
+    const activeStage = tabIndexToOrderStage(activeStepTab, order.workflow_type);
+    if (activeStage == null) return false; // Admin/Payments tabs — handled separately
+    return !isTimelineStageAccessible(activeStage, actor, entryStage) || !hasStageBeenReached(activeStage);
+  })();
 
   /* ── Filtered order list for left panel ── */
   const filteredOrders = allOrders.filter((o) => {
@@ -968,10 +1017,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           permission={effectiveStagePermission("installation")}
           callbacks={{
             updateInstallationDetails,
-            markInstallationCompleted: handleMarkInstallationCompleted,
-            requestInstallationLocationAction,
             onBack: () => {},
-            onCompleted: () => router.refresh(),
           }}
           adminOverrideUnlocked={effectiveAdminOverrideUnlocked}
           setAdminOverrideUnlocked={effectiveSetAdminOverrideUnlocked}
@@ -1461,10 +1507,14 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
 
           </div>
 
-          {/* Sticky footer actions */}
+          {/* Sticky footer actions — hidden entirely when the active stage is inaccessible */}
           <div style={{ padding: "14px 20px", background: "#F8FAFC", borderTop: "1px solid #E2E8F0", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0, boxShadow: "0 -2px 10px rgba(0,0,0,0.05)" }}>
             <div />
-            {activeStepTab === quoteTab ? (
+            {isActiveStageInaccessible ? (
+              <span style={{ fontSize: "12px", fontWeight: "700", color: "#94A3B8", display: "flex", alignItems: "center", gap: "6px" }}>
+                <Lock size={13} /> No actions available for this stage
+              </span>
+            ) : activeStepTab === quoteTab ? (
               order.health && order.health !== "Active" ? (
                 <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
                   <span style={{ fontSize: "12px", color: "#64748B", fontWeight: "600" }}>
@@ -1481,7 +1531,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
               <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
                 {order.health && order.health !== "Active" ? (
                   <>
-                    <span style={{ fontSize: "12px", color: "#64748B", fontWeight: "600" }}>
+                    <span style={{ fontSize: "12px", color: "#64748B", fontWeight: "600", display: "none" }}>
                       Order is <strong style={{ color: "#DC2626" }}>{order.health}</strong>
                     </span>
                     <button onClick={handleReopen} style={{ padding: "7px 16px", background: "var(--color-secondary)", border: "none", color: "white", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
