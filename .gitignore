@@ -47,6 +47,7 @@ CLAUDE.md
 .claudecodeignore
 
 # AI & IDE files
+brag-output-2026-07-15-105449/
 .agents/
 AGENTS.md
 skills-lock.json

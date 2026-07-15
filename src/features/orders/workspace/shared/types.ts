@@ -3,7 +3,8 @@ export type OrderStage =
   | "quotation"
   | "design"
   | "production"
-  | "installation";
+  | "installation"
+  | "service_tickets";
 
 export interface StagePermission {
   canView: boolean;
