@@ -102,7 +102,7 @@ export function OrdersManagementDashboard({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [stageFilter, setStageFilter] = useState("ALL");
   const [healthFilter, setHealthFilter] = useState("ALL");
-  const [adminAssignedFilter, setAdminAssignedFilter] = useState<"ALL" | "MINE">("ALL");
+  const [adminAssignedFilter, setAdminAssignedFilter] = useState<"ALL" | "MINE">("MINE");
   const [selectedKpi, setSelectedKpi] = useState<string | null>(null);
   const clientConfig = loadClientConfig();
   const parsedEntryStage = parseOrderStage(entryStage);
@@ -441,7 +441,22 @@ export function OrdersManagementDashboard({
             </select>
 
             {currentUserRole === "Admin" && clientConfig.features.enableAdminAssignment && (
-              <select value={adminAssignedFilter} onChange={(e) => setAdminAssignedFilter(e.target.value as "ALL" | "MINE")} style={{ padding: "9px 12px", background: "white", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "13px", fontWeight: "500", color: "#475569", cursor: "pointer", outline: "none" }}>
+              <select 
+                value={adminAssignedFilter} 
+                onChange={(e) => setAdminAssignedFilter(e.target.value as "ALL" | "MINE")} 
+                style={{ 
+                  padding: "8px 12px", 
+                  background: "var(--color-primary-container, #eff6ff)", 
+                  border: "2px solid var(--color-primary, #3b82f6)", 
+                  borderRadius: "8px", 
+                  fontSize: "13px", 
+                  fontWeight: "700", 
+                  color: "var(--color-primary, #1d4ed8)", 
+                  cursor: "pointer", 
+                  outline: "none",
+                  boxShadow: "0 2px 4px rgba(0,0,0,0.05)"
+                }}
+              >
                 <option value="ALL">All Assigned Admins</option>
                 <option value="MINE">My Assigned Orders</option>
               </select>
@@ -499,7 +514,7 @@ export function OrdersManagementDashboard({
           </div>
 
           {/* Reset Button */}
-          {(startDate !== "" || endDate !== "" || stageFilter !== "ALL" || healthFilter !== "ALL" || searchTerm !== "" || selectedKpi !== null) && (
+          {(startDate !== "" || endDate !== "" || stageFilter !== "ALL" || healthFilter !== "ALL" || searchTerm !== "" || selectedKpi !== null || adminAssignedFilter !== "MINE") && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "10px" }}>
               <button
                 onClick={() => {
@@ -508,7 +523,7 @@ export function OrdersManagementDashboard({
                   setEndDate("");
                   setStageFilter("ALL");
                   setHealthFilter("ALL");
-                  setAdminAssignedFilter("ALL");
+                  setAdminAssignedFilter("MINE");
                   setSearchTerm("");
                   setSelectedKpi(null);
                 }}

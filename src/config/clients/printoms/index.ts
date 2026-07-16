@@ -1,7 +1,7 @@
 import { PrintOMSClientConfig } from "../../schema";
 
 export const defaultConfig: PrintOMSClientConfig = {
-  id: "default",
+  id: "printoms",
   name: "Printoms",
   colors: {
     primary: "#1E40AF",
@@ -20,7 +20,8 @@ export const defaultConfig: PrintOMSClientConfig = {
     sidebarActiveText: "#E2E8F0",
     sidebarAccent: "#F97316",
   },
-  logoUrl: null,
+  logoUrl: "/clients/printoms/light withoutbg.png",
+  logoScale: 1.8,
   faviconUrl: null,
   loadingText: "PRINTOMS",
   features: {

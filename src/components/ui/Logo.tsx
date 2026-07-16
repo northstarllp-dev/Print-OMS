@@ -26,15 +26,19 @@ export function Logo({ className = "", forceText = false, width = 200, height = 
   }
 
   if (client.logoUrl && !forceText) {
+    const scale = client.logoScale || 1;
+    const finalWidth = width * scale;
+    const finalHeight = height * scale;
+
     return (
-      <div className={`flex items-center ${className}`} style={{ width, transition: "all 0.25s cubic-bezier(0.4,0,0.2,1)" }}>
+      <div className={`flex items-center ${className}`} style={{ width: finalWidth, transition: "all 0.25s cubic-bezier(0.4,0,0.2,1)" }}>
         <Image
           src={client.logoUrl}
           alt={`${client.name} Logo`}
-          width={width}
-          height={height}
+          width={finalWidth}
+          height={finalHeight}
           className="object-contain"
-          style={{ maxHeight: height, maxWidth: "100%", objectPosition: align, transition: "all 0.25s cubic-bezier(0.4,0,0.2,1)" }}
+          style={{ maxHeight: finalHeight, maxWidth: "100%", objectPosition: align, transition: "all 0.25s cubic-bezier(0.4,0,0.2,1)" }}
           priority
         />
       </div>

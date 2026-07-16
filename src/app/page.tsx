@@ -120,7 +120,7 @@ export default async function RootGateway() {
       {/* Footer */}
       <div style={{ marginTop: 80, textAlign: "center", color: "var(--text-secondary)", fontSize: 13 }}>
         <a
-          href="https://thepolarislabs.vercel.app/"
+          href="https://www.thepolarislabs.com/"
           target="_blank"
           rel="noopener noreferrer"
           style={{
@@ -140,7 +140,7 @@ export default async function RootGateway() {
           <img
             src="/clients/light withoutbg.png"
             alt="Polaris"
-            style={{ height: "80px", margin: "-35px" }}
+            style={{ height: "50px", marginLeft: "-2px", marginTop: "-16px", marginBottom: "-12px" }}
           />
         </a>
       </div>

@@ -1,7 +1,7 @@
 import { PrintOMSClientConfig } from "./schema";
 import { clientRegistry } from "./registry";
 import { mergeConfig } from "./mergeConfig";
-import { defaultConfig } from "./clients/_default";
+import { defaultConfig } from "./clients/printoms";
 
 export function loadClientConfig(): PrintOMSClientConfig {
   const slug = process.env.NEXT_PUBLIC_CLIENT_SLUG || "the-board-company";
