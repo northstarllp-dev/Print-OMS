@@ -646,7 +646,7 @@ export function WelcomeMessageModal({ isOpen, onClose, customerInfo }: WelcomeMe
       if (customerInfo.orderId) {
         params.append("order_id", customerInfo.orderId);
       }
-      fetch(`/api/portal-token?${params.toString()}`)
+      fetch(`/printoms/api/portal-token?${params.toString()}`)
         .then((res) => res.json())
         .then((data) => {
           if (data.url) {

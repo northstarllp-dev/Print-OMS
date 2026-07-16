@@ -7,19 +7,30 @@ import {
 } from "@/features/quotations/actions/quotationActions";
 import { revalidateOrderPathsAction } from "@/features/orders/actions/orderActions";
 
+function friendlyError(err: any): string {
+  const msg: string = err?.message || "";
+  if (msg === "Unauthorized" || msg.toLowerCase().includes("unauthorized")) {
+    return "Your session has expired. Please refresh the page and try again.";
+  }
+  return msg || "Something went wrong. Please try again.";
+}
+
 export function useQuotationActions(
   orderId: string,
   customerName: string,
-  onOrderUpdate: (updater: (prev: any) => any) => void
+  onOrderUpdate: (updater: (prev: any) => any) => void,
+  portalToken?: string
 ) {
   const [quoteFeedback, setQuoteFeedback] = useState("");
   const [showQuoteDeclineInput, setShowQuoteDeclineInput] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const handleApproveQuote = async () => {
+    setActionError(null);
     setUpdatingStatus("quote-approve");
     try {
-      await customerApproveQuotation(orderId, customerName);
+      await customerApproveQuotation(orderId, customerName, portalToken);
       onOrderUpdate((prev) => ({
         ...prev,
         stage: "Quotation Approved",
@@ -27,7 +38,7 @@ export function useQuotationActions(
       }));
       await revalidateOrderPathsAction(orderId);
     } catch (err: any) {
-      alert(err?.message || "Failed to approve quotation");
+      setActionError(friendlyError(err));
     } finally {
       setUpdatingStatus(null);
     }
@@ -35,9 +46,10 @@ export function useQuotationActions(
 
   const handleDeclineQuote = async () => {
     if (!quoteFeedback.trim()) return;
+    setActionError(null);
     setUpdatingStatus("quote-decline");
     try {
-      await customerRequestRevision(orderId, customerName, quoteFeedback);
+      await customerRequestRevision(orderId, customerName, quoteFeedback, portalToken);
       onOrderUpdate((prev) => ({
         ...prev,
         stage: "Quotation Negotiation",
@@ -51,7 +63,7 @@ export function useQuotationActions(
       setQuoteFeedback("");
       setShowQuoteDeclineInput(false);
     } catch (err: any) {
-      alert(err?.message || "Failed to submit feedback");
+      setActionError(friendlyError(err));
     } finally {
       setUpdatingStatus(null);
     }
@@ -63,6 +75,8 @@ export function useQuotationActions(
     showQuoteDeclineInput,
     setShowQuoteDeclineInput,
     updatingStatus,
+    actionError,
+    setActionError,
     handleApproveQuote,
     handleDeclineQuote,
   };

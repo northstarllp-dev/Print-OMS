@@ -599,25 +599,25 @@ export function AdminDashboardClient({
                         <p style={{ margin: "4px 0 0", fontSize: "12px", color: "#64748B", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                           {(order.businessName || order.customerName || "No Business")} • {(order.clientName || "No Client")}
                         </p>
-                        {order.assignedAdmins && order.assignedAdmins.length > 0 && (
-                          <div style={{ display: "flex", alignItems: "center", gap: "4px", marginTop: "6px" }}>
-                            {order.assignedAdmins.map((adminId: string) => {
-                              const adminObj = admins?.find(a => a.id === adminId);
-                              const adminName = adminObj ? adminObj.name : "Admin";
-                              const initials = adminName.substring(0, 2).toUpperCase();
-                              return (
-                                <div key={adminId} title={adminName} style={{
-                                  width: "20px", height: "20px", borderRadius: "50%", background: "#E2E8F0", color: "#475569",
-                                  display: "flex", alignItems: "center", justifyContent: "center", fontSize: "9px", fontWeight: "bold",
-                                  border: "1px solid #fff", boxShadow: "0 1px 2px rgba(0,0,0,0.05)"
-                                }}>
-                                  {initials}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
                       </div>
+                      {order.assignedAdmins && order.assignedAdmins.length > 0 && (
+                        <div style={{ display: "flex", alignItems: "center", gap: "4px", flexShrink: 0 }}>
+                          {order.assignedAdmins.map((adminId: string) => {
+                            const adminObj = admins?.find(a => a.id === adminId);
+                            const adminName = adminObj ? adminObj.name : "Admin";
+                            const initials = adminName.substring(0, 2).toUpperCase();
+                            return (
+                              <div key={adminId} title={adminName} style={{
+                                width: "20px", height: "20px", borderRadius: "50%", background: "#E2E8F0", color: "#475569",
+                                display: "flex", alignItems: "center", justifyContent: "center", fontSize: "9px", fontWeight: "bold",
+                                border: "1px solid #fff", boxShadow: "0 1px 2px rgba(0,0,0,0.05)"
+                              }}>
+                                {initials}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                       <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
                         <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: stageInfo.dot, flexShrink: 0 }} />
                         <span style={{ fontSize: "12px", color: "#475569", fontWeight: "600", whiteSpace: "nowrap" }}>{stageInfo.label}</span>

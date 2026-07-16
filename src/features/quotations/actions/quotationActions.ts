@@ -92,34 +92,45 @@ async function resolveOrderId(
   };
 }
 
-async function assertPortalOrderOwnership(orderUuid: string): Promise<void> {
-  await assertValidPortalSessionForOrder(orderUuid, "approve_quote");
-
-  const cookieStore = await cookies();
-  const sessionCookie = cookieStore.get("portal_session")?.value;
-  if (!sessionCookie) throw new Error("Unauthorized");
-
-  const session = JSON.parse(sessionCookie) as { customerId?: string; orderId?: string };
-  const admin = requireAdminClient();
-
-  const { data: order } = await admin
-    .from("orders")
-    .select("id, order_id, customer_id")
-    .eq("id", orderUuid)
-    .maybeSingle();
-  if (!order) throw new Error("Unauthorized");
-
-  if (session.orderId && (session.orderId === order.id || session.orderId === order.order_id)) {
-    return;
+async function assertPortalOrderOwnership(
+  orderUuid: string,
+  portalToken?: string
+): Promise<void> {
+  // Primary check: session cookie
+  try {
+    await assertValidPortalSessionForOrder(orderUuid, "approve_quote");
+    return; // cookie auth succeeded
+  } catch {
+    // Fall through to token-based auth below
   }
 
-  if (session.customerId) {
-    const { data: customer } = await admin
-      .from("customers")
-      .select("id")
-      .eq("customer_id", session.customerId)
+  // Fallback: verify raw portal token directly (handles missing/expired session cookies)
+  if (portalToken) {
+    const { verifyPortalToken } = await import("@/utils/portal-tokens");
+    const payload = verifyPortalToken(portalToken);
+    if (!payload) throw new Error("Unauthorized");
+    if (!payload.scopes.includes("approve_quote")) throw new Error("Unauthorized");
+
+    const admin = requireAdminClient();
+    const { data: order } = await admin
+      .from("orders")
+      .select("id, order_id, customer_id")
+      .eq("id", orderUuid)
       .maybeSingle();
-    if (customer && order.customer_id === customer.id) return;
+    if (!order) throw new Error("Unauthorized");
+
+    // Verify token orderId or customerId matches
+    if (payload.orderId && (payload.orderId === order.id || payload.orderId === order.order_id)) {
+      return;
+    }
+    if (payload.customerId) {
+      const { data: customer } = await admin
+        .from("customers")
+        .select("id")
+        .eq("customer_id", payload.customerId)
+        .maybeSingle();
+      if (customer && order.customer_id === customer.id) return;
+    }
   }
 
   throw new Error("Unauthorized");
@@ -372,10 +383,14 @@ export async function adminMarkQuotationApprovedAction(orderId: string) {
 }
 
 /** Customer approves quotation → stage = Quotation Approved */
-export async function customerApproveQuotation(orderId: string, customerName: string) {
+export async function customerApproveQuotation(
+  orderId: string,
+  customerName: string,
+  portalToken?: string
+) {
   const supabase = await getSupabase();
   const { uuid, friendly } = await resolveOrderId(supabase, orderId);
-  await assertPortalOrderOwnership(uuid);
+  await assertPortalOrderOwnership(uuid, portalToken);
 
   const admin = requireAdminClient();
 
@@ -417,14 +432,15 @@ export async function customerApproveQuotation(orderId: string, customerName: st
 export async function customerRequestRevision(
   orderId: string,
   customerName: string,
-  notes: string
+  notes: string,
+  portalToken?: string
 ) {
   const trimmed = notes.trim();
   if (!trimmed) throw new Error("Feedback is required");
 
   const supabase = await getSupabase();
   const { uuid, friendly } = await resolveOrderId(supabase, orderId);
-  await assertPortalOrderOwnership(uuid);
+  await assertPortalOrderOwnership(uuid, portalToken);
 
   const admin = requireAdminClient();
 

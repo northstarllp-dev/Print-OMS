@@ -77,8 +77,8 @@ async function revalidatePaymentPaths(orderId: string) {
   await revalidateStaffQueuePaths();
   revalidatePath(`/admin/orders/${orderId}`);
   revalidatePath(`/staff/orders/${orderId}`);
-  revalidatePath("/portal");
-  revalidatePath(`/portal/order/${orderId}`);
+  revalidatePath("/printoms/portal");
+  revalidatePath(`/printoms/portal/order/${orderId}`);
 }
 
 export type PaymentBalanceSummary = {

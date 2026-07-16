@@ -264,9 +264,9 @@ export async function updateOrder(id: string, updates: any) {
     revalidatePath(`/admin/orders/${orderUuid}`);
     revalidatePath(`/staff/orders/${orderIdFriendly}`);
     revalidatePath(`/staff/orders/${orderUuid}`);
-    revalidatePath("/portal");
-    revalidatePath(`/portal/order/${orderIdFriendly}`);
-    revalidatePath(`/portal/order/${orderUuid}`);
+    revalidatePath("/printoms/portal");
+    revalidatePath(`/printoms/portal/order/${orderIdFriendly}`);
+    revalidatePath(`/printoms/portal/order/${orderUuid}`);
   }
   return data;
 }
@@ -382,12 +382,12 @@ export async function updateSiteVisitDetailsAction(orderId: string, details: any
   await revalidateStaffQueuePaths();
   revalidatePath(`/admin/orders/${orderId}`);
   revalidatePath(`/staff/orders/${orderId}`);
-  revalidatePath("/portal");
-  revalidatePath(`/portal/order/${orderId}`);
+  revalidatePath("/printoms/portal");
+  revalidatePath(`/printoms/portal/order/${orderId}`);
   if (orderCode) {
     revalidatePath(`/admin/orders/${orderCode}`);
     revalidatePath(`/staff/orders/${orderCode}`);
-    revalidatePath(`/portal/order/${orderCode}`);
+    revalidatePath(`/printoms/portal/order/${orderCode}`);
   }
 
   const mappedVisit = mapSiteVisitFromDb(siteVisit);
@@ -427,9 +427,9 @@ export async function updateProductionDetailsAction(orderId: string, details: an
   revalidatePath(`/admin/orders/${orderUuid}`);
   revalidatePath(`/staff/orders/${orderId}`);
   revalidatePath(`/staff/orders/${orderUuid}`);
-  revalidatePath("/portal");
-  revalidatePath(`/portal/order/${orderId}`);
-  revalidatePath(`/portal/order/${orderUuid}`);
+  revalidatePath("/printoms/portal");
+  revalidatePath(`/printoms/portal/order/${orderId}`);
+  revalidatePath(`/printoms/portal/order/${orderUuid}`);
   
   return { success: true };
 }
@@ -458,9 +458,9 @@ export async function updateInstallationDetailsAction(orderId: string, details: 
   revalidatePath(`/admin/orders/${orderUuid}`);
   revalidatePath(`/staff/orders/${orderId}`);
   revalidatePath(`/staff/orders/${orderUuid}`);
-  revalidatePath("/portal");
-  revalidatePath(`/portal/order/${orderId}`);
-  revalidatePath(`/portal/order/${orderUuid}`);
+  revalidatePath("/printoms/portal");
+  revalidatePath(`/printoms/portal/order/${orderId}`);
+  revalidatePath(`/printoms/portal/order/${orderUuid}`);
   
   return { success: true };
 }

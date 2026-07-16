@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 export function revalidateOrderDetailPaths(friendlyOrId: string) {
   revalidatePath(`/admin/orders/${friendlyOrId}`);
   revalidatePath(`/staff/orders/${friendlyOrId}`);
-  revalidatePath(`/portal/order/${friendlyOrId}`);
+  revalidatePath(`/printoms/portal/order/${friendlyOrId}`);
 }
 
 /** Staff/admin order detail only — for internal quotation saves. */

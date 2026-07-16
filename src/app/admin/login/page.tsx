@@ -26,7 +26,7 @@ export default function AdminLogin() {
         setError(res.error);
         setLoading(false);
       } else {
-        window.location.href = "/admin/dashboard";
+        window.location.href = "/printoms/admin/dashboard";
       }
     } catch (err: any) {
       setError(err.message || "An unexpected error occurred.");
@@ -130,7 +130,7 @@ export default function AdminLogin() {
         <div style={{ marginTop: 20, textAlign: "center" }}>
           <button
             type="button"
-            onClick={() => router.push("/")}
+            onClick={() => window.location.href = "/printoms"}
             style={{ fontSize: 12, color: "#94A3B8", background: "none", border: "none", cursor: "pointer" }}
           >
             ← Back to portal select
@@ -159,7 +159,7 @@ export default function AdminLogin() {
         >
           Made with <span style={{ color: "#EF4444", fontSize: "14px" }}>❤️</span> by
           <img
-            src="/clients/light withoutbg.png"
+            src="/printoms/clients/light%20withoutbg.png"
             alt="Polaris"
             style={{ height: "50px", marginLeft: "-2px", marginTop: "-16px", marginBottom: "-12px" }}
           />

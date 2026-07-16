@@ -40,6 +40,7 @@ export interface QuotationTabProps {
   quoteFeedback: string;
   setQuoteFeedback: (val: string) => void;
   updatingStatus: string | null;
+  actionError?: string | null;
   handleApproveQuote: () => Promise<void>;
   handleDeclineQuote: () => Promise<void>;
   /** portal-step = multi-order wizard; card = single-order detail tab */
@@ -57,6 +58,7 @@ export function QuotationTab({
   quoteFeedback,
   setQuoteFeedback,
   updatingStatus,
+  actionError = null,
   handleApproveQuote,
   handleDeclineQuote,
   layout = "card",
@@ -128,6 +130,11 @@ export function QuotationTab({
           {qd.status === "Sent" && (
             <div className="quotation-no-print space-y-4 border border-slate-200 rounded-2xl bg-white p-5 shadow-sm">
               <p className="text-sm text-slate-600 font-medium">{approveCta}</p>
+              {actionError && (
+                <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm font-medium text-red-700">
+                  {actionError}
+                </div>
+              )}
 
               {!showQuoteDeclineInput ? (
                 <div className="flex flex-col sm:flex-row gap-3">

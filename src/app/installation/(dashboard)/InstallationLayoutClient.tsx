@@ -3,9 +3,8 @@
 import React, { useState } from "react";
 import { 
   Bell, CheckCircle, AlertCircle, Info, LogOut,
-  History, RotateCcw, Lock, Loader2, Key,
-  ShoppingBag, LifeBuoy, Settings,
-  ChevronLeft, ChevronRight, Search, Hammer, MapPin, Menu, X
+  Lock, Loader2, Key,
+  ChevronLeft, ChevronRight, Hammer, MapPin, Menu, X
 } from "lucide-react";
 import { Logo } from "@/components/ui/Logo";
 import { useRouter, usePathname } from "next/navigation";
@@ -32,7 +31,7 @@ export function InstallationLayoutClient({ children, profile }: InstallationLayo
   const [collapsed, setCollapsed] = useState(true);
   const [isHovered, setIsHovered] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const isExpanded = !collapsed || isHovered;
+  const isExpanded = !collapsed || isHovered || isMobileMenuOpen;
 
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
@@ -155,8 +154,9 @@ export function InstallationLayoutClient({ children, profile }: InstallationLayo
             padding: isExpanded ? "24px 20px" : "24px 12px",
             display: "flex",
             alignItems: "center",
-            justifyContent: "center",
+            justifyContent: "space-between",
             flexShrink: 0,
+            gap: 8,
             transition: "padding 0.25s cubic-bezier(0.4,0,0.2,1)",
           }}
         >
@@ -174,6 +174,16 @@ export function InstallationLayoutClient({ children, profile }: InstallationLayo
           }}>
             <Logo width={isExpanded ? 160 : 32} height={40} />
           </div>
+          {isMobileMenuOpen && (
+            <button
+              type="button"
+              className="md:hidden flex items-center justify-center p-2 rounded-lg text-slate-300 hover:bg-white/10"
+              onClick={() => setIsMobileMenuOpen(false)}
+              aria-label="Close menu"
+            >
+              <X size={18} />
+            </button>
+          )}
         </div>
 
         {/* Nav Items */}
@@ -186,6 +196,7 @@ export function InstallationLayoutClient({ children, profile }: InstallationLayo
               <button
                 key={item.id}
                 onClick={() => {
+                  setIsMobileMenuOpen(false);
                   router.push(item.id);
                 }}
                 title={!isExpanded ? item.label : undefined}
@@ -253,13 +264,8 @@ export function InstallationLayoutClient({ children, profile }: InstallationLayo
           })}
         </nav>
 
-        {/* Collapse Button */}
-        <div
-          style={{
-            padding: "12px",
-            flexShrink: 0,
-          }}
-        >
+        {/* Collapse Button — desktop only */}
+        <div className="hidden md:block" style={{ padding: "12px", flexShrink: 0 }}>
           <button
             onClick={() => setCollapsed((c) => !c)}
             style={{
@@ -388,7 +394,7 @@ export function InstallationLayoutClient({ children, profile }: InstallationLayo
                   >
                     {initials}
                   </div>
-                  <div style={{ textAlign: "left" }}>
+                  <div className="hidden sm:block" style={{ textAlign: "left" }}>
                     <p style={{ margin: 0, fontSize: "13px", fontWeight: "700", color: "#0F172A", lineHeight: 1.2 }}>
                       {profile.name}
                     </p>
@@ -466,7 +472,7 @@ export function InstallationLayoutClient({ children, profile }: InstallationLayo
         >
           Made with <span style={{ color: "#EF4444", fontSize: "14px" }}>❤️</span> by
           <img
-            src="/clients/light withoutbg.png"
+            src="/printoms/clients/light%20withoutbg.png"
             alt="Polaris"
             style={{ height: "50px", marginLeft: "-2px", marginTop: "-16px", marginBottom: "-12px" }}
           />
@@ -486,7 +492,7 @@ export function InstallationLayoutClient({ children, profile }: InstallationLayo
       )}
 
       {isChangePasswordModalOpen && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(15, 23, 42, 0.6)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>
+        <div style={{ position: "fixed", inset: 0, background: "rgba(15, 23, 42, 0.6)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 }}>
           <div style={{ background: "white", width: "100%", maxWidth: "400px", borderRadius: "16px", border: "1px solid #e2e8f0", boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)", padding: "24px" }} className="prt-animate-in">
             <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px" }}>
               <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center", color: "#16a34a" }}>

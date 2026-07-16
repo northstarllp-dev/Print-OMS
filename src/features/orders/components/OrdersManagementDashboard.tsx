@@ -298,8 +298,7 @@ export function OrdersManagementDashboard({
 
   return (
     <div 
-      className="p-4 md:p-8 bg-slate-50 min-h-screen transition-all duration-300"
-      style={{ paddingRight: assignPanelOrderId ? "412px" : undefined }}
+      className={`p-4 md:p-8 bg-slate-50 min-h-screen transition-all duration-300 ${assignPanelOrderId ? "md:pr-[412px]" : ""}`}
     >
       {/* Header Section */}
       <div style={{ marginBottom: "32px" }}>
@@ -535,8 +534,108 @@ export function OrdersManagementDashboard({
           )}
         </div>
 
-        {/* Table View */}
-        <div className="overflow-x-auto min-h-[300px]">
+        {/* Mobile card list */}
+        <div className="md:hidden divide-y divide-slate-100 min-h-[200px]">
+          {filteredOrders.length === 0 ? (
+            <div className="py-12 px-4 text-center text-sm text-slate-500 font-medium">
+              No orders found matching your search.
+            </div>
+          ) : (
+            filteredOrders.map((order) => {
+              const isSiteVisitStage = order.stage === "Site Visit Scheduled" || order.stage === "Site Visit Completed";
+              const hasNoDate = !order.siteVisitDetails || !order.siteVisitDetails.auditDate;
+              const displayStage = (isSiteVisitStage && hasNoDate) ? "Site Visit Pending" : order.stage;
+              const statusColor = getStatusColor(displayStage);
+              const dateStr = new Date(order.dateCreated).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+              const isInstallQueue = parsedEntryStage === "installation";
+              const inst = order.installationDetails;
+              const sv = order.siteVisitDetails;
+              const visitDate = isInstallQueue ? inst?.scheduledDate : sv?.auditDate;
+              const visitTime = isInstallQueue ? inst?.scheduledTime : sv?.auditTime;
+              const mapAddress = sv?.customerAddress || sv?.siteAddress || sv?.site_address || null;
+
+              return (
+                <button
+                  key={order.id}
+                  type="button"
+                  onClick={() => router.push(resolveOrderHref(order))}
+                  className="w-full text-left p-4 hover:bg-slate-50 transition-colors"
+                >
+                  <div className="flex items-start justify-between gap-3 mb-1.5">
+                    <div className="min-w-0">
+                      <div className="text-sm font-bold text-slate-900">{order.orderCode || order.id}</div>
+                      <div className="text-sm font-semibold text-slate-800 truncate mt-0.5">
+                        {order.businessName || order.clientName}
+                      </div>
+                      {order.businessName && order.clientName && (
+                        <div className="text-xs text-slate-500 truncate">{order.clientName}</div>
+                      )}
+                    </div>
+                    <span
+                      className={`shrink-0 inline-block px-2.5 py-1 rounded-full text-[10px] font-bold border ${getHealthBadgeColor(order.health || "Active")}`}
+                    >
+                      {order.health || "Active"}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 mt-2">
+                    <span
+                      style={{
+                        display: "inline-block",
+                        padding: "3px 10px",
+                        background: statusColor.bg,
+                        color: statusColor.text,
+                        borderRadius: "6px",
+                        fontSize: "10px",
+                        fontWeight: "700",
+                      }}
+                    >
+                      {statusColor.label}
+                    </span>
+                    <span className="text-[11px] text-slate-400 font-medium">{dateStr}</span>
+                  </div>
+
+                  {(visitDate && visitTime) ? (
+                    <div className="mt-2 rounded-lg bg-slate-50 border border-slate-100 px-3 py-2">
+                      <div className="text-xs font-bold text-slate-800">{visitDate} • {visitTime}</div>
+                      {mapAddress && (
+                        <div className="text-[11px] text-slate-500 mt-0.5 line-clamp-2">{mapAddress}</div>
+                      )}
+                    </div>
+                  ) : null}
+
+                  <div className="mt-3 flex items-center justify-between">
+                    <div className="flex items-center gap-1">
+                      {order.assignedEmployees?.slice(0, 4).map((empId: string, i: number) => {
+                        const staff = employees.find(e => e.id === empId);
+                        const name = staff ? staff.name : "Un";
+                        return (
+                          <div
+                            key={i}
+                            title={name}
+                            className="w-6 h-6 rounded-full bg-[var(--color-primary)] text-white flex items-center justify-center text-[9px] font-bold border-2 border-white"
+                            style={{ marginLeft: i > 0 ? "-6px" : "0" }}
+                          >
+                            {name.substring(0, 2).toUpperCase()}
+                          </div>
+                        );
+                      })}
+                      {(!order.assignedEmployees || order.assignedEmployees.length === 0) && (
+                        <span className="text-[11px] text-slate-400 italic">Unassigned</span>
+                      )}
+                    </div>
+                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[var(--color-primary)]">
+                      <Eye size={12} /> View
+                    </span>
+                  </div>
+                </button>
+              );
+            })
+          )}
+        </div>
+
+        {/* Desktop table */}
+        <div className="hidden md:block overflow-x-auto min-h-[300px]">
           <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "900px" }}>
             <thead style={{ position: "sticky", top: 0, background: "#f8fafc", zIndex: 10 }}>
               <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
@@ -553,7 +652,7 @@ export function OrdersManagementDashboard({
                   BUSINESS NAME
                 </th>
                 <th style={{ padding: "14px 20px", textAlign: "center", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                  SITE VISIT
+                  {parsedEntryStage === "installation" ? "INSTALLATION VISIT" : "SITE VISIT"}
                 </th>
                 <th style={{ padding: "14px 20px", textAlign: "center", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                   STAGE
@@ -608,32 +707,60 @@ export function OrdersManagementDashboard({
                       {order.businessName}
                     </td>
                     <td style={{ padding: "16px 20px", textAlign: "left" }}>
-                      {order.siteVisitDetails?.auditDate && order.siteVisitDetails?.auditTime ? (
-                        <div style={{ textAlign: "left" }}>
-                          <div style={{ fontSize: "12px", fontWeight: "600", color: "#0f172a" }}>
-                            {order.siteVisitDetails.auditDate} • {order.siteVisitDetails.auditTime}
-                          </div>
-                          {order.siteVisitDetails.customerAddress && (
-                            <div style={{ fontSize: "11px", marginTop: "2px" }}>
-                              <a
-                                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.siteVisitDetails.customerAddress)}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                style={{ color: "#64748b", textDecoration: "none", cursor: "pointer" }}
-                                onMouseEnter={(e) => e.currentTarget.style.textDecoration = "underline"}
-                                onMouseLeave={(e) => e.currentTarget.style.textDecoration = "none"}
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                {order.siteVisitDetails.customerAddress}
-                              </a>
+                      {(() => {
+                        const isInstallQueue = parsedEntryStage === "installation";
+                        const inst = order.installationDetails;
+                        const sv = order.siteVisitDetails;
+                        const visitDate = isInstallQueue ? inst?.scheduledDate : sv?.auditDate;
+                        const visitTime = isInstallQueue ? inst?.scheduledTime : sv?.auditTime;
+                        const mapLink =
+                          (isInstallQueue && (inst?.gmapLink || inst?.gmap_link)) ||
+                          sv?.gmapLink ||
+                          sv?.gmap_link ||
+                          null;
+                        const mapAddress =
+                          sv?.customerAddress ||
+                          sv?.siteAddress ||
+                          sv?.site_address ||
+                          null;
+                        const mapHref = mapLink
+                          ? mapLink
+                          : mapAddress
+                            ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapAddress)}`
+                            : null;
+                        const mapLabel = mapAddress || (mapLink ? "Open map location" : null);
+
+                        if (visitDate && visitTime) {
+                          return (
+                            <div style={{ textAlign: "left" }}>
+                              <div style={{ fontSize: "12px", fontWeight: "600", color: "#0f172a" }}>
+                                {visitDate} • {visitTime}
+                              </div>
+                              {mapHref && mapLabel && (
+                                <div style={{ fontSize: "11px", marginTop: "2px" }}>
+                                  <a
+                                    href={mapHref}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    style={{ color: "#64748b", textDecoration: "none", cursor: "pointer" }}
+                                    onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
+                                    onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    {mapLabel}
+                                  </a>
+                                </div>
+                              )}
                             </div>
-                          )}
-                        </div>
-                      ) : (
-                        <span style={{ fontSize: "12px", color: "#94a3b8", fontStyle: "italic" }}>
-                          Not yet booked
-                        </span>
-                      )}
+                          );
+                        }
+
+                        return (
+                          <span style={{ fontSize: "12px", color: "#94a3b8", fontStyle: "italic" }}>
+                            Not yet booked
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td style={{ padding: "16px 20px", textAlign: "center" }}>
                       <span
@@ -751,9 +878,9 @@ export function OrdersManagementDashboard({
           style={{ 
             position: "fixed", 
             top: 0, 
-            right: assignPanelOrderId ? 0 : "-400px", 
+            right: assignPanelOrderId ? 0 : "-100%", 
             bottom: 0, 
-            width: "380px", 
+            width: "min(380px, 100vw)", 
             background: "white", 
             borderLeft: "1px solid #e2e8f0", 
             zIndex: 100, 

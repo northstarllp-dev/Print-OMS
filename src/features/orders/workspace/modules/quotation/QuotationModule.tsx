@@ -476,6 +476,8 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
   const [discount, setDiscount] = useState<number>(
     initialQuotation?.discount ? Number(initialQuotation.discount) : 0
   );
+  const [discountType, setDiscountType] = useState<"amount" | "percentage">("amount");
+  const [discountPercent, setDiscountPercent] = useState<number>(0);
   const [shipping, setShipping] = useState<number>(
     initialQuotation?.shipping ? Number(initialQuotation.shipping) : 0
   );
@@ -606,10 +608,12 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
   const grandTotal = Math.round((subtotal - effectiveDiscount + tax + shipping) * 100) / 100;
 
   useEffect(() => {
-    if (discount > subtotal) {
+    if (discountType === "percentage") {
+      setDiscount(Math.min(subtotal, Math.round(subtotal * (discountPercent / 100) * 100) / 100));
+    } else if (discount > subtotal) {
       setDiscount(subtotal);
     }
-  }, [subtotal, discount]);
+  }, [subtotal, discount, discountType, discountPercent]);
 
   function markDirty() {
     isDirtyRef.current = true;
@@ -1224,11 +1228,13 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
             {showDiscountInput && (
               <div className="space-y-1">
                 <div className="flex justify-between items-center">
-                  <label className="text-[10px] font-black text-[#0f172a] uppercase tracking-wider">Discount (₹)</label>
+                  <label className="text-[10px] font-black text-[#0f172a] uppercase tracking-wider">Discount</label>
                   <button
                     type="button"
                     onClick={() => {
                       setDiscount(0);
+                      setDiscountPercent(0);
+                      setDiscountType("amount");
                       setShowDiscountInput(false);
                     }}
                     className="text-[10px] text-rose-500 hover:underline font-bold"
@@ -1236,23 +1242,55 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                     Remove
                   </button>
                 </div>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-black">₹</span>
-                  <input
-                    type="number"
-                    min="0"
-                    value={discount === 0 ? "" : discount}
+                <div className="flex gap-2">
+                  <select
+                    value={discountType}
                     disabled={isLocked && isEmployee}
-                    onFocus={(e) => e.target.select()}
                     onChange={(e) => {
-                      const val = parseFloat(e.target.value) || 0;
+                      const type = e.target.value as "amount" | "percentage";
+                      setDiscountType(type);
+                      if (type === "percentage") {
+                        setDiscount(Math.min(subtotal, Math.round(subtotal * (discountPercent / 100) * 100) / 100));
+                      }
                       markDirty();
-                      setDiscount(Math.min(Math.max(0, val), subtotal));
                     }}
-                    className={`${inputCls} w-full pl-7 pr-3 py-2 font-mono font-bold bg-white`}
-                    placeholder="0.00"
-                  />
+                    className={`${inputCls} w-16 px-2 py-2 font-mono font-bold bg-white text-center cursor-pointer`}
+                  >
+                    <option value="amount">₹</option>
+                    <option value="percentage">%</option>
+                  </select>
+                  <div className="relative flex-1">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-black">
+                      {discountType === "amount" ? "₹" : "%"}
+                    </span>
+                    <input
+                      type="number"
+                      min="0"
+                      max={discountType === "percentage" ? "100" : undefined}
+                      value={discountType === "percentage" ? (discountPercent === 0 ? "" : discountPercent) : (discount === 0 ? "" : discount)}
+                      disabled={isLocked && isEmployee}
+                      onFocus={(e) => e.target.select()}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value) || 0;
+                        markDirty();
+                        if (discountType === "percentage") {
+                          const p = Math.min(Math.max(0, val), 100);
+                          setDiscountPercent(p);
+                          setDiscount(Math.min(subtotal, Math.round(subtotal * (p / 100) * 100) / 100));
+                        } else {
+                          setDiscount(Math.min(Math.max(0, val), subtotal));
+                        }
+                      }}
+                      className={`${inputCls} w-full pl-7 pr-3 py-2 font-mono font-bold bg-white`}
+                      placeholder="0.00"
+                    />
+                  </div>
                 </div>
+                {discountType === "percentage" && discount > 0 && (
+                  <div className="text-[10px] text-slate-500 font-medium text-right mt-1 px-1">
+                    Amount to deduct: ₹{discount.toFixed(2)}
+                  </div>
+                )}
               </div>
             )}
 
@@ -1433,9 +1471,9 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
       )}
 
       {showDocumentPreview && typeof document !== "undefined" && createPortal(
-        <div className="fixed inset-0 z-[99999] flex items-start justify-center overflow-y-auto bg-black/50 p-4 quotation-no-print">
-          <div className="relative my-6 w-full max-w-4xl rounded-2xl bg-slate-100 shadow-2xl">
-            <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 rounded-t-2xl quotation-no-print">
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center overflow-hidden bg-black/50 p-4 sm:p-6 print:static print:inset-auto print:block print:bg-transparent print:p-0 print:overflow-visible">
+          <div className="relative flex w-full max-w-4xl max-h-full flex-col rounded-2xl bg-slate-100 shadow-2xl print:static print:max-w-none print:max-h-none print:shadow-none print:bg-transparent print:rounded-none">
+            <div className="shrink-0 flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 rounded-t-2xl quotation-no-print">
               <div>
                 <h3 className="text-sm font-black text-slate-900">Customer quotation preview</h3>
                 <p className="text-[11px] text-slate-500">
@@ -1451,7 +1489,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                 <X size={16} />
               </button>
             </div>
-            <div className="p-4 sm:p-6">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 print:overflow-visible print:p-0">
               <QuotationDocument
                 quotationId={quotationId}
                 quoteDate={quoteCreatedAt || new Date().toISOString()}

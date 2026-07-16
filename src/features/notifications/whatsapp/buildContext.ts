@@ -113,7 +113,7 @@ export async function buildNotificationContext(
   const baseUrl =
     input.baseUrl ||
     process.env.NEXT_PUBLIC_SITE_URL ||
-    process.env.WHATSAPP_PORTAL_URL_BASE?.replace(/\/portal\?token=$/, "") ||
+    process.env.WHATSAPP_PORTAL_URL_BASE?.replace(/\/(?:printoms\/)?portal\?token=$/, "") ||
     undefined;
 
   let companyId = input.enquiryRow?.company_id;

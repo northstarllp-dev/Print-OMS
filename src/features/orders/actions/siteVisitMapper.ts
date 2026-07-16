@@ -83,21 +83,21 @@ export function mapSiteVisitFromDb(sv: any): SiteVisitDetails | null {
     reviewStatus: sv.review_status,
 
     // Installation Requirements
-    scaffoldingRequired: sv.scaffolding_required ?? false,
-    craneRequired: sv.crane_required ?? false,
-    overnightInstallation: sv.overnight_installation ?? false,
+    scaffoldingRequired: sv.scaffolding_required ?? undefined,
+    craneRequired: sv.crane_required ?? undefined,
+    overnightInstallation: sv.overnight_installation ?? undefined,
 
     // Fabrication Requirements
-    extraAnglesRequired: sv.extra_angles_required ?? false,
+    extraAnglesRequired: sv.extra_angles_required ?? undefined,
     extraAnglesLength: sv.extra_angles_length ?? "",
-    extraAcpSheetRequired: sv.extra_acp_sheet_required ?? false,
-    oldBoardRemovalRequired: sv.old_board_removal_required ?? false,
-    extraWireRequired: sv.extra_wire_required ?? false,
+    extraAcpSheetRequired: sv.extra_acp_sheet_required ?? undefined,
+    oldBoardRemovalRequired: sv.old_board_removal_required ?? undefined,
+    extraWireRequired: sv.extra_wire_required ?? undefined,
 
     // Design Inputs
     designBriefAvailable: sv.design_brief_available ?? undefined,
-    fabricationRequired: sv.fabrication_required ?? false,
-    civilWorkRequired: sv.civil_work_required ?? false,
+    fabricationRequired: sv.fabrication_required ?? undefined,
+    civilWorkRequired: sv.civil_work_required ?? undefined,
 
     locations: (sv.site_visit_measurements || []).map((m: any) => mapSiteVisitMeasurementFromDb(m))
   };

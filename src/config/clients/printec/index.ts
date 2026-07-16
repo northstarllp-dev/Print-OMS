@@ -20,7 +20,7 @@ export const printecConfig: Partial<PrintOMSClientConfig> = {
     sidebarActiveText: "#fcd900", // Yellow
     sidebarAccent: "#fcd900", // Yellow accent
   },
-  logoUrl: "/clients/printec/logo.jpeg",
+  logoUrl: "/clients/printec/logo.png",
   faviconUrl: "/clients/printec/favicon_io/favicon.ico",
   loadingText: "PRINTEC",
   features: {

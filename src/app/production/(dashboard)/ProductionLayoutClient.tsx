@@ -477,7 +477,7 @@ export function ProductionLayoutClient({ children, profile }: ProductionLayoutCl
         >
           Made with <span style={{ color: "#EF4444", fontSize: "14px" }}>❤️</span> by
           <img
-            src="/clients/light withoutbg.png"
+            src="/printoms/clients/light%20withoutbg.png"
             alt="Polaris"
             style={{ height: "50px", marginLeft: "-2px", marginTop: "-16px", marginBottom: "-12px" }}
           />

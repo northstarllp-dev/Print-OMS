@@ -144,7 +144,7 @@ export async function updateAppSettings(
   }
 
   revalidatePath("/admin/settings");
-  revalidatePath("/portal");
+  revalidatePath("/printoms/portal");
 }
 
 export async function updateInvoiceProfile(

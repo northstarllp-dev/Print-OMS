@@ -91,6 +91,12 @@ export function flattenQuotationLines(
   const rows: FlatDocLine[] = [];
   let index = 0;
 
+  // Determine if we have multiple sections so we show the item label per line.
+  const sectionsWithLines = (sections || []).filter(
+    (s) => (s.lines || []).some(isDisplayableQuotationLine)
+  );
+  const showSectionLabel = sectionsWithLines.length > 1;
+
   for (const section of sections || []) {
     const sv = siteVisitItems?.find(
       (s) =>
@@ -100,6 +106,10 @@ export function flattenQuotationLines(
     );
     const sizeDetail = sv ? formatSizeDetail(sv) : null;
     let sizeAttached = false;
+
+    // The label to append in brackets: prefer itemLabel, fall back to sv.name.
+    const sectionLabel =
+      section.itemLabel?.trim() || sv?.name?.trim() || "";
 
     for (const line of section.lines || []) {
       if (!isDisplayableQuotationLine(line)) continue;
@@ -111,17 +121,17 @@ export function flattenQuotationLines(
       const halfAmt = Math.round(preTax * half) / 100;
       const fullAmt = Math.round(preTax * gstRate) / 100;
 
-      const desc = (line.description || "").trim() || "Item";
+      const baseDesc = (line.description || "").trim() || "Item";
+      const desc =
+        showSectionLabel && sectionLabel
+          ? `${baseDesc} (${sectionLabel})`
+          : baseDesc;
       const detailLines: string[] = [];
       if (line.notes?.trim()) detailLines.push(line.notes.trim());
 
-      // Attach site measurement size once per section (usually the main product line),
-      // matching Zoho-style quotes where freight/transport has no size subtitle.
-      const isSqft = (line.pricingType || "").includes("sqft");
-      if (sizeDetail && !sizeAttached && (isSqft || preTax > 0)) {
-        detailLines.push(sizeDetail);
-        sizeAttached = true;
-      }
+      // Show unit type (e.g. "Per Sq.Ft", "Per Unit") as the sub-detail line.
+      const unitLabel = (line.unit || "").trim();
+      if (unitLabel) detailLines.push(unitLabel);
 
       rows.push({
         index,

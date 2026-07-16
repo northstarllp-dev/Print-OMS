@@ -274,7 +274,7 @@ export function useOrderDetailSync({
 
       channel.subscribe((status, err) => {
         if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-          console.error("[useOrderDetailSync] channel error", {
+          console.warn("[useOrderDetailSync] channel error (likely unauthenticated portal access)", {
             orderId,
             status,
             err,
@@ -337,7 +337,7 @@ export function useOrderDetailSync({
         )
         .subscribe((status, err) => {
           if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-            console.error("[useOrderDetailSync] measurements channel error", {
+            console.warn("[useOrderDetailSync] measurements channel error (likely unauthenticated portal access)", {
               siteVisitId: resolvedSiteVisitId,
               status,
               err,

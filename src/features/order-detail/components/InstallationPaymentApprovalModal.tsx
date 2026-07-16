@@ -63,9 +63,34 @@ export function InstallationPaymentApprovalModal({
     load();
   }, [load]);
 
+  const handlePaymentConfirmedChange = async (checked: boolean) => {
+    setPaymentConfirmed(checked);
+
+    if (checked && outstanding > 0) {
+      setAddingPayment(true);
+      setError(null);
+      try {
+        await createPayment(orderId, {
+          payment_name: "Final Payment (Remaining Balance)",
+          amount_type: "fixed",
+          amount: outstanding,
+          received: true,
+          notes: "Automatically recorded when installation was marked complete",
+        });
+        await load();
+      } catch (e: any) {
+        setError(e.message || "Failed to add remaining payment");
+        setPaymentConfirmed(false); // uncheck if we couldn't record the payment
+      } finally {
+        setAddingPayment(false);
+      }
+    }
+  };
+
+  const outstanding = balance?.outstanding ?? 0;
+
   const handleConfirm = async () => {
     if (!paymentConfirmed) return;
-
     setConfirming(true);
     setError(null);
     try {
@@ -73,29 +98,6 @@ export function InstallationPaymentApprovalModal({
     } catch (e: any) {
       setError(e.message || "Failed to complete order");
       setConfirming(false);
-    }
-  };
-
-  const outstanding = balance?.outstanding ?? 0;
-  const allReceived = outstanding <= 0;
-
-  const handleAddRemainingPayment = async () => {
-    if (!outstanding || outstanding <= 0) return;
-    setAddingPayment(true);
-    setError(null);
-    try {
-      await createPayment(orderId, {
-        payment_name: "Final Payment",
-        amount_type: "fixed",
-        amount: outstanding,
-        received: true,
-        notes: "Automatically created to clear remaining balance on completion",
-      });
-      await load();
-    } catch (e: any) {
-      setError(e.message || "Failed to add payment");
-    } finally {
-      setAddingPayment(false);
     }
   };
 
@@ -167,23 +169,13 @@ export function InstallationPaymentApprovalModal({
                 </div>
               </div>
 
-              {!allReceived && (
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-                  <div className="flex items-start gap-2 text-xs text-amber-800">
-                    <AlertTriangle size={16} className="shrink-0 mt-0.5" />
-                    <span>
-                      There is still ₹{outstanding.toLocaleString("en-IN")} outstanding. You can still complete the order if payment has been received offline.
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleAddRemainingPayment}
-                    disabled={addingPayment || loading}
-                    className="shrink-0 px-3 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-800 text-[10px] font-bold rounded-lg transition-colors disabled:opacity-50 inline-flex items-center justify-center gap-1.5 sm:self-center"
-                  >
-                    {addingPayment ? <Loader2 size={12} className="animate-spin" /> : <IndianRupee size={12} />}
-                    Record Rest (₹{outstanding.toLocaleString("en-IN")})
-                  </button>
+              {outstanding > 0 && (
+                <div className="flex items-start gap-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+                  <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+                  <span>
+                    ₹{outstanding.toLocaleString("en-IN")} is still outstanding.
+                    {" "}Ticking the checkbox below will automatically record it as received.
+                  </span>
                 </div>
               )}
 
@@ -232,15 +224,33 @@ export function InstallationPaymentApprovalModal({
                 )}
               </div>
 
-              <label className="flex items-start gap-3 p-4 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={paymentConfirmed}
-                  onChange={(e) => setPaymentConfirmed(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
-                />
+              <label
+                className={`flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition-colors ${
+                  addingPayment ? "opacity-60 cursor-wait bg-slate-50 border-slate-200" : "bg-slate-50 border-slate-200 hover:border-emerald-300"
+                }`}
+              >
+                <div className="mt-0.5 relative">
+                  {addingPayment ? (
+                    <Loader2 size={16} className="animate-spin text-emerald-500" />
+                  ) : (
+                    <input
+                      type="checkbox"
+                      checked={paymentConfirmed}
+                      onChange={(e) => handlePaymentConfirmedChange(e.target.checked)}
+                      disabled={addingPayment}
+                      className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                    />
+                  )}
+                </div>
                 <span className="text-sm font-semibold text-slate-700 leading-snug">
-                  Payment completed — I confirm all dues for this order have been received or reconciled.
+                  {addingPayment
+                    ? "Recording remaining payment…"
+                    : "Payment completed — I confirm all dues for this order have been received or reconciled."}
+                  {outstanding > 0 && !paymentConfirmed && !addingPayment && (
+                    <span className="block text-xs text-amber-600 font-bold mt-1">
+                      This will record ₹{outstanding.toLocaleString("en-IN")} as received.
+                    </span>
+                  )}
                 </span>
               </label>
             </>

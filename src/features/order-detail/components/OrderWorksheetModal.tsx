@@ -724,7 +724,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   const handleCopyMagicLink = async () => {
     if (!client) return;
     try {
-      const res = await fetch(`/api/portal-token?customer_id=${client.customerId || client.id}&order_id=${order.orderId || order.id}`);
+      const res = await fetch(`/printoms/api/portal-token?customer_id=${client.customerId || client.id}&order_id=${order.orderId || order.id}`);
       const data = await res.json();
       if (data.url) {
         await navigator.clipboard.writeText(data.url);

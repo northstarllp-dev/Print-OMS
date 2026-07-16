@@ -33,7 +33,7 @@ The portal itself doesn't have "states" but visually reflects the states of the 
 
 * Access to the portal is completely password-less, relying on securely generated, short-lived (or manageable) tokens using HMAC.
 * A token can be instantly revoked in the database, locking the customer out on their next page load.
-* Rate limiting is enforced on the `/portal` route to prevent brute-forcing or denial of service attacks.
+* Rate limiting is enforced on the `/printoms/portal` route to prevent brute-forcing or denial of service attacks.
 * Customers can approve quotations, request revisions, add design comments, and schedule site visits/installations (when enabled). They cannot edit core order data or quotation line items.
 * Quotation mutations use `customerApproveQuotation` / `customerRequestRevision` (portal session + Supabase service role). No direct anon client updates on `quotations`.
 
@@ -85,7 +85,7 @@ Purpose: The main layout wrapper for the customer view. Handles state for switch
 Purpose: Renders quotation line items, totals, and approve/decline UI. Used by both `PortalClient` and `OrderDetailClient`. Gates visibility with `isQuotationVisibleToCustomer`.
 
 ### OrderDetailClient (Client Component)
-Purpose: Single-order portal view at `/portal/order/[orderId]`. Shares quotation hooks and `QuotationTab` with `PortalClient`.
+Purpose: Single-order portal view at `/printoms/portal/order/[orderId]`. Shares quotation hooks and `QuotationTab` with `PortalClient`.
 
 ### Order Tracker / Progress Bar
 Purpose: Visually maps the `stage` of the order into a clean 5-step UI (Enquiry, Site Visit, Quote/Design, Production, Installation).
