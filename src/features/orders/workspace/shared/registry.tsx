@@ -28,4 +28,5 @@ export const stageModules: Record<OrderStage, ComponentType<any>> = {
   design: DesignModule,
   production: ProductionStageStub,
   installation: InstallationModule,
+  service_tickets: () => null,
 };

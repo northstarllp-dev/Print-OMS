@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Eye, Plus, SendHorizontal } from "lucide-react";
+import { Eye, Plus, SendHorizontal, Wrench } from "lucide-react";
 import {
   getTicketById,
   sendToServiceManagerAction,
@@ -17,6 +17,19 @@ interface ServiceTicketsViewProps {
   isAdmin: boolean;
   canManage: boolean;
 }
+
+const getTicketStatusStyle = (status: string): { bg: string; text: string; label: string } => {
+  switch (status) {
+    case "open":
+      return { bg: "#fef3c7", text: "#b45309", label: "Open" };
+    case "with_service_manager":
+      return { bg: "#ccfbf1", text: "#0f766e", label: "With Service Manager" };
+    case "closed":
+      return { bg: "#dcfce7", text: "#15803d", label: "Closed" };
+    default:
+      return { bg: "#f1f5f9", text: "#64748b", label: status };
+  }
+};
 
 export function ServiceTicketsView({
   initialTickets,
@@ -56,7 +69,8 @@ export function ServiceTicketsView({
 
   return (
     <div style={{ padding: "32px", background: "#f8fafc", minHeight: "100vh" }}>
-      <div style={{ marginBottom: "24px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px" }}>
+      {/* ─── Header ─── */}
+      <div style={{ marginBottom: "24px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px", flexWrap: "wrap" }}>
         <div>
           <h1 style={{ margin: 0, fontSize: "28px", fontWeight: 800, color: "#0f172a" }}>
             Service Tickets
@@ -65,7 +79,7 @@ export function ServiceTicketsView({
             Queue of customer support tickets linked to existing orders.
           </p>
         </div>
-        <div style={{ display: "flex", gap: "10px" }}>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
           {isAdmin && <CopyLinkButton companyId={companyId} />}
           {isAdmin && (
             <button
@@ -91,8 +105,10 @@ export function ServiceTicketsView({
         </div>
       </div>
 
+      {/* ─── Table Card ─── */}
       <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: "12px", overflow: "hidden" }}>
-        <div style={{ padding: "16px", borderBottom: "1px solid #e2e8f0" }}>
+        {/* Search */}
+        <div style={{ padding: "16px 20px", borderBottom: "1px solid #e2e8f0" }}>
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -104,121 +120,176 @@ export function ServiceTicketsView({
               borderRadius: "8px",
               padding: "10px 12px",
               fontSize: "13px",
+              outline: "none",
             }}
           />
         </div>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead style={{ background: "#f8fafc" }}>
-            <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
-              <th style={thStyle}>DATE CREATED</th>
-              <th style={thStyle}>TICKET</th>
-              <th style={thStyle}>CUSTOMER / BUSINESS</th>
-              <th style={thStyle}>PHONE</th>
-              <th style={thStyle}>PROBLEM</th>
-              <th style={thStyle}>STATUS</th>
-              <th style={{ ...thStyle, textAlign: "center" }}>ACTION</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredTickets.map((ticket) => (
-              <tr
-                key={ticket.id}
-                onClick={() => {
-                  void openTicket(ticket.id);
-                }}
-                style={{
-                  borderBottom: "1px solid #e2e8f0",
-                  cursor: "pointer",
-                }}
-              >
-                <td style={tdStyle} suppressHydrationWarning>{new Date(ticket.created_at).toLocaleDateString()}</td>
-                <td style={tdStyle}>{ticket.ticket_id}</td>
-                <td style={tdStyle}>
-                  {(ticket.customer_name || "-") + " / " + (ticket.customer_business_name || "-")}
-                </td>
-                <td style={tdStyle}>{ticket.phone}</td>
-                <td style={tdStyle}>{truncate(ticket.description, 80)}</td>
-                <td style={tdStyle}>{ticket.status}</td>
-                <td style={{ ...tdStyle, textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
-                  <div
+
+        {/* Table */}
+        <div style={{ overflowX: "auto", minHeight: "200px" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "860px" }}>
+            <thead>
+              <tr style={{ borderBottom: "1px solid #e2e8f0", background: "#f8fafc" }}>
+                <th style={thStyle}>DATE</th>
+                <th style={thStyle}>TICKET</th>
+                <th style={thStyle}>CUSTOMER</th>
+                <th style={thStyle}>PHONE</th>
+                <th style={thStyle}>PROBLEM</th>
+                <th style={{ ...thStyle, textAlign: "center" }}>STATUS</th>
+                <th style={{ ...thStyle, textAlign: "center" }}>ACTIONS</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredTickets.map((ticket) => {
+                const statusStyle = getTicketStatusStyle(ticket.status);
+                return (
+                  <tr
+                    key={ticket.id}
+                    onClick={() => void openTicket(ticket.id)}
                     style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: "8px",
-                      flexWrap: "wrap",
+                      borderBottom: "1px solid #e2e8f0",
+                      cursor: "pointer",
+                      transition: "background 0.15s",
                     }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "#f8fafc"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                   >
-                    <button
-                      onClick={() => {
-                        void openTicket(ticket.id);
-                      }}
-                      style={{
-                        padding: "8px 10px",
-                        background: "#fff",
-                        color: "#334155",
-                        border: "1px solid #cbd5e1",
-                        borderRadius: "8px",
-                        fontSize: "12px",
-                        fontWeight: 700,
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "6px",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <Eye size={14} />
-                      View Ticket
-                    </button>
-                    {isAdmin && ticket.status === "open" && (
-                      <button
-                        disabled={loadingId === ticket.id}
-                        onClick={async () => {
-                          setLoadingId(ticket.id);
-                          try {
-                            await sendToServiceManagerAction(ticket.id);
-                            setTickets((prev) =>
-                              prev.map((t) =>
-                                t.id === ticket.id
-                                  ? { ...t, status: "with_service_manager" }
-                                  : t
-                              )
-                            );
-                          } finally {
-                            setLoadingId(null);
-                          }
-                        }}
+                    <td style={tdStyle} suppressHydrationWarning>
+                      {new Date(ticket.created_at).toLocaleDateString("en-US", {
+                        year: "numeric",
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </td>
+                    <td style={tdStyle}>
+                      <span style={{ fontFamily: "monospace", fontWeight: 700, color: "#0f172a", fontSize: "13px" }}>
+                        {ticket.ticket_id}
+                      </span>
+                    </td>
+                    <td style={tdStyle}>
+                      <div style={{ fontWeight: 600, color: "#0f172a", fontSize: "13px" }}>
+                        {ticket.customer_name || "-"}
+                      </div>
+                      <div style={{ fontSize: "12px", color: "#94a3b8", marginTop: "2px" }}>
+                        {ticket.customer_business_name || "-"}
+                      </div>
+                    </td>
+                    <td style={tdStyle}>
+                      <span style={{ fontSize: "13px", color: "#475569" }}>{ticket.phone}</span>
+                    </td>
+                    <td style={{ ...tdStyle, maxWidth: "240px" }}>
+                      <span style={{ fontSize: "13px", color: "#475569", lineHeight: "1.4" }}>
+                        {truncate(ticket.description, 60)}
+                      </span>
+                    </td>
+                    <td style={{ ...tdStyle, textAlign: "center" }}>
+                      <span
                         style={{
-                          padding: "8px 10px",
-                          background: "#0f766e",
-                          color: "#fff",
-                          border: "none",
-                          borderRadius: "8px",
-                          fontSize: "12px",
+                          display: "inline-block",
+                          padding: "4px 10px",
+                          borderRadius: "999px",
+                          fontSize: "11px",
                           fontWeight: 700,
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "6px",
-                          cursor: "pointer",
+                          background: statusStyle.bg,
+                          color: statusStyle.text,
+                          whiteSpace: "nowrap",
                         }}
                       >
-                        <SendHorizontal size={14} />
-                        Send to Service Manager
-                      </button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {filteredTickets.length === 0 && (
-              <tr>
-                <td colSpan={7} style={{ padding: "28px", textAlign: "center", color: "#94a3b8", fontSize: "13px" }}>
-                  No service tickets found.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+                        {statusStyle.label}
+                      </span>
+                    </td>
+                    <td style={{ ...tdStyle, textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
+                      <div
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: "8px",
+                          flexWrap: "nowrap",
+                        }}
+                      >
+                        <button
+                          onClick={() => void openTicket(ticket.id)}
+                          style={{
+                            padding: "7px 10px",
+                            background: "#fff",
+                            color: "#334155",
+                            border: "1px solid #cbd5e1",
+                            borderRadius: "8px",
+                            fontSize: "12px",
+                            fontWeight: 700,
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "5px",
+                            cursor: "pointer",
+                            whiteSpace: "nowrap",
+                            transition: "all 0.15s",
+                          }}
+                          onMouseOver={(e) => { e.currentTarget.style.background = "#f8fafc"; }}
+                          onMouseOut={(e) => { e.currentTarget.style.background = "#fff"; }}
+                        >
+                          <Eye size={13} />
+                          View
+                        </button>
+                        {isAdmin && ticket.status === "open" && (
+                          <button
+                            disabled={loadingId === ticket.id}
+                            onClick={async () => {
+                              setLoadingId(ticket.id);
+                              try {
+                                await sendToServiceManagerAction(ticket.id);
+                                setTickets((prev) =>
+                                  prev.map((t) =>
+                                    t.id === ticket.id
+                                      ? { ...t, status: "with_service_manager" }
+                                      : t
+                                  )
+                                );
+                              } finally {
+                                setLoadingId(null);
+                              }
+                            }}
+                            style={{
+                              padding: "7px 10px",
+                              background: "#0f766e",
+                              color: "#fff",
+                              border: "none",
+                              borderRadius: "8px",
+                              fontSize: "12px",
+                              fontWeight: 700,
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "5px",
+                              cursor: loadingId === ticket.id ? "wait" : "pointer",
+                              opacity: loadingId === ticket.id ? 0.7 : 1,
+                              whiteSpace: "nowrap",
+                              transition: "all 0.15s",
+                            }}
+                            onMouseOver={(e) => { if (loadingId !== ticket.id) e.currentTarget.style.background = "#115e59"; }}
+                            onMouseOut={(e) => { e.currentTarget.style.background = "#0f766e"; }}
+                          >
+                            <SendHorizontal size={13} />
+                            Send to Manager
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+              {filteredTickets.length === 0 && (
+                <tr>
+                  <td colSpan={7} style={{ padding: "48px 20px", textAlign: "center" }}>
+                    <Wrench size={28} style={{ color: "#cbd5e1", margin: "0 auto 8px" }} />
+                    <p style={{ color: "#94a3b8", fontSize: "13px", margin: 0, fontWeight: 600 }}>
+                      No service tickets found.
+                    </p>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {isCreateOpen && (
@@ -246,24 +317,25 @@ export function ServiceTicketsView({
 }
 
 const thStyle: React.CSSProperties = {
-  padding: "14px 16px",
+  padding: "14px 20px",
   textAlign: "left",
   fontSize: "11px",
   color: "#64748b",
   textTransform: "uppercase",
   letterSpacing: "0.05em",
   fontWeight: 700,
+  whiteSpace: "nowrap",
 };
 
 const tdStyle: React.CSSProperties = {
-  padding: "14px 16px",
+  padding: "14px 20px",
   fontSize: "13px",
   color: "#334155",
-  verticalAlign: "top",
+  verticalAlign: "middle",
 };
 
 function truncate(text: string, max: number) {
   if (text.length <= max) return text;
-  return `${text.slice(0, max - 1)}...`;
+  return `${text.slice(0, max - 1)}…`;
 }
 

@@ -16,7 +16,7 @@ import {
   type StaffNavIcon,
 } from "@/features/orders/workspace/shared/stageGrants";
 import type { StageActor } from "@/features/orders/workspace/shared/types";
-import { resolveTicketPermission } from "@/features/service-tickets/ticketGrants";
+
 
 interface StaffLayoutClientProps {
   children: React.ReactNode;
@@ -53,19 +53,7 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
     company_id: profile.company_id,
   };
   const navItems = React.useMemo(() => {
-    const baseItems = getNavItemsForActor(actor);
-    const ticketPerm = resolveTicketPermission(actor);
-    if (ticketPerm.canView) {
-      const settingsIdx = baseItems.findIndex((item) => item.href === "/staff/settings");
-      const supportItem = { href: "/staff/service-tickets", label: "Service Tickets", icon: "support" as const };
-      if (settingsIdx === -1) return [...baseItems, supportItem];
-      return [
-        ...baseItems.slice(0, settingsIdx),
-        supportItem,
-        ...baseItems.slice(settingsIdx),
-      ];
-    }
-    return baseItems;
+    return getNavItemsForActor(actor);
   }, [actor]);
 
   const [collapsed, setCollapsed] = useState(true);
