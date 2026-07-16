@@ -88,6 +88,7 @@ export default async function StaffDynamicQueuePage({
     orderId: o.order_id || o.id,
     workflow_type: o.workflow_type ?? null,
     siteVisitDetails: o.siteVisitDetails ?? null,
+    installationDetails: o.installationDetails ?? null,
   }));
 
   const mappedCustomers = customers?.map(c => ({

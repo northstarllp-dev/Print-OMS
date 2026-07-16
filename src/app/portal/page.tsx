@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { createClient } from "@/utils/supabase/server";
 import {
   verifyPortalToken,
@@ -34,8 +34,9 @@ export default async function PortalPage({
   }
 
   // ── Rate limiting ──
-  const clientIp = "anonymous"; // In production, use request IP from headers
-  const rate = checkRateLimit(`portal-page-${clientIp}`);
+  const headersList = await headers();
+  const clientIp = headersList.get("x-forwarded-for") || "anonymous";
+  const rate = checkRateLimit(`portal-page-${clientIp}-${tokenParam.slice(0, 16)}`);
   if (!rate.allowed) {
     return (
       <PortalError

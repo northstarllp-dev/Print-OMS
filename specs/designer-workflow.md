@@ -77,7 +77,7 @@ Design can run either after Quotation (`quote_first`, default) or before it (`de
 
 ### Customer portal
 
-- Session established via `/api/portal/session` from a signed portal token (`utils/portal-tokens.ts`); cookie carries `customerId`, optional `orderId`, `scopes`, and `exp`.
+- Session established via `/printoms/api/portal/session` from a signed portal token (`utils/portal-tokens.ts`); cookie carries `customerId`, optional `orderId`, `scopes`, and `exp`.
 - Portal browser client uses direct Supabase Storage uploads (`site-visit-photos` bucket) with **no server-side permission check** — storage bucket policies are the only gate for uploads; the design-record mutation afterwards does go through `assertStageEditOrPortalOrder`.
 
 ### Stage grants

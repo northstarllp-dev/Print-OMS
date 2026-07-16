@@ -176,9 +176,10 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
     showQuoteDeclineInput,
     setShowQuoteDeclineInput,
     updatingStatus,
+    actionError,
     handleApproveQuote,
     handleDeclineQuote,
-  } = useQuotationActions(order?.id ?? "", customer.name, setOrder);
+  } = useQuotationActions(order?.id ?? "", customer.name, setOrder, token);
 
   useEffect(() => {
     const supabase = createClient();
@@ -334,7 +335,7 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
   };
 
   const handleBackToPortal = () => {
-    const url = new URL("/portal", window.location.origin);
+    const url = new URL("/printoms/portal", window.location.origin);
     url.searchParams.set("customer_id", customer.customerId || customer.id);
     url.searchParams.set("token", token);
     window.location.href = url.toString();
@@ -796,6 +797,7 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
             quoteFeedback={quoteFeedback}
             setQuoteFeedback={setQuoteFeedback}
             updatingStatus={updatingStatus}
+            actionError={actionError}
             handleApproveQuote={handleApproveQuote}
             handleDeclineQuote={handleDeclineQuote}
             invoiceProfile={invoiceProfile}

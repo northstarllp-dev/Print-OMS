@@ -138,7 +138,7 @@ export default async function RootGateway() {
         >
           Made with <Heart size={14} fill="#ef4444" color="#ef4444" /> by
           <img
-            src="/clients/light withoutbg.png"
+            src="/printoms/clients/light%20withoutbg.png"
             alt="Polaris"
             style={{ height: "50px", marginLeft: "-2px", marginTop: "-16px", marginBottom: "-12px" }}
           />

@@ -142,7 +142,7 @@ export function buildPortalUrl(token: string, baseUrl?: string): string {
   }
   const resolvedBase = baseUrl || envBaseUrl || "http://localhost:3000";
   const params = new URLSearchParams({ token });
-  return `${resolvedBase}/portal?${params.toString()}`;
+  return `${resolvedBase}/printoms/portal?${params.toString()}`;
 }
 
 // ============================================================

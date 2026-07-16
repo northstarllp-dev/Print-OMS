@@ -18,6 +18,7 @@ import {
   type QuotationDocSection,
 } from "@/features/quotations/utils/quotationDocumentMath";
 import { getLineMeasurement } from "@/features/quotations/utils/lineAmount";
+import { Logo } from "@/components/ui/Logo";
 
 export interface QuotationDocumentProps {
   quotationId?: string | null;
@@ -112,6 +113,26 @@ export function QuotationDocument({
 
   return (
     <div className={`quotation-document-root ${className}`}>
+      <style>{`
+        @media print {
+          /* Removes browser headers and footers (URL, date, title) */
+          @page { margin: 0; }
+          body { margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+          /* Hide the customer portal layout when printing */
+          body * { visibility: hidden; }
+          .quotation-document-root, .quotation-document-root * { visibility: visible; }
+          .quotation-document-root {
+            position: absolute; left: 0; top: 0; width: 100%;
+            padding: 0 12mm !important; /* Add space ONLY on LHS and RHS */
+            box-sizing: border-box;
+          }
+          .quotation-sheet {
+            border: none !important;
+            box-shadow: none !important;
+          }
+          .quotation-no-print { display: none !important; }
+        }
+      `}</style>
       {showPrintButton && (
         <div className="quotation-no-print mb-3 flex justify-end">
           <button
@@ -130,18 +151,10 @@ export function QuotationDocument({
         <header className="flex flex-col sm:flex-row gap-6 justify-between p-6 sm:p-8 border-b border-slate-200">
           <div className="min-w-0 flex-1">
             <div className="flex items-start gap-3">
-              {invoiceProfile?.logoUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={invoiceProfile.logoUrl}
-                  alt={brand}
-                  className="h-12 w-auto max-w-[140px] object-contain"
-                />
-              ) : null}
-              <div>
-                <h1 className="text-lg sm:text-xl font-black tracking-tight text-[#111] uppercase">
-                  {brand}
-                </h1>
+              <div className="flex flex-col">
+                <div className="mb-2">
+                  <Logo width={220} height={40} align="left" />
+                </div>
                 {legalName && legalName !== brand && (
                   <p className="text-xs font-semibold text-slate-600 mt-0.5">
                     {legalName}
@@ -220,8 +233,8 @@ export function QuotationDocument({
         </section>
 
         {/* Lines table — Zoho-style dark header, pre-tax Amount = Qty × Rate */}
-        <div className="overflow-x-auto px-0">
-          <table className="w-full min-w-[720px] border-collapse text-[11px]">
+        <div className="overflow-x-auto print:overflow-visible px-0">
+          <table className="w-full min-w-[720px] print:min-w-0 border-collapse text-[11px]">
             <thead>
               <tr className="bg-[#334155] text-white">
                 <th className="px-2.5 py-2.5 text-left font-bold w-8 border-b border-[#334155]">
@@ -234,7 +247,7 @@ export function QuotationDocument({
                   HSN
                 </th>
                 <th className="px-2.5 py-2.5 text-right font-bold w-14 border-b border-[#334155]">
-                  Qty
+                  Qty / Measurement
                 </th>
                 <th className="px-2.5 py-2.5 text-right font-bold w-20 border-b border-[#334155]">
                   Rate

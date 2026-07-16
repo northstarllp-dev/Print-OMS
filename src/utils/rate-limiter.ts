@@ -11,8 +11,8 @@ interface RateLimitEntry {
 const store = new Map<string, RateLimitEntry>();
 
 const WINDOW_MS = 60 * 1000; // 1 minute
-const MAX_ATTEMPTS = 10; // max 10 attempts per window
-const BLOCK_DURATION_MS = 5 * 60 * 1000; // block for 5 minutes after exceeding limit
+const MAX_ATTEMPTS = 60; // max 60 attempts per window
+const BLOCK_DURATION_MS = 60 * 1000; // block for 1 minute after exceeding limit
 
 function cleanup(key: string, now: number) {
   const entry = store.get(key);

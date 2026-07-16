@@ -23,11 +23,11 @@ export default function LoadingLines({
       role="status"
       aria-label="Loading"
     >
-      <div className="relative z-[2] animate-[logoAnim_4s_linear_infinite]">
+      <div className="relative z-[1] animate-[logoAnim_4s_linear_infinite] mix-blend-multiply">
         <Logo width={logoWidth} height={logoHeight} align="center" />
       </div>
 
-      <div className="absolute top-0 left-0 w-full h-full z-[1] bg-transparent [mask:repeating-linear-gradient(90deg,transparent_0,transparent_6px,black_7px,black_8px)]">
+      <div className="absolute top-0 left-0 w-full h-full z-[2] bg-transparent [mask:repeating-linear-gradient(90deg,transparent_0,transparent_6px,black_7px,black_8px)]">
         <div
           className="absolute top-0 left-0 w-full h-full
             [background-image:radial-gradient(circle_at_50%_50%,#ff0_0%,transparent_50%),radial-gradient(circle_at_45%_45%,#f00_0%,transparent_45%),radial-gradient(circle_at_55%_55%,#0ff_0%,transparent_45%),radial-gradient(circle_at_45%_55%,#0f0_0%,transparent_45%),radial-gradient(circle_at_55%_45%,#00f_0%,transparent_45%)]

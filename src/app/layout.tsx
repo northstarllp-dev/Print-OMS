@@ -15,7 +15,6 @@ import { cn } from "@/lib/utils";
 
 const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
-
 export async function generateMetadata(): Promise<Metadata> {
   const config = loadClientConfig();
   
@@ -23,7 +22,7 @@ export async function generateMetadata(): Promise<Metadata> {
     title: `${config.name} Admin Operations Dashboard`,
     description: "Operations dashboard for custom signage and order management.",
     icons: config.faviconUrl || config.logoUrl ? {
-      icon: config.faviconUrl || config.logoUrl || undefined,
+      icon: `/printoms${config.faviconUrl || config.logoUrl}`,
     } : undefined,
   };
 }
@@ -45,7 +44,6 @@ export default function RootLayout({
         <ClientThemeProvider />
         <GlobalNavigationLoader />
         {children}
-
       </body>
     </html>
   );

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { GoogleMap, useJsApiLoader, Marker, Autocomplete } from "@react-google-maps/api";
 
@@ -302,11 +303,12 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
     showQuoteDeclineInput,
     setShowQuoteDeclineInput,
     updatingStatus: quoteUpdatingStatus,
+    actionError: quoteActionError,
     handleApproveQuote,
     handleDeclineQuote,
   } = useQuotationActions(activeOrderId, customer.name, (updater) => {
     setOrders((prev) => prev.map((o) => (o.id === activeOrderId ? updater(o) : o)));
-  });
+  }, token);
 
   const [products, setProducts] = useState<any[]>([]);
   const [selectedProductInfo, setSelectedProductInfo] = useState<any | null>(null);
@@ -976,6 +978,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                       quoteFeedback={quoteFeedback}
                       setQuoteFeedback={setQuoteFeedback}
                       updatingStatus={quoteUpdatingStatus}
+                      actionError={quoteActionError}
                       handleApproveQuote={handleApproveQuote}
                       handleDeclineQuote={handleDeclineQuote}
                       invoiceProfile={appSettings?.invoiceProfile}
@@ -1109,7 +1112,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
         >
           Made with <span style={{ color: "#EF4444", fontSize: "14px" }}>❤️</span> by
           <img
-            src="/clients/light withoutbg.png"
+            src="/printoms/clients/light%20withoutbg.png"
             alt="Polaris"
             style={{ height: "50px", marginLeft: "-2px", marginTop: "-16px", marginBottom: "-12px" }}
           />

@@ -6,7 +6,6 @@ import { createClient } from "@/utils/supabase/server";
 import { isTokenRevoked } from "@/utils/portal-tokens";
 
 const COOKIE_NAME = "portal_session";
-const COOKIE_MAX_AGE_MINUTES = 60; // 1 hour session cookie
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
@@ -51,12 +50,15 @@ export async function POST(req: NextRequest) {
     exp: payload.exp,
   });
 
+  const now = Math.floor(Date.now() / 1000);
+  const maxAgeSeconds = Math.max(0, payload.exp - now);
+
   const res = NextResponse.json({ success: true, customerId: payload.customerId });
   res.cookies.set(COOKIE_NAME, cookieValue, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: "strict",
-    maxAge: COOKIE_MAX_AGE_MINUTES * 60,
+    sameSite: "lax", // Better for email links
+    maxAge: maxAgeSeconds,
     path: "/",
   });
 

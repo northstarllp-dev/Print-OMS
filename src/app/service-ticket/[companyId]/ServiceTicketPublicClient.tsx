@@ -66,7 +66,7 @@ export default function ServiceTicketPublicClient({
     setLoadingLookup(true);
     setError(null);
     try {
-      const res = await fetch("/api/public/service-ticket/lookup", {
+      const res = await fetch("/printoms/api/public/service-ticket/lookup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ companyId, phone: getFormattedPhone() }),
@@ -103,7 +103,7 @@ export default function ServiceTicketPublicClient({
       formData.set("description", description);
       files.forEach((file) => formData.append("photos", file));
 
-      const res = await fetch("/api/public/service-ticket", {
+      const res = await fetch("/printoms/api/public/service-ticket", {
         method: "POST",
         body: formData,
       });

@@ -279,11 +279,7 @@ export function InstallationModule({
         </div>
       )}
 
-      {/* View-Only Site Visit Banner */}
-      <div className="mb-6 bg-indigo-50/80 border border-indigo-100 text-indigo-700 p-4 rounded-xl text-xs font-semibold flex items-center gap-3 shadow-sm">
-        <Sparkles size={16} className="text-indigo-600 flex-shrink-0" />
-        You now have view-only access to the Site Visit stage. Click the 'Site Visit' tab in the timeline above to view full location photos and measurement details!
-      </div>
+
 
       <div className={embedded ? "space-y-8" : "grid grid-cols-1 lg:grid-cols-3 gap-8 items-start"}>
 

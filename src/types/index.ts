@@ -190,6 +190,8 @@ export interface InstallationDetails {
   paymentCode?: string;
   scheduledDate?: string;
   scheduledTime?: string;
+  gmapLink?: string;
+  gmapRequested?: boolean;
   afterPhotos?: string[];
   checklist?: { id: string; label: string; checked: boolean }[];
   notes?: string;

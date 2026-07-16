@@ -88,7 +88,7 @@ export function CustomersViewNew({
   const handleCopyLink = async (customerId: string, e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent row selection when copying portal link
     try {
-      const res = await fetch(`/api/portal-token?customer_id=${customerId}`);
+      const res = await fetch(`/printoms/api/portal-token?customer_id=${customerId}`);
       const data = await res.json();
       if (data.url) {
         await navigator.clipboard.writeText(data.url);
@@ -104,7 +104,7 @@ export function CustomersViewNew({
   const handleCopyOrderLink = async (customerId: string, orderId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      const res = await fetch(`/api/portal-token?customer_id=${customerId}&order_id=${orderId}`);
+      const res = await fetch(`/printoms/api/portal-token?customer_id=${customerId}&order_id=${orderId}`);
       const data = await res.json();
       if (data.url) {
         await navigator.clipboard.writeText(data.url);

@@ -18,7 +18,10 @@ export default async function InstallationOrdersPage() {
     dateCreated: o.date_created,
     orderId: o.order_id || o.id,
     orderCode: o.order_id || o.id,
-    workflow_type: o.workflow_type
+    workflow_type: o.workflow_type,
+    scheduledDate: o.installationDetails?.scheduledDate ?? null,
+    scheduledTime: o.installationDetails?.scheduledTime ?? null,
+    siteAddress: o.siteVisitDetails?.site_address || o.siteVisitDetails?.siteAddress || null,
   }));
 
   return (
