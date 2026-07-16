@@ -457,7 +457,31 @@ export function ProductionLayoutClient({ children, profile }: ProductionLayoutCl
                 fontWeight: "600",
                 width: "100%"
               }}>
-                Made with <span style={{ color: "#EF4444", fontSize: "14px" }}>❤️</span> by Northstar
+                <a
+          href="https://www.thepolarislabs.com/"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 6,
+            fontWeight: 600,
+            margin: 0,
+            color: "inherit",
+            textDecoration: "none",
+            cursor: "pointer",
+            transition: "opacity 0.15s ease",
+            pointerEvents: "auto",
+          }}
+        >
+          Made with <span style={{ color: "#EF4444", fontSize: "14px" }}>❤️</span> by
+          <img
+            src="/clients/light withoutbg.png"
+            alt="Polaris"
+            style={{ height: "50px", marginLeft: "-2px", marginTop: "-16px", marginBottom: "-12px" }}
+          />
+        </a>
               </div>
             )}
           </div>

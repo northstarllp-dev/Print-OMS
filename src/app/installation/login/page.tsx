@@ -139,7 +139,31 @@ export default function InstallationLogin() {
       </div>
 
       <div style={{ position: "absolute", bottom: 24, textAlign: "center", width: "100%", fontSize: 13, color: "#64748B", pointerEvents: "none" }}>
-        Made with ❤️ by Northstar
+        <a
+          href="https://www.thepolarislabs.com/"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 6,
+            fontWeight: 600,
+            margin: 0,
+            color: "inherit",
+            textDecoration: "none",
+            cursor: "pointer",
+            transition: "opacity 0.15s ease",
+            pointerEvents: "auto",
+          }}
+        >
+          Made with <span style={{ color: "#EF4444", fontSize: "14px" }}>❤️</span> by
+          <img
+            src="/clients/light withoutbg.png"
+            alt="Polaris"
+            style={{ height: "50px", marginLeft: "-2px", marginTop: "-16px", marginBottom: "-12px" }}
+          />
+        </a>
       </div>
     </div>
   );

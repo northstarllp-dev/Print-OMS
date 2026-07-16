@@ -45,6 +45,7 @@ supabase/.temp/
 CLAUDE.md
 .CLAUDE
 .claudecodeignore
+.cursor
 
 # AI & IDE files
 brag-output-2026-07-15-105449/
@@ -56,3 +57,4 @@ skills-lock.json
 scratch-clear-storage.js
 
 __pycache__/
+scratch/

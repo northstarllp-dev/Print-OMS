@@ -559,9 +559,9 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
           defaultClientName={selectedEnquiry.leadName || ""}
           defaultBusinessName={selectedEnquiry.businessName || ""}
           defaultRequirements={selectedEnquiry.notes || ""}
-          onSubmit={async (clientName, businessName, productType, requirements) => {
+          onSubmit={async (clientName, businessName, productType, requirements, assignedAdmins) => {
             const enq = enquiries.find(e => e.id === selectedEnquiry.id);
-            const res = await convertEnquiryToOrderLocal(selectedEnquiry.id, clientName, businessName, productType, requirements);
+            const res = await convertEnquiryToOrderLocal(selectedEnquiry.id, clientName, businessName, productType, requirements, assignedAdmins);
             setConvertModalOpen(false);
             
             if (res && res.success) {
