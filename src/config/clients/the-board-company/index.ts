@@ -6,11 +6,11 @@ export const theBoardCompanyConfig: Partial<PrintOMSClientConfig> = {
   colors: {
     primary: "#2563eb",
     onPrimary: "#ffffff",
-    primaryContainer: "#dbeafe", 
+    primaryContainer: "#dbeafe",
     onPrimaryContainer: "#1e3a8a",
     secondary: "#2563eb",
     onSecondary: "#ffffff",
-    secondaryContainer: "#dbeafe", 
+    secondaryContainer: "#dbeafe",
     onSecondaryContainer: "#1e3a8a",
     background: "#ffffff",
     surface: "#ffffff",
@@ -21,6 +21,7 @@ export const theBoardCompanyConfig: Partial<PrintOMSClientConfig> = {
     sidebarAccent: "#ead64a",
   },
   logoUrl: "/clients/theboardcompany/logo.png",
+  logoScale: 1.3,
   faviconUrl: "/clients/theboardcompany/favicon_io/favicon.ico",
   loadingText: "THE BOARD COMPANY",
   features: {

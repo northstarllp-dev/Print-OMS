@@ -1,13 +1,14 @@
 import { getOrders } from "@/features/orders/actions/orderActions";
-import { getEnquiries } from "@/features/enquiries/actions/enquiryActions";
+import { getEnquiries, getAdmins } from "@/features/enquiries/actions/enquiryActions";
 import { getServiceTickets } from "@/features/service-tickets/actions/serviceTicketActions";
 import { AdminDashboardClient } from "@/features/orders/components/AdminDashboardClient";
 
 export default async function AdminDashboardPage() {
-  const [ordersData, enquiriesData, ticketsData] = await Promise.all([
+  const [ordersData, enquiriesData, ticketsData, adminsData] = await Promise.all([
     getOrders().catch(() => []),
     getEnquiries().catch(() => []),
     getServiceTickets().catch(() => []),
+    getAdmins().catch(() => []),
   ]);
 
   const orders = (ordersData || []).map((o: any) => ({
@@ -22,7 +23,8 @@ export default async function AdminDashboardPage() {
     orderCode: o.order_id || o.id,
     orderId: o.order_id || o.id,
     quotations: o.quotations,
-    payments: o.payments
+    payments: o.payments,
+    assignedAdmins: o.assigned_admins || [],
   }));
 
   const enquiries = (enquiriesData || []).map((e: any) => ({
@@ -36,6 +38,7 @@ export default async function AdminDashboardPage() {
   }));
 
   const tickets = (ticketsData || []).filter((t: any) => t.status !== "closed");
+  const admins = (adminsData || []).map((a: any) => ({ id: a.id, name: a.name }));
 
-  return <AdminDashboardClient orders={orders} enquiries={enquiries} tickets={tickets} />;
+  return <AdminDashboardClient orders={orders} enquiries={enquiries} tickets={tickets} admins={admins} />;
 }
