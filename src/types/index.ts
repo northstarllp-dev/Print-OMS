@@ -89,6 +89,8 @@ export interface SignLocation {
 
 // Extended Site Visit Details
 export interface SiteVisitDetails {
+  /** site_visits.id — needed for realtime measurement subscriptions */
+  id?: string;
   completed: boolean;
   
   // Stage 1: Pending & Details
@@ -186,8 +188,6 @@ export interface InstallationDetails {
   photoUrl?: string; // Legacy support
   customerSignature?: string;
   paymentCode?: string;
-  gmapLink?: string;
-  gmapRequested?: boolean;
   scheduledDate?: string;
   scheduledTime?: string;
   afterPhotos?: string[];
@@ -212,7 +212,7 @@ export interface Order {
   design?: DesignRecord;
   productionDetails?: ProductionDetails;
   installationDetails?: InstallationDetails;
-  stageStatus?: "Normal" | "Pending Admin Approval: Site Visit Completed" | "Pending Admin Approval: Quote Stage" | "Pending Admin Approval: Quote Approval" | "Pending Admin Approval: Design Approval" | "Pending Admin Approval: Production Ready" | "Pending Admin Approval: Job Done" | string;
+  stageStatus?: "Normal" | "Pending Admin Approval: Site Visit Completed" | "Pending Admin Approval: Quote Stage" | "Pending Admin Approval: Quote Approval" | "Pending Admin Approval: Design Stage" | "Pending Admin Approval: Design Approval" | "Pending Admin Approval: Production Ready" | "Pending Admin Approval: Job Done" | string;
   stageAdminNotes?: string;
   orderCode?: string;
   health?: string;

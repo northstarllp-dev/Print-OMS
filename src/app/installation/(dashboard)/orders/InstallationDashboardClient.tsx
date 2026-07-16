@@ -10,7 +10,7 @@ import {
   partitionQueueOrdersByView,
 } from "@/features/orders/workspace/shared/staffQueueStages";
 import { QueueViewToggle } from "@/features/orders/components/QueueViewToggle";
-import type { QueueView } from "@/features/orders/workspace/shared/staffQueueStages";
+import type { QueueView, WorkflowType } from "@/features/orders/workspace/shared/staffQueueStages";
 
 interface OrderItem {
   id: string;
@@ -22,6 +22,7 @@ interface OrderItem {
   dateCreated: string;
   orderId: string;
   orderCode: string;
+  workflow_type?: WorkflowType | null;
 }
 
 interface InstallationDashboardClientProps {
@@ -88,7 +89,7 @@ export function InstallationDashboardClient({
   });
 
   return (
-    <div className="p-8 bg-slate-50/50 min-h-screen">
+    <div className="p-4 md:p-8 bg-slate-50/50 min-h-screen">
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-3xl font-black text-slate-900 tracking-tight mb-2">

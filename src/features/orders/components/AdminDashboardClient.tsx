@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { AddEnquiryModal, EnquiryFormData } from "@/features/enquiries/components/AddEnquiryModal";
 import { createEnquiry } from "@/features/enquiries/actions/enquiryActions";
+import { CreateServiceTicketModal } from "@/features/service-tickets/components/CreateServiceTicketModal";
 
 /* ─── helpers ──────────────────────────────────────────────────── */
 const STAGE_LABEL: Record<string, { label: string; dot: string }> = {
@@ -28,15 +29,15 @@ const STAGE_LABEL: Record<string, { label: string; dot: string }> = {
   "Site Visit Scheduled":  { label: "Scheduled",  dot: "#818CF8" },
   "Site Visit Completed":  { label: "Site Done",   dot: "#818CF8" },
   "Quotation In Progress": { label: "Quoting",     dot: "#F97316" },
-  "Quotation Sent":        { label: "Quote Sent",  dot: "#F97316" },
+  "Quotation Sent":        { label: "Quotation",   dot: "#F97316" },
   "Quotation Negotiation": { label: "Negotiating", dot: "#F97316" },
   "Quotation Approved":    { label: "Quote OK",    dot: "#F97316" },
   "Design In Progress":    { label: "Design",      dot: "#EC4899" },
-  "Design Approved":       { label: "Design OK",   dot: "#EC4899" },
+  "Design Approved":       { label: "Design",      dot: "#EC4899" },
   "Production":            { label: "In Production", dot: "#3B82F6" },
   "Ready For Installation":{ label: "Ready",       dot: "#3B82F6" },
   "Installation Scheduled":{ label: "Installation", dot: "#0EA5E9" },
-  "Completed":             { label: "Completed",   dot: "#22C55E" },
+  "Completed":             { label: "Closed",      dot: "#22C55E" },
   "Closed":                { label: "Closed",      dot: "#22C55E" },
 };
 
@@ -49,6 +50,7 @@ const PRIORITY_STYLES: Record<string, { bg: string; text: string; border: string
 };
 
 const PIPELINE_STAGES = [
+  "Enquiry",
   "Site Visit Pending",
   "Quotation Sent",
   "Design Approved",
@@ -58,6 +60,7 @@ const PIPELINE_STAGES = [
 ];
 
 const PIPELINE_COLORS = [
+  "#A855F7",
   "#818CF8",
   "#F97316",
   "#EC4899",
@@ -79,20 +82,56 @@ const PIPELINE_STAGE_GROUPS: Record<string, string[]> = {
 interface AdminDashboardClientProps {
   orders: any[];
   enquiries: any[];
+  tickets?: any[];
 }
 
-export function AdminDashboardClient({ orders, enquiries }: AdminDashboardClientProps) {
+export function AdminDashboardClient({ 
+  orders: rawOrders, 
+  enquiries: rawEnquiries, 
+  tickets: rawTickets 
+}: AdminDashboardClientProps) {
   const router = useRouter();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isTicketModalOpen, setIsTicketModalOpen] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [selectedPipelineStage, setSelectedPipelineStage] = useState<string | null>(null);
   const [selectedKpi, setSelectedKpi] = useState<string | null>(null);
+  const [startDate, setStartDate] = useState<string>("");
+  const [endDate, setEndDate] = useState<string>("");
+
+  /* Date Filtering */
+  const orders = rawOrders.filter((o) => {
+    if (!startDate && !endDate) return true;
+    if (!o.dateCreated) return true;
+    const itemDate = new Date(o.dateCreated).toISOString().split("T")[0];
+    if (startDate && itemDate < startDate) return false;
+    if (endDate && itemDate > endDate) return false;
+    return true;
+  });
+
+  const enquiries = rawEnquiries.filter((e) => {
+    if (!startDate && !endDate) return true;
+    if (!e.dateCreated) return true;
+    const itemDate = new Date(e.dateCreated).toISOString().split("T")[0];
+    if (startDate && itemDate < startDate) return false;
+    if (endDate && itemDate > endDate) return false;
+    return true;
+  });
+
+  const tickets = (rawTickets || []).filter((t) => {
+    if (!startDate && !endDate) return true;
+    if (!t.created_at) return true;
+    const itemDate = new Date(t.created_at).toISOString().split("T")[0];
+    if (startDate && itemDate < startDate) return false;
+    if (endDate && itemDate > endDate) return false;
+    return true;
+  });
 
   /* Stats calculations */
   const totalOrders = orders.length;
   const completedOrders = orders.filter((o) => o.stage === "Completed" || o.stage === "Closed").length;
   const activeOrders = orders.filter((o) => o.stage !== "Completed" && o.stage !== "Closed").length;
-  const newEnquiries = enquiries.filter((e) => e.status === "Pending" || e.status === "New").length;
+  const newEnquiries = enquiries.filter((e) => e.status !== "Converted").length;
   
   const pendingApprovals = orders.filter((o) => o.stageStatus && o.stageStatus !== "Normal").length;
   const lostOrders = orders.filter((o) => o.health === "Lost").length;
@@ -197,6 +236,13 @@ export function AdminDashboardClient({ orders, enquiries }: AdminDashboardClient
 
   /* Pipeline counts */
   const pipelineCounts = PIPELINE_STAGES.map((stage) => {
+    if (stage === "Enquiry") {
+      return {
+        stage,
+        count: enquiries.filter((e) => e.status !== "Converted").length,
+        label: "Enquiry",
+      };
+    }
     const group = PIPELINE_STAGE_GROUPS[stage] || [stage];
     return {
       stage,
@@ -207,6 +253,9 @@ export function AdminDashboardClient({ orders, enquiries }: AdminDashboardClient
 
   /* Table filter logic based on selected KPI or pipeline stage */
   const getFilteredRows = () => {
+    if (selectedPipelineStage === "Enquiry") {
+      return { type: "enquiries" as const, data: enquiries.filter((e) => e.status !== "Converted") };
+    }
     if (selectedPipelineStage) {
       const group = PIPELINE_STAGE_GROUPS[selectedPipelineStage] || [selectedPipelineStage];
       return { type: "orders" as const, data: orders.filter((o) => group.includes(o.stage)) };
@@ -214,7 +263,7 @@ export function AdminDashboardClient({ orders, enquiries }: AdminDashboardClient
     if (selectedKpi === "total")      return { type: "orders" as const, data: orders };
     if (selectedKpi === "completed")  return { type: "orders" as const, data: orders.filter(o => o.stage === "Completed" || o.stage === "Closed") };
     if (selectedKpi === "active")     return { type: "orders" as const, data: orders.filter(o => o.stage !== "Completed" && o.stage !== "Closed") };
-    if (selectedKpi === "enquiries")  return { type: "enquiries" as const, data: enquiries.filter(e => e.status === "Pending" || e.status === "New") };
+    if (selectedKpi === "enquiries")  return { type: "enquiries" as const, data: enquiries.filter(e => e.status !== "Converted") };
     if (selectedKpi === "approvals")  return { type: "orders" as const, data: orders.filter(o => o.stageStatus && o.stageStatus !== "Normal") };
     if (selectedKpi === "revenue")    return { type: "orders" as const, data: orders.filter(o => {
       const quotes = Array.isArray(o.quotations) ? o.quotations : (o.quotations ? [o.quotations] : []);
@@ -239,14 +288,20 @@ export function AdminDashboardClient({ orders, enquiries }: AdminDashboardClient
   const filteredRows = getFilteredRows();
   const activeFilterLabel = selectedKpi
     ? STATS.find(s => s.filterKey === selectedKpi)?.label
+    : selectedPipelineStage === "Enquiry"
+    ? "Enquiries"
     : selectedPipelineStage
     ? STAGE_LABEL[selectedPipelineStage]?.label
     : null;
 
-  /* Pending Tickets — mock data */
-  const pendingTickets = [
-    { id: "TKT-001", title: "LED light not working in main signage", customer: "Sneha Reddy", date: "26 Feb 2024", priority: "High" as const },
-  ];
+  /* Pending Tickets */
+  const pendingTickets = (tickets || []).map((t: any) => ({
+    id: t.ticket_id || t.id,
+    title: t.description || "No description",
+    customer: t.customer_name || t.customer_business_name || "Unknown",
+    date: t.created_at ? new Date(t.created_at).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" }) : "",
+    priority: t.priority || "High",
+  }));
 
   return (
     <div style={{ padding: "32px", background: "#F8FAFC", minHeight: "100vh" }}>
@@ -261,7 +316,49 @@ export function AdminDashboardClient({ orders, enquiries }: AdminDashboardClient
             Overview of your business performance
           </p>
         </div>
-        <div style={{ display: "flex", gap: "10px" }}>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", background: "white", padding: "4px 8px", borderRadius: "8px", border: "1px solid #E2E8F0" }}>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              style={{ border: "none", outline: "none", fontSize: "13px", color: "#475569", background: "transparent" }}
+            />
+            <span style={{ fontSize: "13px", color: "#94A3B8" }}>to</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              style={{ border: "none", outline: "none", fontSize: "13px", color: "#475569", background: "transparent" }}
+            />
+            {(startDate || endDate) && (
+              <button
+                onClick={() => { setStartDate(""); setEndDate(""); }}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  background: "transparent", border: "none", cursor: "pointer",
+                  color: "#94A3B8", padding: "0 2px"
+                }}
+                title="Clear Dates"
+              >
+                <XCircle size={14} />
+              </button>
+            )}
+          </div>
+          <button
+            onClick={() => setIsTicketModalOpen(true)}
+            style={{
+              display: "flex", alignItems: "center", gap: "6px",
+              padding: "9px 16px", borderRadius: "8px",
+              border: "none", background: "var(--color-primary)",
+              fontSize: "13px", fontWeight: "700", color: "white",
+              cursor: "pointer", transition: "all 0.15s",
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = "var(--color-primary-container)"}
+            onMouseLeave={e => e.currentTarget.style.background = "var(--color-primary)"}
+          >
+            <Plus size={14} /> Add Service Ticket
+          </button>
           <button
             onClick={() => setIsAddModalOpen(true)}
             style={{
@@ -378,12 +475,37 @@ export function AdminDashboardClient({ orders, enquiries }: AdminDashboardClient
                 </span>
               )}
             </div>
-            <button
-              onClick={() => router.push(filteredRows.type === "enquiries" ? "/admin/enquiries" : "/admin/orders")}
-              style={{ fontSize: "12px", fontWeight: "700", color: "var(--color-primary)", background: "none", border: "none", cursor: "pointer" }}
-            >
-              View All
-            </button>
+            <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+              <button
+                onClick={() => {
+                  if (selectedKpi === "approvals") {
+                    setSelectedKpi(null);
+                  } else {
+                    setSelectedKpi("approvals");
+                    setSelectedPipelineStage(null);
+                  }
+                }}
+                style={{
+                  fontSize: "12px",
+                  fontWeight: "700",
+                  color: selectedKpi === "approvals" ? "white" : "var(--color-primary)",
+                  background: selectedKpi === "approvals" ? "var(--color-primary)" : "rgba(30, 64, 175, 0.1)",
+                  padding: "6px 12px",
+                  borderRadius: "6px",
+                  border: "none",
+                  cursor: "pointer",
+                  transition: "all 0.2s"
+                }}
+              >
+                Approvals Req. {pendingApprovals > 0 && `(${pendingApprovals})`}
+              </button>
+              <button
+                onClick={() => router.push(filteredRows.type === "enquiries" ? "/admin/enquire" : "/admin/orders")}
+                style={{ fontSize: "12px", fontWeight: "700", color: "var(--color-primary)", background: "none", border: "none", cursor: "pointer" }}
+              >
+                View All
+              </button>
+            </div>
           </div>
           <div
             className="custom-scrollbar"
@@ -403,20 +525,41 @@ export function AdminDashboardClient({ orders, enquiries }: AdminDashboardClient
                       borderBottom: i < filteredRows.data.length - 1 ? "1px solid #F1F5F9" : "none",
                       gap: "12px", cursor: "pointer", transition: "background 0.15s",
                     }}
-                    onClick={() => router.push("/admin/enquiries")}
+                    onClick={() => router.push("/admin/enquire")}
                     onMouseEnter={e => (e.currentTarget.style.background = "#F8FAFC")}
                     onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
                   >
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: "13px", fontWeight: "700", color: "#0F172A" }}>{enq.business_name || enq.businessName || enq.lead_name || enq.leadName}</div>
-                      <div style={{ fontSize: "12px", color: "#64748B", marginTop: "2px" }}>{enq.phone} • {enq.source}</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        {(enq.enquire_id || enq.enquireId) && (
+                          <span style={{ fontSize: "12px", color: "var(--color-primary)", fontWeight: "600" }}>
+                            #{enq.enquire_id || enq.enquireId}
+                          </span>
+                        )}
+                        <span style={{ fontSize: "13px", fontWeight: "700", color: "#0F172A" }}>
+                          {enq.business_name || enq.businessName || enq.lead_name || enq.leadName || "No Name Provided"}
+                        </span>
+                        {(enq.business_name || enq.businessName) && (enq.lead_name || enq.leadName) && (
+                          <span style={{ fontSize: "12px", color: "#64748B" }}>
+                            ({enq.lead_name || enq.leadName})
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: "12px", color: "#64748B", marginTop: "4px" }}>
+                        {enq.phone ? `${enq.phone} • ` : ""}{enq.source || "No Source"}
+                      </div>
                     </div>
                     <span style={{
                       fontSize: "9px", fontWeight: "800", textTransform: "uppercase",
                       padding: "2px 8px", borderRadius: "4px",
                       background: "#FFFBEB", color: "#D97706", border: "1px solid #FDE68A",
                     }}>{enq.status}</span>
-                    <span style={{ fontSize: "11px", color: "#94A3B8" }}>{enq.enquire_id || enq.enquireId}</span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); router.push("/admin/enquire"); }}
+                      style={{ padding: "6px 10px", background: "var(--color-primary-container)", color: "var(--color-primary)", border: "none", borderRadius: "6px", fontSize: "11px", fontWeight: "700", cursor: "pointer" }}
+                    >
+                      View
+                    </button>
                   </div>
                 ))
               )
@@ -493,10 +636,18 @@ export function AdminDashboardClient({ orders, enquiries }: AdminDashboardClient
         {/* Pending Tickets */}
         <div style={{ background: "white", border: "1px solid #E2E8F0", borderRadius: "12px", overflow: "hidden" }}>
           <div style={{ padding: "18px 20px", borderBottom: "1px solid #E2E8F0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <h2 style={{ margin: 0, fontSize: "14px", fontWeight: "700", color: "#0F172A" }}>Pending Tickets</h2>
-            <span style={{ fontSize: "10px", fontWeight: "800", background: "#EF4444", color: "white", padding: "2px 8px", borderRadius: "99px" }}>
-              {pendingTickets.length} open
-            </span>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <h2 style={{ margin: 0, fontSize: "14px", fontWeight: "700", color: "#0F172A" }}>Pending Tickets</h2>
+              <span style={{ fontSize: "10px", fontWeight: "800", background: "#EF4444", color: "white", padding: "2px 8px", borderRadius: "99px" }}>
+                {pendingTickets.length} open
+              </span>
+            </div>
+            <button
+              onClick={() => router.push("/admin/service-tickets")}
+              style={{ fontSize: "12px", fontWeight: "700", color: "var(--color-primary)", background: "none", border: "none", cursor: "pointer" }}
+            >
+              View All
+            </button>
           </div>
           <div style={{ padding: "16px" }}>
             {pendingTickets.map((ticket) => {
@@ -549,7 +700,10 @@ export function AdminDashboardClient({ orders, enquiries }: AdminDashboardClient
             return (
               <div
                 key={item.stage}
-                onClick={() => setSelectedPipelineStage(isSelected ? null : item.stage)}
+                onClick={() => {
+                  setSelectedPipelineStage(isSelected ? null : item.stage);
+                  setSelectedKpi(null);
+                }}
                 style={{
                   textAlign: "center",
                   padding: "12px 8px",
@@ -631,6 +785,17 @@ export function AdminDashboardClient({ orders, enquiries }: AdminDashboardClient
           }
         }}
       />
+
+      {/* ── Add Service Ticket Modal ── */}
+      {isTicketModalOpen && (
+        <CreateServiceTicketModal
+          onClose={() => setIsTicketModalOpen(false)}
+          onCreated={() => {
+            setIsTicketModalOpen(false);
+            router.refresh();
+          }}
+        />
+      )}
     </div>
   );
 }

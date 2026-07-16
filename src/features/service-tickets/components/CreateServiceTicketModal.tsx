@@ -1,13 +1,16 @@
 "use client";
 
 import React from "react";
-import { Upload, Loader2, Search, X, Phone, FileText } from "lucide-react";
+import { Upload, Loader2, Search, X, Phone, FileText, Trash2, Eye } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
+import { deleteStorageFilesAction } from "@/features/orders/actions/storageActions";
 import {
   createServiceTicketAction,
   lookupOrdersByPhone,
   type TicketPhoto,
 } from "@/features/service-tickets/actions/serviceTicketActions";
+import { loadClientConfig } from "@/config/loadClientConfig";
+import { CopyLinkButton } from "./CopyLinkButton";
 
 interface CreateServiceTicketModalProps {
   onClose: () => void;
@@ -24,6 +27,7 @@ export function CreateServiceTicketModal({
   onClose,
   onCreated,
 }: CreateServiceTicketModalProps) {
+  const clientConfig = loadClientConfig();
   const [phone, setPhone] = React.useState("");
   const [description, setDescription] = React.useState("");
   const [resolutionNotes, setResolutionNotes] = React.useState("");
@@ -105,6 +109,19 @@ export function CreateServiceTicketModal({
     }
   }
 
+  async function removePhoto(index: number) {
+    const photo = photos[index];
+    try {
+      const path = photo.url.split("/service-ticket-photos/").pop();
+      if (path) {
+        await deleteStorageFilesAction("service-ticket-photos", [path]);
+      }
+    } catch {
+      // best-effort cleanup — continue removing from local state
+    }
+    setPhotos((prev) => prev.filter((_, i) => i !== index));
+  }
+
   async function handleCreate() {
     if (!canSubmit) return;
     setSaveLoading(true);
@@ -154,15 +171,20 @@ export function CreateServiceTicketModal({
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "32px" }}>
           <div>
+            {clientConfig?.logoUrl && (
+              <img src={clientConfig.logoUrl} alt="Logo" style={{ height: "32px", objectFit: "contain", marginBottom: "12px" }} />
+            )}
             <h2 className="text-display-sm" style={{ margin: 0, color: "var(--color-primary)" }}>
               Create Service Ticket
             </h2>
-            <p className="text-body-md" style={{ margin: "8px 0 0", color: "var(--color-on-surface-variant)" }}>
+            <p className="text-body-md" style={{ margin: "4px 0 0", color: "var(--color-on-surface-variant)" }}>
               Follow the steps below to record a new customer issue.
             </p>
           </div>
-          <button 
-            onClick={onClose} 
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <CopyLinkButton companyId={clientConfig?.id || "default"} />
+            <button 
+              onClick={onClose} 
             style={{ 
               border: "none", 
               background: "var(--color-surface-container-lowest)", 
@@ -181,6 +203,7 @@ export function CreateServiceTicketModal({
           >
             <X size={20} />
           </button>
+          </div>
         </div>
 
         {error && (
@@ -338,8 +361,80 @@ export function CreateServiceTicketModal({
                 {photos.length > 0 && (
                   <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", marginTop: "20px" }}>
                     {photos.map((photo, i) => (
-                       <div key={i} style={{ width: "80px", height: "80px", borderRadius: "8px", overflow: "hidden", border: "1px solid var(--color-outline-variant)" }}>
+                       <div
+                         key={i}
+                         className="group"
+                         style={{
+                           position: "relative",
+                           width: "96px",
+                           height: "96px",
+                           borderRadius: "12px",
+                           overflow: "hidden",
+                           border: "1px solid var(--color-outline-variant)",
+                           boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+                         }}
+                       >
                          <img src={photo.url} alt={`Preview ${i}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                         <div
+                           className="opacity-0 group-hover:opacity-100"
+                           style={{
+                             position: "absolute",
+                             inset: 0,
+                             background: "rgba(15,23,42,0.7)",
+                             display: "flex",
+                             alignItems: "center",
+                             justifyContent: "center",
+                             gap: "6px",
+                             transition: "opacity 0.2s",
+                           }}
+                         >
+                           <a
+                             href={photo.url}
+                             target="_blank"
+                             rel="noreferrer"
+                             onClick={(e) => e.stopPropagation()}
+                             style={{
+                               width: "28px",
+                               height: "28px",
+                               borderRadius: "50%",
+                               background: "rgba(255,255,255,0.2)",
+                               display: "flex",
+                               alignItems: "center",
+                               justifyContent: "center",
+                               color: "#fff",
+                               border: "none",
+                               cursor: "pointer",
+                               transition: "background 0.15s",
+                             }}
+                             onMouseOver={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.4)"; }}
+                             onMouseOut={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.2)"; }}
+                             title="View"
+                           >
+                             <Eye size={14} />
+                           </a>
+                           <button
+                             type="button"
+                             onClick={(e) => { e.stopPropagation(); void removePhoto(i); }}
+                             style={{
+                               width: "28px",
+                               height: "28px",
+                               borderRadius: "50%",
+                               background: "rgba(239,68,68,0.8)",
+                               display: "flex",
+                               alignItems: "center",
+                               justifyContent: "center",
+                               color: "#fff",
+                               border: "none",
+                               cursor: "pointer",
+                               transition: "background 0.15s",
+                             }}
+                             onMouseOver={(e) => { e.currentTarget.style.background = "rgba(239,68,68,1)"; }}
+                             onMouseOut={(e) => { e.currentTarget.style.background = "rgba(239,68,68,0.8)"; }}
+                             title="Remove"
+                           >
+                             <Trash2 size={14} />
+                           </button>
+                         </div>
                        </div>
                     ))}
                   </div>

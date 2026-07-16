@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import {
-  ArrowLeft, CheckSquare, FileText, MapPin,
+  ArrowLeft, CheckSquare, FileText,
   AlertOctagon, Check, Image as ImageIcon, Sparkles, Loader2, Save, Timer, Shield
 } from "lucide-react";
 import type { StageModuleProps } from "../../shared/types";
@@ -444,108 +444,22 @@ export function ProductionModule({
         </>
       )}
 
+      {/* View-Only Site Visit Banner */}
+      <div className="mb-6 bg-indigo-50/80 border border-indigo-100 text-indigo-700 p-4 rounded-xl text-xs font-semibold flex items-center gap-3 shadow-sm">
+        <Sparkles size={16} className="text-indigo-600 flex-shrink-0" />
+        You now have view-only access to the Site Visit stage. Click the 'Site Visit' tab in the timeline above to view full location photos and measurement details!
+      </div>
+
       {/* Two Column Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
 
         {/* LEFT COLUMN: Stage Outputs & Details (2/3 width) */}
         <div className="lg:col-span-2 space-y-8">
 
-          {/* SITE VISIT DETAILS */}
-          <div className="prt-card p-6">
-            <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
-              <MapPin size={18} className="text-indigo-600" />
-              <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider">
-                Measurements
-              </h2>
-            </div>
 
-            {siteVisitItems.length > 0 ? (
-              <div className="space-y-4">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead>
-                      <tr className="bg-slate-50 border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wider">
-                        <th className="py-2.5 px-4">Location / Name</th>
-                        <th className="py-2.5 px-4">Dimensions (W × H)</th>
-                        <th className="py-2.5 px-4">Depth</th>
-                        <th className="py-2.5 px-4">Notes</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {siteVisitItems.map((loc, idx) => (
-                        <tr key={loc.id || idx}>
-                          <td className="py-3 px-4 font-bold text-slate-800">{loc.name}</td>
-                          <td className="py-3 px-4 font-medium text-slate-600">
-                            {loc.width && loc.height ? `${loc.width}ft × ${loc.height}ft` : "—"}
-                          </td>
-                          <td className="py-3 px-4 font-medium text-slate-600">{loc.depth ? `${loc.depth}in` : "—"}</td>
-                          <td className="py-3 px-4 font-medium text-slate-600">{loc.notes || "—"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            ) : (
-              <div className="py-6 text-center text-xs text-slate-400 font-semibold">
-                No site visit locations or measurements specified. Default dimensions: {order.dimensions || "TBD"}
-              </div>
-            )}
-          </div>
 
-          {/* QUOTATION DETAILS */}
-          <div className="prt-card p-6">
-            <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <CheckSquare size={18} className="text-amber-600" />
-                <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider">
-                  Material Requirements (From Quotation)
-                </h2>
-              </div>
-            </div>
 
-            {signageOptions.length > 0 ? (
-              <div className="space-y-5">
-                <div className="overflow-x-auto space-y-6">
-                  {signageOptions.map((section: any, sIdx: number) => {
-                    const svItem = siteVisitItems.find(sv => sv.id === section.siteVisitItemId);
-                    return (
-                      <div key={sIdx} className="border border-slate-200 rounded-xl overflow-hidden">
-                        <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 font-bold text-slate-800">
-                          {svItem ? svItem.name : section.itemLabel}
-                        </div>
-                        <table className="w-full text-left text-xs border-collapse">
-                          <thead>
-                            <tr className="bg-white border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wider">
-                              <th className="py-2.5 px-4 w-1/2">Material Description</th>
-                              <th className="py-2.5 px-4">Required Quantity</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100 bg-white">
-                            {(section.lines || []).map((item: any, idx: number) => {
-                              const qty = item.pricingType === "per_sqft" ? (item.quantity * (item.totalSqFt || 1)) : item.quantity;
-                              return (
-                                <tr key={item.id || idx}>
-                                  <td className="py-3 px-4 font-bold text-slate-800">{item.description}</td>
-                                  <td className="py-3 px-4 font-semibold text-slate-700">
-                                    {qty} {item.pricingType === "per_sqft" ? "Sq Ft" : item.unit || "Nos"}
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : (
-              <div className="py-6 text-center text-xs text-slate-400 font-semibold">
-                No detailed quotation entries found for this order. Project Budget: ₹{order.budget?.toLocaleString("en-IN")}
-              </div>
-            )}
-          </div>
+
 
           {/* FINAL PRODUCTION FILES (Per Item) */}
           <div className="prt-card p-6">

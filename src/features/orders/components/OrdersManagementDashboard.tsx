@@ -21,10 +21,12 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { updateOrder, assignTeamToOrder } from "@/features/orders/actions/orderActions";
+import { loadClientConfig } from "@/config/loadClientConfig";
 import { parseOrderStage } from "@/features/orders/workspace/shared/stageGrants";
 import {
   countQueueViews,
   partitionQueueOrdersByView,
+  queueHasIncomingTab,
 } from "@/features/orders/workspace/shared/staffQueueStages";
 import { QueueViewToggle } from "./QueueViewToggle";
 import type { QueueView } from "@/features/orders/workspace/shared/staffQueueStages";
@@ -69,6 +71,10 @@ export function OrdersManagementDashboard({
   currentEmployeeName,
   orderDetailBasePath,
   entryStage,
+  currentUserId,
+  hideTitle,
+  title,
+  subtitle,
 }: { 
   initialOrders: any[];
   initialCustomers: any[];
@@ -78,8 +84,16 @@ export function OrdersManagementDashboard({
   currentEmployeeName: string;
   /** Base path for order detail links (e.g. `/staff/orders`). Defaults by role. */
   orderDetailBasePath?: string;
+  /** Optional current user ID for admin assigned filter */
+  currentUserId?: string;
   /** Optional entryStage query param (e.g. staff queue lock). */
   entryStage?: string;
+  /** Hides the default "Orders Management" title header if true */
+  hideTitle?: boolean;
+  /** Custom override for the main heading */
+  title?: string;
+  /** Custom override for the subtitle */
+  subtitle?: string;
 }) {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
@@ -88,7 +102,9 @@ export function OrdersManagementDashboard({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [stageFilter, setStageFilter] = useState("ALL");
   const [healthFilter, setHealthFilter] = useState("ALL");
+  const [adminAssignedFilter, setAdminAssignedFilter] = useState<"ALL" | "MINE">("MINE");
   const [selectedKpi, setSelectedKpi] = useState<string | null>(null);
+  const clientConfig = loadClientConfig();
   const parsedEntryStage = parseOrderStage(entryStage);
   const [queueView, setQueueView] = useState<QueueView>("current");
   
@@ -163,7 +179,7 @@ export function OrdersManagementDashboard({
   // Calculations for Admin
   const activeOrders = orders.filter(o => o.stage !== "Completed" && o.stage !== "Closed").length;
   const unassignedOrders = orders.filter(o => o.stage !== "Completed" && o.stage !== "Closed" && (!o.assignedEmployees || o.assignedEmployees.length === 0)).length;
-  const pendingCalls = enquiries ? enquiries.filter(e => e.status === "Pending" && e.source === "Phone Call").length : 0;
+  const pendingApprovals = orders.filter(o => o.stageStatus && o.stageStatus !== "Normal").length;
   const completedOrders = orders.filter(o => o.stage === "Completed" || o.stage === "Closed").length;
 
   // Calculations for Staff
@@ -205,10 +221,10 @@ export function OrdersManagementDashboard({
       color: "#ef4444",
     },
     {
-      label: "PENDING CALLS",
-      value: pendingCalls.toString(),
-      change: "Immediate action req.",
-      filterKey: "pendingcalls",
+      label: "APPROVALS REQ.",
+      value: pendingApprovals.toString(),
+      change: "Pending admin review",
+      filterKey: "approvals",
       icon: AlertCircle,
       color: "#F97316",
     },
@@ -225,7 +241,7 @@ export function OrdersManagementDashboard({
   const getKpiFilteredOrders = () => {
     if (selectedKpi === "active")       return queueScopedOrders.filter(o => o.stage !== "Completed" && o.stage !== "Closed");
     if (selectedKpi === "unassigned")   return queueScopedOrders.filter(o => o.stage !== "Completed" && o.stage !== "Closed" && (!o.assignedEmployees || o.assignedEmployees.length === 0));
-    if (selectedKpi === "pendingcalls") return queueScopedOrders.filter(o => enquiries?.find((e: any) => e.orderId === o.id && e.status === "Pending" && e.source === "Phone Call"));
+    if (selectedKpi === "approvals")    return queueScopedOrders.filter(o => o.stageStatus && o.stageStatus !== "Normal");
     if (selectedKpi === "completed")    return queueScopedOrders.filter(o => o.stage === "Completed" || o.stage === "Closed");
     if (selectedKpi === "myactive")     return queueScopedOrders.filter(o => o.stage !== "Completed" && o.stage !== "Closed" && (o.assignedEmployees?.includes(employeeName) || o.assignedEmployees?.includes(currentEmployeeId)));
     if (selectedKpi === "mycompleted")  return queueScopedOrders.filter(o => (o.stage === "Completed" || o.stage === "Closed") && (o.assignedEmployees?.includes(employeeName) || o.assignedEmployees?.includes(currentEmployeeId)));
@@ -271,22 +287,34 @@ export function OrdersManagementDashboard({
     if (currentUserRole === "Employee" && !kpiFilteredOrders) {
       return order.assignedEmployees?.includes(employeeName) || order.assignedEmployees?.includes(currentEmployeeId);
     }
+    
+    if (currentUserRole === "Admin" && adminAssignedFilter === "MINE") {
+      if (!currentUserId) return false;
+      return order.assignedAdmins?.includes(currentUserId);
+    }
 
     return true;
   });
 
   return (
-    <div style={{ padding: "32px", paddingRight: assignPanelOrderId ? "412px" : "32px", transition: "padding-right 0.3s cubic-bezier(0.4, 0, 0.2, 1)", background: "#f8fafc", minHeight: "100vh" }}>
+    <div 
+      className="p-4 md:p-8 bg-slate-50 min-h-screen transition-all duration-300"
+      style={{ paddingRight: assignPanelOrderId ? "412px" : undefined }}
+    >
       {/* Header Section */}
       <div style={{ marginBottom: "32px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "24px" }}>
           <div>
-            <h1 style={{ fontSize: "28px", fontWeight: "800", color: "#0f172a", margin: "0 0 8px" }}>
-              Orders Management
-            </h1>
-            <p style={{ fontSize: "14px", color: "#64748b", margin: 0 }}>
-              Track and process initial project requests
-            </p>
+            {!hideTitle && (
+              <>
+                <h1 style={{ fontSize: "28px", fontWeight: "800", color: "#0f172a", margin: "0 0 8px" }}>
+                  {title || "Orders Management"}
+                </h1>
+                <p style={{ fontSize: "14px", color: "#64748b", margin: 0 }}>
+                  {subtitle || "Track and process initial project requests"}
+                </p>
+              </>
+            )}
           </div>
           <button
             type="button"
@@ -320,12 +348,13 @@ export function OrdersManagementDashboard({
               incomingCount={queueViewCounts.incoming}
               currentCount={queueViewCounts.current}
               completedCount={queueViewCounts.completed}
+              hideIncoming={!queueHasIncomingTab(parsedEntryStage)}
             />
           </div>
         )}
 
         {/* Stats Cards */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {stats.map((stat: any, idx) => {
             const Icon = stat.icon;
             const isActive = selectedKpi === stat.filterKey;
@@ -374,12 +403,12 @@ export function OrdersManagementDashboard({
       </div>
 
       {/* Main Content Area */}
-      <div style={{ display: "flex", gap: "24px", alignItems: "flex-start" }}>
+      <div className="flex flex-col lg:flex-row gap-6 items-start">
         {/* Table Section */}
-        <div style={{ flex: 1, background: "white", borderRadius: "12px", border: "1px solid #e2e8f0", overflow: "visible", minWidth: 0 }}>
+        <div className="w-full lg:flex-1 bg-white rounded-xl border border-slate-200 overflow-visible min-w-0">
           {/* Search & Filter Bar */}
-        <div style={{ padding: "16px 20px", borderBottom: "1px solid #e2e8f0", display: "flex", flexDirection: "column", gap: "10px" }}>
-          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+        <div className="p-4 border-b border-slate-200 flex flex-col gap-3">
+          <div className="flex flex-col md:flex-row gap-3 md:items-center">
             {/* Search */}
             <div style={{ flex: 1, position: "relative" }}>
               <Search size={15} style={{ position: "absolute", left: "11px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8", pointerEvents: "none" }} />
@@ -393,28 +422,12 @@ export function OrdersManagementDashboard({
                 onBlur={(e) => { e.currentTarget.style.borderColor = "#e2e8f0"; e.currentTarget.style.boxShadow = "none"; }}
               />
               {searchTerm && (
-                <button onClick={() => setSearchTerm("")} style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#94a3b8", padding: 0, display: "flex" }}>
+                <button onClick={() => setSearchTerm("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
                   <X size={14} />
                 </button>
               )}
             </div>
 
-            {/* Custom Date inputs */}
-            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                style={{ padding: "8px 12px", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "13px", color: "#475569", outline: "none" }}
-              />
-              <span style={{ fontSize: "12px", color: "#64748b" }}>to</span>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                style={{ padding: "8px 12px", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "13px", color: "#475569", outline: "none" }}
-              />
-            </div>
 
             {/* Stage filter */}
             <select value={stageFilter} onChange={(e) => setStageFilter(e.target.value)} style={{ padding: "9px 12px", background: "white", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "13px", fontWeight: "500", color: "#475569", cursor: "pointer", outline: "none" }}>
@@ -426,6 +439,68 @@ export function OrdersManagementDashboard({
               <option value="Installation">Installation</option>
               <option value="Completed">Completed</option>
             </select>
+
+            {currentUserRole === "Admin" && clientConfig.features.enableAdminAssignment && (
+              <select 
+                value={adminAssignedFilter} 
+                onChange={(e) => setAdminAssignedFilter(e.target.value as "ALL" | "MINE")} 
+                style={{ 
+                  padding: "8px 12px", 
+                  background: "var(--color-primary-container, #eff6ff)", 
+                  border: "2px solid var(--color-primary, #3b82f6)", 
+                  borderRadius: "8px", 
+                  fontSize: "13px", 
+                  fontWeight: "700", 
+                  color: "var(--color-primary, #1d4ed8)", 
+                  cursor: "pointer", 
+                  outline: "none",
+                  boxShadow: "0 2px 4px rgba(0,0,0,0.05)"
+                }}
+              >
+                <option value="ALL">All Assigned Admins</option>
+                <option value="MINE">My Assigned Orders</option>
+              </select>
+            )}
+
+            {/* Date Range Filter */}
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => {
+                  setDateFilterType("range");
+                  setStartDate(e.target.value);
+                }}
+                style={{ padding: "8px 12px", background: "white", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "13px", color: "#475569", outline: "none" }}
+              />
+              <span style={{ fontSize: "13px", color: "#64748b", fontWeight: "500" }}>to</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => {
+                  setDateFilterType("range");
+                  setEndDate(e.target.value);
+                }}
+                style={{ padding: "8px 12px", background: "white", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "13px", color: "#475569", outline: "none" }}
+              />
+              {(startDate || endDate) && (
+                <button
+                  onClick={() => {
+                    setStartDate("");
+                    setEndDate("");
+                    setDateFilterType("all");
+                  }}
+                  style={{
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    background: "white", border: "1px solid #e2e8f0", borderRadius: "8px", 
+                    cursor: "pointer", color: "#94A3B8", padding: "9px"
+                  }}
+                  title="Clear Dates"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
 
             {/* Health filter */}
             <select value={healthFilter} onChange={(e) => setHealthFilter(e.target.value)} style={{ padding: "9px 12px", background: "white", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "13px", fontWeight: "500", color: "#475569", cursor: "pointer", outline: "none" }}>
@@ -439,7 +514,7 @@ export function OrdersManagementDashboard({
           </div>
 
           {/* Reset Button */}
-          {(startDate !== "" || endDate !== "" || stageFilter !== "ALL" || healthFilter !== "ALL" || searchTerm !== "" || selectedKpi !== null) && (
+          {(startDate !== "" || endDate !== "" || stageFilter !== "ALL" || healthFilter !== "ALL" || searchTerm !== "" || selectedKpi !== null || adminAssignedFilter !== "MINE") && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "10px" }}>
               <button
                 onClick={() => {
@@ -448,6 +523,7 @@ export function OrdersManagementDashboard({
                   setEndDate("");
                   setStageFilter("ALL");
                   setHealthFilter("ALL");
+                  setAdminAssignedFilter("MINE");
                   setSearchTerm("");
                   setSelectedKpi(null);
                 }}
@@ -460,8 +536,8 @@ export function OrdersManagementDashboard({
         </div>
 
         {/* Table View */}
-        <div style={{ overflow: "visible" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <div className="overflow-x-auto min-h-[300px]">
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "900px" }}>
             <thead style={{ position: "sticky", top: 0, background: "#f8fafc", zIndex: 10 }}>
               <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
                 <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>

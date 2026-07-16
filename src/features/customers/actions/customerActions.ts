@@ -57,6 +57,12 @@ export async function updateCustomer(id: string, updates: any) {
   const supabase = await getSupabase();
   const { data, error } = await supabase.from("customers").update(updates).eq("id", id).select();
   if (error) throw new Error(error.message);
+
+  if (updates.name) {
+    await supabase.from("enquiries").update({ business_name: updates.name }).eq("customer_id", id);
+    await supabase.from("orders").update({ business_name: updates.name }).eq("customer_id", id);
+  }
+
   revalidatePath("/admin/customers");
   return data;
 }

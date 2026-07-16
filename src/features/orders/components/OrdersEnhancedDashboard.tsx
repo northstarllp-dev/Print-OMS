@@ -36,6 +36,7 @@ interface Order {
   isOutstanding?: boolean;
   isDelayed?: boolean;
   orderCode?: string;
+  stageStatus?: string;
 }
 
 const generateMockOrders = (): Order[] => {
@@ -144,7 +145,12 @@ export function OrdersEnhancedDashboard({ onAddOrder }: OrdersEnhancedDashboardP
       order.projectName.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
       order.customer.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
       order.id.toLowerCase().includes(debouncedSearchTerm.toLowerCase());
-    const matchesStage = !selectedStage || order.stage === selectedStage;
+    let matchesStage = true;
+    if (selectedStage === "pending_approval") {
+      matchesStage = !!order.stageStatus && order.stageStatus !== "Normal";
+    } else if (selectedStage) {
+      matchesStage = order.stage === selectedStage;
+    }
     return matchesSearch && matchesStage;
   });
 
@@ -388,6 +394,7 @@ export function OrdersEnhancedDashboard({ onAddOrder }: OrdersEnhancedDashboardP
             }}
           >
             <option value="">Filter by Stage...</option>
+            <option value="pending_approval">Approvals Req.</option>
             <option value="enquired">Enquired</option>
             <option value="site-visit">Site Visit</option>
             <option value="quotation">Quotation</option>

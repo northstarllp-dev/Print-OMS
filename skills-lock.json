@@ -1,6 +1,12 @@
 {
   "version": 1,
   "skills": {
+    "brag": {
+      "source": "latent-spaces/brag",
+      "sourceType": "github",
+      "skillPath": "skills/brag/SKILL.md",
+      "computedHash": "a16b5b1861b3d396fa5cb37ebebfc4d5ee40854900e33d855f1e43904f383267"
+    },
     "supabase": {
       "source": "supabase/agent-skills",
       "sourceType": "github",

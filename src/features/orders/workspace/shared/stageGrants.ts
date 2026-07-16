@@ -56,8 +56,8 @@ export const TENANT_ROLE_STAGE_GRANTS: Record<string, Record<string, RoleStageGr
     Installation: edit("installation"),
   },
   [BOARD_COMPANY_ID]: {
-    Designer: merge(view("site_visit"), edit("design")),
-    "Production & Service": edit("production"),
+    Designer: merge(view("site_visit"), edit("design", "quotation")),
+    "Production & Service": merge(view("site_visit"), edit("production", "service_tickets")),
     "Recce & Installation": edit("site_visit", "installation"),
   },
 };
@@ -67,7 +67,7 @@ export function tenantUsesFloorPortals(actor: StageActor): boolean {
   return TENANT_USES_FLOOR_PORTALS[actor.company_id] === true;
 }
 
-const ALL_STAGES: OrderStage[] = ["site_visit", "quotation", "design", "production", "installation"];
+const ALL_STAGES: OrderStage[] = ["site_visit", "quotation", "design", "production", "installation", "service_tickets"];
 
 function adminGrantMap(): RoleStageGrantMap {
   const map: RoleStageGrantMap = {};
@@ -173,7 +173,7 @@ const STAGE_NAV: Record<OrderStage, StaffNavItem> = {
   },
   quotation: {
     href: "/staff/orders",
-    label: "Orders",
+    label: "Quotations",
     icon: "orders",
     orderDetailEntryStage: "quotation",
   },
@@ -195,6 +195,12 @@ const STAGE_NAV: Record<OrderStage, StaffNavItem> = {
     icon: "installation",
     orderDetailEntryStage: "installation",
   },
+  service_tickets: {
+    href: "/staff/service-tickets",
+    label: "Service Tickets",
+    icon: "support",
+    orderDetailEntryStage: "service_tickets",
+  },
 };
 
 const NAV_STAGE_ORDER: OrderStage[] = [
@@ -203,6 +209,7 @@ const NAV_STAGE_ORDER: OrderStage[] = [
   "design",
   "production",
   "installation",
+  "service_tickets",
 ];
 
 /** Sidebar tabs derived from tenant stage grants (canEdit stages only). */
@@ -230,6 +237,7 @@ const BACK_HREF_BY_STAGE: Record<OrderStage, string> = {
   design: "/staff/design",
   production: "/staff/production",
   installation: "/staff/installation",
+  service_tickets: "/staff/service-tickets",
 };
 
 export function getStaffOrderBackHref(entryStage?: OrderStage | null): string {

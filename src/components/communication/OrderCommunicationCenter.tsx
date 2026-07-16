@@ -7,6 +7,7 @@ import {
   Volume2, SearchCode, History, Users, MessageCircle, FileDown, ShieldAlert
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
+import { ensureRealtimeAuth } from "@/utils/supabase/ensureRealtimeAuth";
 import { Employee, Customer } from "@/types";
 
 interface OrderCommunicationCenterProps {
@@ -108,18 +109,24 @@ export function OrderCommunicationCenter({
 
   // Real-time channel subscription
   useEffect(() => {
-    const channel = supabase
-      .channel(`order-comm-${orderId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "order_activity",
-          filter: `order_id=eq.${orderId}`
-        },
-        (payload) => {
-          if (payload.eventType === "INSERT") {
+    let cancelled = false;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    void (async () => {
+      await ensureRealtimeAuth(supabase);
+      if (cancelled) return;
+
+      channel = supabase
+        .channel(`order-comm-${orderId}:${Math.random().toString(36).slice(2, 8)}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "order_activity",
+            filter: `order_id=eq.${orderId}`,
+          },
+          (payload) => {
             const newMessage = payload.new as DBMessage;
             setMessages((prev) => {
               if (prev.some((m) => m.id === newMessage.id)) return prev;
@@ -129,21 +136,45 @@ export function OrderCommunicationCenter({
               }
               return [...prev, newMessage];
             });
-          } else if (payload.eventType === "UPDATE") {
+          }
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "order_activity",
+            filter: `order_id=eq.${orderId}`,
+          },
+          (payload) => {
             const updatedMessage = payload.new as DBMessage;
             setMessages((prev) =>
               prev.map((m) => (m.id === updatedMessage.id ? updatedMessage : m))
             );
-          } else if (payload.eventType === "DELETE") {
-            const deletedMessage = payload.old as DBMessage;
-            setMessages((prev) => prev.filter((m) => m.id !== deletedMessage.id));
           }
-        }
-      )
-      .subscribe();
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "DELETE",
+            schema: "public",
+            table: "order_activity",
+          },
+          (payload) => {
+            const deletedMessage = payload.old as DBMessage;
+            if (!deletedMessage?.id) return;
+            setMessages((prev) => {
+              if (!prev.some((m) => m.id === deletedMessage.id)) return prev;
+              return prev.filter((m) => m.id !== deletedMessage.id);
+            });
+          }
+        )
+        .subscribe();
+    })();
 
     return () => {
-      supabase.removeChannel(channel);
+      cancelled = true;
+      if (channel) supabase.removeChannel(channel);
     };
   }, [orderId, activeTab]);
 

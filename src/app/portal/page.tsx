@@ -12,6 +12,7 @@ import { mapDesignFromDb } from "@/features/designs/actions/designMapper";
 import { toCustomerVisibleDesign } from "@/features/designs/utils/customerVisibleDesign";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { isQuotationVisibleToCustomer } from "@/features/quotations/utils/lineAmount";
+import { normalizeInvoiceProfile } from "@/features/quotations/types/invoiceProfile";
 
 export const dynamic = "force-dynamic";
 
@@ -130,9 +131,7 @@ export default async function PortalPage({
       admin.from("site_visits").select("id, order_id").in("order_id", orderIds),
     ]);
     if (!qtsRes.error && qtsRes.data) {
-      quotationsData = qtsRes.data.filter((q) =>
-        isQuotationVisibleToCustomer(q.status)
-      );
+      quotationsData = qtsRes.data;
     }
     if (!svsRes.error && svsRes.data) siteVisitsData = svsRes.data;
 
@@ -223,19 +222,27 @@ export default async function PortalPage({
           ? (o.site_visits.length > 0 ? o.site_visits[0] : null)
           : (o.site_visits || null)
       ),
-      quoteDetails: q ? {
-        id: q.id,
-        quotationId: q.quotation_id,
-        signageOptions: q.signage_options || [],
-        discount: Number(q.discount || 0),
-        shipping: Number(q.shipping || 0),
-        subtotal: Number(q.subtotal || 0),
-        tax: Number(q.tax || 0),
-        grandTotal: Number(q.grand_total || 0),
-        status: q.status,
-        notes: q.notes,
-        terms: q.terms,
-      } : null,
+      quoteDetails: q ? (
+        isQuotationVisibleToCustomer(q.status) ? {
+          id: q.id,
+          quotationId: q.quotation_id,
+          signageOptions: q.signage_options || [],
+          discount: Number(q.discount || 0),
+          shipping: Number(q.shipping || 0),
+          subtotal: Number(q.subtotal || 0),
+          tax: Number(q.tax || 0),
+          grandTotal: Number(q.grand_total || 0),
+          status: q.status,
+          notes: q.notes,
+          terms: q.terms,
+          rejectionReason: q.rejection_reason,
+          createdAt: q.created_at,
+          updatedAt: q.updated_at,
+        } : {
+          status: q.status,
+          rejectionReason: q.rejection_reason,
+        }
+      ) : null,
       design: toCustomerVisibleDesign(
         Array.isArray(o.designs) && o.designs.length > 0
           ? mapDesignFromDb(o.designs[0])
@@ -257,13 +264,16 @@ export default async function PortalPage({
   // Fetch app settings using customer's company ID (admin client — portal has no staff session)
   const { data: settingsRow } = await admin
     .from("app_settings")
-    .select("site_visit_scheduling_enabled, installation_scheduling_enabled")
+    .select(
+      "site_visit_scheduling_enabled, installation_scheduling_enabled, invoice_profile"
+    )
     .eq("company_id", customerData.company_id)
     .maybeSingle();
 
   const appSettings = {
     siteVisitSchedulingEnabled: settingsRow?.site_visit_scheduling_enabled ?? true,
     installationSchedulingEnabled: settingsRow?.installation_scheduling_enabled ?? true,
+    invoiceProfile: normalizeInvoiceProfile(settingsRow?.invoice_profile),
   };
 
   return (
@@ -278,6 +288,8 @@ export default async function PortalPage({
     />
   );
 }
+
+import { Logo } from "@/components/ui/Logo";
 
 function PortalError({ title, message }: { title: string; message: string }) {
   return (
@@ -304,6 +316,9 @@ function PortalError({ title, message }: { title: string; message: string }) {
           boxShadow: "0 8px 24px rgba(0, 0, 0, 0.08)",
         }}
       >
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: "24px" }}>
+          <Logo height={48} />
+        </div>
         <div
           style={{
             width: 56,

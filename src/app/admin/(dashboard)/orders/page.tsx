@@ -23,11 +23,13 @@ export default async function OrdersPage() {
     productType: o.product_type,
     requirements: o.requirements,
     assignedEmployees: o.assigned_employees || [],
+    assignedAdmins: o.assigned_admins || [],
     dateCreated: o.date_created,
     customerName: o.business_name || "",
     orderCode: o.order_id || o.id,
     orderId: o.order_id || o.id,
-    siteVisitDetails: o.siteVisitDetails || null
+    siteVisitDetails: o.siteVisitDetails || null,
+    workflow_type: o.workflow_type,
   })) || [];
 
   const mappedCustomers = customers?.map(c => ({
@@ -61,6 +63,7 @@ export default async function OrdersPage() {
       initialEnquiries={mappedEnquiries}
       userRole="Admin"
       currentEmployeeName=""
+      currentUserId={user?.id}
     />
   );
 }

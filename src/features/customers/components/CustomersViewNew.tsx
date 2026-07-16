@@ -1,7 +1,9 @@
 "use client";
 
 import React, { useState } from "react";
-import { Search, Filter, MapPin, Mail, Phone, X, ShoppingBag, ExternalLink, Share2 } from "lucide-react";
+import { Search, Filter, MapPin, Mail, Phone, X, ShoppingBag, ExternalLink, Share2, Pencil } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { updateCustomer } from "@/features/customers/actions/customerActions";
 
 const getStatusColor = (status: string | undefined) => {
   const colors: Record<string, { bg: string; text: string; label: string }> = {
@@ -35,6 +37,49 @@ export function CustomersViewNew({
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [copiedCustomerId, setCopiedCustomerId] = useState<string | null>(null);
   const [copiedOrderId, setCopiedOrderId] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState<any>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const router = useRouter();
+
+  const handleEditClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (selectedCustomer) {
+      setEditForm({
+        name: selectedCustomer.name || "",
+        phone: selectedCustomer.phone || "",
+        email: selectedCustomer.email || "",
+        billing_address: selectedCustomer.billingAddress || "",
+        shipping_address: selectedCustomer.shippingAddress || "",
+        status: selectedCustomer.status || "Active"
+      });
+      setIsEditing(true);
+    }
+  };
+
+  const handleSaveEdit = async () => {
+    if (!selectedCustomer) return;
+    setIsSubmitting(true);
+    try {
+      await updateCustomer(selectedCustomer.id, editForm);
+      setCustomers(customers.map(c => c.id === selectedCustomer.id ? {
+        ...c,
+        name: editForm.name,
+        phone: editForm.phone,
+        email: editForm.email,
+        billingAddress: editForm.billing_address,
+        shippingAddress: editForm.shipping_address,
+        status: editForm.status
+      } : c));
+      setIsEditing(false);
+      router.refresh();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to update customer");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
   const customerOrders = selectedCustomer ? initialOrders.filter(o => o.customerId === selectedCustomer.id) : [];
@@ -284,12 +329,20 @@ export function CustomersViewNew({
                 <span className="text-xs font-bold text-slate-400 block uppercase tracking-wider">{selectedCustomer.customerCode || selectedCustomer.id}</span>
                 <h2 className="text-xl font-extrabold text-slate-800 mt-1">{selectedCustomer.name}</h2>
               </div>
-              <button 
-                onClick={() => setSelectedCustomerId(null)}
-                className="p-1 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition"
-              >
-                <X size={18} />
-              </button>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={handleEditClick}
+                  className="p-1.5 rounded-md hover:bg-slate-100 text-slate-500 hover:text-blue-600 transition flex items-center gap-1 text-xs font-semibold"
+                >
+                  <Pencil size={14} /> Edit
+                </button>
+                <button 
+                  onClick={() => setSelectedCustomerId(null)}
+                  className="p-1 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition"
+                >
+                  <X size={18} />
+                </button>
+              </div>
             </div>
 
             {/* Profile Info */}
@@ -387,6 +440,57 @@ export function CustomersViewNew({
         )}
 
       </div>
+
+      {isEditing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center p-4 border-b border-slate-100">
+              <h3 className="font-bold text-lg text-slate-800">Edit Customer</h3>
+              <button onClick={() => setIsEditing(false)} className="text-slate-400 hover:text-slate-600 transition">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-4 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Company Name</label>
+                <input type="text" value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-blue-500" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Phone</label>
+                  <input type="text" value={editForm.phone} onChange={e => setEditForm({ ...editForm, phone: e.target.value })} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Email</label>
+                  <input type="email" value={editForm.email} onChange={e => setEditForm({ ...editForm, email: e.target.value })} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Billing Address</label>
+                <textarea value={editForm.billing_address} onChange={e => setEditForm({ ...editForm, billing_address: e.target.value })} rows={2} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-blue-500"></textarea>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Shipping Address</label>
+                <textarea value={editForm.shipping_address} onChange={e => setEditForm({ ...editForm, shipping_address: e.target.value })} rows={2} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-blue-500"></textarea>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Status</label>
+                <select value={editForm.status} onChange={e => setEditForm({ ...editForm, status: e.target.value })} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-blue-500 bg-white">
+                  <option value="Active">Active</option>
+                  <option value="Inactive">Inactive</option>
+                  <option value="Pending">Pending</option>
+                </select>
+              </div>
+            </div>
+            <div className="p-4 border-t border-slate-100 flex justify-end gap-2 bg-slate-50">
+              <button onClick={() => setIsEditing(false)} className="px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-200 rounded-lg transition">Cancel</button>
+              <button onClick={handleSaveEdit} disabled={isSubmitting} className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition disabled:opacity-50">
+                {isSubmitting ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

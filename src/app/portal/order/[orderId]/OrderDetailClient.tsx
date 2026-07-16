@@ -32,8 +32,6 @@ import {
   mergeOrderDetailPatch,
   useOrderDetailSync,
 } from "@/features/orders/realtime/useOrderDetailSync";
-import { usePortalOrderSync } from "@/features/orders/realtime/usePortalOrderSync";
-import { toPortalOrderDetailPatch } from "@/features/orders/realtime/portalOrderPatch";
 import type { OrderDetailPatch } from "@/features/orders/realtime/orderDetailPatch";
 import { QuotationTab } from "@/app/portal/components/QuotationTab";
 import { useQuotationActions } from "@/app/portal/hooks/useQuotationActions";
@@ -44,6 +42,7 @@ import {
   didStageAdvance,
   getTabForStage,
 } from "@/app/portal/utils/portalStageNavigation";
+import type { InvoiceProfile } from "@/features/quotations/types/invoiceProfile";
 
 const libraries: ("places")[] = ["places"];
 
@@ -100,9 +99,10 @@ interface OrderDetailClientProps {
   order: Order;
   siteVisitItems?: any[];
   token: string;
+  invoiceProfile?: InvoiceProfile | null;
 }
 
-export function OrderDetailClient({ customer, order: initialOrder, siteVisitItems = [], token }: OrderDetailClientProps) {
+export function OrderDetailClient({ customer, order: initialOrder, siteVisitItems = [], token, invoiceProfile = null }: OrderDetailClientProps) {
   const workflowType = initialOrder.workflow_type || "quote_first";
   const isDesignFirst = workflowType === "design_first";
 
@@ -154,23 +154,15 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
   }, [order.stage, workflowType]);
 
   const applyPortalPatch = useCallback((patch: OrderDetailPatch) => {
-    setOrder((prev) => mergeOrderDetailPatch(prev, toPortalOrderDetailPatch(patch)));
+    setOrder((prev) => mergeOrderDetailPatch(prev, patch));
   }, []);
 
   // Supabase realtime (instant when portal anon RLS policies are present).
   useOrderDetailSync({
     orderId: order.id,
     businessOrderId: order.orderId || order.orderCode || order.id,
+    siteVisitId: order.siteVisitDetails?.id ?? null,
     enabled: Boolean(order.id),
-    getOrderSnapshot: () => orderRef.current as unknown as Record<string, unknown>,
-    onPatch: applyPortalPatch,
-  });
-
-  // Secure polling fallback (when anon realtime is blocked by RLS hardening).
-  usePortalOrderSync({
-    orderId: order.id,
-    token,
-    enabled: Boolean(token),
     getOrderSnapshot: () => orderRef.current as unknown as Record<string, unknown>,
     onPatch: applyPortalPatch,
   });
@@ -806,6 +798,9 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
             updatingStatus={updatingStatus}
             handleApproveQuote={handleApproveQuote}
             handleDeclineQuote={handleDeclineQuote}
+            invoiceProfile={invoiceProfile}
+            billingAddress={customer.billingAddress}
+            customerCity={customer.city}
           />
         )}
         {activeTab === "design" && (

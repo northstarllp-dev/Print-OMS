@@ -5,8 +5,9 @@ import {
   Bell, CheckCircle, AlertCircle, Info, LogOut,
   History, RotateCcw, Lock, Loader2, Key,
   ShoppingBag, LifeBuoy, Settings,
-  ChevronLeft, ChevronRight, Search, Hammer, MapPin
+  ChevronLeft, ChevronRight, Search, Hammer, MapPin, Menu, X
 } from "lucide-react";
+import { Logo } from "@/components/ui/Logo";
 import { useRouter, usePathname } from "next/navigation";
 import { signOut, updateUserPassword } from "@/features/auth/actions/authActions";
 import { getEditableStages } from "@/features/orders/workspace/shared/stageGrants";
@@ -30,6 +31,7 @@ export function InstallationLayoutClient({ children, profile }: InstallationLayo
 
   const [collapsed, setCollapsed] = useState(true);
   const [isHovered, setIsHovered] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const isExpanded = !collapsed || isHovered;
 
   const [isNotifOpen, setIsNotifOpen] = useState(false);
@@ -138,97 +140,39 @@ export function InstallationLayoutClient({ children, profile }: InstallationLayo
       <aside
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
+        className={`fixed inset-y-0 left-0 z-[60] transform ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"} md:sticky md:top-0 md:translate-x-0 transition-transform duration-300 md:transition-none flex flex-col flex-shrink-0 overflow-y-auto overflow-x-hidden`}
         style={{
-          width: sidebarW,
+          width: isMobileMenuOpen ? "240px" : sidebarW,
           minHeight: "100vh",
           background: "var(--sidebar-bg)",
-          display: "flex",
-          flexDirection: "column",
-          flexShrink: 0,
           transition: "width 0.25s cubic-bezier(0.4,0,0.2,1)",
-          position: "sticky",
-          top: 0,
           height: "100vh",
-          overflowY: "auto",
-          overflowX: "hidden",
-          zIndex: 50,
         }}
       >
         {/* Logo */}
         <div
           style={{
-            padding: isExpanded ? "20px 20px" : "20px 16px",
-            borderBottom: "1px solid var(--sidebar-border)",
+            padding: isExpanded ? "24px 20px" : "24px 12px",
             display: "flex",
             alignItems: "center",
+            justifyContent: "center",
             flexShrink: 0,
             transition: "padding 0.25s cubic-bezier(0.4,0,0.2,1)",
           }}
         >
-          <div
-            style={{
-              width: "32px",
-              height: "32px",
-              background: "var(--sidebar-active-bg)",
-              borderRadius: "8px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
-              border: "1px solid var(--sidebar-border)",
-            }}
-          >
-            <svg
-              viewBox="0 0 24 24"
-              style={{ width: "16px", height: "16px", color: "var(--sidebar-accent)" }}
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M3 20h18" />
-              <path d="M6 20V11" />
-              <circle cx="6" cy="11" r="1" fill="var(--sidebar-accent)" />
-              <path d="M6 11l6-4.5" />
-              <circle cx="12" cy="6.5" r="1" fill="var(--sidebar-accent)" />
-              <path d="M12 6.5l5 3.5" />
-            </svg>
-          </div>
           <div style={{
-            lineHeight: 1,
-            minWidth: 0,
-            opacity: isExpanded ? 1 : 0,
-            maxWidth: isExpanded ? "150px" : "0px",
-            transition: "opacity 0.15s ease, max-width 0.25s cubic-bezier(0.4,0,0.2,1), margin-left 0.25s cubic-bezier(0.4,0,0.2,1)",
             overflow: "hidden",
-            whiteSpace: "nowrap",
-            marginLeft: isExpanded ? "10px" : "0px",
+            width: isExpanded ? "180px" : "40px",
+            height: isExpanded ? "auto" : "40px",
+            transition: "width 0.25s cubic-bezier(0.4,0,0.2,1)",
+            display: "flex",
+            background: "#ffffff",
+            borderRadius: "8px",
+            padding: isExpanded ? "8px 16px" : "4px",
+            alignItems: "center",
+            justifyContent: "center"
           }}>
-            <span
-              style={{
-                fontSize: "13px",
-                fontWeight: "800",
-                color: "var(--sidebar-active-text)",
-                letterSpacing: "0.06em",
-                display: "block",
-              }}
-            >
-              PRINTOMS
-            </span>
-            <span
-              style={{
-                fontSize: "9px",
-                color: "var(--sidebar-text)",
-                fontWeight: "700",
-                textTransform: "uppercase",
-                letterSpacing: "0.05em",
-                marginTop: "2px",
-                display: "block",
-              }}
-            >
-              Installation Portal
-            </span>
+            <Logo width={isExpanded ? 160 : 32} height={40} />
           </div>
         </div>
 
@@ -312,7 +256,6 @@ export function InstallationLayoutClient({ children, profile }: InstallationLayo
         {/* Collapse Button */}
         <div
           style={{
-            borderTop: "1px solid var(--sidebar-border)",
             padding: "12px",
             flexShrink: 0,
           }}
@@ -364,61 +307,16 @@ export function InstallationLayoutClient({ children, profile }: InstallationLayo
         {/* Top Bar — hidden on worksheet pages */}
         {!isWorksheetPage && (
           <header
-            style={{
-              display: "flex",
-              alignItems: "center",
-              width: "100%",
-              height: "56px",
-              background: "white",
-              borderBottom: "1px solid #E2E8F0",
-              paddingLeft: "24px",
-              paddingRight: "24px",
-              position: "sticky",
-              top: 0,
-              zIndex: 40,
-              gap: "12px",
-              flexShrink: 0,
-            }}
+            className="flex items-center w-full h-[56px] bg-white border-b border-slate-200 px-4 md:px-6 sticky top-0 z-40 gap-3 shrink-0"
           >
-            {/* Search Placeholder */}
-            <div style={{ flex: 1, maxWidth: "480px", position: "relative" }}>
-              <Search
-                size={14}
-                style={{
-                  position: "absolute",
-                  left: "12px",
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  color: "#94A3B8",
-                  pointerEvents: "none",
-                }}
-              />
-              <input
-                type="text"
-                placeholder="Search installation jobs..."
-                style={{
-                  width: "100%",
-                  height: "36px",
-                  padding: "0 12px 0 36px",
-                  border: "1px solid #E2E8F0",
-                  borderRadius: "8px",
-                  fontSize: "13px",
-                  background: "#F8FAFC",
-                  color: "#0F172A",
-                  outline: "none",
-                  fontFamily: "inherit",
-                  transition: "border-color 0.15s",
-                }}
-                onFocus={(e) => {
-                  e.currentTarget.style.borderColor = "#16a34a";
-                  e.currentTarget.style.background = "white";
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.borderColor = "#E2E8F0";
-                  e.currentTarget.style.background = "#F8FAFC";
-                }}
-              />
-            </div>
+            {/* Mobile Menu Toggle */}
+            <button
+              className="md:hidden flex items-center justify-center p-2 rounded-md text-slate-500 hover:bg-slate-100"
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            >
+              <Menu size={20} />
+            </button>
+
 
             {/* Actions */}
             <div style={{ display: "flex", alignItems: "center", gap: "4px", marginLeft: "auto" }}>
@@ -536,9 +434,32 @@ export function InstallationLayoutClient({ children, profile }: InstallationLayo
             }
           >
             {children}
+
+            {!isWorksheetPage && (
+              <div style={{
+                textAlign: "center",
+                padding: "24px 0",
+                marginTop: "auto",
+                borderTop: "1px solid #E2E8F0",
+                color: "#94A3B8",
+                fontSize: "13px",
+                fontWeight: "600",
+                width: "100%"
+              }}>
+                Made with <span style={{ color: "#EF4444", fontSize: "14px" }}>❤️</span> by Northstar
+              </div>
+            )}
           </div>
         </main>
       </div>
+
+      {/* Mobile Overlay */}
+      {isMobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-slate-900/50 z-50 md:hidden"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
 
       {isChangePasswordModalOpen && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(15, 23, 42, 0.6)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>

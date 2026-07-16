@@ -80,7 +80,7 @@ export const InstallationModule: React.FC<InstallationModuleProps> = ({
         initialScheduledDate={inst.scheduledDate}
         initialScheduledTime={inst.scheduledTime}
         isCompleted={order.stage === "Completed" || order.stage === "Closed"}
-        locationLink={inst.gmapLink}
+        locationLink={(order.siteVisitDetails as any)?.gmap_link || (order.siteVisitDetails as any)?.gmapLink}
         locationText={"Installation Location"}
       />
 

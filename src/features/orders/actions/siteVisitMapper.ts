@@ -66,6 +66,7 @@ export function mapSiteVisitFromDb(sv: any): SiteVisitDetails | null {
   if (!sv) return null;
 
   return {
+    id: sv.id || undefined,
     completed: sv.completed || false,
 
     customerAddress: sv.customer_address,

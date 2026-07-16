@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
-import { ArrowLeft, MapPin, Sparkles, Check, Loader2, CheckCircle, Save, UploadCloud, Calendar, Clock, Shield } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { ArrowLeft, Sparkles, Check, Loader2, CheckCircle, Save, UploadCloud, Calendar, Clock, Shield, FileText, Image as ImageIcon } from "lucide-react";
 import { InstallationScheduleModule } from "@/features/installations/components/InstallationScheduleModule";
+import { deleteStorageFilesAction } from "@/features/orders/actions/storageActions";
 import { createClient } from "@/utils/supabase/client";
 import type { StageModuleProps } from "../../shared/types";
 
@@ -14,10 +15,7 @@ export interface InstallationModuleData {
 
 export interface InstallationModuleCallbacks {
   updateInstallationDetails: (orderId: string, details: any) => Promise<any>;
-  markInstallationCompleted: (orderId: string, checklist: any[], photos: any[], notes: string) => Promise<any>;
-  requestInstallationLocationAction: (orderId: string) => Promise<any>;
   onBack: () => void;
-  onCompleted: () => void;
 }
 
 type InstallationModuleProps = StageModuleProps<
@@ -43,10 +41,7 @@ export function InstallationModule({
   const { order, customers, installation } = data;
   const {
     updateInstallationDetails,
-    markInstallationCompleted,
-    requestInstallationLocationAction,
     onBack,
-    onCompleted,
   } = callbacks;
   
   const isInstallationStage = ["Installation Scheduled", "Installation In Progress", "Installation Pending", "Installation"].includes(order.stage);
@@ -59,31 +54,36 @@ export function InstallationModule({
 
   const client = customers.find(c => c.id === order.customerId);
   const svDetails = order.siteVisitDetails || {};
-  const locations = svDetails.locations || [];
   
   const dd = order.designDetails || order.design || { proofUrl: "", status: "Draft" };
   const designImage = order.imageMockup || dd.proofUrl;
   
   const installationDetails = installation || {};
-  const gmapLink = svDetails.gmap_link || svDetails.gmapLink || installationDetails.gmapLink;
-  const gmapRequested = installationDetails.gmapRequested;
+  const gmapLink = svDetails.gmap_link || svDetails.gmapLink;
   const siteAddress = svDetails.site_address || svDetails.siteAddress || client?.shippingAddress || "Installation Location";
 
-  // Parse initial checklist from installation data
-  const initialChecklist = Array.isArray(installation?.checklist) 
-    ? installation.checklist 
-    : [
-        { id: "prep", label: "Site preparation completed", checked: false },
-        { id: "mount", label: "Signage mounted securely", checked: false },
-        { id: "elec", label: "Electricals/Wiring tested (if applicable)", checked: false },
-        { id: "clean", label: "Site cleaned up", checked: false }
-      ];
-      
-  const [checklist, setChecklist] = useState(initialChecklist);
+  const defaultChecklist = [
+    { id: "prep", label: "Site preparation completed", checked: false },
+    { id: "mount", label: "Signage mounted securely", checked: false },
+    { id: "elec", label: "Electricals/Wiring tested (if applicable)", checked: false },
+    { id: "clean", label: "Site cleaned up", checked: false },
+  ];
+
+  const [checklist, setChecklist] = useState(
+    Array.isArray(installation?.checklist) ? installation.checklist : defaultChecklist
+  );
   const [notes, setNotes] = useState(installation?.notes || "");
   const [afterPhotos, setAfterPhotos] = useState<string[]>(
     installation?.photos || installation?.afterPhotos || []
   );
+
+  // Keep local worksheet fields in sync when realtime/parent installation props change.
+  useEffect(() => {
+    setChecklist(Array.isArray(installation?.checklist) ? installation.checklist : defaultChecklist);
+    setNotes(installation?.notes || "");
+    setAfterPhotos(installation?.photos || installation?.afterPhotos || []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- sync from installation prop only
+  }, [installation]);
 
   const handleToggleCheck = async (stepId: string) => {
     if (!canEdit) return;
@@ -131,12 +131,17 @@ export function InstallationModule({
 
   const removeInstallationPhoto = async (urlToRemove: string) => {
     if (!canEdit) return;
-    const supabase = createClient();
-    const path = urlToRemove.split("/installation-photos/").pop();
-    if (path) await supabase.storage.from("installation-photos").remove([path]);
-    const newUrls = afterPhotos.filter(u => u !== urlToRemove);
-    setAfterPhotos(newUrls);
-    await updateInstallationDetails(order.id, { afterPhotos: newUrls, photos: newUrls });
+    try {
+      const path = urlToRemove.split("/installation-photos/").pop();
+      if (path) {
+        await deleteStorageFilesAction("installation-photos", [path]);
+      }
+      const newUrls = afterPhotos.filter(u => u !== urlToRemove);
+      setAfterPhotos(newUrls);
+      await updateInstallationDetails(order.id, { afterPhotos: newUrls, photos: newUrls });
+    } catch (err: any) {
+      window.alert("Failed to delete photo: " + (err?.message || "Unknown error"));
+    }
   };
 
   const handleSaveNotes = async () => {
@@ -145,48 +150,6 @@ export function InstallationModule({
     try {
       await updateInstallationDetails(order.id, { notes });
       setAlert({ message: "Notes saved.", type: "success" });
-    } catch (err: any) {
-      setAlert({ message: err.message, type: "error" });
-    } finally {
-      setSaving(false);
-      setTimeout(() => setAlert(null), 3000);
-    }
-  };
-
-  const handleMarkCompleted = async () => {
-    if (!canEdit) return;
-    if (
-      !window.confirm(
-        "Submit installation to admin for review? The order will stay open until admin confirms payments and marks it completed."
-      )
-    ) {
-      return;
-    }
-
-    setSaving(true);
-    try {
-      await markInstallationCompleted(order.id, checklist, afterPhotos, notes);
-      setAlert({
-        message: "Installation submitted to admin. Awaiting payment review and order completion.",
-        type: "success",
-      });
-      setTimeout(() => {
-        onCompleted();
-      }, 2000);
-    } catch (err: any) {
-      setAlert({ message: err.message, type: "error" });
-      setSaving(false);
-    }
-  };
-
-  // Note: Handle location request functions remain unchanged
-
-  const handleRequestLocation = async () => {
-    if (!canEdit) return;
-    setSaving(true);
-    try {
-      await requestInstallationLocationAction(order.id);
-      setAlert({ message: "Requested exact location from customer.", type: "success" });
     } catch (err: any) {
       setAlert({ message: err.message, type: "error" });
     } finally {
@@ -316,6 +279,12 @@ export function InstallationModule({
         </div>
       )}
 
+      {/* View-Only Site Visit Banner */}
+      <div className="mb-6 bg-indigo-50/80 border border-indigo-100 text-indigo-700 p-4 rounded-xl text-xs font-semibold flex items-center gap-3 shadow-sm">
+        <Sparkles size={16} className="text-indigo-600 flex-shrink-0" />
+        You now have view-only access to the Site Visit stage. Click the 'Site Visit' tab in the timeline above to view full location photos and measurement details!
+      </div>
+
       <div className={embedded ? "space-y-8" : "grid grid-cols-1 lg:grid-cols-3 gap-8 items-start"}>
 
         {/* Work column — full width when embedded */}
@@ -367,21 +336,28 @@ export function InstallationModule({
               ))}
             </div>
 
-            <div className="mt-6">
-              <label className="block text-xs font-bold text-slate-700 mb-2">Installation Notes / Remarks</label>
+            <div className="mt-8 bg-slate-50/50 rounded-xl p-4 border border-slate-100">
+              <div className="flex items-center gap-2 mb-3">
+                <FileText size={16} className="text-slate-500" />
+                <label className="block text-xs font-bold text-slate-700">Installation Notes / Remarks</label>
+              </div>
               <textarea 
                 value={notes}
                 onChange={e => setNotes(e.target.value)}
+                onBlur={() => {
+                  if (!canAct) return;
+                  void updateInstallationDetails(order.id, { notes }).catch(() => {});
+                }}
                 disabled={!canAct}
                 placeholder="Add any notes about the installation (e.g. issues encountered, specific details...)"
-                className="w-full min-h-[100px] bg-slate-50 text-slate-800 text-sm p-3 border border-slate-200 rounded-xl focus:outline-none focus:border-green-500 focus:bg-white transition-all resize-y"
+                className="w-full min-h-[100px] bg-white text-slate-800 text-sm p-4 border border-slate-200 rounded-xl focus:outline-none focus:border-green-500 focus:ring-4 focus:ring-green-500/10 transition-all resize-y shadow-sm"
               />
               {!isCompleted && (
-                <div className="mt-2 flex justify-end">
+                <div className="mt-3 flex justify-end">
                   <button 
                     onClick={handleSaveNotes}
                     disabled={saving || !canEdit}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 rounded-lg text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-white text-slate-700 hover:bg-slate-50 border border-slate-200 shadow-sm rounded-lg text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Save size={14} /> Save Notes
                   </button>
@@ -389,21 +365,25 @@ export function InstallationModule({
               )}
             </div>
 
-            <div className="mt-6 pt-6 border-t border-slate-100">
-              <label className="block text-xs font-bold text-slate-700 mb-2">After-Installation Photos</label>
+            <div className="mt-8">
+              <div className="flex items-center gap-2 mb-4">
+                <ImageIcon size={16} className="text-slate-500" />
+                <label className="block text-xs font-bold text-slate-700">After-Installation Photos</label>
+              </div>
+              
               <div className="space-y-4">
                 {afterPhotos.length > 0 && (
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="flex flex-wrap gap-4">
                     {afterPhotos.map((photo, index) => (
-                      <div key={index} className="group relative aspect-square bg-slate-100 rounded-xl overflow-hidden border border-slate-200">
+                      <div key={index} className="group relative w-24 h-24 sm:w-32 sm:h-32 bg-slate-100 rounded-xl overflow-hidden border border-slate-200 shadow-sm">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={photo} alt="Installation Photo" className="w-full h-full object-cover" />
                         {!isCompleted && (
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                             <button
                               onClick={() => removeInstallationPhoto(photo)}
                               disabled={!canEdit}
-                              className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-lg text-xs font-bold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-lg text-xs font-bold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105 transition-transform"
                             >
                               Remove
                             </button>
@@ -413,8 +393,9 @@ export function InstallationModule({
                     ))}
                   </div>
                 )}
+                
                 {!isCompleted && (
-                  <div>
+                  <div className="pt-2">
                     <input
                       type="file"
                       multiple
@@ -426,16 +407,16 @@ export function InstallationModule({
                     />
                     <label
                       htmlFor="installation-photos-upload"
-                      className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                      className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all border ${
                         uploadingPhotos || !canEdit
-                          ? "bg-slate-100 text-slate-400 cursor-not-allowed" 
-                          : "bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"
+                          ? "bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed" 
+                          : "bg-white hover:bg-slate-50 border-slate-200 text-slate-700 cursor-pointer shadow-sm"
                       }`}
                     >
                       {uploadingPhotos ? (
-                        <><Loader2 size={14} className="animate-spin" /> Uploading...</>
+                        <><Loader2 size={14} className="animate-spin text-slate-400" /> Uploading...</>
                       ) : (
-                        <><UploadCloud size={14} /> Upload Photos</>
+                        <><UploadCloud size={14} className="text-slate-500" /> Upload Photos</>
                       )}
                     </label>
                   </div>
@@ -443,18 +424,6 @@ export function InstallationModule({
               </div>
             </div>
             
-            {!isCompleted && (
-              <div className="mt-8 pt-6 border-t border-slate-100 flex justify-end">
-                <button
-                  onClick={handleMarkCompleted}
-                  disabled={saving || !canEdit}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white border border-green-700 rounded-xl text-sm font-bold shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {saving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
-                  Submit Installation to Admin
-                </button>
-              </div>
-            )}
             {isSubmittedToAdmin && (
               <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs font-semibold text-amber-800">
                 Submitted to admin for payment review. The order will be marked completed after admin approval.
@@ -462,100 +431,7 @@ export function InstallationModule({
             )}
           </div>
           
-          {/* SITE VISIT DETAILS */}
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4 pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <MapPin size={18} className="text-indigo-600" />
-                <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider">
-                  Site Location & Dimensions
-                </h2>
-              </div>
-              
-              {/* Google Map Link actions */}
-              <div className="flex items-center gap-2">
-                {gmapLink ? (
-                  <a href={gmapLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-bold transition-colors">
-                    <MapPin size={14} /> Open Exact Location
-                  </a>
-                ) : gmapRequested ? (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 text-amber-700 rounded-lg text-xs font-bold">
-                    Location Requested...
-                  </span>
-                ) : (
-                  <button onClick={handleRequestLocation} disabled={saving || !canEdit} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                    Request Exact Map Link
-                  </button>
-                )}
-              </div>
-            </div>
 
-            {svDetails.skipped ? (
-              <div className="py-6 px-4 bg-amber-50 border border-amber-200 rounded-xl">
-                <div className="flex items-center gap-3">
-                  <span className="text-amber-600 font-bold">⚠️ Site Visit Was Skipped</span>
-                </div>
-                <div className="mt-2 text-xs text-amber-800 font-medium leading-relaxed">
-                  {svDetails.reason ? `Reason: ${svDetails.reason}` : "The customer opted out of the site visit."}
-                </div>
-                <div className="mt-4 pt-4 border-t border-amber-200/50">
-                  <div className="text-[10px] text-amber-700/80 font-bold uppercase tracking-wider mb-1">Target Installation Address (from client)</div>
-                  <div className="font-semibold text-amber-900">{client?.shippingAddress || "No address provided."}</div>
-                  <div className="text-[10px] text-amber-700/80 font-bold uppercase tracking-wider mt-3 mb-1">Default Dimensions</div>
-                  <div className="font-semibold text-amber-900">{order.dimensions || "TBD"}</div>
-                </div>
-              </div>
-            ) : locations.length > 0 ? (
-              <div className="space-y-4">
-                {svDetails.siteAddress && (
-                  <div className="mb-4">
-                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Surveyed Address</div>
-                    <div className="font-bold text-slate-800 bg-slate-50 p-3 rounded-xl border border-slate-100">{svDetails.siteAddress}</div>
-                  </div>
-                )}
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead>
-                      <tr className="bg-slate-50 border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wider">
-                        <th className="py-2.5 px-4">Location / Name</th>
-                        <th className="py-2.5 px-4">Width</th>
-                        <th className="py-2.5 px-4">Height</th>
-                        <th className="py-2.5 px-4">Depth</th>
-                        <th className="py-2.5 px-4">Photos</th>
-                        <th className="py-2.5 px-4">Notes</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {locations.map((loc: any, idx: number) => (
-                        <tr key={loc.id || idx}>
-                          <td className="py-3 px-4 font-bold text-slate-800">{loc.name}</td>
-                          <td className="py-3 px-4 font-medium text-slate-600">{loc.width || "—"}</td>
-                          <td className="py-3 px-4 font-medium text-slate-600">{loc.height || "—"}</td>
-                          <td className="py-3 px-4 font-medium text-slate-600">{loc.depth || "—"}</td>
-                          <td className="py-3 px-4 font-medium text-slate-600">
-                            {loc.photos && loc.photos.length > 0 ? (
-                              <div className="flex gap-1 overflow-x-auto max-w-[150px]">
-                                {loc.photos.map((p: string, pIdx: number) => (
-                                  <a key={pIdx} href={p} target="_blank" rel="noreferrer" className="w-8 h-8 rounded border bg-slate-100 flex-shrink-0 overflow-hidden">
-                                    <img src={p} alt="Site" className="w-full h-full object-cover" />
-                                  </a>
-                                ))}
-                              </div>
-                            ) : "—"}
-                          </td>
-                          <td className="py-3 px-4 font-medium text-slate-600">{loc.notes || "—"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            ) : (
-              <div className="py-6 text-center text-xs text-slate-400 font-semibold">
-                No site visit locations or measurements specified. Default dimensions: {order.dimensions || "TBD"}
-              </div>
-            )}
-          </div>
 
           {/* DESIGN REFERENCE */}
           {designImage && (

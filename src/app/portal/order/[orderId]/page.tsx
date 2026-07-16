@@ -12,6 +12,7 @@ import { mapDesignFromDb } from "@/features/designs/actions/designMapper";
 import { toCustomerVisibleQuotation } from "@/features/quotations/utils/quotationSecurity";
 import { toCustomerVisibleDesign } from "@/features/designs/utils/customerVisibleDesign";
 import { OrderDetailClient } from "./OrderDetailClient";
+import { normalizeInvoiceProfile } from "@/features/quotations/types/invoiceProfile";
 import React from "react";
 
 export const dynamic = "force-dynamic";
@@ -152,6 +153,8 @@ export default async function OrderDetailPage({
     status: quotationData.status,
     notes: quotationData.notes,
     terms: quotationData.terms,
+    createdAt: quotationData.created_at as string | undefined,
+    updatedAt: quotationData.updated_at as string | undefined,
   } : null;
 
   // Find the site visit for this order
@@ -222,12 +225,20 @@ export default async function OrderDetailPage({
     orderId: orderData.order_id || orderData.id,
   };
 
+  const { data: settingsRow } = await admin
+    .from("app_settings")
+    .select("invoice_profile")
+    .eq("company_id", customerData.company_id)
+    .maybeSingle();
+  const invoiceProfile = normalizeInvoiceProfile(settingsRow?.invoice_profile);
+
   return (
     <OrderDetailClient
       customer={customer}
       order={order}
       siteVisitItems={siteVisitItems}
       token={tokenParam}
+      invoiceProfile={invoiceProfile}
     />
   );
 }

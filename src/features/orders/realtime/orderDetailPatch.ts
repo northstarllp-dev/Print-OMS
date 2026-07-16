@@ -12,8 +12,16 @@ export interface OrderDetailPatch {
   chatHistory?: unknown[];
   depositPaid?: number;
   siteVisitDetails?: SiteVisitDetails | null;
+  siteVisitUpdateEvent?: { row: Record<string, unknown> };
+  siteVisitMeasurementEvent?: {
+    eventType: string;
+    newRow: Record<string, unknown> | null;
+    oldRow: Record<string, unknown> | null;
+  };
   quoteDetails?: Record<string, unknown>;
-  design?: ReturnType<typeof mapDesignFromDb>;
+  /** Raw quotations row for QuotationModule realtime apply (snake_case DB shape). */
+  quotationRow?: Record<string, unknown>;
+  design?: ReturnType<typeof mapDesignFromDb> | null;
   productionDetails?: Record<string, unknown> | null;
   installationDetails?: Record<string, unknown> | null;
 }
@@ -29,51 +37,22 @@ export function patchFromOrdersRow(row: Record<string, unknown>): OrderDetailPat
 }
 
 export function patchFromSiteVisitRow(
-  row: Record<string, unknown>,
-  existingLocations: SiteVisitDetails["locations"] = []
+  row: Record<string, unknown>
 ): OrderDetailPatch {
-  const mapped = mapSiteVisitFromDb(row);
-  if (!mapped) return { siteVisitDetails: null };
-  return {
-    siteVisitDetails: {
-      ...mapped,
-      locations:
-        mapped.locations && mapped.locations.length > 0
-          ? mapped.locations
-          : existingLocations,
-    },
-  };
+  return { siteVisitUpdateEvent: { row } };
 }
 
 export function patchFromMeasurementEvent(
   eventType: string,
   newRow: Record<string, unknown> | null,
-  oldRow: Record<string, unknown> | null,
-  existingLocations: SiteVisitDetails["locations"] = []
-): OrderDetailPatch | null {
-  if (eventType === "DELETE" && oldRow?.id) {
-    const id = String(oldRow.id);
-    return {
-      siteVisitDetails: {
-        locations: (existingLocations || []).filter((loc) => loc.id !== id),
-      } as SiteVisitDetails,
-    };
-  }
-  if ((eventType === "INSERT" || eventType === "UPDATE") && newRow) {
-    const mapped = mapSiteVisitMeasurementFromDb(newRow);
-    const id = mapped.id;
-    const without = (existingLocations || []).filter((loc) => loc.id !== id);
-    return {
-      siteVisitDetails: {
-        locations: [...without, mapped],
-      } as SiteVisitDetails,
-    };
-  }
-  return null;
+  oldRow: Record<string, unknown> | null
+): OrderDetailPatch {
+  return { siteVisitMeasurementEvent: { eventType, newRow, oldRow } };
 }
 
 export function patchFromQuotationRow(row: Record<string, unknown>): OrderDetailPatch {
   return {
+    quotationRow: row,
     quoteDetails: {
       quotationId: row.quotation_id,
       status: row.status,
@@ -85,6 +64,9 @@ export function patchFromQuotationRow(row: Record<string, unknown>): OrderDetail
       shipping: Number(row.shipping) || 0,
       notes: row.notes || "",
       terms: row.terms || "",
+      rejectionReason: row.rejection_reason || "",
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
     },
   };
 }
@@ -93,7 +75,7 @@ export function patchFromDesignRow(
   eventType: string,
   row: Record<string, unknown> | null
 ): OrderDetailPatch {
-  if (eventType === "DELETE") return { design: undefined };
+  if (eventType === "DELETE") return { design: null };
   const mapped = mapDesignFromDb(row);
   return mapped ? { design: mapped } : {};
 }
@@ -124,21 +106,54 @@ export function mergeOrderDetailPatch<T>(prev: T, patch: OrderDetailPatch): T {
   if (patch.depositPaid !== undefined) next.depositPaid = patch.depositPaid;
 
   if (patch.siteVisitDetails !== undefined) {
-    if (patch.siteVisitDetails === null) {
+    next.siteVisitDetails = patch.siteVisitDetails;
+  }
+
+  if (patch.siteVisitUpdateEvent) {
+    const mapped = mapSiteVisitFromDb(patch.siteVisitUpdateEvent.row);
+    if (!mapped) {
       next.siteVisitDetails = undefined;
-    } else if (patch.siteVisitDetails.locations && !(patch.siteVisitDetails as SiteVisitDetails).auditDate) {
-      const prevSv = next.siteVisitDetails as SiteVisitDetails | undefined;
-      next.siteVisitDetails = {
-        ...(prevSv || {}),
-        ...patch.siteVisitDetails,
-        locations: patch.siteVisitDetails.locations,
-      };
     } else {
       const prevSv = next.siteVisitDetails as SiteVisitDetails | undefined;
+      const existingLocations = prevSv?.locations || [];
       next.siteVisitDetails = {
         ...(prevSv || {}),
-        ...patch.siteVisitDetails,
+        ...mapped,
+        locations: mapped.locations && mapped.locations.length > 0 ? mapped.locations : existingLocations,
       };
+    }
+  }
+
+  if (patch.siteVisitMeasurementEvent) {
+    const { eventType, newRow, oldRow } = patch.siteVisitMeasurementEvent;
+    const prevSv = next.siteVisitDetails as SiteVisitDetails | undefined;
+    const existingLocations = prevSv?.locations || [];
+
+    if (eventType === "DELETE") {
+      const id = oldRow?.id != null ? String(oldRow.id) : null;
+      if (id) {
+        next.siteVisitDetails = {
+          ...(prevSv || {}),
+          locations: existingLocations.filter((loc) => String(loc.id) !== id),
+        } as SiteVisitDetails;
+      }
+    } else if ((eventType === "INSERT" || eventType === "UPDATE") && newRow) {
+      const mapped = mapSiteVisitMeasurementFromDb(newRow);
+      const id = mapped.id != null ? String(mapped.id) : null;
+      if (!id) return next as T;
+      const existsIndex = existingLocations.findIndex((loc) => String(loc.id) === id);
+      const newLocations = [...existingLocations];
+
+      if (existsIndex >= 0) {
+        newLocations[existsIndex] = mapped;
+      } else {
+        newLocations.push(mapped);
+      }
+
+      next.siteVisitDetails = {
+        ...(prevSv || {}),
+        locations: newLocations,
+      } as SiteVisitDetails;
     }
   }
 
@@ -147,7 +162,7 @@ export function mergeOrderDetailPatch<T>(prev: T, patch: OrderDetailPatch): T {
     next.quoteDetails = { ...(prevQd || {}), ...patch.quoteDetails };
   }
 
-  if (patch.design !== undefined) next.design = patch.design;
+  if (patch.design !== undefined) next.design = patch.design ?? undefined;
   if (patch.productionDetails !== undefined) next.productionDetails = patch.productionDetails;
   if (patch.installationDetails !== undefined) next.installationDetails = patch.installationDetails;
 

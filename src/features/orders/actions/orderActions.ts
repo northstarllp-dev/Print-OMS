@@ -4,7 +4,11 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 
-import { mapSiteVisitFromDb, mapSiteVisitToDb } from "./siteVisitMapper";
+import {
+  mapSiteVisitFromDb,
+  mapSiteVisitMeasurementFromDb,
+  mapSiteVisitToDb,
+} from "./siteVisitMapper";
 import { mapDesignFromDb } from "@/features/designs/actions/designMapper";
 import {
   dispatchWhatsAppNotification,
@@ -20,8 +24,33 @@ import {
   revalidateOrderDetailPaths,
   revalidateStaffOrderDetailPaths,
 } from "@/features/orders/actions/revalidateOrderPaths";
+import { areAllDesignItemsApproved } from "@/features/designs/utils/designApproval";
 
 export { revalidateOrderDetailPaths, revalidateStaffOrderDetailPaths };
+
+/** Design In Progress may only advance once artwork is customer-approved and production files exist. */
+async function assertDesignReadyToLeaveInProgress(
+  supabase: Awaited<ReturnType<typeof getSupabase>>,
+  orderUuid: string
+): Promise<void> {
+  const { data: design, error } = await supabase
+    .from("designs")
+    .select("items")
+    .eq("order_id", orderUuid)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+
+  const items = (design?.items as any[]) || [];
+  const allApproved = areAllDesignItemsApproved(items as any);
+  const hasProductionFiles = items.some(
+    (item: any) => Array.isArray(item.productionFiles) && item.productionFiles.length > 0
+  );
+  if (!allApproved || !hasProductionFiles) {
+    throw new Error(
+      "Cannot advance from Design In Progress until all design items are customer-approved and production files are uploaded."
+    );
+  }
+}
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -277,37 +306,74 @@ export async function updateSiteVisitDetailsAction(orderId: string, details: any
   if (svError) throw new Error(svError.message);
 
   // 4. Update measurements if provided
+  let savedLocations =
+    (details.locations && Array.isArray(details.locations)
+      ? details.locations.map((loc: any) => mapSiteVisitMeasurementFromDb(loc))
+      : null) as ReturnType<typeof mapSiteVisitMeasurementFromDb>[] | null;
+
   if (details.locations && Array.isArray(details.locations)) {
+    const isUuid = (id: unknown): id is string =>
+      typeof id === "string" &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
+    const keepIds = details.locations.map((l: any) => l.id).filter(isUuid);
+
+    // Delete measurements for this site visit that are no longer in the payload
+    if (keepIds.length > 0) {
+      const { error: delError } = await supabase
+        .from("site_visit_measurements")
+        .delete()
+        .eq("site_visit_id", siteVisit.id)
+        .not("id", "in", `(${keepIds.join(",")})`);
+      if (delError) throw new Error(`Failed to remove old signage items: ${delError.message}`);
+    } else {
+      const { error: delAllError } = await supabase
+        .from("site_visit_measurements")
+        .delete()
+        .eq("site_visit_id", siteVisit.id);
+      if (delAllError) throw new Error(`Failed to clear signage items: ${delAllError.message}`);
+    }
+
     if (details.locations.length > 0) {
-      const locationsPayload = details.locations.map((loc: any) => {
-        const isValidUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(loc.id);
-        return {
-          ...(isValidUuid ? { id: loc.id } : {}),
-          site_visit_id: siteVisit.id,
-          name: loc.name || "Unknown",
-        width: loc.width,
+      const locationsPayload = details.locations.map((loc: any) => ({
+        ...(isUuid(loc.id) ? { id: loc.id } : {}),
+        site_visit_id: siteVisit.id,
+        name: loc.name || "Unknown",
+        width: loc.width ?? null,
         width_unit: loc.widthUnit || "ft",
-        height: loc.height,
+        height: loc.height ?? null,
         height_unit: loc.heightUnit || "ft",
-        depth: loc.depth,
+        depth: loc.depth ?? null,
         depth_unit: loc.depthUnit || "ft",
-        ground_clearance: loc.groundClearance,
+        ground_clearance: loc.groundClearance ?? null,
         ground_clearance_unit: loc.groundClearanceUnit || "ft",
-        notes: loc.notes,
+        notes: loc.notes ?? null,
         photos: loc.photos || [],
-        power_available: loc.powerAvailable,
-        distance_to_power_source: loc.distanceToPowerSource,
-        distance_to_power_source_unit: loc.distanceToPowerSourceUnit,
+        power_available: loc.powerAvailable ?? false,
+        distance_to_power_source: loc.distanceToPowerSource ?? null,
+        distance_to_power_source_unit: loc.distanceToPowerSourceUnit ?? null,
         electrical_notes: loc.electricalNotes || "",
         wall_type: loc.wallType || "",
-        mounting_method: loc.mountingMethod,
-        surface_condition: loc.surfaceCondition,
+        mounting_method: loc.mountingMethod ?? null,
+        surface_condition: loc.surfaceCondition ?? null,
         obstacles: loc.obstacles || [],
-        structural_notes: loc.structuralNotes
-      };
-      });
-      const { error: locError } = await supabase.from("site_visit_measurements").upsert(locationsPayload, { onConflict: "id" });
-      if (locError) console.error("Failed to upsert measurements:", locError.message);
+        structural_notes: loc.structuralNotes ?? null,
+      }));
+
+      const { data: upserted, error: locError } = await supabase
+        .from("site_visit_measurements")
+        .upsert(locationsPayload, { onConflict: "id" })
+        .select("*");
+
+      if (locError) throw new Error(`Failed to save signage items: ${locError.message}`);
+      if (!upserted || upserted.length !== locationsPayload.length) {
+        throw new Error(
+          `Failed to save all signage items (saved ${upserted?.length ?? 0} of ${locationsPayload.length}).`
+        );
+      }
+      savedLocations = upserted.map((row) => mapSiteVisitMeasurementFromDb(row));
+    } else {
+      savedLocations = [];
     }
   }
 
@@ -324,7 +390,15 @@ export async function updateSiteVisitDetailsAction(orderId: string, details: any
     revalidatePath(`/portal/order/${orderCode}`);
   }
 
-  return { success: true };
+  const mappedVisit = mapSiteVisitFromDb(siteVisit);
+  return {
+    success: true,
+    siteVisitDetails: {
+      ...(mappedVisit || { completed: false }),
+      id: siteVisit.id,
+      ...(savedLocations ? { locations: savedLocations } : {}),
+    },
+  };
 }
 
 
@@ -438,8 +512,9 @@ export async function requestStageAdvancementAction(orderId: string) {
   } else if (stage === "Quotation Approved") {
     nextStatus = isDesignFirst
       ? "Pending Admin Approval: Production Ready"
-      : "Pending Admin Approval: Design Approval";
+      : "Pending Admin Approval: Design Stage";
   } else if (stage === "Design In Progress") {
+    await assertDesignReadyToLeaveInProgress(supabase, orderUuid);
     nextStatus = "Pending Admin Approval: Design Approval";
   } else if (stage === "Design Approved") {
     nextStatus = isDesignFirst
@@ -447,7 +522,11 @@ export async function requestStageAdvancementAction(orderId: string) {
       : "Pending Admin Approval: Production Ready";
   } else if (stage === "Production") {
     nextStatus = "Pending Admin Approval: Production Ready";
-  } else if (stage === "Ready For Installation" || stage === "Installation Scheduled") {
+  } else if (stage === "Ready For Installation") {
+    throw new Error(
+      "Schedule the installation first. Job-done approval is only available after the order is Installation Scheduled."
+    );
+  } else if (stage === "Installation Scheduled") {
     nextStatus = "Pending Admin Approval: Job Done";
   }
   
@@ -460,7 +539,7 @@ export async function adminApproveStageAction(orderId: string) {
   const orderUuid = await resolveOrderUuid(supabase, orderId);
   const { data: o, error: fetchError } = await supabase
     .from("orders")
-    .select("stage, order_id, workflow_type")
+    .select("stage, order_id, workflow_type, stage_status")
     .eq("id", orderUuid)
     .single();
   if (fetchError) throw new Error(fetchError.message);
@@ -482,6 +561,7 @@ export async function adminApproveStageAction(orderId: string) {
   }
 
   const isDesignFirst = (o.workflow_type || "quote_first") === "design_first";
+  const isJobDonePending = o.stage_status === "Pending Admin Approval: Job Done";
 
   // Build the next-stage map dynamically based on workflow type
   const nextStageMap: Record<string, string> = isDesignFirst
@@ -516,8 +596,15 @@ export async function adminApproveStageAction(orderId: string) {
         "Completed":              "Closed",
       };
 
-  const nextStage = nextStageMap[o.stage] || o.stage;
-  const logMsg = `Admin approved stage progression from "${o.stage}" to "${nextStage}".`;
+  // Job Done always completes the order (payment review happens in the UI before this action).
+  const nextStage = isJobDonePending ? "Completed" : (nextStageMap[o.stage] || o.stage);
+  if (o.stage === "Design In Progress" && nextStage === "Design Approved") {
+    await assertDesignReadyToLeaveInProgress(supabase, orderUuid);
+  }
+
+  const logMsg = isJobDonePending
+    ? `Admin reviewed payments and marked the order Completed (from "${o.stage}").`
+    : `Admin approved stage progression from "${o.stage}" to "${nextStage}".`;
 
   const result = await updateOrder(orderUuid, {
     stage: nextStage,
@@ -565,6 +652,14 @@ export async function adminRejectStageAction(orderId: string, notes: string) {
     stage_status: "Normal",
     stage_admin_notes: trimmed,
   });
+
+  // If rejecting job-done, reopen the installation work package for staff edits.
+  if (o.stage_status === "Pending Admin Approval: Job Done") {
+    await supabase
+      .from("installations")
+      .update({ status: "Pending" })
+      .eq("order_id", orderUuid);
+  }
 
   await supabase.from("order_activity").insert({
     order_id: o.order_id || orderId,
@@ -698,6 +793,7 @@ export async function revalidateStaffQueuePaths() {
   revalidatePath("/staff/design");
   revalidatePath("/staff/production");
   revalidatePath("/staff/installation");
+  revalidatePath("/staff");
   revalidatePath("/production/orders");
   revalidatePath("/installation/orders");
   revalidatePath("/installation/site-visit");
@@ -841,7 +937,7 @@ export async function scheduleSiteVisitAction(orderId: string, scheduleData: any
   const mappedExisting = mapSiteVisitFromDb(existingSv) || {};
   const updatedSiteVisit = { ...mappedExisting, ...scheduleData, completed: false, reviewStatus: "Pending" as const };
   const companyId = order.company_id || "11111111-1111-1111-1111-111111111111";
-  const dbPayload = mapSiteVisitToDb(orderId, companyId, updatedSiteVisit);
+  const dbPayload = mapSiteVisitToDb(orderUuid, companyId, updatedSiteVisit);
 
   const { data: siteVisit, error: svError } = await supabase.from("site_visits").upsert(dbPayload, { onConflict: "order_id" }).select().single();
   if (svError) throw new Error(svError.message);
@@ -880,7 +976,15 @@ export async function scheduleSiteVisitAction(orderId: string, scheduleData: any
   revalidatePath(`/admin/orders/${order.order_id || orderId}`);
   revalidatePath(`/staff/orders/${order.order_id || orderId}`);
   
-  return { success: true, order: { ...updatedOrderRow, siteVisitDetails: mapSiteVisitFromDb(siteVisit) } };
+  return {
+    success: true,
+    order: {
+      id: updatedOrderRow.id,
+      stage: updatedOrderRow.stage,
+      stageStatus: updatedOrderRow.stage_status,
+      siteVisitDetails: mapSiteVisitFromDb(siteVisit),
+    },
+  };
 }
 
 export async function approveSiteVisitAction(orderId: string) {
@@ -899,7 +1003,7 @@ export async function approveSiteVisitAction(orderId: string) {
   const { data: existingSv } = await supabase.from("site_visits").select("*").eq("order_id", orderUuid).maybeSingle();
   const mappedExisting = mapSiteVisitFromDb(existingSv) || {};
   const companyId = order.company_id || "11111111-1111-1111-1111-111111111111";
-  const dbPayload = mapSiteVisitToDb(orderId, companyId, { ...mappedExisting, reviewStatus: "Staff Approved" as const });
+  const dbPayload = mapSiteVisitToDb(orderUuid, companyId, { ...mappedExisting, reviewStatus: "Staff Approved" as const });
 
   const { data: siteVisit, error: svError } = await supabase.from("site_visits").upsert(dbPayload, { onConflict: "order_id" }).select().single();
   if (svError) throw new Error(svError.message);

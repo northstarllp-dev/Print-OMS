@@ -6,6 +6,8 @@ import {
   canAccessInstallationPortal,
   canAccessProductionPortal,
 } from "@/features/orders/workspace/shared/stageGrants";
+import { loadClientConfig } from "@/config/loadClientConfig";
+import { createAdminClient } from "@/utils/supabase/admin";
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -61,13 +63,18 @@ export async function adminSignIn(email: string, pass: string) {
   // Fetch role
   const { data: profile, error: profileError } = await supabase
     .from("users")
-    .select("role")
+    .select("role, companies!inner(slug)")
     .eq("email", email.toLowerCase())
     .single();
 
   if (profileError || !profile) {
     await supabase.auth.signOut();
     return { error: "Failed to fetch user role profile." };
+  }
+
+  if ((profile as any).companies?.slug !== loadClientConfig().id) {
+    await supabase.auth.signOut();
+    return { error: "Unauthorized access. This account belongs to a different client workspace." };
   }
 
   if (profile.role !== "admin") {
@@ -93,13 +100,18 @@ export async function staffSignIn(email: string, pass: string) {
   // Fetch role
   const { data: profile, error: profileError } = await supabase
     .from("users")
-    .select("role")
+    .select("role, companies!inner(slug)")
     .eq("email", email.toLowerCase())
     .single();
 
   if (profileError || !profile) {
     await supabase.auth.signOut();
     return { error: "Failed to fetch user role profile." };
+  }
+
+  if ((profile as any).companies?.slug !== loadClientConfig().id) {
+    await supabase.auth.signOut();
+    return { error: "Unauthorized access. This account belongs to a different client workspace." };
   }
 
   if (profile.role !== "staff") {
@@ -128,13 +140,18 @@ export async function productionFloorSignIn(email: string, pass: string) {
 
   const { data: profile, error: profileError } = await supabase
     .from("users")
-    .select("role, staff_role, company_id")
+    .select("role, staff_role, company_id, companies!inner(slug)")
     .eq("email", email.toLowerCase())
     .single();
 
   if (profileError || !profile) {
     await supabase.auth.signOut();
     return { error: "Failed to fetch user role profile." };
+  }
+
+  if ((profile as any).companies?.slug !== loadClientConfig().id) {
+    await supabase.auth.signOut();
+    return { error: "Unauthorized access. This account belongs to a different client workspace." };
   }
 
   if (profile.role !== "staff" && profile.role !== "admin") {
@@ -177,13 +194,18 @@ export async function installationFloorSignIn(email: string, pass: string) {
 
   const { data: profile, error: profileError } = await supabase
     .from("users")
-    .select("role, staff_role, company_id")
+    .select("role, staff_role, company_id, companies!inner(slug)")
     .eq("email", email.toLowerCase())
     .single();
 
   if (profileError || !profile) {
     await supabase.auth.signOut();
     return { error: "Failed to fetch user role profile." };
+  }
+
+  if ((profile as any).companies?.slug !== loadClientConfig().id) {
+    await supabase.auth.signOut();
+    return { error: "Unauthorized access. This account belongs to a different client workspace." };
   }
 
   if (profile.role !== "staff" && profile.role !== "admin") {
@@ -229,15 +251,35 @@ export async function getCurrentUser() {
   if (!user) return null;
   const { data: profile } = await supabase
     .from("users")
-    .select("*")
+    .select("*, companies!inner(slug)")
     .eq("email", user.email?.toLowerCase())
     .single();
+    
+  if (profile && (profile as any).companies?.slug !== loadClientConfig().id) {
+    return null;
+  }
   return profile;
 }
 
 export async function updateUserPassword(password: string) {
   const supabase = await getSupabase();
   const { error } = await supabase.auth.updateUser({ password });
+  if (error) return { error: error.message };
+  return { success: true };
+}
+
+export async function adminResetUserPassword(userId: string, newPassword: string) {
+  const adminClient = createAdminClient();
+  if (!adminClient) return { error: "Admin client not configured." };
+  
+  const supabase = await getSupabase();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Unauthorized" };
+  
+  const { data: profile } = await supabase.from("users").select("role").eq("id", user.id).single();
+  if (profile?.role !== "admin") return { error: "Unauthorized. Admin only." };
+
+  const { error } = await adminClient.auth.admin.updateUserById(userId, { password: newPassword });
   if (error) return { error: error.message };
   return { success: true };
 }

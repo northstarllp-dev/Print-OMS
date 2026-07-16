@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Search, Filter, Plus, MoreVertical, Users, Star, Clock, AlertCircle, Edit, Trash2, Briefcase, BarChart2 } from "lucide-react";
+import { Search, Filter, Plus, MoreVertical, Users, Star, Clock, AlertCircle, Edit, Trash2, Briefcase, BarChart2, Key, X } from "lucide-react";
 import { Employee } from "@/types";
 import { EmployeeModal } from "./EmployeeModal";
 import {
@@ -9,6 +9,7 @@ import {
   updateEmployee as updateEmployeeAction,
   deleteEmployee as deleteEmployeeAction
 } from "@/features/employees/actions/employeeActions";
+import { adminResetUserPassword } from "@/features/auth/actions/authActions";
 
 interface EmployeesViewNewProps {
   initialEmployees: Employee[];
@@ -23,7 +24,40 @@ export function EmployeesViewNew({ initialEmployees, companyId = null }: Employe
   const [editingEmployee, setEditingEmployee] = useState<Employee | undefined>(undefined);
   const [actionDropdownId, setActionDropdownId] = useState<string | null>(null);
 
+  // Password reset state
+  const [resetModalEmpId, setResetModalEmpId] = useState<string | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [resetStatus, setResetStatus] = useState<"idle" | "saving" | "error" | "success">("idle");
+  const [resetErrorMsg, setResetErrorMsg] = useState("");
 
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetModalEmpId) return;
+    if (newPassword.length < 6) {
+      setResetStatus("error");
+      setResetErrorMsg("Password must be at least 6 characters");
+      return;
+    }
+    
+    setResetStatus("saving");
+    try {
+      const res = await adminResetUserPassword(resetModalEmpId, newPassword);
+      if (res.error) {
+        setResetStatus("error");
+        setResetErrorMsg(res.error);
+      } else {
+        setResetStatus("success");
+        setTimeout(() => {
+          setResetModalEmpId(null);
+          setNewPassword("");
+          setResetStatus("idle");
+        }, 1500);
+      }
+    } catch (err: any) {
+      setResetStatus("error");
+      setResetErrorMsg(err.message || "An error occurred");
+    }
+  };
   const handleEditEmployee = (emp: Employee) => {
     setEditingEmployee(emp);
     setIsModalOpen(true);
@@ -294,6 +328,15 @@ export function EmployeesViewNew({ initialEmployees, companyId = null }: Employe
                               <Edit size={14} /> Edit
                             </button>
                             <button 
+                              onClick={() => {
+                                setResetModalEmpId(emp.id);
+                                setActionDropdownId(null);
+                              }}
+                              style={{ display: "flex", alignItems: "center", gap: "8px", width: "100%", padding: "10px 16px", background: "none", border: "none", borderBottom: "1px solid #f1f5f9", cursor: "pointer", fontSize: "13px", color: "#f59e0b", textAlign: "left" }}
+                            >
+                              <Key size={14} /> Reset Password
+                            </button>
+                            <button 
                               onClick={() => handleDeleteEmployee(emp.id)}
                               style={{ display: "flex", alignItems: "center", gap: "8px", width: "100%", padding: "10px 16px", background: "none", border: "none", cursor: "pointer", fontSize: "13px", color: "#ef4444", textAlign: "left" }}
                             >
@@ -318,6 +361,67 @@ export function EmployeesViewNew({ initialEmployees, companyId = null }: Employe
         initialData={editingEmployee}
         companyId={companyId}
       />
+
+      {/* Admin Reset Password Modal */}
+      {resetModalEmpId && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+          background: "rgba(0,0,0,0.4)", backdropFilter: "blur(2px)",
+          display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100
+        }}>
+          <div style={{
+            background: "white", borderRadius: "12px", width: "100%", maxWidth: "400px",
+            boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)", padding: "24px"
+          }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px" }}>
+              <h2 style={{ fontSize: "18px", fontWeight: "700", margin: 0 }}>Reset Password</h2>
+              <button onClick={() => setResetModalEmpId(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#64748b" }}>
+                <X size={20} />
+              </button>
+            </div>
+            <p style={{ fontSize: "13px", color: "#64748b", marginBottom: "16px" }}>
+              You are manually setting a new password for this user.
+            </p>
+            <form onSubmit={handleResetPassword} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+              <div>
+                <label style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a", marginBottom: "6px", display: "block" }}>New Password</label>
+                <input 
+                  type="text" 
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  style={{
+                    width: "100%", padding: "10px 12px", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "14px"
+                  }}
+                  required
+                />
+              </div>
+
+              {resetStatus === "error" && (
+                <div style={{ fontSize: "13px", color: "#ef4444", background: "#fef2f2", padding: "8px 12px", borderRadius: "6px" }}>
+                  {resetErrorMsg}
+                </div>
+              )}
+              {resetStatus === "success" && (
+                <div style={{ fontSize: "13px", color: "#10b981", background: "#dcfce7", padding: "8px 12px", borderRadius: "6px" }}>
+                  Password reset successfully!
+                </div>
+              )}
+
+              <button 
+                type="submit" 
+                disabled={resetStatus === "saving" || resetStatus === "success"}
+                style={{
+                  width: "100%", padding: "12px", background: "#f59e0b", color: "white", border: "none",
+                  borderRadius: "8px", fontSize: "14px", fontWeight: "600", cursor: "pointer", marginTop: "8px",
+                  opacity: (resetStatus === "saving" || resetStatus === "success") ? 0.7 : 1
+                }}
+              >
+                {resetStatus === "saving" ? "Updating..." : "Force Reset Password"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
