@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Search, Filter, Plus, MoreVertical, Users, Star, Clock, AlertCircle, Edit, Trash2, Briefcase, BarChart2, Key, X } from "lucide-react";
+import { Search, Filter, Plus, MoreVertical, Users, Star, Clock, AlertCircle, Edit, Trash2, Briefcase, BarChart2, Key, X, RefreshCw } from "lucide-react";
 import { Employee } from "@/types";
 import { EmployeeModal } from "./EmployeeModal";
 import {
@@ -275,6 +275,35 @@ export function EmployeesViewNew({ initialEmployees, companyId = null }: Employe
             }}
           >
             <Filter size={16} /> Filters
+          </button>
+          
+          {/* Reset Button */}
+          <button
+            title="Reset Filters"
+            onClick={() => setSearchTerm("")}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "0 14px",
+              background: "#fef2f2",
+              border: "1px solid #fecaca",
+              borderRadius: "8px",
+              cursor: "pointer",
+              color: "#dc2626",
+              outline: "none",
+              height: "39px",
+              transition: "all 0.2s",
+              fontWeight: "600",
+              fontSize: "13px",
+              gap: "6px",
+              flexShrink: 0
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "#fee2e2"; e.currentTarget.style.borderColor = "#fca5a5"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "#fef2f2"; e.currentTarget.style.borderColor = "#fecaca"; }}
+          >
+            <RefreshCw size={14} />
+            Reset
           </button>
         </div>
 

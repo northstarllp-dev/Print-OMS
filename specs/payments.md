@@ -33,6 +33,7 @@ Payments can be recorded at any time (advance after quote, after design, during 
 
 | Status | Meaning |
 | ------ | ------- |
+| `expected` | Amount is expected but not yet received |
 | `received` | Amount has been received |
 
 ## Amount types
@@ -57,7 +58,7 @@ Installment names auto-number: `1st installment`, `2nd installment`, …
 | `trigger_stage` | text | Optional note of order stage when recorded |
 | `amount_type` | text | `fixed` \| `percentage` |
 | `amount` / `percentage` / `calculated_amount` | numeric | |
-| `status` | text | `received` |
+| `status` | text | `expected` \| `received` |
 | `notes` | text | Optional |
 | `paid_at` | timestamptz | Set when marked received |
 | `created_at` / `updated_at` | timestamptz | |

@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useTransition, useRef } from "react";
 import {
   Search, Plus, X, Pencil, Trash2, Package, ToggleLeft, ToggleRight,
-  Upload, Image as ImageIcon, Loader2, IndianRupee, ChevronDown, Tag, Ruler, Hash,
+  Upload, Image as ImageIcon, Loader2, IndianRupee, ChevronDown, Tag, Ruler, Hash, RefreshCw
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import {
@@ -209,13 +209,14 @@ function PricingSection({
 
 // ── Product Form Modal ───────────────────────────────────────────────────────
 function ProductFormModal({
-  product, allProducts, categories, onClose, onSaved,
+  product, allProducts, categories, onClose, onSaved, enableFinalProduct
 }: {
   product: Product | null;
   allProducts: Product[];
   categories: ProductCategory[];
   onClose: () => void;
   onSaved: (p: Product) => void;
+  enableFinalProduct: boolean;
 }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
@@ -328,25 +329,27 @@ function ProductFormModal({
                 style={inputStyle}
               />
               <div style={{ marginTop: "8px" }}>
-                <label style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "11px", fontWeight: "700", color: "#374151", textTransform: "uppercase", letterSpacing: "0.04em", cursor: "pointer", userSelect: "none" }}>
-                  <input
-                    type="checkbox"
-                    checked={form.final_prdt ?? false}
-                    onChange={e => {
-                      const checked = e.target.checked;
-                      setForm(f => {
-                        const updated = {
-                          ...f,
-                          final_prdt: checked,
-                          product_id: isEdit ? f.product_id : (checked ? generateFinalProductId(allProducts, tenantCompanyId) : generateProductId(allProducts, tenantCompanyId))
-                        };
-                        return updated;
-                      });
-                    }}
-                    style={{ cursor: "pointer" }}
-                  />
-                  Final Products
-                </label>
+                {enableFinalProduct && (
+                  <label style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "11px", fontWeight: "700", color: "#374151", textTransform: "uppercase", letterSpacing: "0.04em", cursor: "pointer", userSelect: "none" }}>
+                    <input
+                      type="checkbox"
+                      checked={form.final_prdt ?? false}
+                      onChange={e => {
+                        const checked = e.target.checked;
+                        setForm(f => {
+                          const updated = {
+                            ...f,
+                            final_prdt: checked,
+                            product_id: isEdit ? f.product_id : (checked ? generateFinalProductId(allProducts, tenantCompanyId) : generateProductId(allProducts, tenantCompanyId))
+                          };
+                          return updated;
+                        });
+                      }}
+                      style={{ cursor: "pointer" }}
+                    />
+                    Final Products
+                  </label>
+                )}
               </div>
             </div>
           </div>
@@ -602,10 +605,12 @@ function ProductCard({
 // ── Main Component ───────────────────────────────────────────────────────────
 export function ProductsView({ 
   initialProducts, 
-  initialCategories = [] 
+  initialCategories = [],
+  enableFinalProduct = false,
 }: { 
   initialProducts: Product[]; 
-  initialCategories?: ProductCategory[]; 
+  initialCategories?: ProductCategory[];
+  enableFinalProduct?: boolean;
 }) {
   const [products, setProducts] = useState<Product[]>(initialProducts);
   const [categories, setCategories] = useState<ProductCategory[]>(initialCategories);
@@ -750,6 +755,40 @@ export function ProductsView({
           <option value="Final">Final Products</option>
           <option value="Regular">Regular Products</option>
         </select>
+        
+        {/* Reset Button */}
+        <button
+          title="Reset Filters"
+          onClick={() => {
+            setSearch("");
+            setCategoryFilter("All");
+            setStatusFilter("All");
+            setFinalFilter("All");
+          }}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "0 14px",
+            background: "#fef2f2",
+            border: "1px solid #fecaca",
+            borderRadius: "8px",
+            cursor: "pointer",
+            color: "#dc2626",
+            outline: "none",
+            height: "40px",
+            transition: "all 0.2s",
+            fontWeight: "600",
+            fontSize: "13px",
+            gap: "6px",
+            flexShrink: 0
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "#fee2e2"; e.currentTarget.style.borderColor = "#fca5a5"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "#fef2f2"; e.currentTarget.style.borderColor = "#fecaca"; }}
+        >
+          <RefreshCw size={14} />
+          Reset
+        </button>
       </div>
 
       {/* Grid */}
@@ -797,7 +836,8 @@ export function ProductsView({
           product={editingProduct}
           allProducts={products}
           categories={categories}
-          onClose={() => { setShowForm(false); setEditingProduct(null); }}
+          onClose={() => { setEditingProduct(null); setShowForm(false); }}
+          enableFinalProduct={enableFinalProduct}
           onSaved={handleSaved}
         />
       )}

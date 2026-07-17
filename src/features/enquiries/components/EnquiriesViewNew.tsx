@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { Search, Filter, Plus, AlertCircle, CheckCircle, Clock, Phone, Copy, MessageSquare, Mail, X, Check, ArrowRight, Calendar, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, Filter, Plus, AlertCircle, CheckCircle, Clock, Phone, Copy, MessageSquare, Mail, X, Check, ArrowRight, Calendar, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
 import { AddEnquiryModal, EnquiryFormData } from "./AddEnquiryModal";
 import { ConvertEnquiryModal } from "./ConvertEnquiryModal";
 import { AssignTeamModal } from "./AssignTeamModal";
@@ -389,22 +389,41 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
             </select>
 
             {/* Reset Button */}
-            {(startDate !== "" || endDate !== "" || addedByFilter !== "All" || sourceFilter !== "All" || searchTerm !== "" || selectedKpi !== null) && (
-              <button
-                onClick={() => {
-                  setDateFilterType("range");
-                  setStartDate("");
-                  setEndDate("");
-                  setAddedByFilter("All");
-                  setSourceFilter("All");
-                  setSearchTerm("");
-                  setSelectedKpi(null);
-                }}
-                style={{ padding: "9px 12px", background: "#f1f5f9", border: "1px solid #cbd5e1", borderRadius: "8px", cursor: "pointer", fontSize: "13px", fontWeight: "600", color: "#475569", outline: "none" }}
-              >
-                Reset Filters
-              </button>
-            )}
+            <button
+              title="Reset Filters"
+              onClick={() => {
+                setDateFilterType("range");
+                setStartDate("");
+                setEndDate("");
+                setAddedByFilter("All");
+                setSourceFilter("All");
+                setSearchTerm("");
+                setSelectedKpi(null);
+              }}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "0 14px",
+                background: "#fef2f2",
+                border: "1px solid #fecaca",
+                borderRadius: "8px",
+                cursor: "pointer",
+                color: "#dc2626",
+                outline: "none",
+                height: "38px",
+                transition: "all 0.2s",
+                fontWeight: "600",
+                fontSize: "13px",
+                gap: "6px",
+                flexShrink: 0
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "#fee2e2"; e.currentTarget.style.borderColor = "#fca5a5"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "#fef2f2"; e.currentTarget.style.borderColor = "#fecaca"; }}
+            >
+              <RefreshCw size={14} />
+              Reset
+            </button>
           </div>
         </div>
 

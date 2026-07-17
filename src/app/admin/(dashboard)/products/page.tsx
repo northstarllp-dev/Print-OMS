@@ -1,10 +1,12 @@
 import { getProducts, getProductCategories } from "@/features/products/actions/productActions";
 import { ProductsView } from "@/features/products/components/ProductsView";
+import { getAppSettings } from "@/features/settings/actions/settingsActions";
 
 export default async function ProductsPage() {
-  const [productsData, categoriesData] = await Promise.all([
+  const [productsData, categoriesData, appSettings] = await Promise.all([
     getProducts().catch(() => []),
     getProductCategories().catch(() => []),
+    getAppSettings().catch(() => null),
   ]);
 
   const products = (productsData || []).map((p: any) => ({
@@ -29,5 +31,11 @@ export default async function ProductsPage() {
     created_at: c.created_at ?? null,
   }));
 
-  return <ProductsView initialProducts={products} initialCategories={mappedCategories} />;
+  return (
+    <ProductsView
+      initialProducts={products}
+      initialCategories={mappedCategories}
+      enableFinalProduct={appSettings?.enableFinalProduct ?? false}
+    />
+  );
 }

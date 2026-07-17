@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { Send, Bot, User, Sparkles } from "lucide-react";
-import { ReportCard } from "./ReportCard";
+import { Send, Bot, User, Sparkles, Zap } from "lucide-react";
+import { ReportCard, type ReportType } from "./ReportCard";
 
 interface ReportChatBoxProps {
   reportData: any;
@@ -12,29 +12,99 @@ interface Message {
   id: string;
   sender: "bot" | "user";
   text?: string;
-  reportDataKey?: keyof typeof REPORT_TYPES;
+  reportType?: ReportType;
+  reportDataKey?: string;
 }
 
-const REPORT_TYPES = {
-  ORDERS_OVER_TIME: { title: "Orders Over Time", desc: "Monthly order volume & revenue", key: "ordersByMonth" },
-  PIPELINE_FUNNEL: { title: "Pipeline Funnel", desc: "Enquiry to order conversion", key: "conversionFunnel" },
-  REVENUE_BY_CUSTOMER: { title: "Revenue by Customer", desc: "Top customers by revenue", key: "revenueByCustomer" },
-  TEAM_PERFORMANCE: { title: "Team Performance", desc: "Orders completed by employee", key: "teamPerformance" },
-  ORDER_STAGE: { title: "Order Stage Breakdown", desc: "Distribution of active orders", key: "ordersByStage" },
-  TICKET_ANALYSIS: { title: "Ticket Analysis", desc: "Support tickets by priority", key: "ticketsByPriority" },
-  ENQUIRY_SOURCES: { title: "Enquiry Sources", desc: "Where leads are coming from", key: "enquirySourceBreakdown" },
-} as const;
+const REPORT_REGISTRY: Record<string, { title: string; desc: string; type: ReportType; dataKey: string; keywords: string[] }> = {
+  REVENUE_TREND: {
+    title: "Revenue & Order Trend", desc: "Monthly revenue bars + order count line",
+    type: "REVENUE_TREND", dataKey: "revenueTrend",
+    keywords: ["revenue trend", "monthly revenue", "revenue growth", "income"],
+  },
+  ORDERS_OVER_TIME: {
+    title: "Orders Over Time", desc: "Monthly order volume and estimated revenue",
+    type: "ORDERS_OVER_TIME", dataKey: "ordersByMonth",
+    keywords: ["orders over time", "order trend", "monthly orders", "order volume"],
+  },
+  PIPELINE_FUNNEL: {
+    title: "Pipeline Funnel", desc: "Enquiry → Order → Installation → Completed",
+    type: "PIPELINE_FUNNEL", dataKey: "conversionFunnel",
+    keywords: ["funnel", "pipeline", "conversion funnel"],
+  },
+  REVENUE_BY_CUSTOMER: {
+    title: "Top 10 Customers", desc: "Highest revenue generating customers",
+    type: "REVENUE_BY_CUSTOMER", dataKey: "revenueByCustomer",
+    keywords: ["customer", "top customers", "revenue by customer", "best customers"],
+  },
+  TEAM_PERFORMANCE: {
+    title: "Team Performance", desc: "Assigned vs completed orders per employee",
+    type: "TEAM_PERFORMANCE", dataKey: "teamPerformance",
+    keywords: ["team", "employee", "performance", "staff", "completed by"],
+  },
+  ORDER_STAGE: {
+    title: "Order Stage Breakdown", desc: "Distribution of orders by pipeline stage",
+    type: "ORDER_STAGE", dataKey: "ordersByStage",
+    keywords: ["stage", "breakdown", "order stages", "pipeline stages"],
+  },
+  TICKET_ANALYSIS: {
+    title: "Tickets by Priority", desc: "Support ticket distribution by priority",
+    type: "TICKET_ANALYSIS", dataKey: "ticketsByPriority",
+    keywords: ["ticket", "support", "priority", "service ticket"],
+  },
+  ENQUIRY_SOURCES: {
+    title: "Enquiry Sources", desc: "Where your leads are coming from",
+    type: "ENQUIRY_SOURCES", dataKey: "enquirySourceBreakdown",
+    keywords: ["source", "lead source", "enquiry source", "where leads", "marketing"],
+  },
+  ORDER_HEALTH: {
+    title: "Order Health", desc: "Active, on-hold, lost & completed breakdown",
+    type: "ORDER_HEALTH", dataKey: "orderHealthBreakdown",
+    keywords: ["health", "order health", "active orders", "lost orders", "on hold"],
+  },
+  CONVERSION_BY_MONTH: {
+    title: "Monthly Conversion Trend", desc: "Enquiries vs orders with conversion rate",
+    type: "CONVERSION_BY_MONTH", dataKey: "conversionByMonth",
+    keywords: ["conversion", "conversion rate", "monthly conversion", "enquiry to order"],
+  },
+  CUSTOMER_RETENTION: {
+    title: "Customer Retention", desc: "New vs returning customers per month",
+    type: "CUSTOMER_RETENTION", dataKey: "customerRetention",
+    keywords: ["retention", "returning customer", "new customer", "repeat", "loyal"],
+  },
+  WEEKLY_COMPLETIONS: {
+    title: "Weekly Completions", desc: "Orders completed per week (last 12 weeks)",
+    type: "WEEKLY_COMPLETIONS", dataKey: "weeklyCompletions",
+    keywords: ["weekly", "week", "completion rate", "completed per week"],
+  },
+  TICKET_STATUS: {
+    title: "Ticket Status Mix", desc: "Open, in-progress, and resolved breakdown",
+    type: "TICKET_STATUS", dataKey: "ticketStatusBreakdown",
+    keywords: ["ticket status", "open tickets", "resolved", "closed tickets"],
+  },
+};
+
+const QUICK_SUGGESTIONS = [
+  "Show revenue trend",
+  "Top customers by revenue",
+  "Team performance",
+  "Pipeline funnel",
+  "Customer retention",
+  "Ticket analysis",
+];
 
 export function ReportChatBox({ reportData }: ReportChatBoxProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "welcome",
       sender: "bot",
-      text: "Hi there! I can generate custom reports on the fly. Try asking for 'revenue by customer' or 'ticket analysis'.",
+      text: "👋 Hi! I can generate any report instantly. Ask me about **revenue**, **orders**, **team performance**, **customer retention**, **tickets**, and more. Or pick a suggestion below!",
     },
   ]);
   const [input, setInput] = useState("");
+  const [isTyping, setIsTyping] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -42,132 +112,162 @@ export function ReportChatBox({ reportData }: ReportChatBoxProps) {
     }
   }, [messages]);
 
-  const handleSend = () => {
-    if (!input.trim()) return;
+  const handleSend = (overrideInput?: string) => {
+    const query = (overrideInput ?? input).trim();
+    if (!query) return;
 
-    const userMessage: Message = { id: Date.now().toString(), sender: "user", text: input };
-    setMessages((prev) => [...prev, userMessage]);
-    
-    // Process intent
-    const query = input.toLowerCase();
-    let matchedType: keyof typeof REPORT_TYPES | null = null;
-    let botText = "Here is the report you requested:";
+    const userMsg: Message = { id: Date.now().toString(), sender: "user", text: query };
+    setMessages(prev => [...prev, userMsg]);
+    setInput("");
+    setIsTyping(true);
 
-    if (query.includes("funnel") || query.includes("conversion")) {
-      matchedType = "PIPELINE_FUNNEL";
-    } else if (query.includes("revenue") || query.includes("customer")) {
-      matchedType = "REVENUE_BY_CUSTOMER";
-    } else if (query.includes("team") || query.includes("employee") || query.includes("performance")) {
-      matchedType = "TEAM_PERFORMANCE";
-    } else if (query.includes("stage") || query.includes("breakdown")) {
-      matchedType = "ORDER_STAGE";
-    } else if (query.includes("ticket") || query.includes("support")) {
-      matchedType = "TICKET_ANALYSIS";
-    } else if (query.includes("source") || query.includes("lead") || query.includes("enquiry")) {
-      matchedType = "ENQUIRY_SOURCES";
-    } else if (query.includes("time") || query.includes("month") || query.includes("trend") || query.includes("order")) {
-      matchedType = "ORDERS_OVER_TIME";
-    } else {
-      botText = "I couldn't quite understand which report you need. Try asking for 'revenue', 'funnel', 'stages', or 'tickets'.";
+    const lower = query.toLowerCase();
+    let matched: typeof REPORT_REGISTRY[string] | null = null;
+    let bestScore = 0;
+
+    for (const entry of Object.values(REPORT_REGISTRY)) {
+      const score = entry.keywords.reduce((s, kw) => s + (lower.includes(kw) ? kw.length : 0), 0);
+      if (score > bestScore) { bestScore = score; matched = entry; }
     }
 
     setTimeout(() => {
-      setMessages((prev) => [
-        ...prev,
-        {
+      setIsTyping(false);
+      if (matched) {
+        setMessages(prev => [...prev, {
           id: (Date.now() + 1).toString(),
           sender: "bot",
-          text: botText,
-          reportDataKey: matchedType || undefined,
-        },
-      ]);
-    }, 600);
-
-    setInput("");
-  };
-
-  const handleQuickAction = (query: string) => {
-    setInput(query);
-    setTimeout(() => handleSend(), 100);
+          text: `Here's the **${matched.title}** report:`,
+          reportType: matched.type,
+          reportDataKey: matched.dataKey,
+        }]);
+      } else {
+        setMessages(prev => [...prev, {
+          id: (Date.now() + 1).toString(),
+          sender: "bot",
+          text: "I couldn't find a matching report. Try asking for: revenue, orders, funnel, customers, team, tickets, retention, conversion, or health.",
+        }]);
+      }
+    }, 700);
   };
 
   return (
-    <div className="flex flex-col h-full bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, overflow: "hidden", boxShadow: "0 1px 3px 0 rgba(0,0,0,0.06)" }}>
       {/* Header */}
-      <div className="p-4 border-b border-slate-100 bg-slate-50 flex items-center gap-2">
-        <Sparkles className="text-blue-500" size={18} />
-        <h3 className="font-semibold text-slate-800">AI Report Builder</h3>
+      <div style={{ padding: "14px 18px", borderBottom: "1px solid #f1f5f9", background: "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)", display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <Sparkles size={16} color="#fff" />
+        </div>
+        <div>
+          <div style={{ fontWeight: 700, color: "#fff", fontSize: 14 }}>AI Report Builder</div>
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.75)" }}>Ask for any report in plain English</div>
+        </div>
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 5, background: "rgba(255,255,255,0.15)", borderRadius: 20, padding: "4px 10px" }}>
+          <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#4ade80" }} />
+          <span style={{ fontSize: 11, color: "rgba(255,255,255,0.9)", fontWeight: 600 }}>Live data</span>
+        </div>
       </div>
 
-      {/* Chat Area */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-6 bg-slate-50/50">
-        {messages.map((msg) => (
-          <div key={msg.id} className={`flex gap-3 ${msg.sender === "user" ? "flex-row-reverse" : ""}`}>
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${msg.sender === "user" ? "bg-blue-600" : "bg-slate-200"}`}>
-              {msg.sender === "user" ? <User size={16} className="text-white" /> : <Bot size={16} className="text-slate-600" />}
+      {/* Messages */}
+      <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: 14, background: "#fafafa" }}>
+        {messages.map(msg => (
+          <div key={msg.id} style={{ display: "flex", gap: 10, flexDirection: msg.sender === "user" ? "row-reverse" : "row", alignItems: "flex-start" }}>
+            {/* Avatar */}
+            <div style={{ width: 32, height: 32, borderRadius: "50%", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
+              background: msg.sender === "user" ? "#6366f1" : "#fff",
+              border: msg.sender === "bot" ? "1px solid #e2e8f0" : "none",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+              {msg.sender === "user" ? <User size={14} color="#fff" /> : <Bot size={14} color="#6366f1" />}
             </div>
-            <div className={`max-w-[80%] flex flex-col gap-2 ${msg.sender === "user" ? "items-end" : "items-start"}`}>
+            <div style={{ maxWidth: "78%", display: "flex", flexDirection: "column", gap: 6, alignItems: msg.sender === "user" ? "flex-end" : "flex-start" }}>
               {msg.text && (
-                <div className={`px-4 py-2.5 rounded-2xl text-sm shadow-sm ${msg.sender === "user" ? "bg-blue-600 text-white rounded-tr-none" : "bg-white border border-slate-200 text-slate-800 rounded-tl-none"}`}>
+                <div style={{
+                  padding: "10px 14px", borderRadius: 12,
+                  borderTopLeftRadius: msg.sender === "bot" ? 2 : 12,
+                  borderTopRightRadius: msg.sender === "user" ? 2 : 12,
+                  background: msg.sender === "user" ? "linear-gradient(135deg, #6366f1, #8b5cf6)" : "#fff",
+                  color: msg.sender === "user" ? "#fff" : "#334155",
+                  fontSize: 13, lineHeight: 1.5,
+                  border: msg.sender === "bot" ? "1px solid #e2e8f0" : "none",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+                }}>
                   {msg.text}
                 </div>
               )}
-              {msg.reportDataKey && (
-                <div className="w-[600px] max-w-full bg-white p-2 rounded-xl border border-slate-200 shadow-sm animate-in fade-in slide-in-from-bottom-2">
-                  <ReportCard 
-                    type={msg.reportDataKey}
-                    title={REPORT_TYPES[msg.reportDataKey].title}
-                    description={REPORT_TYPES[msg.reportDataKey].desc}
-                    data={reportData[REPORT_TYPES[msg.reportDataKey].key]}
+              {msg.reportType && msg.reportDataKey && (
+                <div style={{ width: 580, maxWidth: "100%" }}>
+                  <ReportCard
+                    type={msg.reportType}
+                    title={(REPORT_REGISTRY[msg.reportType] || {}).title || msg.reportType}
+                    description={(REPORT_REGISTRY[msg.reportType] || {}).desc || ""}
+                    data={reportData[msg.reportDataKey] || []}
                   />
                 </div>
               )}
             </div>
           </div>
         ))}
+
+        {/* Typing indicator */}
+        {isTyping && (
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#fff", border: "1px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Bot size={14} color="#6366f1" />
+            </div>
+            <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "10px 16px", display: "flex", gap: 4, alignItems: "center" }}>
+              {[0, 1, 2].map(i => (
+                <div key={i} style={{ width: 7, height: 7, borderRadius: "50%", background: "#6366f1", animation: `dotBounce 1.2s ${i * 0.2}s infinite ease-in-out` }} />
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Suggestions */}
-      <div className="px-4 pt-3 pb-2 flex gap-2 overflow-x-auto whitespace-nowrap bg-white border-t border-slate-100">
-        {["Show revenue by customer", "View pipeline funnel", "Support ticket analysis", "Enquiry sources"].map((suggestion) => (
-          <button
-            key={suggestion}
-            onClick={() => handleQuickAction(suggestion)}
-            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs rounded-full transition-colors border border-slate-200"
-          >
-            {suggestion}
+      {/* Quick suggestions */}
+      <div style={{ padding: "10px 14px 6px", background: "#fff", borderTop: "1px solid #f1f5f9", display: "flex", gap: 6, flexWrap: "wrap" }}>
+        {QUICK_SUGGESTIONS.map(s => (
+          <button key={s} onClick={() => handleSend(s)} style={{
+            padding: "5px 12px", background: "#f5f3ff", border: "1px solid #e0e7ff", borderRadius: 20,
+            cursor: "pointer", fontSize: 12, fontWeight: 600, color: "#6366f1",
+            display: "flex", alignItems: "center", gap: 4, transition: "all 0.15s",
+          }}
+          onMouseEnter={e => { e.currentTarget.style.background = "#e0e7ff"; }}
+          onMouseLeave={e => { e.currentTarget.style.background = "#f5f3ff"; }}>
+            <Zap size={10} />
+            {s}
           </button>
         ))}
       </div>
 
       {/* Input */}
-      <div className="p-4 bg-white">
-        <div className="flex items-end gap-2 bg-slate-100 rounded-xl p-2 border border-slate-200 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 transition-all">
+      <div style={{ padding: "10px 14px 14px", background: "#fff" }}>
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 8, background: "#f8fafc", borderRadius: 12, padding: "8px 10px", border: "1.5px solid #e2e8f0", transition: "border-color 0.2s" }}
+          onFocus={e => { (e.currentTarget as HTMLElement).style.borderColor = "#6366f1"; }}
+          onBlur={e => { (e.currentTarget as HTMLElement).style.borderColor = "#e2e8f0"; }}>
           <textarea
+            ref={inputRef}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                handleSend();
-              }
-            }}
-            placeholder="Type a report request (e.g., 'Show me orders over time')"
-            className="flex-1 bg-transparent border-none focus:ring-0 resize-none max-h-32 min-h-[44px] py-2 px-3 text-sm text-slate-800"
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+            placeholder="Ask for any report… (e.g. 'Show customer retention')"
             rows={1}
+            style={{ flex: 1, background: "transparent", border: "none", outline: "none", resize: "none", maxHeight: 100, fontSize: 13, color: "#334155", lineHeight: 1.5, padding: "4px 4px" }}
           />
           <button
-            onClick={handleSend}
+            onClick={() => handleSend()}
             disabled={!input.trim()}
-            className="p-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:hover:bg-blue-600 text-white rounded-lg transition-colors shrink-0"
-          >
-            <Send size={16} />
+            style={{ padding: "8px 14px", background: input.trim() ? "linear-gradient(135deg, #6366f1, #8b5cf6)" : "#e2e8f0", border: "none", borderRadius: 9, cursor: input.trim() ? "pointer" : "not-allowed", color: input.trim() ? "#fff" : "#94a3b8", display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, flexShrink: 0, transition: "all 0.2s" }}>
+            <Send size={13} />
+            Send
           </button>
         </div>
-        <p className="text-[10px] text-slate-400 mt-2 text-center">
-          Note: This agent only has read access to your reports data.
-        </p>
       </div>
+
+      <style>{`
+        @keyframes dotBounce {
+          0%, 100% { transform: translateY(0); opacity: 0.4; }
+          50% { transform: translateY(-5px); opacity: 1; }
+        }
+      `}</style>
     </div>
   );
 }

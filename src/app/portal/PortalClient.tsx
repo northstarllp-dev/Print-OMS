@@ -1083,14 +1083,18 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
         </div>
 
         <div style={{
+          position: "fixed",
+          bottom: 0,
+          left: 0,
           textAlign: "center",
-          padding: "24px 0",
-          marginTop: "48px",
+          padding: "12px 0",
           borderTop: "1px solid #E2E8F0",
           color: "#94A3B8",
           fontSize: "13px",
           fontWeight: "600",
-          width: "100%"
+          width: "100%",
+          background: "#f4f6fb",
+          zIndex: 40
         }}>
           <a
           href="https://www.thepolarislabs.com/"
@@ -1114,7 +1118,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
           <img
             src="/printoms/clients/light%20withoutbg.png"
             alt="Polaris"
-            style={{ height: "50px", marginLeft: "-2px", marginTop: "-16px", marginBottom: "-12px" }}
+            style={{ height: "40px", marginLeft: "-2px", marginTop: "-12px", marginBottom: "-10px" }}
           />
         </a>
         </div>

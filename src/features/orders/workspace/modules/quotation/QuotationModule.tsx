@@ -214,7 +214,6 @@ function ProductSearch({
     ? products.filter(
       (p) =>
         p.is_active &&
-        p.product_id.startsWith("PRD") &&
         (p.name.toLowerCase().includes(query.toLowerCase()) ||
           p.product_id.toLowerCase().includes(query.toLowerCase()) ||
           (p.category ?? "").toLowerCase().includes(query.toLowerCase()))
