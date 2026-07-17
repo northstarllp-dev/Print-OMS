@@ -407,7 +407,7 @@ export function OrdersManagementDashboard({
         <div className="w-full lg:flex-1 bg-white rounded-xl border border-slate-200 overflow-visible min-w-0">
           {/* Search & Filter Bar */}
         <div className="p-4 border-b border-slate-200 flex flex-col gap-3">
-          <div className="flex flex-col md:flex-row gap-3 md:items-center">
+          <div className="flex flex-col md:flex-row flex-wrap gap-3 md:items-center">
             {/* Search */}
             <div style={{ flex: 1, position: "relative" }}>
               <Search size={15} style={{ position: "absolute", left: "11px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8", pointerEvents: "none" }} />
@@ -510,28 +510,45 @@ export function OrdersManagementDashboard({
               <option value="Cancelled">Cancelled</option>
               <option value="Completed">Completed</option>
             </select>
-          </div>
 
-          {/* Reset Button */}
-          {(startDate !== "" || endDate !== "" || stageFilter !== "ALL" || healthFilter !== "ALL" || searchTerm !== "" || selectedKpi !== null || adminAssignedFilter !== "MINE") && (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "10px" }}>
-              <button
-                onClick={() => {
-                  setDateFilterType("range");
-                  setStartDate("");
-                  setEndDate("");
-                  setStageFilter("ALL");
-                  setHealthFilter("ALL");
-                  setAdminAssignedFilter("MINE");
-                  setSearchTerm("");
-                  setSelectedKpi(null);
-                }}
-                style={{ padding: "9px 12px", background: "#f1f5f9", border: "1px solid #cbd5e1", borderRadius: "8px", cursor: "pointer", fontSize: "13px", fontWeight: "600", color: "#475569", outline: "none" }}
-              >
-                Reset Filters
-              </button>
-            </div>
-          )}
+            {/* Reset Button */}
+            <button
+              title="Reset Filters"
+              onClick={() => {
+                setDateFilterType("range");
+                setStartDate("");
+                setEndDate("");
+                setStageFilter("ALL");
+                setHealthFilter("ALL");
+                setAdminAssignedFilter("MINE");
+                setSearchTerm("");
+                setSelectedKpi(null);
+              }}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "0 14px",
+                background: "#fef2f2",
+                border: "1px solid #fecaca",
+                borderRadius: "8px",
+                cursor: "pointer",
+                color: "#dc2626",
+                outline: "none",
+                height: "38px",
+                transition: "all 0.2s",
+                fontWeight: "600",
+                fontSize: "13px",
+                gap: "6px",
+                flexShrink: 0
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "#fee2e2"; e.currentTarget.style.borderColor = "#fca5a5"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "#fef2f2"; e.currentTarget.style.borderColor = "#fecaca"; }}
+            >
+              <RefreshCw size={14} />
+              Reset
+            </button>
+          </div>
         </div>
 
         {/* Mobile card list */}

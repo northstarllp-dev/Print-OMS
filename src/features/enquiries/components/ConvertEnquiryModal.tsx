@@ -32,8 +32,7 @@ export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultClientNa
       setRequirements(defaultRequirements);
       setSelectedAdmins([]);
       getActiveProducts().then((data) => {
-        const finalProducts = data.filter((p) => p.final_prdt === true);
-        setProducts(finalProducts.map((p) => ({ id: p.id, name: p.name })));
+        setProducts(data.map((p) => ({ id: p.id, name: p.name })));
       }).catch(console.error);
       getAdmins().then(data => {
         setAdmins(data.map((a: any) => ({ id: a.id, name: a.name })));

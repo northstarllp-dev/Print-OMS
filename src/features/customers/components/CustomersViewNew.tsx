@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Search, Filter, MapPin, Mail, Phone, X, ShoppingBag, ExternalLink, Share2, Pencil } from "lucide-react";
+import { Search, Filter, MapPin, Mail, Phone, X, ShoppingBag, ExternalLink, Share2, Pencil, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { updateCustomer } from "@/features/customers/actions/customerActions";
 
@@ -243,6 +243,35 @@ export function CustomersViewNew({
                 }}
               />
             </div>
+            
+            {/* Reset Button */}
+            <button
+              title="Reset Filters"
+              onClick={() => setSearchTerm("")}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "0 14px",
+                background: "#fef2f2",
+                border: "1px solid #fecaca",
+                borderRadius: "8px",
+                cursor: "pointer",
+                color: "#dc2626",
+                outline: "none",
+                height: "39px",
+                transition: "all 0.2s",
+                fontWeight: "600",
+                fontSize: "13px",
+                gap: "6px",
+                flexShrink: 0
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "#fee2e2"; e.currentTarget.style.borderColor = "#fca5a5"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "#fef2f2"; e.currentTarget.style.borderColor = "#fecaca"; }}
+            >
+              <RefreshCw size={14} />
+              Reset
+            </button>
           </div>
 
           {/* Table */}

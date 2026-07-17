@@ -531,47 +531,47 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
             }
           >
             {children}
-
-            {!isWorksheetPage && (
-              <div style={{
-                textAlign: "center",
-                padding: "24px 0",
-                marginTop: "auto",
-                borderTop: "1px solid #E2E8F0",
-                color: "#94A3B8",
-                fontSize: "13px",
-                fontWeight: "600",
-                width: "100%"
-              }}>
-                <a
-          href="https://www.thepolarislabs.com/"
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 6,
-            fontWeight: 600,
-            margin: 0,
-            color: "inherit",
-            textDecoration: "none",
-            cursor: "pointer",
-            transition: "opacity 0.15s ease",
-            pointerEvents: "auto",
-          }}
-        >
-          Made with <span style={{ color: "#EF4444", fontSize: "14px" }}>❤️</span> by
-          <img
-            src="/printoms/clients/light%20withoutbg.png"
-            alt="Polaris"
-            style={{ height: "50px", marginLeft: "-2px", marginTop: "-16px", marginBottom: "-12px" }}
-          />
-        </a>
-              </div>
-            )}
           </div>
         </main>
+        {!isWorksheetPage && (
+          <div style={{
+            textAlign: "center",
+            padding: "12px 0",
+            borderTop: "1px solid #E2E8F0",
+            color: "#94A3B8",
+            fontSize: "13px",
+            fontWeight: "600",
+            width: "100%",
+            background: "var(--color-background)",
+            zIndex: 10,
+          }}>
+            <a
+              href="https://www.thepolarislabs.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+                fontWeight: 600,
+                margin: 0,
+                color: "inherit",
+                textDecoration: "none",
+                cursor: "pointer",
+                transition: "opacity 0.15s ease",
+                pointerEvents: "auto",
+              }}
+            >
+              Made with <span style={{ color: "#EF4444", fontSize: "14px" }}>❤️</span> by
+              <img
+                src="/printoms/clients/light%20withoutbg.png"
+                alt="Polaris"
+                style={{ height: "40px", marginLeft: "-2px", marginTop: "-12px", marginBottom: "-10px" }}
+              />
+            </a>
+          </div>
+        )}
       </div>
 
       {/* Mobile Overlay */}
@@ -661,6 +661,7 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
         @media (min-width: 769px) {
           .show-mobile { display: none !important; }
         }
+        html, body { overflow: hidden !important; margin: 0; padding: 0; width: 100%; height: 100%; }
       `}</style>
     </div>
   );

@@ -44,21 +44,32 @@ Permissions:
 
 | Column | Type | Description |
 | ------ | ---- | ----------- |
-| id | uuid (PK) | Unique product ID |
+| id | uuid (PK) | Unique internal ID |
+| product_id | text | Custom display ID (e.g., PRD-001, FP001) |
 | company_id | uuid (FK) | Reference to the tenant company |
 | name | text | e.g., "3mm ACP Board" |
-| category | text | e.g., "Raw Material", "Finished Sign" |
-| pricing_type | text | `"per_sqft"` or `"per_unit"` (running feet removed) |
+| description | text | Description of material, specs, finish |
+| category | text | Maps to `product_categories.name` |
+| pricing_type | text | `"per_sqft"`, `"per_unit"`, or `null` (for Final Products) |
 | price_per_sqft | numeric | Base price if applicable |
 | price_per_unit | numeric | Base price if applicable |
 | is_active | boolean | Determines visibility in quotes |
 | final_prdt | boolean | Marks whether the product is a "Final Product" |
 | images | jsonb | Array of product image URLs (optional) |
 
+#### product_categories
+
+| Column | Type | Description |
+| ------ | ---- | ----------- |
+| id | uuid (PK) | Unique category ID |
+| company_id | uuid (FK) | Reference to the tenant company |
+| name | text | Name of the category (e.g., "Raw Material") |
+| created_at | timestamptz | Creation timestamp |
+
 ## API Endpoints
 
 ### Manage Products
-Method: Server Actions (`createProduct`, `updateProduct`, `deleteProduct`)
+Method: Server Actions (`createProduct`, `updateProduct`, `deleteProduct`, `deleteImagesFromStorage`, `createProductCategory`, `deleteProductCategory`)
 Behavior: Standard database operations ensuring `company_id` isolation via RLS policies.
 
 ## UI Components

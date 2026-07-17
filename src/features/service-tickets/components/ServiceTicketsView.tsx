@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Eye, Plus, SendHorizontal, Wrench } from "lucide-react";
+import { Eye, Plus, SendHorizontal, Wrench, RefreshCw } from "lucide-react";
 import {
   getTicketById,
   sendToServiceManagerAction,
@@ -108,7 +108,7 @@ export function ServiceTicketsView({
       {/* ─── Table Card ─── */}
       <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: "12px", overflow: "hidden" }}>
         {/* Search */}
-        <div style={{ padding: "16px 20px", borderBottom: "1px solid #e2e8f0" }}>
+        <div style={{ padding: "16px 20px", borderBottom: "1px solid #e2e8f0", display: "flex", gap: "12px", alignItems: "center" }}>
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -123,6 +123,33 @@ export function ServiceTicketsView({
               outline: "none",
             }}
           />
+          <button
+            title="Reset Filters"
+            onClick={() => setSearch("")}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "0 14px",
+              background: "#fef2f2",
+              border: "1px solid #fecaca",
+              borderRadius: "8px",
+              cursor: "pointer",
+              color: "#dc2626",
+              outline: "none",
+              height: "39px",
+              transition: "all 0.2s",
+              fontWeight: "600",
+              fontSize: "13px",
+              gap: "6px",
+              flexShrink: 0
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "#fee2e2"; e.currentTarget.style.borderColor = "#fca5a5"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "#fef2f2"; e.currentTarget.style.borderColor = "#fecaca"; }}
+          >
+            <RefreshCw size={14} />
+            Reset
+          </button>
         </div>
 
         {/* Table */}

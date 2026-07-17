@@ -2,11 +2,14 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { Save, Palette, MessageCircle, Calendar, Key, X, FileText } from "lucide-react";
+import { Save, Palette, MessageCircle, Calendar, Key, X, FileText, Package } from "lucide-react";
+import { useLoadScript, Autocomplete } from "@react-google-maps/api";
 import {
   updateAppSettings,
   updateInvoiceProfile,
+  updateCompanyDetails,
   AppSettings,
+  CompanyDetails
 } from "@/features/settings/actions/settingsActions";
 import { updateUserPassword } from "@/features/auth/actions/authActions";
 import {
@@ -17,22 +20,51 @@ import {
 
 interface SettingsViewNewProps {
   initialAppSettings?: AppSettings;
+  companyDetails?: CompanyDetails | null;
 }
 
-export function SettingsViewNew({ initialAppSettings }: SettingsViewNewProps) {
+export function SettingsViewNew({ initialAppSettings, companyDetails }: SettingsViewNewProps) {
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [invoiceSaveStatus, setInvoiceSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
-  const [settings, setSettings] = useState({
-    companyName: "Printoms",
-    email: "admin@printoms.com",
-    phone: "+91 98765 12345",
-    address: "123 Business Park, Tech City",
+  
+  const defaultSettings = {
+    companyName: companyDetails?.name || "Printoms",
+    address: companyDetails?.address || "123 Business Park, Tech City",
     notifications: true,
     twoFactorAuth: true,
     theme: "light",
     siteVisitSchedulingEnabled: initialAppSettings?.siteVisitSchedulingEnabled ?? true,
     installationSchedulingEnabled: initialAppSettings?.installationSchedulingEnabled ?? true,
+    enableFinalProduct: initialAppSettings?.enableFinalProduct ?? false,
+  };
+  
+  const [settings, setSettings] = useState(defaultSettings);
+  const [initialSettings, setInitialSettings] = useState(defaultSettings);
+
+  const hasUnsavedChanges = 
+    settings.companyName !== initialSettings.companyName ||
+    settings.address !== initialSettings.address ||
+    settings.siteVisitSchedulingEnabled !== initialSettings.siteVisitSchedulingEnabled ||
+    settings.installationSchedulingEnabled !== initialSettings.installationSchedulingEnabled ||
+    settings.enableFinalProduct !== initialSettings.enableFinalProduct;
+
+  const { isLoaded } = useLoadScript({
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
+    libraries: ["places"],
   });
+
+  const [autocomplete, setAutocomplete] = useState<google.maps.places.Autocomplete | null>(null);
+
+  const onLoad = (autoC: google.maps.places.Autocomplete) => setAutocomplete(autoC);
+  const onPlaceChanged = () => {
+    if (autocomplete !== null) {
+      const place = autocomplete.getPlace();
+      if (place.formatted_address) {
+        setSettings(prev => ({ ...prev, address: place.formatted_address! }));
+      }
+    }
+  };
+
   const [invoiceProfile, setInvoiceProfile] = useState<InvoiceProfile>(
     initialAppSettings?.invoiceProfile ?? EMPTY_INVOICE_PROFILE
   );
@@ -50,9 +82,20 @@ export function SettingsViewNew({ initialAppSettings }: SettingsViewNewProps) {
       description: "Manage your business information and preferences",
       fields: [
         { label: "Company Name", key: "companyName", type: "text" },
-        { label: "Email Address", key: "email", type: "email" },
-        { label: "Phone Number", key: "phone", type: "tel" },
         { label: "Business Address", key: "address", type: "text" },
+      ],
+    },
+    {
+      title: "Products",
+      icon: <Package size={20} />,
+      description: "Configure how products are managed and displayed",
+      fields: [
+        { 
+          label: "Enable 'Final Product' Designation", 
+          key: "enableFinalProduct", 
+          type: "toggle", 
+          description: "Allows you to mark specific items as 'Final Products'. When enabled, both regular and final products will be searchable when quoting or converting an enquiry to an order." 
+        },
       ],
     },
     {
@@ -60,23 +103,14 @@ export function SettingsViewNew({ initialAppSettings }: SettingsViewNewProps) {
       icon: <Calendar size={20} />,
       description: "Control what customers can do in their portal",
       fields: [
-        { label: "Site Visit Self-Scheduling", key: "siteVisitSchedulingEnabled", type: "toggle", description: "Allow customers to book their site visit slots." },
-        { label: "Installation Self-Scheduling", key: "installationSchedulingEnabled", type: "toggle", description: "Allow customers to book their installation slots." },
+        { label: "Site Visit Self-Scheduling", key: "siteVisitSchedulingEnabled", type: "toggle", description: "Allow customers to independently book their site visit slots through the portal." },
+        { label: "Installation Self-Scheduling", key: "installationSchedulingEnabled", type: "toggle", description: "Allow customers to independently book their installation slots through the portal." },
       ],
     },
   ];
 
-  const handleChange = async (key: string, value: any) => {
+  const handleChange = (key: string, value: any) => {
     setSettings({ ...settings, [key]: value });
-    if (key === "siteVisitSchedulingEnabled" || key === "installationSchedulingEnabled") {
-      try {
-        await updateAppSettings({ [key]: value });
-      } catch (e) {
-        console.error("Failed to save app settings", e);
-        // revert local state on failure
-        setSettings({ ...settings, [key]: !value });
-      }
-    }
   };
 
   const setInvoiceField = (key: keyof InvoiceProfile, value: string) => {
@@ -155,7 +189,7 @@ export function SettingsViewNew({ initialAppSettings }: SettingsViewNewProps) {
   };
 
   return (
-    <div style={{ padding: "32px", background: "#f8fafc", minHeight: "100vh" }}>
+    <div style={{ padding: "32px", background: "#f8fafc", minHeight: "100vh", paddingBottom: "120px" }}>
       <div style={{ maxWidth: "900px", margin: "0 auto" }}>
         {/* Header */}
         <div style={{ marginBottom: "32px" }}>
@@ -238,9 +272,14 @@ export function SettingsViewNew({ initialAppSettings }: SettingsViewNewProps) {
             <div style={{ display: "grid", gap: "16px" }}>
               {section.fields.map((field) => (
                 <div key={field.key}>
-                  <label style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a", marginBottom: "6px", display: "block" }}>
+                  <label style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a", marginBottom: "description" in field && field.description ? "4px" : "6px", display: "block" }}>
                     {field.label}
                   </label>
+                  {"description" in field && field.description && (
+                    <div style={{ fontSize: "12px", color: "#64748b", marginBottom: "10px", lineHeight: "1.4", maxWidth: "600px" }}>
+                      {field.description}
+                    </div>
+                  )}
                   {field.type === "toggle" ? (
                     <button
                       onClick={() => handleChange(field.key, !settings[field.key as keyof typeof settings])}
@@ -272,6 +311,31 @@ export function SettingsViewNew({ initialAppSettings }: SettingsViewNewProps) {
                         }}
                       />
                     </button>
+                  ) : field.key === "address" && isLoaded ? (
+                    <Autocomplete onLoad={onLoad} onPlaceChanged={onPlaceChanged}>
+                      <input
+                        type={field.type}
+                        value={settings[field.key as keyof typeof settings] as string}
+                        onChange={(e) => handleChange(field.key, e.target.value)}
+                        style={{
+                          width: "100%",
+                          padding: "10px 12px",
+                          border: "1px solid #e2e8f0",
+                          borderRadius: "8px",
+                          fontSize: "13px",
+                          fontFamily: "inherit",
+                          transition: "all 0.2s",
+                        }}
+                        onFocus={(e) => {
+                          e.currentTarget.style.borderColor = "#94a3b8";
+                          e.currentTarget.style.boxShadow = "0 0 0 3px rgba(148, 163, 184, 0.1)";
+                        }}
+                        onBlur={(e) => {
+                          e.currentTarget.style.borderColor = "#e2e8f0";
+                          e.currentTarget.style.boxShadow = "none";
+                        }}
+                      />
+                    </Autocomplete>
                   ) : (
                     <input
                       type={field.type}
@@ -504,14 +568,26 @@ export function SettingsViewNew({ initialAppSettings }: SettingsViewNewProps) {
 
         {/* Save Button */}
         <button
-          onClick={() => {
+          onClick={async () => {
             setSaveStatus("saving");
-            setTimeout(() => {
+            try {
+              await Promise.all([
+                updateCompanyDetails(settings.companyName, settings.address),
+                updateAppSettings({
+                  siteVisitSchedulingEnabled: settings.siteVisitSchedulingEnabled,
+                  installationSchedulingEnabled: settings.installationSchedulingEnabled,
+                  enableFinalProduct: settings.enableFinalProduct,
+                }),
+              ]);
+              setInitialSettings(settings);
               setSaveStatus("saved");
               setTimeout(() => setSaveStatus("idle"), 3000);
-            }, 800);
+            } catch (err) {
+              console.error(err);
+              setSaveStatus("idle");
+            }
           }}
-          disabled={saveStatus === "saving"}
+          disabled={saveStatus === "saving" || !hasUnsavedChanges}
           style={{
             width: "100%",
             padding: "14px",
@@ -527,13 +603,7 @@ export function SettingsViewNew({ initialAppSettings }: SettingsViewNewProps) {
             justifyContent: "center",
             gap: "8px",
             transition: "all 0.3s",
-            opacity: saveStatus === "saving" ? 0.7 : 1,
-          }}
-          onMouseEnter={(e) => {
-            if (saveStatus !== "saved") e.currentTarget.style.background = "var(--color-primary-container)";
-          }}
-          onMouseLeave={(e) => {
-            if (saveStatus !== "saved") e.currentTarget.style.background = "var(--color-primary)";
+            opacity: saveStatus === "saving" || !hasUnsavedChanges ? 0.7 : 1,
           }}
         >
           {saveStatus === "saving" ? (
@@ -546,29 +616,98 @@ export function SettingsViewNew({ initialAppSettings }: SettingsViewNewProps) {
         </button>
       </div>
 
-      {/* Floating Notification Toast */}
+      {/* Unsaved Changes Banner */}
       <div style={{
         position: "fixed",
-        bottom: saveStatus === "saved" ? "32px" : "-100px",
-        left: "50%",
-        transform: "translateX(-50%)",
-        background: "#0f172a",
+        bottom: hasUnsavedChanges && saveStatus !== "saved" ? "0" : "-100px",
+        left: 0,
+        right: 0,
+        background: "#ef4444",
         color: "white",
-        padding: "12px 24px",
-        borderRadius: "9999px",
-        fontSize: "14px",
-        fontWeight: "600",
+        padding: "16px 32px",
         display: "flex",
         alignItems: "center",
-        gap: "8px",
-        boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
+        justifyContent: "center",
+        gap: "24px",
+        boxShadow: "0 -10px 15px -3px rgba(0, 0, 0, 0.1)",
         transition: "bottom 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
-        zIndex: 50
+        zIndex: 50,
       }}>
-        <div style={{ width: "20px", height: "20px", background: "#10b981", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        <div style={{ fontSize: "16px", fontWeight: "700" }}>
+          You have unsaved changes. Not saved yet!
         </div>
-        Settings successfully saved!
+        <button
+          onClick={async () => {
+            setSaveStatus("saving");
+            try {
+              await Promise.all([
+                updateCompanyDetails(settings.companyName, settings.address),
+                updateAppSettings({
+                  siteVisitSchedulingEnabled: settings.siteVisitSchedulingEnabled,
+                  installationSchedulingEnabled: settings.installationSchedulingEnabled,
+                  enableFinalProduct: settings.enableFinalProduct,
+                }),
+              ]);
+              setInitialSettings(settings);
+              setSaveStatus("saved");
+              setTimeout(() => setSaveStatus("idle"), 3000);
+            } catch (err) {
+              console.error(err);
+              setSaveStatus("idle");
+            }
+          }}
+          disabled={saveStatus === "saving"}
+          style={{
+            padding: "10px 24px",
+            background: "white",
+            color: "#ef4444",
+            border: "none",
+            borderRadius: "9999px",
+            fontSize: "14px",
+            fontWeight: "800",
+            cursor: saveStatus === "saving" ? "not-allowed" : "pointer",
+            boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+            transition: "all 0.2s"
+          }}
+        >
+          {saveStatus === "saving" ? "Saving..." : "Save Now"}
+        </button>
+      </div>
+
+      {/* Enhanced Floating Notification Toast */}
+      <div style={{
+        position: "fixed",
+        bottom: saveStatus === "saved" ? "40px" : "-100px",
+        left: "50%",
+        transform: "translateX(-50%)",
+        background: "rgba(255, 255, 255, 0.9)",
+        backdropFilter: "blur(10px)",
+        color: "#064e3b",
+        padding: "16px 32px",
+        borderRadius: "20px",
+        fontSize: "15px",
+        fontWeight: "700",
+        display: "flex",
+        alignItems: "center",
+        gap: "12px",
+        boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04), inset 0 0 0 1px rgba(16, 185, 129, 0.2)",
+        transition: "bottom 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)",
+        zIndex: 60
+      }}>
+        <div style={{ 
+          width: "28px", 
+          height: "28px", 
+          background: "#10b981", 
+          borderRadius: "50%", 
+          display: "flex", 
+          alignItems: "center", 
+          justifyContent: "center",
+          color: "white",
+          boxShadow: "0 2px 5px rgba(16, 185, 129, 0.4)"
+        }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        </div>
+        Settings successfully updated
       </div>
 
       {/* Password Modal */}
