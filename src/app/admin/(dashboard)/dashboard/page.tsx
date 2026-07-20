@@ -18,6 +18,7 @@ export default async function AdminDashboardPage() {
     customerId: o.customer_id,
     customerName: o.business_name || "",
     stage: o.stage,
+    stageStatus: o.stage_status || "Normal",
     health: o.health || "Active",
     dateCreated: o.date_created,
     orderCode: o.order_id || o.id,

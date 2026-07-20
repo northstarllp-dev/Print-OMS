@@ -350,12 +350,12 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
       
       {/* ── ADMIN OVERRIDE BANNER ── */}
       {baseFrozen && currentUserRole === "Admin" && setAdminOverrideUnlocked && (
-        <div className={`p-4 rounded-xl border flex items-center justify-between transition-colors ${adminOverrideUnlocked ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}>
-          <div className="flex items-center gap-3">
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${adminOverrideUnlocked ? 'bg-amber-100 text-amber-600' : 'bg-slate-200 text-slate-500'}`}>
+        <div className={`p-4 rounded-xl border flex flex-col md:flex-row md:items-center gap-3 md:justify-between transition-colors ${adminOverrideUnlocked ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}>
+          <div className="flex items-start md:items-center gap-3 min-w-0">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${adminOverrideUnlocked ? 'bg-amber-100 text-amber-600' : 'bg-slate-200 text-slate-500'}`}>
               <Shield size={16} />
             </div>
-            <div>
+            <div className="min-w-0">
               <h4 className={`text-sm font-bold ${adminOverrideUnlocked ? 'text-amber-900' : 'text-slate-700'}`}>Admin God Mode</h4>
               <p className={`text-xs ${adminOverrideUnlocked ? 'text-amber-700' : 'text-slate-500'}`}>
                 {adminOverrideUnlocked 
@@ -366,7 +366,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
           </div>
           <button
             onClick={() => setAdminOverrideUnlocked(!adminOverrideUnlocked)}
-            className={`px-4 py-2 rounded-lg text-xs font-bold transition-colors ${
+            className={`px-4 py-2.5 rounded-lg text-xs font-bold transition-colors w-full md:w-auto shrink-0 ${
               adminOverrideUnlocked 
                 ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-xs' 
                 : 'bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 shadow-3xs'
@@ -623,7 +623,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
                         e.preventDefault();
                         removeSignLocation(loc.id);
                       }}
-                      className={`ml-1.5 w-4 h-4 rounded-full flex items-center justify-center text-[12px] font-bold transition-colors focus:outline-none ${isSelected ? "text-slate-400 hover:text-red-600 hover:bg-red-50" : "text-slate-400 hover:text-red-600 hover:bg-slate-200"}`}
+                      className={`ml-1.5 w-7 h-7 rounded-full flex items-center justify-center text-[12px] font-bold transition-colors focus:outline-none ${isSelected ? "text-slate-400 hover:text-red-600 hover:bg-red-50" : "text-slate-400 hover:text-red-600 hover:bg-slate-200"}`}
                       title="Remove item"
                     >
                       ×
@@ -1246,30 +1246,30 @@ const SectionCard: React.FC<{
   extra?: React.ReactNode;
 }> = ({ title, icon, children, isCollapsed, onToggle, extra }) => (
   <div className="bg-white border border-slate-200/70 rounded-2xl shadow-xs overflow-hidden transition-all duration-200 hover:border-slate-300/80">
-    <div className="w-full px-5 py-4 flex items-center justify-between bg-slate-50/30 hover:bg-slate-50/70 border-b border-slate-100 transition-colors">
+    <div className="w-full px-3 sm:px-5 py-4 flex items-center justify-between bg-slate-50/30 hover:bg-slate-50/70 border-b border-slate-100 transition-colors">
       <button
         onClick={onToggle}
-        className="flex-1 text-left flex items-center justify-between focus:outline-none"
+        className="flex-1 text-left flex items-center justify-between focus:outline-none min-w-0 gap-2"
       >
-        <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-          {icon && <span className="text-base">{icon}</span>}
-          {title}
+        <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 min-w-0">
+          {icon && <span className="text-base shrink-0">{icon}</span>}
+          <span className="truncate">{title}</span>
         </h3>
         {!extra && (
-          isCollapsed ? <ChevronDown size={18} className="text-slate-400 transition-transform duration-200" /> : <ChevronUp size={18} className="text-slate-400 transition-transform duration-200" />
+          isCollapsed ? <ChevronDown size={18} className="text-slate-400 transition-transform duration-200 shrink-0" /> : <ChevronUp size={18} className="text-slate-400 transition-transform duration-200 shrink-0" />
         )}
       </button>
       {extra && (
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 shrink-0">
           {extra}
-          <button onClick={onToggle} className="focus:outline-none">
+          <button onClick={onToggle} className="focus:outline-none p-1">
             {isCollapsed ? <ChevronDown size={18} className="text-slate-400" /> : <ChevronUp size={18} className="text-slate-400" />}
           </button>
         </div>
       )}
     </div>
     {!isCollapsed && (
-      <div className="px-5 pb-5">
+      <div className="px-3 sm:px-5 pb-5">
         {children}
       </div>
     )}
@@ -1320,7 +1320,7 @@ const SitePhotoUploader: React.FC<{
           {photos.map((url, idx) => (
             <div key={url} className="relative group w-24 h-24 rounded-xl overflow-hidden border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
               <img src={url} alt={`Site photo ${idx + 1}`} className="w-full h-full object-cover" />
-              <div className="absolute inset-0 bg-slate-900/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+              <div className="absolute inset-0 bg-slate-900/70 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                 <button
                   onClick={(e) => { e.stopPropagation(); onView(idx); }}
                   className="w-7 h-7 rounded-full bg-white/20 hover:bg-white/40 flex items-center justify-center text-white transition-colors"

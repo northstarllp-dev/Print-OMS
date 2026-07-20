@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Eye, Plus, SendHorizontal, Wrench, RefreshCw } from "lucide-react";
+import { Eye, Plus, SendHorizontal, Wrench, RefreshCw, Search, Filter, X } from "lucide-react";
 import {
   getTicketById,
   sendToServiceManagerAction,
@@ -42,6 +42,8 @@ export function ServiceTicketsView({
   const [selectedTicket, setSelectedTicket] = React.useState<ServiceTicketRecord | null>(null);
   const [isCreateOpen, setIsCreateOpen] = React.useState(false);
   const [search, setSearch] = React.useState("");
+  const [statusFilter, setStatusFilter] = React.useState("ALL");
+  const [mobileFiltersOpen, setMobileFiltersOpen] = React.useState(false);
 
   async function refreshTicket(ticketId: string) {
     const fresh = await getTicketById(ticketId);
@@ -57,15 +59,23 @@ export function ServiceTicketsView({
 
   const filteredTickets = tickets.filter((ticket) => {
     const text = search.toLowerCase();
-    if (!text) return true;
-    return (
+    const matchesSearch =
+      !text ||
       ticket.ticket_id.toLowerCase().includes(text) ||
       (ticket.customer_name || "").toLowerCase().includes(text) ||
       (ticket.customer_business_name || "").toLowerCase().includes(text) ||
       ticket.phone.toLowerCase().includes(text) ||
-      ticket.description.toLowerCase().includes(text)
-    );
+      ticket.description.toLowerCase().includes(text);
+    const matchesStatus = statusFilter === "ALL" || ticket.status === statusFilter;
+    return matchesSearch && matchesStatus;
   });
+
+  const resetFilters = () => {
+    setSearch("");
+    setStatusFilter("ALL");
+  };
+
+  const activeFilterCount = [statusFilter !== "ALL"].filter(Boolean).length;
 
   return (
     <div className="p-3 sm:p-4 md:p-8 bg-slate-50 min-h-screen">
@@ -97,23 +107,151 @@ export function ServiceTicketsView({
 
       {/* ─── Table Card ─── */}
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-        {/* Search */}
-        <div className="p-3 sm:p-4 border-b border-slate-200 flex flex-wrap gap-2 items-center">
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by ticket, customer, phone, description..."
-            className="w-full sm:max-w-[380px] flex-1 border border-slate-300 rounded-lg px-3 py-2.5 text-[13px] outline-none"
-          />
-          <button
-            title="Reset Filters"
-            type="button"
-            onClick={() => setSearch("")}
-            className="inline-flex items-center justify-center gap-1.5 px-3.5 h-[39px] bg-red-50 border border-red-200 rounded-lg text-red-600 font-semibold text-[13px] shrink-0"
-          >
-            <RefreshCw size={14} />
-            Reset
-          </button>
+        {/* Search & Filter Bar — Orders-style */}
+        <div className="p-3 sm:p-4 border-b border-slate-200">
+          <div className="lg:hidden flex items-center gap-2">
+            <div className="relative flex-1 min-w-0">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Search tickets…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full pl-[34px] pr-8 py-2.5 border border-slate-200 rounded-full text-[13px] outline-none focus:border-[var(--color-primary)] bg-slate-50"
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => setMobileFiltersOpen(true)}
+              className={`relative shrink-0 inline-flex items-center gap-1.5 h-10 px-3.5 rounded-full border text-[12px] font-bold transition-colors ${
+                activeFilterCount > 0
+                  ? "bg-slate-900 text-white border-slate-900"
+                  : "bg-white text-slate-700 border-slate-200"
+              }`}
+            >
+              <Filter size={14} />
+              Filters
+              {activeFilterCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-[var(--color-primary)] text-white text-[10px] font-extrabold flex items-center justify-center border-2 border-white">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              title="Reset filters"
+              onClick={resetFilters}
+              className="shrink-0 w-10 h-10 inline-flex items-center justify-center rounded-full bg-red-50 border border-red-200 text-red-600"
+            >
+              <RefreshCw size={14} />
+            </button>
+          </div>
+
+          {mobileFiltersOpen && (
+            <div className="lg:hidden fixed inset-0 z-[80]">
+              <button
+                type="button"
+                aria-label="Close filters"
+                className="absolute inset-0 bg-slate-900/40"
+                onClick={() => setMobileFiltersOpen(false)}
+              />
+              <div className="absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-2xl bg-white shadow-xl">
+                <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-white rounded-t-2xl">
+                  <h3 className="text-sm font-extrabold text-slate-900">Filters</h3>
+                  <button
+                    type="button"
+                    onClick={() => setMobileFiltersOpen(false)}
+                    className="w-8 h-8 inline-flex items-center justify-center rounded-full bg-slate-100 text-slate-500"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+                <div className="p-4 space-y-4">
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Status</label>
+                    <select
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value)}
+                      className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[13px] font-medium text-slate-700"
+                    >
+                      <option value="ALL">All Statuses</option>
+                      <option value="open">Open</option>
+                      <option value="with_service_manager">With Service Manager</option>
+                      <option value="closed">Closed</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="sticky bottom-0 flex gap-2 px-4 py-3 border-t border-slate-100 bg-white pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+                  <button
+                    type="button"
+                    onClick={resetFilters}
+                    className="flex-1 py-3 rounded-xl border border-slate-200 text-[13px] font-bold text-slate-600 bg-white"
+                  >
+                    Clear all
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMobileFiltersOpen(false)}
+                    className="flex-[1.4] py-3 rounded-xl bg-slate-900 text-white text-[13px] font-bold"
+                  >
+                    Show results
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="hidden lg:flex flex-row flex-wrap gap-3 items-center">
+            <div className="flex-1 relative min-w-[12rem]">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Search tickets…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full pl-[34px] pr-8 py-2.5 border border-slate-200 rounded-lg text-[13px] outline-none focus:border-[var(--color-primary)] focus:ring-[3px] focus:ring-[rgba(30,64,175,0.1)]"
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="px-3 py-2.5 bg-white border border-slate-200 rounded-lg text-[13px] font-medium text-slate-600"
+            >
+              <option value="ALL">All Statuses</option>
+              <option value="open">Open</option>
+              <option value="with_service_manager">With Service Manager</option>
+              <option value="closed">Closed</option>
+            </select>
+
+            <button
+              type="button"
+              title="Reset Filters"
+              onClick={resetFilters}
+              className="inline-flex items-center justify-center gap-1.5 h-[38px] px-3.5 bg-red-50 border border-red-200 rounded-lg text-red-600 text-[13px] font-semibold shrink-0 hover:bg-red-100"
+            >
+              <RefreshCw size={14} />
+              Reset
+            </button>
+          </div>
         </div>
 
         {/* Mobile cards */}

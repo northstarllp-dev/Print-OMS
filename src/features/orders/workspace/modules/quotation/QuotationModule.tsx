@@ -751,12 +751,12 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
     <div className="space-y-6" style={{ fontFamily: "inherit" }}>
       {/* ── ADMIN OVERRIDE BANNER ── */}
       {baseFrozen && currentUserRole === "Admin" && setAdminOverrideUnlocked && (
-        <div className={`p-4 rounded-xl border flex items-center justify-between transition-colors ${adminOverrideUnlocked ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}>
-          <div className="flex items-center gap-3">
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${adminOverrideUnlocked ? 'bg-amber-100 text-amber-600' : 'bg-slate-200 text-slate-500'}`}>
+        <div className={`p-4 rounded-xl border flex flex-col md:flex-row md:items-center gap-3 md:justify-between transition-colors ${adminOverrideUnlocked ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}>
+          <div className="flex items-start md:items-center gap-3 min-w-0">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${adminOverrideUnlocked ? 'bg-amber-100 text-amber-600' : 'bg-slate-200 text-slate-500'}`}>
               <Shield size={16} />
             </div>
-            <div>
+            <div className="min-w-0">
               <h4 className={`text-sm font-bold ${adminOverrideUnlocked ? 'text-amber-900' : 'text-slate-700'}`}>Admin God Mode</h4>
               <p className={`text-xs ${adminOverrideUnlocked ? 'text-amber-700' : 'text-slate-500'}`}>
                 {adminOverrideUnlocked 
@@ -767,7 +767,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
           </div>
           <button
             onClick={() => setAdminOverrideUnlocked(!adminOverrideUnlocked)}
-            className={`px-4 py-2 rounded-lg text-xs font-bold transition-colors ${
+            className={`px-4 py-2.5 rounded-lg text-xs font-bold transition-colors w-full md:w-auto shrink-0 ${
               adminOverrideUnlocked 
                 ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-xs' 
                 : 'bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 shadow-3xs'
@@ -779,10 +779,10 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
       )}
 
       {/* Header Row */}
-      <div className="flex items-center justify-between bg-slate-50 p-4 border border-slate-200 rounded-2xl">
-        <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col md:flex-row md:items-center gap-3 md:justify-between bg-slate-50 p-3 md:p-4 border border-slate-200 rounded-2xl">
+        <div className="flex flex-col gap-1.5 min-w-0">
           <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
-            <ClipboardList size={16} className="text-blue-600" />
+            <ClipboardList size={16} className="text-blue-600 shrink-0" />
             Quotation Builder
           </h3>
           <div className="flex items-center gap-1.5">
@@ -796,11 +796,11 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
             />
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 md:gap-3 flex-wrap">
           <button
             type="button"
             onClick={() => setShowDocumentPreview(true)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-bold text-slate-700 hover:bg-slate-50 shadow-sm"
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold text-slate-700 hover:bg-slate-50 shadow-sm w-full sm:w-auto"
           >
             <Eye size={13} />
             Preview / Print
@@ -890,7 +890,9 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                 </div>
               </div>
 
-              {/* Line Items Table Header */}
+              {/* Line Items Table — horizontal scroll on phone/tablet */}
+              <div className="overflow-x-auto -mx-0">
+              <div className="min-w-[640px]">
               <div
                 className="grid gap-2 px-4 py-2.5 text-[10px] font-black text-[#64748b] uppercase tracking-wider bg-slate-50 border-b border-slate-100"
                 style={{
@@ -1127,6 +1129,8 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                     </div>
                   );
                 })}
+              </div>
+              </div>
               </div>
 
               {/* Add Line inside section */}
@@ -1380,12 +1384,12 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
         const actionButtons = (
           <>
             {!isLocked ? (
-              <div className="flex items-center gap-2">
+              <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 w-full">
                 <button
                   type="button"
                   onClick={handleSave}
                   disabled={isPending}
-                  className="py-2 px-4 bg-slate-100 border border-slate-200 text-slate-700 hover:bg-slate-200 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm"
+                  className="py-2.5 px-4 bg-slate-100 border border-slate-200 text-slate-700 hover:bg-slate-200 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm w-full sm:w-auto"
                 >
                   {isPending ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
                   Save Draft
@@ -1396,7 +1400,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                     type="button"
                     onClick={() => setShowSendConfirm(true)}
                     disabled={isPending || sendingToCustomer || sections.length === 0}
-                    className="py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto"
                   >
                     {sendingToCustomer ? (
                       <Loader2 size={14} className="animate-spin" />
@@ -1412,10 +1416,13 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                     type="button"
                     onClick={() => setAdvanceConfirmType("override")}
                     disabled={isPending}
-                    className="py-2 px-5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50"
+                    className="py-2.5 px-4 md:px-5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 w-full sm:w-auto"
                   >
-                    <Sparkles size={13} />
-                    Approve without Customer & Advance
+                    <Sparkles size={13} className="shrink-0" />
+                    <span className="text-center leading-tight">
+                      <span className="md:hidden">Approve &amp; Advance</span>
+                      <span className="hidden md:inline">Approve without Customer &amp; Advance</span>
+                    </span>
                   </button>
                 )}
 
@@ -1423,16 +1430,16 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                   <button
                     type="button"
                     onClick={() => setAdvanceConfirmType("advance")}
-                    className="py-2 px-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm"
+                    className="py-2.5 px-4 md:px-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm w-full sm:w-auto"
                   >
-                    <Sparkles size={13} />
+                    <Sparkles size={13} className="shrink-0" />
                     {advanceButtonLabel}
                   </button>
                 )}
               </div>
             ) : (
-              <div className="flex items-center gap-2">
-                <div className="py-2 px-4 bg-slate-100 border border-slate-200 text-slate-500 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 shadow-sm">
+              <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 w-full">
+                <div className="py-2.5 px-4 bg-slate-100 border border-slate-200 text-slate-500 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 shadow-sm w-full sm:w-auto">
                   <Check size={14} /> Submitted & Locked
                 </div>
                 {canAdminApproveWithoutCustomer && (
@@ -1440,19 +1447,22 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                     type="button"
                     onClick={() => setAdvanceConfirmType("override")}
                     disabled={isPending}
-                    className="py-2 px-5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50"
+                    className="py-2.5 px-4 md:px-5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 w-full sm:w-auto"
                   >
-                    <Sparkles size={13} />
-                    Approve without Customer & Advance
+                    <Sparkles size={13} className="shrink-0" />
+                    <span className="text-center leading-tight">
+                      <span className="md:hidden">Approve &amp; Advance</span>
+                      <span className="hidden md:inline">Approve without Customer &amp; Advance</span>
+                    </span>
                   </button>
                 )}
                 {canMoveToNextStage && (
                   <button
                     type="button"
                     onClick={() => setAdvanceConfirmType("advance")}
-                    className="py-2 px-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm"
+                    className="py-2.5 px-4 md:px-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm w-full sm:w-auto"
                   >
-                    <Sparkles size={13} />
+                    <Sparkles size={13} className="shrink-0" />
                     {advanceButtonLabel}
                   </button>
                 )}
@@ -1463,7 +1473,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
 
         if (portalTarget) {
           return createPortal(
-            <div className="flex gap-2.5 items-center justify-end w-full">
+            <div className="flex flex-col sm:flex-row flex-wrap gap-2.5 items-stretch sm:items-center justify-end w-full">
               {actionButtons}
             </div>,
             portalTarget

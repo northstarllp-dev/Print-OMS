@@ -172,16 +172,6 @@ export function ProductionLayoutClient({ children, profile }: ProductionLayoutCl
           }}>
             <Logo width={isExpanded ? 160 : 32} height={40} />
           </div>
-          {isMobileMenuOpen && (
-            <button
-              type="button"
-              className="lg:hidden flex items-center justify-center p-2 rounded-lg text-slate-200 hover:bg-white/10 shrink-0"
-              onClick={() => setIsMobileMenuOpen(false)}
-              aria-label="Close menu"
-            >
-              <X size={20} />
-            </button>
-          )}
         </div>
 
         {/* Nav Items */}

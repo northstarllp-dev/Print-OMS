@@ -78,6 +78,7 @@ export default async function StaffDynamicQueuePage({
     businessName: o.business_name || "",
     customerId: o.customer_id,
     stage: o.stage,
+    stageStatus: o.stage_status || "Normal",
     health: o.health,
     productType: o.product_type,
     requirements: o.requirements,

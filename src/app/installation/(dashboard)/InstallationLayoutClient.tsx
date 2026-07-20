@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { 
   Bell, CheckCircle, AlertCircle, Info, LogOut,
   Lock, Loader2, Key,
-  ChevronLeft, ChevronRight, Hammer, MapPin, Menu, X
+  ChevronLeft, ChevronRight, Hammer, MapPin, Menu
 } from "lucide-react";
 import { Logo } from "@/components/ui/Logo";
 import { useRouter, usePathname } from "next/navigation";
@@ -174,16 +174,6 @@ export function InstallationLayoutClient({ children, profile }: InstallationLayo
           }}>
             <Logo width={isExpanded ? 160 : 32} height={40} />
           </div>
-          {isMobileMenuOpen && (
-            <button
-              type="button"
-              className="lg:hidden flex items-center justify-center p-2 rounded-lg text-slate-300 hover:bg-white/10"
-              onClick={() => setIsMobileMenuOpen(false)}
-              aria-label="Close menu"
-            >
-              <X size={18} />
-            </button>
-          )}
         </div>
 
         {/* Nav Items */}

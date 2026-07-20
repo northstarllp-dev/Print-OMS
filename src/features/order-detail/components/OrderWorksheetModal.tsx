@@ -1323,8 +1323,9 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                       alignItems: "center",
                       justifyContent: "center",
                       gap: "6px",
-                      height: "32px",
-                      padding: "0 10px",
+                      minHeight: "40px",
+                      height: "40px",
+                      padding: "0 12px",
                       borderRadius: "8px",
                       border: activeRightPanel === "timeline" ? "none" : "1px solid #E2E8F0",
                       background: activeRightPanel === "timeline" ? "var(--color-secondary)" : "transparent",
@@ -1362,11 +1363,12 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
               </div>
 
               {/* Customer Info & Actions — equal-width boxes; text may truncate */}
-              <div className="w-full md:w-auto md:min-w-[280px] lg:min-w-[360px]" style={{ display: "flex", alignItems: "stretch", gap: "6px", flex: "1 1 220px", minWidth: 0, maxWidth: "100%" }}>
+              <div className="w-full grid grid-cols-2 md:flex md:min-w-[280px] lg:min-w-[360px] gap-1.5 md:gap-[6px]" style={{ flex: "1 1 220px", minWidth: 0, maxWidth: "100%" }}>
                 {([
                   {
                     key: "customer",
                     label: "Customer Details",
+                    shortLabel: "Customer",
                     icon: User,
                     onClick: () => setShowCustomerPanel(true),
                     active: false,
@@ -1376,6 +1378,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                   {
                     key: "portal",
                     label: copiedLink ? "Copied!" : "Portal",
+                    shortLabel: copiedLink ? "Copied!" : "Portal",
                     icon: Share2,
                     onClick: handleCopyMagicLink,
                     active: false,
@@ -1385,6 +1388,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                   {
                     key: "admin",
                     label: "Admin Controls",
+                    shortLabel: "Admin",
                     icon: Lock,
                     onClick: () => setActiveStepTab(ADMIN_TAB),
                     active: activeStepTab === ADMIN_TAB,
@@ -1399,6 +1403,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                   {
                     key: "payments",
                     label: "Payments",
+                    shortLabel: "Payments",
                     icon: CreditCard,
                     onClick: () => setActiveStepTab(PAYMENTS_TAB),
                     active: activeStepTab === PAYMENTS_TAB,
@@ -1418,7 +1423,8 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                         style={{
                           flex: "1 1 0",
                           minWidth: 0,
-                          height: "34px",
+                          minHeight: "40px",
+                          height: "40px",
                           background: btn.active ? "#0F172A" : "transparent",
                           border: btn.active ? "none" : "1px solid #E2E8F0",
                           color: btn.active ? "white" : "#475569",
@@ -1437,7 +1443,10 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                         }}
                       >
                         <Icon size={13} className="shrink-0" />
-                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
+                        <span className="md:hidden" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
+                          {btn.shortLabel}
+                        </span>
+                        <span className="hidden md:inline" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
                           {btn.label}
                         </span>
                         {btn.badge}
@@ -1479,7 +1488,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                             if (canSelect) setActiveStepTab(step.tabIndex);
                           }}
                           disabled={!canSelect}
-                          className={`flex-1 min-w-0 flex items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-[12px] font-semibold transition-all focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed ${
+                          className={`shrink-0 min-w-[5.5rem] md:flex-1 md:min-w-0 flex items-center justify-center gap-1 rounded-lg px-2.5 py-2 text-[12px] font-semibold transition-all focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed ${
                             isActive
                               ? "bg-white text-[var(--color-secondary)] shadow-[0_1px_3px_rgba(0,0,0,0.1)] ring-1 ring-slate-900/5"
                               : isDone
@@ -1488,7 +1497,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                           }`}
                         >
                           {isDone && !isActive ? <Check size={12} strokeWidth={3} className="shrink-0" /> : null}
-                          <span className="truncate">{step.label}</span>
+                          <span className="whitespace-nowrap md:truncate">{step.label}</span>
                         </button>
                       );
                     })}
@@ -1596,26 +1605,26 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           </div>
 
           {/* Sticky footer actions — hidden entirely when the active stage is inaccessible */}
-          <div className="px-3 sm:px-5 py-3 flex flex-wrap items-center justify-end gap-2" style={{ background: "#F8FAFC", borderTop: "1px solid #E2E8F0", flexShrink: 0, boxShadow: "0 -2px 10px rgba(0,0,0,0.05)" }}>
+          <div className="px-3 sm:px-5 py-3 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center justify-end gap-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]" style={{ background: "#F8FAFC", borderTop: "1px solid #E2E8F0", flexShrink: 0, boxShadow: "0 -2px 10px rgba(0,0,0,0.05)" }}>
             {isActiveStageInaccessible ? (
               <span style={{ fontSize: "12px", fontWeight: "700", color: "#94A3B8", display: "flex", alignItems: "center", gap: "6px" }}>
                 <Lock size={13} /> No actions available for this stage
               </span>
             ) : activeStepTab === quoteTab ? (
               order.health && order.health !== "Active" ? (
-                <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+                <div className="flex flex-col sm:flex-row gap-2 sm:gap-2.5 items-stretch sm:items-center w-full sm:w-auto flex-wrap">
                   <span style={{ fontSize: "12px", color: "#64748B", fontWeight: "600" }}>
                     Order is <strong style={{ color: "#DC2626" }}>{order.health}</strong>
                   </span>
-                  <button onClick={handleReopen} style={{ padding: "7px 16px", background: "var(--color-secondary)", border: "none", color: "white", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
+                  <button onClick={handleReopen} className="w-full sm:w-auto justify-center" style={{ padding: "10px 16px", background: "var(--color-secondary)", border: "none", color: "white", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
                     <RefreshCw size={13} /> Reopen Order
                   </button>
                 </div>
               ) : (
-                <div id="modal-footer-portal" style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }} />
+                <div id="modal-footer-portal" className="flex flex-col sm:flex-row gap-2 sm:gap-2.5 items-stretch sm:items-center w-full sm:w-auto flex-wrap" />
               )
             ) : (
-              <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+              <div className="flex flex-col sm:flex-row gap-2 sm:gap-2.5 items-stretch sm:items-center w-full sm:w-auto flex-wrap">
                 {order.health && order.health !== "Active" ? (
                   <>
                     <span style={{ fontSize: "12px", color: "#64748B", fontWeight: "600", display: "none" }}>
@@ -1644,10 +1653,11 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                             <>
                               <button
                                 onClick={handleSaveDraft}
+                                className="w-full sm:w-auto justify-center"
                                 style={
                                   activeStepTab === designTab
                                     ? {
-                                        padding: "7px 16px",
+                                        padding: "10px 16px",
                                         border: "none",
                                         background: "var(--color-primary)",
                                         color: "white",
@@ -1660,7 +1670,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                                         gap: "6px",
                                       }
                                     : {
-                                        padding: "7px 16px",
+                                        padding: "10px 16px",
                                         border: "1px solid #E2E8F0",
                                         background: "white",
                                         color: "#64748B",
@@ -1686,7 +1696,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                                     activeStepTab === designTab &&
                                     !areAllDesignItemsApproved((dd.items || []) as any);
                                   return (
-                                  <div style={{ display: "inline-block" }}>
+                                  <div className="w-full sm:w-auto">
                                     <button
                                       onClick={() => {
                                         if (advanceBlocked) {
@@ -1703,8 +1713,9 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                                             ? siteVisitAdvanceTooltip
                                             : undefined
                                       }
+                                      className="w-full sm:w-auto justify-center"
                                       style={{
-                                        padding: "8px 18px",
+                                        padding: "10px 16px",
                                         background: advanceBlocked ? "#94A3B8" : "#22C55E",
                                         border: "none",
                                         color: "white",
@@ -1718,21 +1729,23 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                                         gap: "6px",
                                       }}
                                     >
-                                      <CheckCircle2 size={13} /> Request Admin Approval for {activeModuleTitle}
+                                      <CheckCircle2 size={13} className="shrink-0" />
+                                      <span className="md:hidden">Request Approval</span>
+                                      <span className="hidden md:inline">Request Admin Approval for {activeModuleTitle}</span>
                                     </button>
                                   </div>
                                   );
                                 })()
                               ) : (
                                 showAdminApproveButton && (
-                                  <div style={{ display: "inline-block" }}>
+                                  <div className="w-full sm:w-auto">
                                     <button onClick={() => {
                                       if ((activeStepTab === 0 || activeStepTab === designTab) && !canAdvanceSiteVisit) {
                                         alert(siteVisitAdvanceTooltip);
                                         return;
                                       }
                                       handleAdminApprove();
-                                    }} style={{ padding: "7px 16px", background: "#22C55E", border: "none", color: "white", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
+                                    }} className="w-full sm:w-auto justify-center" style={{ padding: "10px 16px", background: "#22C55E", border: "none", color: "white", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
                                       <Check size={13} /> Approve & Advance
                                     </button>
                                   </div>
@@ -1754,12 +1767,12 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
         {activeRightPanel && (
           <>
             <div
-              className="md:hidden fixed inset-0 z-[45] bg-slate-900/40 backdrop-blur-sm"
+              className="lg:hidden fixed inset-0 z-[45] bg-slate-900/40 backdrop-blur-sm"
               onClick={() => setActiveRightPanel(null)}
               aria-hidden
             />
-            <aside
-              className="fixed md:relative inset-y-0 right-0 z-[50] md:z-40 w-full max-w-[380px] md:w-[380px] md:max-w-none"
+                    <aside
+              className="fixed lg:relative inset-y-0 right-0 z-[50] lg:z-40 w-full max-w-[380px] lg:w-[380px] lg:max-w-none"
               style={{
                 flexShrink: 0,
                 borderLeft: "1px solid #E2E8F0",

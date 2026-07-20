@@ -62,6 +62,10 @@ const getHealthBadgeColor = (health: string) => {
   return colors[health] || "bg-slate-100 text-slate-600 border-slate-200";
 };
 
+function needsAdminApproval(stageStatus?: string | null) {
+  return !!stageStatus && stageStatus !== "Normal" && stageStatus.startsWith("Pending Admin Approval");
+}
+
 export function OrdersManagementDashboard({ 
   initialOrders,
   initialCustomers,
@@ -245,7 +249,7 @@ export function OrdersManagementDashboard({
   // KPI counts reflect the same toolbar filters as the list
   const activeOrders = toolbarFilteredOrders.filter(o => o.stage !== "Completed" && o.stage !== "Closed").length;
   const unassignedOrders = toolbarFilteredOrders.filter(o => o.stage !== "Completed" && o.stage !== "Closed" && (!o.assignedEmployees || o.assignedEmployees.length === 0)).length;
-  const pendingApprovals = toolbarFilteredOrders.filter(o => o.stageStatus && o.stageStatus !== "Normal").length;
+  const pendingApprovals = toolbarFilteredOrders.filter(o => needsAdminApproval(o.stageStatus)).length;
   const completedOrders = toolbarFilteredOrders.filter(o => o.stage === "Completed" || o.stage === "Closed").length;
 
   const myActiveOrders = toolbarFilteredOrders.filter(o => o.stage !== "Completed" && o.stage !== "Closed" && (o.assignedEmployees.includes(employeeName) || o.assignedEmployees.includes(currentEmployeeId))).length;
@@ -310,7 +314,7 @@ export function OrdersManagementDashboard({
     } else if (selectedKpi === "unassigned") {
       list = list.filter(o => o.stage !== "Completed" && o.stage !== "Closed" && (!o.assignedEmployees || o.assignedEmployees.length === 0));
     } else if (selectedKpi === "approvals") {
-      list = list.filter(o => o.stageStatus && o.stageStatus !== "Normal");
+      list = list.filter(o => needsAdminApproval(o.stageStatus));
     } else if (selectedKpi === "completed") {
       list = list.filter(o => o.stage === "Completed" || o.stage === "Closed");
     } else if (selectedKpi === "myactive") {

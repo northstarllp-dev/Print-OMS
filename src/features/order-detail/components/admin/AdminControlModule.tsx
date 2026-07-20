@@ -170,11 +170,11 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
                 </p>
               </div>
               
-                <div className="flex gap-2 shrink-0">
+                <div className="flex flex-col sm:flex-row flex-wrap gap-2 shrink-0 w-full sm:w-auto">
                   {onAdminReject && (
                     <button
                       onClick={() => setShowRejectModal(true)}
-                      className="px-4 py-2 bg-white border border-amber-300 text-amber-800 rounded-lg text-xs font-bold hover:bg-amber-100 transition-colors flex items-center gap-1.5"
+                      className="px-4 py-2.5 bg-white border border-amber-300 text-amber-800 rounded-lg text-xs font-bold hover:bg-amber-100 transition-colors flex items-center justify-center gap-1.5 w-full sm:w-auto"
                     >
                       <XCircle size={16} />
                       Request Changes
@@ -183,15 +183,16 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
                   {order.stage.startsWith("Site Visit") && onApproveWithWorkflowChoice ? (
                     <button
                       onClick={onApproveWithWorkflowChoice}
-                      className="px-4 py-2 bg-emerald-500 text-white rounded-lg text-xs font-bold hover:bg-emerald-600 transition-colors flex items-center gap-1.5"
+                      className="px-4 py-2.5 bg-emerald-500 text-white rounded-lg text-xs font-bold hover:bg-emerald-600 transition-colors flex items-center justify-center gap-1.5 w-full sm:w-auto"
                     >
                       <CheckCircle2 size={16} />
-                      Choose Workflow & Approve
+                      <span className="sm:hidden">Approve Workflow</span>
+                      <span className="hidden sm:inline">Choose Workflow &amp; Approve</span>
                     </button>
                   ) : (
                     <button 
                       onClick={onAdminApprove} 
-                      className="px-4 py-2 bg-emerald-500 text-white rounded-lg text-xs font-bold hover:bg-emerald-600 transition-colors flex items-center gap-1.5"
+                      className="px-4 py-2.5 bg-emerald-500 text-white rounded-lg text-xs font-bold hover:bg-emerald-600 transition-colors flex items-center justify-center gap-1.5 w-full sm:w-auto"
                     >
                       <CheckCircle2 size={16} />
                       {isJobDonePending ? "Review Payments & Complete" : "Approve Stage"}
@@ -221,8 +222,8 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
           </div>
         </div>
         <div className="p-5">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex-1">
+          <div className="flex flex-col md:flex-row md:items-start gap-3 md:justify-between">
+            <div className="flex-1 min-w-0">
               <h4 className="text-sm font-bold text-slate-800">Customer Magic Link</h4>
               <p className="text-xs text-slate-500 mt-1 leading-relaxed">
                 The customer accesses the portal via a secure magic link sent via WhatsApp or Email. Revoking invalidates all active links for this customer/order. Use this if the link is compromised or the customer relationship ends.
@@ -236,7 +237,7 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
             <button
               onClick={handleRevokePortalAccess}
               disabled={revoking}
-              className="shrink-0 flex items-center gap-2 px-4 py-2 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs font-bold hover:bg-red-100 transition-colors disabled:opacity-50"
+              className="w-full md:w-auto shrink-0 flex items-center justify-center gap-2 px-4 py-2.5 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs font-bold hover:bg-red-100 transition-colors disabled:opacity-50"
             >
               <ShieldOff size={14} />
               {revoking ? "Revoking..." : "Revoke Portal Access"}

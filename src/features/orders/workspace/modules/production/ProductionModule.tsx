@@ -225,12 +225,12 @@ export function ProductionModule({
 
       {/* ── ADMIN OVERRIDE BANNER ── */}
       {baseFrozen && currentUserRole === "Admin" && setAdminOverrideUnlocked && (
-        <div className={`mb-6 p-4 rounded-xl border flex items-center justify-between transition-colors ${adminOverrideUnlocked ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}>
-          <div className="flex items-center gap-3">
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${adminOverrideUnlocked ? 'bg-amber-100 text-amber-600' : 'bg-slate-200 text-slate-500'}`}>
+        <div className={`mb-6 p-4 rounded-xl border flex flex-col md:flex-row md:items-center gap-3 md:justify-between transition-colors ${adminOverrideUnlocked ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}>
+          <div className="flex items-start md:items-center gap-3 min-w-0">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${adminOverrideUnlocked ? 'bg-amber-100 text-amber-600' : 'bg-slate-200 text-slate-500'}`}>
               <Shield size={16} />
             </div>
-            <div>
+            <div className="min-w-0">
               <h4 className={`text-sm font-bold ${adminOverrideUnlocked ? 'text-amber-900' : 'text-slate-700'}`}>Admin God Mode</h4>
               <p className={`text-xs ${adminOverrideUnlocked ? 'text-amber-700' : 'text-slate-500'}`}>
                 {adminOverrideUnlocked 
@@ -241,7 +241,7 @@ export function ProductionModule({
           </div>
           <button
             onClick={() => setAdminOverrideUnlocked(!adminOverrideUnlocked)}
-            className={`px-4 py-2 rounded-lg text-xs font-bold transition-colors ${
+            className={`px-4 py-2.5 rounded-lg text-xs font-bold transition-colors w-full md:w-auto shrink-0 ${
               adminOverrideUnlocked 
                 ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-xs' 
                 : 'bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 shadow-3xs'
@@ -406,7 +406,7 @@ export function ProductionModule({
             <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider mb-4 border-b border-slate-100 pb-3 flex items-center gap-2">
               <FileText size={18} className="text-blue-600" /> Basic Information
             </h2>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-6 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 md:gap-6 text-xs">
               <div>
                 <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Order No</div>
                 <div className="font-bold text-slate-800">{order.orderCode}</div>
@@ -575,7 +575,7 @@ export function ProductionModule({
         <div className="space-y-8">
 
           {/* WORKSHOP PRODUCTION QUEUE CHECKLIST */}
-          <div className="prt-card p-6 sticky top-6">
+          <div className="prt-card p-4 md:p-6 lg:sticky lg:top-6">
             <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
               <CheckSquare size={18} className="text-blue-600" />
               <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider">

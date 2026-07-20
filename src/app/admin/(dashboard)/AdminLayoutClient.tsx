@@ -24,6 +24,12 @@ import {
   Search,
   Menu,
   X,
+  IndianRupee,
+  CalendarDays,
+  Boxes,
+  Shield,
+  Building2,
+  Plug,
 } from "lucide-react";
 import { Logo } from "@/components/ui/Logo";
 import { useRouter, usePathname } from "next/navigation";
@@ -58,6 +64,12 @@ const NAV_ITEMS = [
   { id: "/admin/reports", label: "Reports", icon: BarChart2 },
   { id: "/production/orders", label: "Production", icon: Factory, countKey: "production" },
   { id: "/installation/orders", label: "Installation", icon: Wrench, countKey: "installation" },
+  { id: "/admin/payments", label: "Payments", icon: IndianRupee },
+  { id: "/admin/calendar", label: "Calendar", icon: CalendarDays },
+  { id: "/admin/inventory", label: "Inventory", icon: Boxes },
+  { id: "/admin/roles", label: "Roles", icon: Shield },
+  { id: "/admin/branches", label: "Branches", icon: Building2 },
+  { id: "/admin/integrations", label: "Integrations", icon: Plug },
   { id: "/admin/products", label: "Products", icon: Package },
   { id: "/admin/settings", label: "Settings", icon: Settings },
 ] as const;
@@ -195,16 +207,6 @@ export function AdminLayoutClient({
           }}>
             <Logo width={isExpanded ? 160 : 32} height={40} />
           </div>
-          {isMobileMenuOpen && (
-            <button
-              type="button"
-              className="lg:hidden flex items-center justify-center p-2 rounded-lg text-slate-200 hover:bg-white/10 shrink-0"
-              onClick={() => setIsMobileMenuOpen(false)}
-              aria-label="Close menu"
-            >
-              <X size={20} />
-            </button>
-          )}
         </div>
 
         {/* Nav Items */}

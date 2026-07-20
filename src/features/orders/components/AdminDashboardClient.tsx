@@ -79,6 +79,15 @@ const PIPELINE_STAGE_GROUPS: Record<string, string[]> = {
   "Completed": ["Completed", "Closed"],
 };
 
+/** Orders locked for admin gatekeeping (see specs/admin-dashboard.md). */
+function needsAdminApproval(stageStatus?: string | null) {
+  return !!stageStatus && stageStatus !== "Normal" && stageStatus.startsWith("Pending Admin Approval");
+}
+
+function formatApprovalLabel(stageStatus: string) {
+  return stageStatus.replace(/^Pending Admin Approval:\s*/i, "").trim() || stageStatus;
+}
+
 /* ─── Component ─────────────────────────────────────────────────── */
 interface AdminDashboardClientProps {
   orders: any[];
@@ -136,7 +145,7 @@ export function AdminDashboardClient({
   const activeOrders = orders.filter((o) => o.stage !== "Completed" && o.stage !== "Closed").length;
   const newEnquiries = enquiries.filter((e) => e.status !== "Converted").length;
   
-  const pendingApprovals = orders.filter((o) => o.stageStatus && o.stageStatus !== "Normal").length;
+  const pendingApprovals = orders.filter((o) => needsAdminApproval(o.stageStatus)).length;
   const lostOrders = orders.filter((o) => o.health === "Lost").length;
 
   let revenue = 0;
@@ -267,7 +276,7 @@ export function AdminDashboardClient({
     if (selectedKpi === "completed")  return { type: "orders" as const, data: orders.filter(o => o.stage === "Completed" || o.stage === "Closed") };
     if (selectedKpi === "active")     return { type: "orders" as const, data: orders.filter(o => o.stage !== "Completed" && o.stage !== "Closed") };
     if (selectedKpi === "enquiries")  return { type: "enquiries" as const, data: enquiries.filter(e => e.status !== "Converted") };
-    if (selectedKpi === "approvals")  return { type: "orders" as const, data: orders.filter(o => o.stageStatus && o.stageStatus !== "Normal") };
+    if (selectedKpi === "approvals")  return { type: "orders" as const, data: orders.filter(o => needsAdminApproval(o.stageStatus)) };
     if (selectedKpi === "revenue")    return { type: "orders" as const, data: orders.filter(o => {
       const quotes = Array.isArray(o.quotations) ? o.quotations : (o.quotations ? [o.quotations] : []);
       return quotes.some((q: any) => q.status === "Approved");
@@ -609,11 +618,12 @@ export function AdminDashboardClient({
               ) : (
                 filteredRows.data.map((order: any) => {
                   const stageInfo = STAGE_LABEL[order.stage] || { label: order.stage, dot: "#94A3B8" };
+                  const awaitingApproval = needsAdminApproval(order.stageStatus);
                   return (
                     <div
                       key={order.id}
                       className="flex items-center gap-2 sm:gap-3 px-3 sm:px-6 py-3.5 border-b border-slate-100 last:border-b-0 cursor-pointer hover:bg-slate-50 transition-colors"
-                      onClick={() => router.push(`/admin/orders/${order.orderId || order.id}`)}
+                      onClick={() => router.push(`/admin/orders/${order.id}`)}
                     >
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -625,12 +635,23 @@ export function AdminDashboardClient({
                             color: order.health === "Active" ? "#16A34A" : "#DC2626",
                             border: `1px solid ${order.health === "Active" ? "#BBF7D0" : "#FECACA"}`,
                           }}>{order.health || "Active"}</span>
+                          {awaitingApproval && (
+                            <span style={{
+                              fontSize: "9px", fontWeight: "800", textTransform: "uppercase",
+                              padding: "2px 6px", borderRadius: "4px",
+                              background: "#FFFBEB",
+                              color: "#D97706",
+                              border: "1px solid #FDE68A",
+                            }}>
+                              Needs: {formatApprovalLabel(order.stageStatus)}
+                            </span>
+                          )}
                         </div>
                         <p className="m-0 mt-1 text-xs text-slate-500 truncate">
                           {(order.businessName || order.customerName || "No Business")} • {(order.clientName || "No Client")}
                         </p>
                         <div className="sm:hidden mt-1.5 flex items-center gap-1.5">
-                          <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: stageInfo.dot, flexShrink: 0 }} />
+                          <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: awaitingApproval ? "#D97706" : stageInfo.dot, flexShrink: 0 }} />
                           <span className="text-[11px] text-slate-600 font-semibold">{stageInfo.label}</span>
                         </div>
                       </div>
@@ -668,7 +689,7 @@ export function AdminDashboardClient({
                             <div style={{ position: "fixed", inset: 0, zIndex: 49 }} onClick={() => setOpenMenuId(null)} />
                             <div style={{ position: "absolute", right: 0, top: "calc(100% + 4px)", background: "white", border: "1px solid #E2E8F0", borderRadius: "8px", boxShadow: "0 4px 12px rgba(0,0,0,0.08)", zIndex: 50, minWidth: 140, overflow: "hidden" }}>
                               <button
-                                onClick={() => { setOpenMenuId(null); router.push(`/admin/orders/${order.orderId || order.id}`); }}
+                                onClick={() => { setOpenMenuId(null); router.push(`/admin/orders/${order.id}`); }}
                                 style={{ width: "100%", padding: "9px 14px", display: "flex", alignItems: "center", gap: "8px", background: "none", border: "none", fontSize: "12px", fontWeight: "600", color: "#0F172A", cursor: "pointer", textAlign: "left" }}
                                 onMouseEnter={e => e.currentTarget.style.background = "#F8FAFC"}
                                 onMouseLeave={e => e.currentTarget.style.background = "none"}
