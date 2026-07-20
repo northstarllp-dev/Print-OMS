@@ -346,11 +346,18 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
             <p className="text-xs text-amber-700 mt-1">
               Design work is locked while awaiting admin approval. Editing will resume when an admin requests changes or approves the stage.
             </p>
-            {stageAdminNotes && (
-              <p className="text-xs text-amber-800 mt-2 font-medium bg-white/60 border border-amber-200 rounded-lg p-2">
-                Admin feedback: {stageAdminNotes}
-              </p>
-            )}
+          </div>
+        </div>
+      )}
+
+      {!isPendingReview && stageAdminNotes && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
+          <AlertTriangle size={18} className="text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <h4 className="text-sm font-bold text-amber-900">Admin requested changes</h4>
+            <p className="text-xs text-amber-800 mt-2 font-medium bg-white/60 border border-amber-200 rounded-lg p-2 whitespace-pre-wrap">
+              {stageAdminNotes}
+            </p>
           </div>
         </div>
       )}

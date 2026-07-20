@@ -32,36 +32,33 @@ interface ReportCardProps {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SINGLE SOURCE OF TRUTH — color system used everywhere in Reports
+// App brand palette — matches globals.css (#1E40AF / #F97316 / #10B981 / #DC2626)
 // ─────────────────────────────────────────────────────────────────────────────
 export const C = {
-  // Primary semantic colors
-  revenue:    "#6366f1",  // indigo    — revenue, primary metric
-  orders:     "#0ea5e9",  // sky        — order counts
-  customers:  "#14b8a6",  // teal       — customers, retention
-  completion: "#22c55e",  // green      — completed / success
-  warning:    "#f59e0b",  // amber      — on-hold, conversion ref line
-  danger:     "#ef4444",  // red        — lost, danger
-  team:       "#8b5cf6",  // violet     — team / employees
-  tickets:    "#f97316",  // orange     — service tickets
-  sources:    "#ec4899",  // pink       — marketing / sources
-  neutral:    "#94a3b8",  // slate      — neutral / enquiries
+  revenue:    "#1E40AF",  // primary blue — revenue, primary metric
+  orders:     "#3B82F6",  // blue-500 — order counts
+  customers:  "#0EA5E9",  // sky — customers, retention
+  completion: "#10B981",  // success green
+  warning:    "#F97316",  // accent orange — on-hold, conversion ref
+  danger:     "#DC2626",  // error red
+  team:       "#1D4ED8",  // blue-700 — team / employees
+  tickets:    "#F97316",  // accent — service tickets
+  sources:    "#2563EB",  // blue-600 — marketing / sources
+  neutral:    "#94a3b8",  // slate — neutral / enquiries
 
-  // Tints (10% opacity fills for backgrounds)
-  revenueTint:   "#eef2ff",
-  ordersTint:    "#e0f2fe",
-  customersTint: "#ccfbf1",
-  teamTint:      "#ede9fe",
+  revenueTint:   "#dbeafe",  // primary-container
+  ordersTint:    "#eff6ff",
+  customersTint: "#e0f2fe",
+  teamTint:      "#dbeafe",
 
-  // Light bars / ghost bars
-  revenueMuted: "#c7d2fe",  // light indigo — muted/historical bars
-  teamMuted:    "#ddd6fe",  // light violet
+  revenueMuted: "#93c5fd",  // light blue — muted/historical bars
+  teamMuted:    "#bfdbfe",
 };
 
 // Ordered palette used for multi-segment charts (pie, funnel, stage)
 export const PALETTE = [
-  C.revenue, C.customers, C.warning, C.danger,
-  C.team, C.orders, C.completion, C.tickets, C.sources, C.neutral,
+  C.revenue, C.orders, C.warning, C.completion,
+  C.customers, C.team, C.tickets, C.sources, C.danger, C.neutral,
 ];
 
 // Semantic colors for order health
@@ -398,6 +395,7 @@ export function ReportCard({ title, description, type, data, className = "" }: R
       className={`bg-white rounded-2xl border border-slate-100 flex flex-col overflow-hidden ${className}`}
       style={{ boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.06)" }}
     >
+      <div style={{ height: 3, background: `linear-gradient(90deg, ${C.revenue} 0%, ${C.orders} 55%, ${C.warning} 100%)` }} />
       {/* Card Header */}
       <div style={{ padding: "18px 20px 12px", borderBottom: "1px solid #f8fafc", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
         <div>
@@ -407,9 +405,9 @@ export function ReportCard({ title, description, type, data, className = "" }: R
         <button
           onClick={() => exportToCSV(data, csvFilename)}
           title="Export CSV"
-          style={{ display: "flex", alignItems: "center", gap: 4, padding: "5px 10px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, cursor: "pointer", fontSize: 11, fontWeight: 600, color: "#64748b", flexShrink: 0, transition: "all 0.15s" }}
-          onMouseEnter={e => { e.currentTarget.style.background = "#f1f5f9"; e.currentTarget.style.color = "#334155"; }}
-          onMouseLeave={e => { e.currentTarget.style.background = "#f8fafc"; e.currentTarget.style.color = "#64748b"; }}
+          style={{ display: "flex", alignItems: "center", gap: 4, padding: "5px 10px", background: C.revenueTint, border: "1px solid #bfdbfe", borderRadius: 8, cursor: "pointer", fontSize: 11, fontWeight: 600, color: C.revenue, flexShrink: 0, transition: "all 0.15s" }}
+          onMouseEnter={e => { e.currentTarget.style.background = "#bfdbfe"; }}
+          onMouseLeave={e => { e.currentTarget.style.background = C.revenueTint; }}
         >
           <Download size={12} />
           CSV

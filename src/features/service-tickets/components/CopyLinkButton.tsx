@@ -13,7 +13,7 @@ export function CopyLinkButton({ companyId }: CopyLinkButtonProps) {
   const handleCopy = async () => {
     const base =
       typeof window !== "undefined" ? window.location.origin : "";
-    const shareLink = `${base}/service-ticket/${companyId}`;
+    const shareLink = `${base}/printoms/service-ticket/${companyId}`;
     try {
       await navigator.clipboard.writeText(shareLink);
       setCopied(true);

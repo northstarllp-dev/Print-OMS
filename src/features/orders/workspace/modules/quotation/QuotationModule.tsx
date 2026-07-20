@@ -626,7 +626,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
     "Quotation Approved",
   ].includes(orderStage);
   
-  const baseFrozen = !isQuotationStage || status === "Approved";
+  const baseFrozen = !isQuotationStage;
   const isLocked = baseFrozen && !adminOverrideUnlocked;
 
 
@@ -1416,6 +1416,17 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                   >
                     <Sparkles size={13} />
                     Approve without Customer & Advance
+                  </button>
+                )}
+
+                {canMoveToNextStage && (
+                  <button
+                    type="button"
+                    onClick={() => setAdvanceConfirmType("advance")}
+                    className="py-2 px-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm"
+                  >
+                    <Sparkles size={13} />
+                    {advanceButtonLabel}
                   </button>
                 )}
               </div>

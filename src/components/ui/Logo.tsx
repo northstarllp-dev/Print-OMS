@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import Image from "next/image";
+
 import { loadClientConfig, ClientConfig } from "@/config/loadClientConfig";
 
 interface LogoProps {
@@ -31,15 +31,28 @@ export function Logo({ className = "", forceText = false, width = 200, height = 
     const finalHeight = height * scale;
 
     return (
-      <div className={`flex items-center ${className}`} style={{ width: finalWidth, transition: "all 0.25s cubic-bezier(0.4,0,0.2,1)" }}>
-        <Image
-          src={client.logoUrl}
+      <div 
+        className={`flex items-center ${className}`} 
+        style={{ 
+          width: finalWidth, 
+          justifyContent: align === "center" ? "center" : align === "right" ? "flex-end" : "flex-start",
+          transition: "all 0.25s cubic-bezier(0.4,0,0.2,1)" 
+        }}
+      >
+        <img
+          src={`/printoms${client.logoUrl}`}
           alt={`${client.name} Logo`}
           width={finalWidth}
           height={finalHeight}
           className="object-contain"
-          style={{ maxHeight: finalHeight, maxWidth: "100%", objectPosition: align, transition: "all 0.25s cubic-bezier(0.4,0,0.2,1)" }}
-          priority
+          style={{
+            maxHeight: finalHeight,
+            maxWidth: "100%",
+            width: "auto",
+            height: "auto",
+            objectPosition: align,
+            transition: "all 0.25s cubic-bezier(0.4,0,0.2,1)",
+          }}
         />
       </div>
     );

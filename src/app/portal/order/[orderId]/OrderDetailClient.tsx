@@ -7,7 +7,6 @@ import {
   FileCheck,
   Layout,
   CreditCard,
-  MessageSquare,
   CheckCircle,
   Clock,
   Calendar,
@@ -117,7 +116,6 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
         { id: "quotation", label: "Quotation", icon: FileCheck },
         { id: "payments", label: "Payments", icon: CreditCard },
         { id: "billing", label: "Billing", icon: CreditCard },
-        { id: "chat", label: "Chat", icon: MessageSquare },
       ]
     : [
         { id: "site_visit", label: "Site Visit", icon: MapPin },
@@ -125,7 +123,6 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
         { id: "design", label: "Design", icon: Layout },
         { id: "payments", label: "Payments", icon: CreditCard },
         { id: "billing", label: "Billing", icon: CreditCard },
-        { id: "chat", label: "Chat", icon: MessageSquare },
       ];
 
   // Initial tab follows server-rendered stage; realtime advances switch forward only (below).
@@ -345,21 +342,21 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-6 py-6 flex items-center justify-between">
-          <div className="flex items-center gap-4">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3 sm:py-4 flex items-start sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2 sm:gap-4 min-w-0">
             <button
               onClick={handleBackToPortal}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors shrink-0"
             >
               <ArrowLeft size={20} className="text-gray-600" />
             </button>
-            <div>
-              <h1 className="text-2xl font-extrabold text-gray-900">{order.businessName} - {order.clientName}</h1>
-              <p className="text-sm text-gray-500">Order {order.orderCode || order.id}</p>
+            <div className="min-w-0">
+              <h1 className="text-base sm:text-2xl font-extrabold text-gray-900 truncate">{order.businessName} - {order.clientName}</h1>
+              <p className="text-xs sm:text-sm text-gray-500">Order {order.orderCode || order.id}</p>
             </div>
           </div>
-          <div className="flex items-center gap-4">
-            <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+          <div className="flex items-center gap-2 shrink-0">
+            <span className={`px-2.5 sm:px-3 py-1 rounded-full text-[10px] sm:text-xs font-bold whitespace-nowrap ${
               currentStageIndex >= 2
                 ? "bg-green-50 text-green-700 border border-green-200"
                 : "bg-blue-50 text-blue-700 border border-blue-200"
@@ -372,8 +369,8 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
 
       {/* Progress Bar */}
       <div className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-6 py-6">
-          <div className="flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6">
+          <div className="flex items-center gap-1 sm:justify-between overflow-x-auto pb-1 -mx-1 px-1">
             {stages.map((stage, idx) => {
               const isCompleted = idx < currentStageIndex;
               const isActive = idx === currentStageIndex;
@@ -384,7 +381,7 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
                 "Quotations": "quotation",
                 "Design": "design",
                 "Production": "billing",
-                "Installation": "chat"
+                "Installation": "billing"
               };
               
               const targetTab = tabMap[stage];
@@ -405,11 +402,11 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
                 <React.Fragment key={idx}>
                   <button
                     onClick={() => setActiveTab(targetTab)}
-                    className="flex flex-col items-center gap-2 focus:outline-none focus:ring-4 focus:ring-blue-200 rounded-xl p-2"
+                    className="flex flex-col items-center gap-1.5 sm:gap-2 focus:outline-none focus:ring-4 focus:ring-blue-200 rounded-xl p-1.5 sm:p-2 shrink-0"
                     style={{ cursor: "pointer" }}
                   >
                     <div
-                      className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${
+                      className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center transition-all ${
                         isTabActive || isActive
                           ? "bg-blue-500 text-white"
                           : isCompleted
@@ -420,7 +417,7 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
                       <Icon size={16} />
                     </div>
                     <span
-                      className={`text-sm font-semibold ${
+                      className={`text-[9px] sm:text-sm font-semibold max-w-[3.5rem] sm:max-w-none text-center leading-tight ${
                         isTabActive || isActive
                           ? "text-blue-600"
                           : isCompleted
@@ -432,7 +429,7 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
                     </span>
                   </button>
                   {idx < stages.length - 1 && (
-                    <div className={`flex-1 h-1 mx-4 rounded-full ${
+                    <div className={`hidden sm:block flex-1 h-1 mx-2 sm:mx-4 rounded-full ${
                       idx < currentStageIndex ? "bg-green-500" : "bg-gray-200"
                     }`} />
                   )}
@@ -445,15 +442,15 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
 
       {/* Tabs */}
       <div className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="flex gap-2 overflow-x-auto py-2">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6">
+          <div className="flex gap-2 overflow-x-auto py-2 scrollbar-none">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               return (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`px-5 py-3 rounded-lg text-sm font-semibold transition-all flex items-center gap-2 ${
+                  className={`px-3 sm:px-5 py-2.5 sm:py-3 rounded-lg text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 whitespace-nowrap shrink-0 ${
                     activeTab === tab.id
                       ? "bg-blue-50 text-blue-600 border border-blue-200"
                       : "text-gray-600 hover:bg-gray-100"
@@ -469,7 +466,7 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
       </div>
 
       {/* Tab Content */}
-      <main className="max-w-7xl mx-auto px-6 py-8">
+      <main className="max-w-7xl mx-auto px-3 sm:px-6 py-5 sm:py-8 pb-24">
         {activeTab === "site_visit" && (
           <div className="space-y-6">
             {(!sv.auditDate || isRescheduling) ? (
@@ -810,7 +807,6 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
         )}
         {activeTab === "payments" && <PaymentsTab orderId={order.id} />}
         {activeTab === "billing" && <BillingTab order={order} />}
-        {activeTab === "chat" && <ChatTab order={order} />}
       </main>
 
       {selectedProductInfo && (
@@ -869,50 +865,6 @@ function BillingTab({ order }: { order: Order }) {
             </button>
           </div>
         </div>
-      </div>
-    </div>
-  );
-}
-
-function ChatTab({ order }: { order: Order }) {
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 h-[500px] flex flex-col">
-      <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-        <h3 className="text-lg font-bold text-gray-900">Communication</h3>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        <div className="flex gap-3">
-          <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center text-xs font-bold">
-            A
-          </div>
-          <div className="max-w-[70%]">
-            <div className="bg-gray-100 rounded-xl p-3">
-              <p className="text-sm text-gray-900">Hi! Welcome to Printoms! We have received your order and will get started soon.</p>
-            </div>
-            <span className="text-xs text-gray-500 mt-1 block">Today at 10:00 AM</span>
-          </div>
-        </div>
-
-        <div className="flex gap-3 justify-end">
-          <div className="max-w-[70%] text-right">
-            <div className="bg-blue-600 text-white rounded-xl p-3">
-              <p className="text-sm">Great! Looking forward to the design.</p>
-            </div>
-            <span className="text-xs text-gray-500 mt-1 block">Today at 10:05 AM</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="p-4 border-t border-gray-200 flex gap-2">
-        <input
-          type="text"
-          placeholder="Type your message..."
-          className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-        <button className="px-6 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors">
-          Send
-        </button>
       </div>
     </div>
   );

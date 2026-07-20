@@ -203,7 +203,10 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
             <div className="py-6 flex flex-col items-center justify-center text-center">
               <CheckCircle2 size={32} className="text-emerald-400 mb-2" />
               <h4 className="text-sm font-bold text-slate-700">No Pending Approvals</h4>
-              <p className="text-xs text-slate-500 mt-1">The order is currently in the <span className="font-bold">{order.stage}</span> stage.</p>
+              <p className="text-xs text-slate-500 mt-1 max-w-sm leading-relaxed">
+                The order is in the <span className="font-bold">{order.stage}</span> stage with no staff push waiting.
+                To move forward yourself, use <span className="font-bold">Approve &amp; Advance</span> on the current stage tab.
+              </p>
             </div>
           )}
         </div>

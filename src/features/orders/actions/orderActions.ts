@@ -598,6 +598,11 @@ export async function adminApproveStageAction(orderId: string) {
 
   // Job Done always completes the order (payment review happens in the UI before this action).
   const nextStage = isJobDonePending ? "Completed" : (nextStageMap[o.stage] || o.stage);
+  if (!isJobDonePending && nextStage === o.stage) {
+    throw new Error(
+      `No next stage configured for "${o.stage}". Cannot approve advancement.`
+    );
+  }
   if (o.stage === "Design In Progress" && nextStage === "Design Approved") {
     await assertDesignReadyToLeaveInProgress(supabase, orderUuid);
   }
@@ -755,12 +760,12 @@ export async function addChatMessageAction(orderId: string, sender: string, mess
     .single();
   if (fetchError) throw new Error(fetchError.message);
 
-  const isSystem = sender === "System";
+  // Timeline-only — internal/customer chat was removed.
   await supabase.from("order_activity").insert({
     order_id: o.order_id || orderId,
-    activity_type: isSystem ? "timeline" : "internal",
+    activity_type: "timeline",
     actor_name: sender,
-    actor_role: isSystem ? "System" : sender === "Admin" ? "Admin" : "Employee",
+    actor_role: sender === "System" ? "System" : sender === "Admin" ? "Admin" : "Employee",
     content: message
   });
 }
@@ -788,6 +793,7 @@ export async function revalidateOrderPathsAction(orderId?: string) {
 /** Invalidate all staff/floor queue pages after assignment or order creation. */
 export async function revalidateStaffQueuePaths() {
   revalidatePath("/admin/orders");
+  revalidatePath("/admin/dashboard");
   revalidatePath("/staff/orders");
   revalidatePath("/staff/site-visit");
   revalidatePath("/staff/design");

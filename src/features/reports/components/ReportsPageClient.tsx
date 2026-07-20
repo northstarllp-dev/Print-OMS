@@ -94,9 +94,9 @@ function Tab({ label, icon: Icon, active, onClick }: { label: string; icon: Reac
         cursor: "pointer",
         fontSize: 13,
         fontWeight: active ? 700 : 500,
-        color: active ? "#6366f1" : "#64748b",
+        color: active ? C.revenue : "#64748b",
         background: active ? "#fff" : "transparent",
-        boxShadow: active ? "0 1px 4px rgba(99,102,241,0.12), 0 0 0 1px rgba(99,102,241,0.08)" : "none",
+        boxShadow: active ? "0 1px 4px rgba(30,64,175,0.12), 0 0 0 1px rgba(30,64,175,0.08)" : "none",
         transition: "all 0.2s",
       }}
     >
@@ -150,7 +150,7 @@ export function ReportsPageClient({ reportData, initialFrom, initialTo }: Report
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 40, height: 40, borderRadius: 12, background: "linear-gradient(135deg, #6366f1, #8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div style={{ width: 40, height: 40, borderRadius: 12, background: `linear-gradient(135deg, ${C.revenue}, ${C.orders})`, display: "flex", alignItems: "center", justifyContent: "center" }}>
               <BarChart2 size={20} color="#fff" />
             </div>
             <div>

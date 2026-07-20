@@ -13,6 +13,7 @@ interface InstallationScheduleModuleProps {
   customerSchedulingEnabled?: boolean;
   locationText?: string;
   locationLink?: string;
+  onScheduled?: (payload: { scheduledDate: string; scheduledTime: string }) => void;
 }
 
 export const InstallationScheduleModule: React.FC<InstallationScheduleModuleProps> = ({
@@ -24,6 +25,7 @@ export const InstallationScheduleModule: React.FC<InstallationScheduleModuleProp
   customerSchedulingEnabled = true,
   locationText = "",
   locationLink = "",
+  onScheduled,
 }) => {
   // confirmedDate/Time track the *saved* value — updated after a successful save
   const [confirmedDate, setConfirmedDate] = useState(initialScheduledDate);
@@ -63,6 +65,7 @@ export const InstallationScheduleModule: React.FC<InstallationScheduleModuleProp
       setConfirmedDate(selectedDate);
       setConfirmedTime(selectedTime);
       setIsRescheduling(false);
+      onScheduled?.({ scheduledDate: selectedDate, scheduledTime: selectedTime });
       setAlert({ message: "Installation scheduled successfully!", type: "success" });
     } catch (err: any) {
       setAlert({ message: err.message || "Failed to schedule", type: "error" });
@@ -139,14 +142,22 @@ export const InstallationScheduleModule: React.FC<InstallationScheduleModuleProp
                   at {confirmedTime}
                 </p>
                 {(locationText || locationLink) && (
-                  <div className="flex items-center gap-1.5 mt-2">
-                    <MapPin size={12} className="text-blue-500" />
+                  <div className="flex items-center gap-1.5 mt-2 min-w-0 max-w-full">
+                    <MapPin size={12} className="text-blue-500 shrink-0" />
                     {locationLink ? (
-                      <a href={locationLink} target="_blank" rel="noreferrer" className="text-[11px] font-bold text-blue-600 hover:underline">
+                      <a
+                        href={locationLink}
+                        target="_blank"
+                        rel="noreferrer"
+                        title={locationText || "View on Map"}
+                        className="text-[11px] font-bold text-blue-600 hover:underline truncate min-w-0"
+                      >
                         {locationText || "View on Map"}
                       </a>
                     ) : (
-                      <span className="text-[11px] font-bold text-blue-600">{locationText}</span>
+                      <span className="text-[11px] font-bold text-blue-600 truncate min-w-0" title={locationText}>
+                        {locationText}
+                      </span>
                     )}
                   </div>
                 )}

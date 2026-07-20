@@ -178,10 +178,13 @@ export interface DesignRecord {
 }
 
 export interface ProductionDetails {
-  procurementOfMaterials: boolean;
-  acpAndAcrylicCutting: boolean;
-  lightingAndWiring: boolean;
-  qualityCheck: boolean;
+  stage1?: boolean;
+  stage2?: boolean;
+  stage3?: boolean;
+  stage4?: boolean;
+  /** Dynamic workshop checklist progress keyed by settings item id. */
+  checklist?: Record<string, boolean>;
+  deadline?: string | null;
 }
 
 export interface InstallationDetails {

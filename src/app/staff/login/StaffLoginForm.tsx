@@ -148,7 +148,7 @@ export function StaffLoginForm({ employees }: StaffLoginFormProps) {
       
       <div style={{ position: "absolute", bottom: 24, textAlign: "center", width: "100%", fontSize: 13, color: "#64748B", pointerEvents: "none" }}>
         <a
-          href="https://www.thepolarislabs.com/"
+          href="https://printoms.thepolarislabs.com/"
           target="_blank"
           rel="noopener noreferrer"
           style={{

@@ -16,6 +16,7 @@ export interface InstallationModuleData {
 export interface InstallationModuleCallbacks {
   updateInstallationDetails: (orderId: string, details: any) => Promise<any>;
   onBack: () => void;
+  onInstallationScheduled?: (payload: { scheduledDate: string; scheduledTime: string }) => void;
 }
 
 type InstallationModuleProps = StageModuleProps<
@@ -42,9 +43,16 @@ export function InstallationModule({
   const {
     updateInstallationDetails,
     onBack,
+    onInstallationScheduled,
   } = callbacks;
   
-  const isInstallationStage = ["Installation Scheduled", "Installation In Progress", "Installation Pending", "Installation"].includes(order.stage);
+  const isInstallationStage = [
+    "Ready For Installation",
+    "Installation Scheduled",
+    "Installation In Progress",
+    "Installation Pending",
+    "Installation",
+  ].includes(order.stage);
   const baseFrozen = !isInstallationStage;
   const canEdit = (permission?.canEdit ?? true) && (!baseFrozen || adminOverrideUnlocked);
 
@@ -294,6 +302,7 @@ export function InstallationModule({
             isCompleted={!canAct}
             locationLink={gmapLink}
             locationText={siteAddress}
+            onScheduled={onInstallationScheduled}
           />
           
           {/* CHECKLIST */}

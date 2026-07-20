@@ -170,9 +170,6 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
   const isFrozen = (baseFrozen && !adminOverrideUnlocked) || !canEdit;
   
   const [isConfirmSkipOpen, setIsConfirmSkipOpen] = useState(false);
-  const [isChatOpen, setIsChatOpen] = useState(false);
-  const [chatMessage, setChatMessage] = useState("");
-  const [unreadCount, setUnreadCount] = useState(0);
 
   // State for manual scheduling
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
@@ -605,16 +602,16 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
         
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200/60 pb-3 w-full">
           <div 
-            className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent w-full"
-            style={{ WebkitOverflowScrolling: "touch" }}
+            className="flex items-center gap-1 overflow-x-auto p-1 bg-slate-100 border border-slate-200/60 rounded-xl w-full max-w-full"
+            style={{ WebkitOverflowScrolling: "touch", scrollbarWidth: "none", msOverflowStyle: "none" }}
           >
             {(siteVisit.locations || []).map((loc, idx) => {
               const isSelected = loc.id === selectedLocationId;
               return (
-                <div key={loc.id} className={`flex items-center flex-shrink-0 border rounded-full pl-3 pr-1 py-1 transition-all ${isSelected ? "bg-[var(--color-secondary)]/10 border-[var(--color-secondary)]" : "bg-white border-slate-200 hover:bg-slate-50"}`}>
+                <div key={loc.id} className={`flex items-center flex-shrink-0 rounded-lg px-3 py-1.5 transition-all ${isSelected ? "bg-white shadow-[0_1px_3px_rgba(0,0,0,0.1)] ring-1 ring-slate-900/5" : "hover:bg-slate-200/50"}`}>
                   <button
                     onClick={() => setSelectedLocationId(loc.id)}
-                    className={`text-xs font-bold transition-all focus:outline-none ${isSelected ? "text-[var(--color-secondary)] font-extrabold" : "text-slate-500"}`}
+                    className={`text-[13px] font-semibold transition-all focus:outline-none ${isSelected ? "text-[var(--color-secondary)]" : "text-slate-500 hover:text-slate-700"}`}
                   >
                     {loc.name || `Item-${idx + 1}`}
                   </button>
@@ -626,7 +623,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
                         e.preventDefault();
                         removeSignLocation(loc.id);
                       }}
-                      className={`ml-2 w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold transition-colors focus:outline-none ${isSelected ? "text-[var(--color-secondary)] hover:text-red-650 hover:bg-red-50" : "text-slate-400 hover:text-red-550 hover:bg-red-50"}`}
+                      className={`ml-1.5 w-4 h-4 rounded-full flex items-center justify-center text-[12px] font-bold transition-colors focus:outline-none ${isSelected ? "text-slate-400 hover:text-red-600 hover:bg-red-50" : "text-slate-400 hover:text-red-600 hover:bg-slate-200"}`}
                       title="Remove item"
                     >
                       ×
@@ -640,9 +637,9 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
             {!isFrozen && (
               <button
                 onClick={addSignLocation}
-                className="flex items-center gap-1 px-3.5 py-1.5 bg-white border border-dashed border-[var(--color-secondary)] text-[var(--color-secondary)] hover:bg-[var(--color-secondary)]/5 rounded-full text-xs font-bold transition-all flex-shrink-0 focus:outline-none"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-semibold text-slate-500 hover:text-slate-700 hover:bg-slate-200/50 rounded-lg transition-all flex-shrink-0 focus:outline-none ml-1"
               >
-                <Plus size={12} /> New Item
+                <Plus size={14} strokeWidth={2.5} /> New Item
               </button>
             )}
           </div>

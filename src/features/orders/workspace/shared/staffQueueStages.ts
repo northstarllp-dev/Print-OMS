@@ -52,8 +52,8 @@ const CURRENT_STAGES_BY_QUEUE: Record<OrderStage, readonly string[]> = {
     "Quotation Approved",
   ],
   design: ["Design In Progress", "Design Approved"],
-  production: ["Production", "Ready For Installation"],
-  installation: ["Installation Scheduled"],
+  production: ["Production"],
+  installation: ["Ready For Installation", "Installation Scheduled"],
   service_tickets: [], // Service tickets don't use order status pipeline
 };
 

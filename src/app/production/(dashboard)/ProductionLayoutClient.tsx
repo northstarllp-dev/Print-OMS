@@ -460,7 +460,7 @@ export function ProductionLayoutClient({ children, profile }: ProductionLayoutCl
             zIndex: 10,
           }}>
             <a
-              href="https://www.thepolarislabs.com/"
+              href="https://printoms.thepolarislabs.com/"
               target="_blank"
               rel="noopener noreferrer"
               style={{

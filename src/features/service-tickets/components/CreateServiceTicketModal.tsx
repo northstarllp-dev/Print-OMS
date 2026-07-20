@@ -10,6 +10,7 @@ import {
   type TicketPhoto,
 } from "@/features/service-tickets/actions/serviceTicketActions";
 import { loadClientConfig } from "@/config/loadClientConfig";
+import { Logo } from "@/components/ui/Logo";
 import { CopyLinkButton } from "./CopyLinkButton";
 
 interface CreateServiceTicketModalProps {
@@ -171,9 +172,7 @@ export function CreateServiceTicketModal({
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "32px" }}>
           <div>
-            {clientConfig?.logoUrl && (
-              <img src={clientConfig.logoUrl} alt="Logo" style={{ height: "32px", objectFit: "contain", marginBottom: "12px" }} />
-            )}
+            <Logo height={32} width={140} align="left" className="mb-3" />
             <h2 className="text-display-sm" style={{ margin: 0, color: "var(--color-primary)" }}>
               Create Service Ticket
             </h2>

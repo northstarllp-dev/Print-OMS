@@ -57,8 +57,8 @@ function NavigationLoaderInner() {
   if (!isLoading) return null;
 
   return (
-    <div className="fixed inset-0 z-[99999] flex flex-col items-center justify-center bg-white/90 backdrop-blur-sm transition-opacity duration-300">
-      <LoadingLines logoWidth={220} logoHeight={64} />
+    <div className="fixed inset-0 z-[99999] flex flex-col items-center justify-center bg-white/95">
+      <LoadingLines logoWidth={160} logoHeight={48} />
     </div>
   );
 }

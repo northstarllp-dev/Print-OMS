@@ -455,7 +455,7 @@ export function InstallationLayoutClient({ children, profile }: InstallationLayo
             zIndex: 10,
           }}>
             <a
-              href="https://www.thepolarislabs.com/"
+              href="https://printoms.thepolarislabs.com/"
               target="_blank"
               rel="noopener noreferrer"
               style={{

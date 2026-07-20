@@ -212,9 +212,9 @@ export function InstallationDashboardClient({
                         {visit.timeLabel ? ` · ${visit.timeLabel}` : ""}
                       </div>
                       {visit.address && (
-                        <div className="flex items-start gap-1.5 mt-1 text-[11px] text-slate-500 font-medium">
-                          <MapPin size={12} className="shrink-0 mt-0.5" />
-                          <span className="line-clamp-2">{visit.address}</span>
+                        <div className="flex items-center gap-1.5 mt-1 text-[11px] text-slate-500 font-medium min-w-0">
+                          <MapPin size={12} className="shrink-0" />
+                          <span className="truncate" title={visit.address}>{visit.address}</span>
                         </div>
                       )}
                     </div>

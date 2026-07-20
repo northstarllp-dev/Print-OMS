@@ -1,11 +1,18 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ArrowLeft, CheckSquare, FileText,
   AlertOctagon, Check, Image as ImageIcon, Sparkles, Loader2, Save, Timer, Shield
 } from "lucide-react";
 import type { StageModuleProps } from "../../shared/types";
+import { getAppSettings } from "@/features/settings/actions/settingsActions";
+import {
+  buildProductionChecklistUpdate,
+  DEFAULT_PRODUCTION_CHECKLIST_ITEMS,
+  resolveChecklistProgress,
+  type ProductionChecklistItem,
+} from "@/features/settings/productionChecklist";
 
 interface LocationMeasurement {
   id: string;
@@ -90,21 +97,36 @@ export function ProductionModule({
   const { updateProductionDetails, onBack } = callbacks;
   const [order, setOrder] = useState(initialOrder);
 
-  const isProductionStage = ["Production In Progress", "Production Pending", "Production", "Ready For Installation"].includes(order.stage);
+  const isProductionStage = ["Production In Progress", "Production Pending", "Production"].includes(order.stage);
   const baseFrozen = !isProductionStage;
   const canEdit = (permission?.canEdit ?? true) && (!baseFrozen || adminOverrideUnlocked);
   const canEditDeadline = canEdit;
 
   const [saving, setSaving] = useState(false);
   const [alert, setAlert] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [checklistItems, setChecklistItems] = useState<ProductionChecklistItem[]>(
+    DEFAULT_PRODUCTION_CHECKLIST_ITEMS
+  );
+
+  useEffect(() => {
+    getAppSettings()
+      .then((settings) => {
+        if (settings?.productionChecklistItems?.length) {
+          setChecklistItems(settings.productionChecklistItems);
+        }
+      })
+      .catch(console.error);
+  }, []);
 
   const pd = order.productionDetails || {
-    procurementOfMaterials: false,
-    acpAndAcrylicCutting: false,
-    lightingAndWiring: false,
-    qualityCheck: false,
+    stage1: false,
+    stage2: false,
+    stage3: false,
+    stage4: false,
+    checklist: {},
     deadline: null
   };
+  const checklistProgress = resolveChecklistProgress(pd, checklistItems);
 
   const [editingDeadline, setEditingDeadline] = useState(false);
   const [deadlineValue, setDeadlineValue] = useState(
@@ -142,14 +164,18 @@ export function ProductionModule({
   const dd = order.designDetails || order.design || { proofUrl: "", status: "Draft" };
   const mockImage = order.imageMockup || dd.proofUrl;
 
-  const handleCheckboxChange = async (key: "procurementOfMaterials" | "acpAndAcrylicCutting" | "lightingAndWiring" | "qualityCheck") => {
+  const handleCheckboxChange = async (key: string) => {
     if (!canEdit) return;
     setSaving(true);
     setAlert(null);
 
+    const nextProgress = {
+      ...checklistProgress,
+      [key]: !checklistProgress[key],
+    };
     const updatedPd = {
       ...pd,
-      [key]: !pd[key]
+      ...buildProductionChecklistUpdate(nextProgress, checklistItems),
     };
 
     // Optimistically update local state
@@ -159,7 +185,10 @@ export function ProductionModule({
     }));
 
     try {
-      await updateProductionDetails(order.id, updatedPd);
+      await updateProductionDetails(
+        order.id,
+        buildProductionChecklistUpdate(nextProgress, checklistItems)
+      );
       setAlert({ message: "Fabrication milestone updated successfully.", type: "success" });
     } catch (err: any) {
       console.error(err);
@@ -444,11 +473,13 @@ export function ProductionModule({
         </>
       )}
 
-      {/* View-Only Site Visit Banner */}
-      <div className="mb-6 bg-indigo-50/80 border border-indigo-100 text-indigo-700 p-4 rounded-xl text-xs font-semibold flex items-center gap-3 shadow-sm">
-        <Sparkles size={16} className="text-indigo-600 flex-shrink-0" />
-        You now have view-only access to the Site Visit stage. Click the 'Site Visit' tab in the timeline above to view full location photos and measurement details!
-      </div>
+      {/* View-Only Site Visit Banner — staff portals only (admins already have full Site Visit access) */}
+      {currentUserRole !== "Admin" && (
+        <div className="mb-6 bg-indigo-50/80 border border-indigo-100 text-indigo-700 p-4 rounded-xl text-xs font-semibold flex items-center gap-3 shadow-sm">
+          <Sparkles size={16} className="text-indigo-600 flex-shrink-0" />
+          You now have view-only access to the Site Visit stage. Click the 'Site Visit' tab in the timeline above to view full location photos and measurement details!
+        </div>
+      )}
 
       {/* Two Column Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
@@ -557,17 +588,12 @@ export function ProductionModule({
             </p>
 
             <div className="space-y-3.5">
-              {[
-                { key: "procurementOfMaterials", label: "1. Procurement of Materials", desc: "Sourcing and procuring all required raw materials" },
-                { key: "acpAndAcrylicCutting", label: "2. ACP & Acrylic Cutting", desc: "Precision cutting of ACP and acrylic sheets" },
-                { key: "lightingAndWiring", label: "3. Lighting & Wiring", desc: "Installing LED modules and electrical wiring" },
-                { key: "qualityCheck", label: "4. Quality Check", desc: "Final inspection and quality assurance" },
-              ].map(step => {
-                const isChecked = !!pd[step.key as keyof typeof pd];
+              {checklistItems.map((step, index) => {
+                const isChecked = !!checklistProgress[step.id];
                 return (
                   <div
-                    key={step.key}
-                    onClick={() => canEdit && !saving && handleCheckboxChange(step.key as any)}
+                    key={step.id}
+                    onClick={() => canEdit && !saving && handleCheckboxChange(step.id)}
                     className={`p-4 border rounded-xl flex items-start gap-3 select-none transition-all duration-200 ${
                       canEdit ? "cursor-pointer" : "cursor-not-allowed opacity-70"
                     } ${
@@ -586,8 +612,12 @@ export function ProductionModule({
                       </div>
                     </div>
                     <div>
-                      <div className="text-xs font-bold leading-none mb-1">{step.label}</div>
-                      <div className="text-[10px] text-slate-500 font-semibold">{step.desc}</div>
+                      <div className="text-xs font-bold leading-none mb-1">
+                        {index + 1}. {step.label}
+                      </div>
+                      {step.description ? (
+                        <div className="text-[10px] text-slate-500 font-semibold">{step.description}</div>
+                      ) : null}
                     </div>
                   </div>
                 );

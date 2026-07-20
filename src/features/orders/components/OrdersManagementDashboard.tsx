@@ -160,6 +160,7 @@ export function OrdersManagementDashboard({
   
   // State for right assignment panel
   const [assignPanelOrderId, setAssignPanelOrderId] = useState<string | null>(null);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   
   // State for options dropdown
   const [optionsOrderId, setOptionsOrderId] = useState<string | null>(null);
@@ -296,20 +297,44 @@ export function OrdersManagementDashboard({
     return true;
   });
 
+  const resetFilters = () => {
+    setDateFilterType("range");
+    setStartDate("");
+    setEndDate("");
+    setStageFilter("ALL");
+    setHealthFilter("ALL");
+    setAdminAssignedFilter("MINE");
+    setSearchTerm("");
+    setSelectedKpi(null);
+  };
+
+  const activeFilterCount = [
+    stageFilter !== "ALL",
+    healthFilter !== "ALL",
+    Boolean(startDate || endDate),
+    currentUserRole === "Admin" &&
+      clientConfig.features.enableAdminAssignment &&
+      adminAssignedFilter !== "MINE",
+    Boolean(selectedKpi),
+  ].filter(Boolean).length;
+
+  const showAdminAssignFilter =
+    currentUserRole === "Admin" && clientConfig.features.enableAdminAssignment;
+
   return (
     <div 
-      className={`p-4 md:p-8 bg-slate-50 min-h-screen transition-all duration-300 ${assignPanelOrderId ? "md:pr-[412px]" : ""}`}
+      className={`p-3 sm:p-4 md:p-8 bg-slate-50 min-h-screen transition-all duration-300 ${assignPanelOrderId ? "md:pr-[412px]" : ""}`}
     >
       {/* Header Section */}
-      <div style={{ marginBottom: "32px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "24px" }}>
-          <div>
+      <div className="mb-5 md:mb-8">
+        <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-start mb-4 md:mb-6">
+          <div className="min-w-0">
             {!hideTitle && (
               <>
-                <h1 style={{ fontSize: "28px", fontWeight: "800", color: "#0f172a", margin: "0 0 8px" }}>
+                <h1 className="text-xl sm:text-2xl md:text-[28px] font-extrabold text-slate-900 m-0 mb-1 md:mb-2">
                   {title || "Orders Management"}
                 </h1>
-                <p style={{ fontSize: "14px", color: "#64748b", margin: 0 }}>
+                <p className="text-xs sm:text-sm text-slate-500 m-0">
                   {subtitle || "Track and process initial project requests"}
                 </p>
               </>
@@ -319,20 +344,7 @@ export function OrdersManagementDashboard({
             type="button"
             onClick={handleRefresh}
             disabled={isRefreshing}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "8px",
-              padding: "10px 16px",
-              fontSize: "13px",
-              fontWeight: "600",
-              color: "#0f172a",
-              background: "white",
-              border: "1px solid #e2e8f0",
-              borderRadius: "10px",
-              cursor: isRefreshing ? "wait" : "pointer",
-              opacity: isRefreshing ? 0.7 : 1,
-            }}
+            className="inline-flex items-center justify-center gap-2 self-start px-3.5 py-2.5 text-xs sm:text-[13px] font-semibold text-slate-900 bg-white border border-slate-200 rounded-[10px] shrink-0 disabled:opacity-70 disabled:cursor-wait"
           >
             <RefreshCw size={16} className={isRefreshing ? "animate-spin" : ""} />
             Refresh
@@ -340,7 +352,7 @@ export function OrdersManagementDashboard({
         </div>
 
         {parsedEntryStage && (
-          <div style={{ marginBottom: "20px" }}>
+          <div className="mb-4 md:mb-5 -mx-1 px-1 overflow-x-auto">
             <QueueViewToggle
               value={queueView}
               onChange={setQueueView}
@@ -352,8 +364,39 @@ export function OrdersManagementDashboard({
           </div>
         )}
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Mobile: compact filter chips instead of large KPI cards */}
+        <div className="md:hidden flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
+          {stats.map((stat: any) => {
+            const isActive = selectedKpi === stat.filterKey;
+            return (
+              <button
+                key={stat.filterKey}
+                type="button"
+                onClick={() => setSelectedKpi(isActive ? null : stat.filterKey)}
+                className="shrink-0 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-bold border transition-colors"
+                style={{
+                  background: isActive ? `${stat.color}14` : "white",
+                  borderColor: isActive ? stat.color : "#e2e8f0",
+                  color: isActive ? stat.color : "#64748b",
+                }}
+              >
+                <span>{stat.label}</span>
+                <span
+                  className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-extrabold"
+                  style={{
+                    background: isActive ? stat.color : "#f1f5f9",
+                    color: isActive ? "white" : "#475569",
+                  }}
+                >
+                  {stat.value}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Desktop/tablet: Stats Cards */}
+        <div className="hidden md:grid grid-cols-2 lg:grid-cols-4 gap-4">
           {stats.map((stat: any, idx) => {
             const Icon = stat.icon;
             const isActive = selectedKpi === stat.filterKey;
@@ -406,30 +449,194 @@ export function OrdersManagementDashboard({
         {/* Table Section */}
         <div className="w-full lg:flex-1 bg-white rounded-xl border border-slate-200 overflow-visible min-w-0">
           {/* Search & Filter Bar */}
-        <div className="p-4 border-b border-slate-200 flex flex-col gap-3">
-          <div className="flex flex-col md:flex-row flex-wrap gap-3 md:items-center">
-            {/* Search */}
-            <div style={{ flex: 1, position: "relative" }}>
-              <Search size={15} style={{ position: "absolute", left: "11px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8", pointerEvents: "none" }} />
+        <div className="p-3 sm:p-4 border-b border-slate-200">
+          {/* Mobile: Airbnb-style — search + Filters chip + icon reset */}
+          <div className="md:hidden flex items-center gap-2">
+            <div className="relative flex-1 min-w-0">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
               <input
                 type="text"
-                placeholder="Search by order ID, project name or customer…"
+                placeholder="Search orders…"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                style={{ width: "100%", padding: "9px 32px 9px 34px", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "13px", fontFamily: "inherit", transition: "all 0.2s", outline: "none", boxSizing: "border-box" }}
-                onFocus={(e) => { e.currentTarget.style.borderColor = "var(--color-primary)"; e.currentTarget.style.boxShadow = "0 0 0 3px rgba(30,64,175,0.1)"; }}
-                onBlur={(e) => { e.currentTarget.style.borderColor = "#e2e8f0"; e.currentTarget.style.boxShadow = "none"; }}
+                className="w-full pl-[34px] pr-8 py-2.5 border border-slate-200 rounded-full text-[13px] outline-none focus:border-[var(--color-primary)] bg-slate-50"
               />
               {searchTerm && (
-                <button onClick={() => setSearchTerm("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => setMobileFiltersOpen(true)}
+              className={`relative shrink-0 inline-flex items-center gap-1.5 h-10 px-3.5 rounded-full border text-[12px] font-bold transition-colors ${
+                activeFilterCount > 0
+                  ? "bg-slate-900 text-white border-slate-900"
+                  : "bg-white text-slate-700 border-slate-200"
+              }`}
+            >
+              <Filter size={14} />
+              Filters
+              {activeFilterCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-[var(--color-primary)] text-white text-[10px] font-extrabold flex items-center justify-center border-2 border-white">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              title="Reset filters"
+              onClick={resetFilters}
+              className="shrink-0 w-10 h-10 inline-flex items-center justify-center rounded-full bg-red-50 border border-red-200 text-red-600"
+            >
+              <RefreshCw size={14} />
+            </button>
+          </div>
+
+          {/* Mobile filter sheet */}
+          {mobileFiltersOpen && (
+            <div className="md:hidden fixed inset-0 z-[80]">
+              <button
+                type="button"
+                aria-label="Close filters"
+                className="absolute inset-0 bg-slate-900/40"
+                onClick={() => setMobileFiltersOpen(false)}
+              />
+              <div className="absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-2xl bg-white shadow-xl">
+                <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-white rounded-t-2xl">
+                  <h3 className="text-sm font-extrabold text-slate-900">Filters</h3>
+                  <button
+                    type="button"
+                    onClick={() => setMobileFiltersOpen(false)}
+                    className="w-8 h-8 inline-flex items-center justify-center rounded-full bg-slate-100 text-slate-500"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+                <div className="p-4 space-y-4">
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Stage</label>
+                    <select
+                      value={stageFilter}
+                      onChange={(e) => setStageFilter(e.target.value)}
+                      className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[13px] font-medium text-slate-700"
+                    >
+                      <option value="ALL">All Stages</option>
+                      <option value="Site Visit">Site Visit</option>
+                      <option value="Quotation">Quotation</option>
+                      <option value="Designing">Designing</option>
+                      <option value="Production">Production</option>
+                      <option value="Installation">Installation</option>
+                      <option value="Completed">Completed</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Health</label>
+                    <select
+                      value={healthFilter}
+                      onChange={(e) => setHealthFilter(e.target.value)}
+                      className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[13px] font-medium text-slate-700"
+                    >
+                      <option value="ALL">All Health States</option>
+                      <option value="Active">Active</option>
+                      <option value="On Hold">On Hold</option>
+                      <option value="Lost">Lost</option>
+                      <option value="Cancelled">Cancelled</option>
+                      <option value="Completed">Completed</option>
+                    </select>
+                  </div>
+                  {showAdminAssignFilter && (
+                    <div>
+                      <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Assignment</label>
+                      <select
+                        value={adminAssignedFilter}
+                        onChange={(e) => setAdminAssignedFilter(e.target.value as "ALL" | "MINE")}
+                        className="w-full px-3 py-2.5 bg-[var(--color-primary-container,#eff6ff)] border-2 border-[var(--color-primary,#3b82f6)] rounded-xl text-[13px] font-bold text-[var(--color-primary,#1d4ed8)]"
+                      >
+                        <option value="ALL">All Assigned Admins</option>
+                        <option value="MINE">My Assigned Orders</option>
+                      </select>
+                    </div>
+                  )}
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Date range</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="date"
+                        value={startDate}
+                        onChange={(e) => {
+                          setDateFilterType("range");
+                          setStartDate(e.target.value);
+                        }}
+                        className="flex-1 min-w-0 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[13px] text-slate-700"
+                      />
+                      <span className="text-[12px] text-slate-400 font-medium">to</span>
+                      <input
+                        type="date"
+                        value={endDate}
+                        onChange={(e) => {
+                          setDateFilterType("range");
+                          setEndDate(e.target.value);
+                        }}
+                        className="flex-1 min-w-0 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[13px] text-slate-700"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="sticky bottom-0 flex gap-2 px-4 py-3 border-t border-slate-100 bg-white pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      resetFilters();
+                    }}
+                    className="flex-1 py-3 rounded-xl border border-slate-200 text-[13px] font-bold text-slate-600 bg-white"
+                  >
+                    Clear all
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMobileFiltersOpen(false)}
+                    className="flex-[1.4] py-3 rounded-xl bg-slate-900 text-white text-[13px] font-bold"
+                  >
+                    Show results
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Desktop / tablet: inline filters */}
+          <div className="hidden md:flex flex-row flex-wrap gap-3 items-center">
+            <div className="flex-1 relative min-w-[12rem]">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Search orders…"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-[34px] pr-8 py-2.5 border border-slate-200 rounded-lg text-[13px] outline-none focus:border-[var(--color-primary)] focus:ring-[3px] focus:ring-[rgba(30,64,175,0.1)]"
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
                   <X size={14} />
                 </button>
               )}
             </div>
 
-
-            {/* Stage filter */}
-            <select value={stageFilter} onChange={(e) => setStageFilter(e.target.value)} style={{ padding: "9px 12px", background: "white", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "13px", fontWeight: "500", color: "#475569", cursor: "pointer", outline: "none" }}>
+            <select
+              value={stageFilter}
+              onChange={(e) => setStageFilter(e.target.value)}
+              className="px-3 py-2.5 bg-white border border-slate-200 rounded-lg text-[13px] font-medium text-slate-600"
+            >
               <option value="ALL">All Stages</option>
               <option value="Site Visit">Site Visit</option>
               <option value="Quotation">Quotation</option>
@@ -439,30 +646,18 @@ export function OrdersManagementDashboard({
               <option value="Completed">Completed</option>
             </select>
 
-            {currentUserRole === "Admin" && clientConfig.features.enableAdminAssignment && (
-              <select 
-                value={adminAssignedFilter} 
-                onChange={(e) => setAdminAssignedFilter(e.target.value as "ALL" | "MINE")} 
-                style={{ 
-                  padding: "8px 12px", 
-                  background: "var(--color-primary-container, #eff6ff)", 
-                  border: "2px solid var(--color-primary, #3b82f6)", 
-                  borderRadius: "8px", 
-                  fontSize: "13px", 
-                  fontWeight: "700", 
-                  color: "var(--color-primary, #1d4ed8)", 
-                  cursor: "pointer", 
-                  outline: "none",
-                  boxShadow: "0 2px 4px rgba(0,0,0,0.05)"
-                }}
+            {showAdminAssignFilter && (
+              <select
+                value={adminAssignedFilter}
+                onChange={(e) => setAdminAssignedFilter(e.target.value as "ALL" | "MINE")}
+                className="px-3 py-2 bg-[var(--color-primary-container,#eff6ff)] border-2 border-[var(--color-primary,#3b82f6)] rounded-lg text-[13px] font-bold text-[var(--color-primary,#1d4ed8)]"
               >
                 <option value="ALL">All Assigned Admins</option>
                 <option value="MINE">My Assigned Orders</option>
               </select>
             )}
 
-            {/* Date Range Filter */}
-            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <div className="flex flex-wrap items-center gap-1.5">
               <input
                 type="date"
                 value={startDate}
@@ -470,9 +665,9 @@ export function OrdersManagementDashboard({
                   setDateFilterType("range");
                   setStartDate(e.target.value);
                 }}
-                style={{ padding: "8px 12px", background: "white", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "13px", color: "#475569", outline: "none" }}
+                className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-[13px] text-slate-600"
               />
-              <span style={{ fontSize: "13px", color: "#64748b", fontWeight: "500" }}>to</span>
+              <span className="text-[13px] text-slate-500 font-medium">to</span>
               <input
                 type="date"
                 value={endDate}
@@ -480,20 +675,17 @@ export function OrdersManagementDashboard({
                   setDateFilterType("range");
                   setEndDate(e.target.value);
                 }}
-                style={{ padding: "8px 12px", background: "white", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "13px", color: "#475569", outline: "none" }}
+                className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-[13px] text-slate-600"
               />
               {(startDate || endDate) && (
                 <button
+                  type="button"
                   onClick={() => {
                     setStartDate("");
                     setEndDate("");
                     setDateFilterType("all");
                   }}
-                  style={{
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    background: "white", border: "1px solid #e2e8f0", borderRadius: "8px", 
-                    cursor: "pointer", color: "#94A3B8", padding: "9px"
-                  }}
+                  className="flex items-center justify-center bg-white border border-slate-200 rounded-lg cursor-pointer text-slate-400 p-2.5"
                   title="Clear Dates"
                 >
                   <X size={14} />
@@ -501,8 +693,11 @@ export function OrdersManagementDashboard({
               )}
             </div>
 
-            {/* Health filter */}
-            <select value={healthFilter} onChange={(e) => setHealthFilter(e.target.value)} style={{ padding: "9px 12px", background: "white", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "13px", fontWeight: "500", color: "#475569", cursor: "pointer", outline: "none" }}>
+            <select
+              value={healthFilter}
+              onChange={(e) => setHealthFilter(e.target.value)}
+              className="px-3 py-2.5 bg-white border border-slate-200 rounded-lg text-[13px] font-medium text-slate-600"
+            >
               <option value="ALL">All Health States</option>
               <option value="Active">Active</option>
               <option value="On Hold">On Hold</option>
@@ -511,39 +706,11 @@ export function OrdersManagementDashboard({
               <option value="Completed">Completed</option>
             </select>
 
-            {/* Reset Button */}
             <button
+              type="button"
               title="Reset Filters"
-              onClick={() => {
-                setDateFilterType("range");
-                setStartDate("");
-                setEndDate("");
-                setStageFilter("ALL");
-                setHealthFilter("ALL");
-                setAdminAssignedFilter("MINE");
-                setSearchTerm("");
-                setSelectedKpi(null);
-              }}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: "0 14px",
-                background: "#fef2f2",
-                border: "1px solid #fecaca",
-                borderRadius: "8px",
-                cursor: "pointer",
-                color: "#dc2626",
-                outline: "none",
-                height: "38px",
-                transition: "all 0.2s",
-                fontWeight: "600",
-                fontSize: "13px",
-                gap: "6px",
-                flexShrink: 0
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = "#fee2e2"; e.currentTarget.style.borderColor = "#fca5a5"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = "#fef2f2"; e.currentTarget.style.borderColor = "#fecaca"; }}
+              onClick={resetFilters}
+              className="inline-flex items-center justify-center gap-1.5 h-[38px] px-3.5 bg-red-50 border border-red-200 rounded-lg text-red-600 text-[13px] font-semibold shrink-0 hover:bg-red-100"
             >
               <RefreshCw size={14} />
               Reset
@@ -551,10 +718,10 @@ export function OrdersManagementDashboard({
           </div>
         </div>
 
-        {/* Mobile card list */}
-        <div className="md:hidden divide-y divide-slate-100 min-h-[200px]">
+        {/* Mobile: compact inbox-style cards (not a tall divider stack) */}
+        <div className="md:hidden p-3 space-y-2.5 min-h-[200px] bg-slate-50/80">
           {filteredOrders.length === 0 ? (
-            <div className="py-12 px-4 text-center text-sm text-slate-500 font-medium">
+            <div className="py-12 px-4 text-center text-sm text-slate-500 font-medium bg-white rounded-xl border border-slate-200">
               No orders found matching your search.
             </div>
           ) : (
@@ -570,80 +737,85 @@ export function OrdersManagementDashboard({
               const visitDate = isInstallQueue ? inst?.scheduledDate : sv?.auditDate;
               const visitTime = isInstallQueue ? inst?.scheduledTime : sv?.auditTime;
               const mapAddress = sv?.customerAddress || sv?.siteAddress || sv?.site_address || null;
+              const title = order.businessName || order.clientName || "Order";
 
               return (
                 <button
                   key={order.id}
                   type="button"
                   onClick={() => router.push(resolveOrderHref(order))}
-                  className="w-full text-left p-4 hover:bg-slate-50 transition-colors"
+                  className="w-full text-left rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden active:scale-[0.99] transition-transform"
                 >
-                  <div className="flex items-start justify-between gap-3 mb-1.5">
-                    <div className="min-w-0">
-                      <div className="text-sm font-bold text-slate-900">{order.orderCode || order.id}</div>
-                      <div className="text-sm font-semibold text-slate-800 truncate mt-0.5">
-                        {order.businessName || order.clientName}
-                      </div>
-                      {order.businessName && order.clientName && (
-                        <div className="text-xs text-slate-500 truncate">{order.clientName}</div>
-                      )}
-                    </div>
-                    <span
-                      className={`shrink-0 inline-block px-2.5 py-1 rounded-full text-[10px] font-bold border ${getHealthBadgeColor(order.health || "Active")}`}
-                    >
-                      {order.health || "Active"}
-                    </span>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2 mt-2">
-                    <span
-                      style={{
-                        display: "inline-block",
-                        padding: "3px 10px",
-                        background: statusColor.bg,
-                        color: statusColor.text,
-                        borderRadius: "6px",
-                        fontSize: "10px",
-                        fontWeight: "700",
-                      }}
-                    >
-                      {statusColor.label}
-                    </span>
-                    <span className="text-[11px] text-slate-400 font-medium">{dateStr}</span>
-                  </div>
-
-                  {(visitDate && visitTime) ? (
-                    <div className="mt-2 rounded-lg bg-slate-50 border border-slate-100 px-3 py-2">
-                      <div className="text-xs font-bold text-slate-800">{visitDate} • {visitTime}</div>
-                      {mapAddress && (
-                        <div className="text-[11px] text-slate-500 mt-0.5 line-clamp-2">{mapAddress}</div>
-                      )}
-                    </div>
-                  ) : null}
-
-                  <div className="mt-3 flex items-center justify-between">
-                    <div className="flex items-center gap-1">
-                      {order.assignedEmployees?.slice(0, 4).map((empId: string, i: number) => {
-                        const staff = employees.find(e => e.id === empId);
-                        const name = staff ? staff.name : "Un";
-                        return (
-                          <div
-                            key={i}
-                            title={name}
-                            className="w-6 h-6 rounded-full bg-[var(--color-primary)] text-white flex items-center justify-center text-[9px] font-bold border-2 border-white"
-                            style={{ marginLeft: i > 0 ? "-6px" : "0" }}
-                          >
-                            {name.substring(0, 2).toUpperCase()}
+                  <div className="flex">
+                    <div
+                      className="w-1 shrink-0 self-stretch"
+                      style={{ background: statusColor.text }}
+                      aria-hidden
+                    />
+                    <div className="flex-1 min-w-0 p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <span className="text-[13px] font-extrabold text-slate-900">
+                              {order.orderCode || order.id}
+                            </span>
+                            <span
+                              className="inline-block px-2 py-0.5 rounded-md text-[10px] font-bold"
+                              style={{ background: statusColor.bg, color: statusColor.text }}
+                            >
+                              {statusColor.label}
+                            </span>
                           </div>
-                        );
-                      })}
-                      {(!order.assignedEmployees || order.assignedEmployees.length === 0) && (
-                        <span className="text-[11px] text-slate-400 italic">Unassigned</span>
-                      )}
+                          <div className="text-[13px] font-semibold text-slate-800 truncate mt-1">
+                            {title}
+                          </div>
+                          {order.businessName && order.clientName ? (
+                            <div className="text-[11px] text-slate-500 truncate">{order.clientName}</div>
+                          ) : null}
+                        </div>
+                        <ChevronRight size={18} className="shrink-0 text-slate-300 mt-0.5" />
+                      </div>
+
+                      <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500">
+                        <span className="font-medium">{dateStr}</span>
+                        <span
+                          className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border ${getHealthBadgeColor(order.health || "Active")}`}
+                        >
+                          {order.health || "Active"}
+                        </span>
+                      </div>
+
+                      {(visitDate && visitTime) ? (
+                        <div className="mt-2 rounded-lg bg-slate-50 border border-slate-100 px-2.5 py-1.5">
+                          <div className="text-[11px] font-bold text-slate-800">{visitDate} • {visitTime}</div>
+                          {mapAddress ? (
+                            <div className="text-[10px] text-slate-500 mt-0.5 truncate" title={mapAddress}>
+                              {mapAddress}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
+
+                      <div className="mt-2.5 flex items-center gap-1">
+                        {order.assignedEmployees?.slice(0, 4).map((empId: string, i: number) => {
+                          const staff = employees.find(e => e.id === empId);
+                          const name = staff ? staff.name : "Un";
+                          return (
+                            <div
+                              key={i}
+                              title={name}
+                              className="w-6 h-6 rounded-full bg-[var(--color-primary)] text-white flex items-center justify-center text-[9px] font-bold border-2 border-white"
+                              style={{ marginLeft: i > 0 ? "-6px" : "0" }}
+                            >
+                              {name.substring(0, 2).toUpperCase()}
+                            </div>
+                          );
+                        })}
+                        {(!order.assignedEmployees || order.assignedEmployees.length === 0) && (
+                          <span className="text-[11px] text-slate-400 italic">Unassigned</span>
+                        )}
+                      </div>
                     </div>
-                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[var(--color-primary)]">
-                      <Eye size={12} /> View
-                    </span>
                   </div>
                 </button>
               );
@@ -754,12 +926,21 @@ export function OrdersManagementDashboard({
                                 {visitDate} • {visitTime}
                               </div>
                               {mapHref && mapLabel && (
-                                <div style={{ fontSize: "11px", marginTop: "2px" }}>
+                                <div style={{ fontSize: "11px", marginTop: "2px", maxWidth: 220 }}>
                                   <a
                                     href={mapHref}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    style={{ color: "#64748b", textDecoration: "none", cursor: "pointer" }}
+                                    title={mapLabel}
+                                    style={{
+                                      color: "#64748b",
+                                      textDecoration: "none",
+                                      cursor: "pointer",
+                                      display: "block",
+                                      overflow: "hidden",
+                                      textOverflow: "ellipsis",
+                                      whiteSpace: "nowrap",
+                                    }}
                                     onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
                                     onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
                                     onClick={(e) => e.stopPropagation()}

@@ -9,19 +9,19 @@ import {
   type InvoiceProfile,
 } from "@/features/quotations/types/invoiceProfile";
 import { createAdminClient } from "@/utils/supabase/admin";
-
-export interface AppSettings {
-  siteVisitSchedulingEnabled: boolean;
-  installationSchedulingEnabled: boolean;
-  enableFinalProduct: boolean;
-  invoiceProfile: InvoiceProfile;
-}
+import {
+  DEFAULT_PRODUCTION_CHECKLIST_ITEMS,
+  normalizeProductionChecklistItems,
+  type ProductionChecklistItem,
+} from "@/features/settings/productionChecklist";
+import type { AppSettings, CompanyDetails } from "@/features/settings/settingsTypes";
 
 const DEFAULT_SETTINGS: AppSettings = {
   siteVisitSchedulingEnabled: true,
   installationSchedulingEnabled: true,
   enableFinalProduct: false,
   invoiceProfile: EMPTY_INVOICE_PROFILE,
+  productionChecklistItems: DEFAULT_PRODUCTION_CHECKLIST_ITEMS,
 };
 
 function mapRow(data: {
@@ -29,12 +29,16 @@ function mapRow(data: {
   installation_scheduling_enabled?: boolean;
   enable_final_product?: boolean;
   invoice_profile?: unknown;
+  production_checklist_items?: unknown;
 }): AppSettings {
   return {
     siteVisitSchedulingEnabled: data.site_visit_scheduling_enabled ?? true,
     installationSchedulingEnabled: data.installation_scheduling_enabled ?? true,
     enableFinalProduct: data.enable_final_product ?? false,
     invoiceProfile: normalizeInvoiceProfile(data.invoice_profile),
+    productionChecklistItems: normalizeProductionChecklistItems(
+      data.production_checklist_items
+    ),
   };
 }
 
@@ -68,7 +72,7 @@ export async function getAppSettingsForCompany(
   const { data, error } = await supabase
     .from("app_settings")
     .select(
-      "site_visit_scheduling_enabled, installation_scheduling_enabled, enable_final_product, invoice_profile"
+      "site_visit_scheduling_enabled, installation_scheduling_enabled, enable_final_product, invoice_profile, production_checklist_items"
     )
     .eq("company_id", companyId)
     .maybeSingle();
@@ -87,9 +91,10 @@ export async function getAppSettingsForCompany(
         DEFAULT_SETTINGS.installationSchedulingEnabled,
       enable_final_product: DEFAULT_SETTINGS.enableFinalProduct,
       invoice_profile: EMPTY_INVOICE_PROFILE,
+      production_checklist_items: DEFAULT_PRODUCTION_CHECKLIST_ITEMS,
     })
     .select(
-      "site_visit_scheduling_enabled, installation_scheduling_enabled, enable_final_product, invoice_profile"
+      "site_visit_scheduling_enabled, installation_scheduling_enabled, enable_final_product, invoice_profile, production_checklist_items"
     )
     .single();
 
@@ -134,6 +139,11 @@ export async function updateAppSettings(
         } }
       : current.invoiceProfile
   );
+  const newProductionChecklistItems = normalizeProductionChecklistItems(
+    settings.productionChecklistItems !== undefined
+      ? settings.productionChecklistItems
+      : current.productionChecklistItems
+  );
 
   const { error: upsertError } = await supabase.from("app_settings").upsert(
     {
@@ -142,6 +152,7 @@ export async function updateAppSettings(
       installation_scheduling_enabled: newInstallation,
       enable_final_product: newEnableFinalProduct,
       invoice_profile: newInvoiceProfile,
+      production_checklist_items: newProductionChecklistItems,
     },
     { onConflict: "company_id" }
   );
@@ -153,18 +164,15 @@ export async function updateAppSettings(
 
   revalidatePath("/admin/settings");
   revalidatePath("/printoms/portal");
+  revalidatePath("/admin/orders");
+  revalidatePath("/production/orders");
+  revalidatePath("/staff/orders");
 }
 
 export async function updateInvoiceProfile(
   profile: InvoiceProfile
 ): Promise<void> {
   await updateAppSettings({ invoiceProfile: normalizeInvoiceProfile(profile) });
-}
-
-export interface CompanyDetails {
-  id: string;
-  name: string;
-  address?: string | null;
 }
 
 export async function getCompanyDetails(): Promise<CompanyDetails | null> {

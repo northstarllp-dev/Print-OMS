@@ -8,12 +8,14 @@ import {
   Loader2,
   IndianRupee,
   AlertTriangle,
+  Trash2,
 } from "lucide-react";
 import type { Payment } from "@/types";
 import {
   getPaymentsByOrder,
   getPaymentBalanceSummary,
   createPayment,
+  deletePayment,
   type PaymentBalanceSummary,
 } from "@/features/payments/actions/paymentActions";
 
@@ -41,6 +43,22 @@ export function InstallationPaymentApprovalModal({
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [addingPayment, setAddingPayment] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleDeletePayment = async (paymentId: string) => {
+    if (!confirm("Are you sure you want to delete this payment?")) return;
+    setDeletingId(paymentId);
+    setError(null);
+    try {
+      await deletePayment(paymentId);
+      await load();
+      setPaymentConfirmed(false);
+    } catch (e: any) {
+      setError(e.message || "Failed to delete payment");
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -214,9 +232,23 @@ export function InstallationPaymentApprovalModal({
                               )}
                             </div>
                           </div>
-                          {received && (
-                            <CheckCircle2 size={18} className="text-emerald-500 shrink-0" />
-                          )}
+                          <div className="flex items-center gap-2 shrink-0">
+                            {deletingId === p.id ? (
+                              <Loader2 size={16} className="animate-spin text-slate-400" />
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleDeletePayment(p.id)}
+                                className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors focus:outline-none"
+                                title="Delete payment"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            )}
+                            {received && (
+                              <CheckCircle2 size={18} className="text-emerald-500" />
+                            )}
+                          </div>
                         </div>
                       );
                     })}

@@ -23,6 +23,8 @@ interface SiteVisitReviewModalProps {
   orderName: string;
   onConfirm: () => Promise<void>;
   onClose: () => void;
+  /** staff_push = summary then request admin approval (no lock). admin_lock = freeze before workflow. */
+  mode?: "staff_push" | "admin_lock";
 }
 
 function InfoChip({
@@ -238,8 +240,10 @@ export const SiteVisitReviewModal: React.FC<SiteVisitReviewModalProps> = ({
   orderName,
   onConfirm,
   onClose,
+  mode = "admin_lock",
 }) => {
   const [confirming, setConfirming] = useState(false);
+  const isStaffPush = mode === "staff_push";
 
   const handleConfirm = async () => {
     setConfirming(true);
@@ -265,12 +269,16 @@ export const SiteVisitReviewModal: React.FC<SiteVisitReviewModalProps> = ({
         {/* ── Sticky Header ── */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-white shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center shrink-0">
-              <Lock size={17} className="text-white" />
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${isStaffPush ? "bg-emerald-600" : "bg-indigo-600"}`}>
+              {isStaffPush ? (
+                <CheckCircle2 size={17} className="text-white" />
+              ) : (
+                <Lock size={17} className="text-white" />
+              )}
             </div>
             <div>
               <h2 className="text-base font-black text-slate-900">
-                Review & Confirm Site Visit
+                {isStaffPush ? "Confirm Site Visit Summary" : "Review & Confirm Site Visit"}
               </h2>
               <p className="text-xs text-slate-500 font-medium">{orderName}</p>
             </div>
@@ -436,10 +444,12 @@ export const SiteVisitReviewModal: React.FC<SiteVisitReviewModalProps> = ({
         {/* ── Sticky Footer ── */}
         <div className="shrink-0 border-t border-slate-100 bg-white px-6 py-4">
           {/* Warning strip */}
-          <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 mb-4">
-            <AlertTriangle size={14} className="text-amber-600 shrink-0" />
-            <p className="text-xs text-amber-800 font-semibold">
-              Once confirmed, this data cannot be edited. The site visit will be locked and sent for admin review.
+          <div className={`flex items-center gap-2 rounded-xl px-4 py-2.5 mb-4 border ${isStaffPush ? "bg-sky-50 border-sky-200" : "bg-amber-50 border-amber-200"}`}>
+            <AlertTriangle size={14} className={`shrink-0 ${isStaffPush ? "text-sky-600" : "text-amber-600"}`} />
+            <p className={`text-xs font-semibold ${isStaffPush ? "text-sky-800" : "text-amber-800"}`}>
+              {isStaffPush
+                ? "Review the summary below, then request admin approval. Site visit data will not be locked yet."
+                : "Once confirmed, this data cannot be edited. The site visit will be locked before you choose the next workflow."}
             </p>
           </div>
 
@@ -462,12 +472,12 @@ export const SiteVisitReviewModal: React.FC<SiteVisitReviewModalProps> = ({
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                   </svg>
-                  Locking...
+                  {isStaffPush ? "Submitting..." : "Locking..."}
                 </>
               ) : (
                 <>
                   <CheckCircle2 size={16} />
-                  Confirm & Lock Site Visit
+                  {isStaffPush ? "Confirm & Request Admin Approval" : "Confirm & Lock Site Visit"}
                 </>
               )}
             </button>

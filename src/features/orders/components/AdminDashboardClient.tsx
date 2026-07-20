@@ -35,7 +35,7 @@ const STAGE_LABEL: Record<string, { label: string; dot: string }> = {
   "Design In Progress":    { label: "Design",      dot: "#EC4899" },
   "Design Approved":       { label: "Design",      dot: "#EC4899" },
   "Production":            { label: "In Production", dot: "#3B82F6" },
-  "Ready For Installation":{ label: "Ready",       dot: "#3B82F6" },
+  "Ready For Installation":{ label: "Ready to Install", dot: "#0EA5E9" },
   "Installation Scheduled":{ label: "Installation", dot: "#0EA5E9" },
   "Completed":             { label: "Closed",      dot: "#22C55E" },
   "Closed":                { label: "Closed",      dot: "#22C55E" },
@@ -73,8 +73,8 @@ const PIPELINE_STAGE_GROUPS: Record<string, string[]> = {
   "Site Visit Pending": ["Site Visit Pending", "Site Visit Scheduled", "Site Visit Completed"],
   "Quotation Sent": ["Quotation In Progress", "Quotation Sent", "Quotation Negotiation", "Quotation Approved"],
   "Design Approved": ["Design In Progress", "Design Approved"],
-  "Production": ["Production", "Ready For Installation"],
-  "Installation Scheduled": ["Installation Scheduled"],
+  "Production": ["Production"],
+  "Installation Scheduled": ["Ready For Installation", "Installation Scheduled"],
   "Completed": ["Completed", "Closed"],
 };
 
@@ -306,41 +306,37 @@ export function AdminDashboardClient({
   }));
 
   return (
-    <div style={{ padding: "32px", background: "#F8FAFC", minHeight: "100vh" }}>
+    <div className="p-3 sm:p-5 md:p-8 bg-slate-50 min-h-screen">
 
       {/* ── Header ── */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "28px" }}>
-        <div>
-          <h1 style={{ fontSize: "24px", fontWeight: "800", color: "#0F172A", margin: 0 }}>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-5 md:mb-7">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 m-0">
             Dashboard
           </h1>
-          <p style={{ fontSize: "13px", color: "#64748B", margin: "4px 0 0" }}>
+          <p className="text-xs sm:text-[13px] text-slate-500 mt-1 mb-0">
             Overview of your business performance
           </p>
         </div>
-        <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "6px", background: "white", padding: "4px 8px", borderRadius: "8px", border: "1px solid #E2E8F0" }}>
+        <div className="flex gap-2 sm:gap-2.5 items-center flex-wrap">
+          <div className="flex items-center gap-1.5 bg-white px-2 py-1 rounded-lg border border-slate-200 w-full sm:w-auto">
             <input
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              style={{ border: "none", outline: "none", fontSize: "13px", color: "#475569", background: "transparent" }}
+              className="flex-1 min-w-0 border-none outline-none text-[13px] text-slate-600 bg-transparent"
             />
-            <span style={{ fontSize: "13px", color: "#94A3B8" }}>to</span>
+            <span className="text-[13px] text-slate-400">to</span>
             <input
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              style={{ border: "none", outline: "none", fontSize: "13px", color: "#475569", background: "transparent" }}
+              className="flex-1 min-w-0 border-none outline-none text-[13px] text-slate-600 bg-transparent"
             />
             {(startDate || endDate) && (
               <button
                 onClick={() => { setStartDate(""); setEndDate(""); }}
-                style={{
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  background: "transparent", border: "none", cursor: "pointer",
-                  color: "#94A3B8", padding: "0 2px"
-                }}
+                className="flex items-center justify-center bg-transparent border-none cursor-pointer text-slate-400 p-0.5"
                 title="Clear Dates"
               >
                 <XCircle size={14} />
@@ -349,37 +345,55 @@ export function AdminDashboardClient({
           </div>
           <button
             onClick={() => setIsTicketModalOpen(true)}
-            style={{
-              display: "flex", alignItems: "center", gap: "6px",
-              padding: "9px 16px", borderRadius: "8px",
-              border: "none", background: "var(--color-primary)",
-              fontSize: "13px", fontWeight: "700", color: "white",
-              cursor: "pointer", transition: "all 0.15s",
-            }}
-            onMouseEnter={e => e.currentTarget.style.background = "var(--color-primary-container)"}
-            onMouseLeave={e => e.currentTarget.style.background = "var(--color-primary)"}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-lg border-none bg-[var(--color-primary)] text-[12px] sm:text-[13px] font-bold text-white cursor-pointer"
           >
-            <Plus size={14} /> Add Service Ticket
+            <Plus size={14} /> <span className="hidden sm:inline">Add Service </span>Ticket
           </button>
           <button
             onClick={() => setIsAddModalOpen(true)}
-            style={{
-              display: "flex", alignItems: "center", gap: "6px",
-              padding: "9px 16px", borderRadius: "8px",
-              border: "none", background: "var(--color-primary)",
-              fontSize: "13px", fontWeight: "700", color: "white",
-              cursor: "pointer", transition: "all 0.15s",
-            }}
-            onMouseEnter={e => e.currentTarget.style.background = "var(--color-primary-container)"}
-            onMouseLeave={e => e.currentTarget.style.background = "var(--color-primary)"}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-lg border-none bg-[var(--color-primary)] text-[12px] sm:text-[13px] font-bold text-white cursor-pointer"
           >
-            <Plus size={14} /> Add Enquiry
+            <Plus size={14} /> <span className="hidden sm:inline">Add </span>Enquiry
           </button>
         </div>
       </div>
 
-      {/* ── Stat Cards (2 rows of 4) ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px", marginBottom: "28px" }}>
+      {/* Mobile: compact filter chips instead of large KPI cards */}
+      <div className="md:hidden flex gap-2 overflow-x-auto pb-3 -mx-1 px-1 mb-1">
+        {STATS.filter((s) => s.filterKey).map((stat) => {
+          const isActive = selectedKpi === stat.filterKey;
+          return (
+            <button
+              key={stat.filterKey}
+              type="button"
+              onClick={() => {
+                setSelectedKpi(isActive ? null : (stat.filterKey as string));
+                setSelectedPipelineStage(null);
+              }}
+              className="shrink-0 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-bold border"
+              style={{
+                background: isActive ? stat.iconBg : "white",
+                borderColor: isActive ? stat.iconColor : "#E2E8F0",
+                color: isActive ? stat.iconColor : "#64748B",
+              }}
+            >
+              <span>{stat.label}</span>
+              <span
+                className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-extrabold"
+                style={{
+                  background: isActive ? stat.iconColor : "#F1F5F9",
+                  color: isActive ? "white" : "#475569",
+                }}
+              >
+                {stat.value}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Desktop/tablet: Stat Cards */}
+      <div className="hidden md:grid grid-cols-2 lg:grid-cols-4 gap-4 mb-7">
         {STATS.map((stat, i) => {
           const Icon = stat.icon;
           const isActive = stat.filterKey ? selectedKpi === stat.filterKey : false;
@@ -432,7 +446,7 @@ export function AdminDashboardClient({
       </div>
 
       {/* ── Bottom two columns: Recent Orders + Pending Tickets ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: "20px", marginBottom: "24px" }}>
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_340px] gap-4 md:gap-5 mb-6">
 
         {/* Recent Orders / Enquiries Table */}
         <div style={{ background: "white", border: "1px solid #E2E8F0", borderRadius: "12px", overflow: "hidden" }}>
@@ -570,24 +584,17 @@ export function AdminDashboardClient({
               filteredRows.data.length === 0 ? (
                 <div style={{ padding: "40px", textAlign: "center", color: "#94A3B8", fontSize: "13px" }}>No orders found.</div>
               ) : (
-                filteredRows.data.map((order: any, i: number) => {
+                filteredRows.data.map((order: any) => {
                   const stageInfo = STAGE_LABEL[order.stage] || { label: order.stage, dot: "#94A3B8" };
                   return (
                     <div
                       key={order.id}
-                      style={{
-                        display: "flex", alignItems: "center",
-                        padding: "14px 24px",
-                        borderBottom: i < filteredRows.data.length - 1 ? "1px solid #F1F5F9" : "none",
-                        gap: "12px", cursor: "pointer", transition: "background 0.15s",
-                      }}
+                      className="flex items-center gap-2 sm:gap-3 px-3 sm:px-6 py-3.5 border-b border-slate-100 last:border-b-0 cursor-pointer hover:bg-slate-50 transition-colors"
                       onClick={() => router.push(`/admin/orders/${order.orderId || order.id}`)}
-                      onMouseEnter={e => (e.currentTarget.style.background = "#F8FAFC")}
-                      onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
                     >
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                          <span style={{ fontSize: "13px", fontWeight: "700", color: "#0F172A" }}>{order.orderCode}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-[13px] font-bold text-slate-900">{order.orderCode}</span>
                           <span style={{
                             fontSize: "9px", fontWeight: "800", textTransform: "uppercase",
                             padding: "2px 6px", borderRadius: "4px",
@@ -596,12 +603,16 @@ export function AdminDashboardClient({
                             border: `1px solid ${order.health === "Active" ? "#BBF7D0" : "#FECACA"}`,
                           }}>{order.health || "Active"}</span>
                         </div>
-                        <p style={{ margin: "4px 0 0", fontSize: "12px", color: "#64748B", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        <p className="m-0 mt-1 text-xs text-slate-500 truncate">
                           {(order.businessName || order.customerName || "No Business")} • {(order.clientName || "No Client")}
                         </p>
+                        <div className="sm:hidden mt-1.5 flex items-center gap-1.5">
+                          <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: stageInfo.dot, flexShrink: 0 }} />
+                          <span className="text-[11px] text-slate-600 font-semibold">{stageInfo.label}</span>
+                        </div>
                       </div>
                       {order.assignedAdmins && order.assignedAdmins.length > 0 && (
-                        <div style={{ display: "flex", alignItems: "center", gap: "4px", flexShrink: 0 }}>
+                        <div className="hidden sm:flex items-center gap-1 shrink-0">
                           {order.assignedAdmins.map((adminId: string) => {
                             const adminObj = admins?.find(a => a.id === adminId);
                             const adminName = adminObj ? adminObj.name : "Admin";
@@ -618,11 +629,11 @@ export function AdminDashboardClient({
                           })}
                         </div>
                       )}
-                      <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                      <div className="hidden sm:flex items-center gap-1.5 shrink-0">
                         <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: stageInfo.dot, flexShrink: 0 }} />
-                        <span style={{ fontSize: "12px", color: "#475569", fontWeight: "600", whiteSpace: "nowrap" }}>{stageInfo.label}</span>
+                        <span className="text-xs text-slate-600 font-semibold whitespace-nowrap">{stageInfo.label}</span>
                       </div>
-                      <div style={{ position: "relative" }}>
+                      <div className="relative shrink-0">
                         <button
                           onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === order.id ? null : order.id); }}
                           style={{ padding: "4px", background: "none", border: "none", cursor: "pointer", color: "#94A3B8", borderRadius: "4px" }}
@@ -712,9 +723,9 @@ export function AdminDashboardClient({
       </div>
 
       {/* ── Order Pipeline ── */}
-      <div style={{ background: "white", border: "1px solid #E2E8F0", borderRadius: "12px", padding: "20px 24px" }}>
-        <h2 style={{ margin: "0 0 20px", fontSize: "14px", fontWeight: "700", color: "#0F172A" }}>Order Pipeline</h2>
-        <div style={{ display: "grid", gridTemplateColumns: `repeat(${PIPELINE_STAGES.length}, 1fr)`, gap: "8px" }}>
+      <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 md:p-6">
+        <h2 className="m-0 mb-4 text-sm font-bold text-slate-900">Order Pipeline</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
           {pipelineCounts.map((item, i) => {
             const isSelected = selectedPipelineStage === item.stage;
             return (
