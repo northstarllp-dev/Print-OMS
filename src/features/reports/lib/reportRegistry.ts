@@ -9,93 +9,81 @@ export type ReportRegistryEntry = {
 
 /** Shared catalog for dashboard cards + AI Report Builder */
 export const REPORT_REGISTRY: Record<ReportType, ReportRegistryEntry> = {
-  REVENUE_TREND: {
-    id: "REVENUE_TREND",
-    title: "Revenue & Order Trend",
-    desc: "Monthly revenue bars + order count line",
-    dataKey: "revenueTrend",
+  PIPELINE_BOTTLENECK: {
+    id: "PIPELINE_BOTTLENECK",
+    title: "Pipeline Bottlenecks",
+    desc: "Where active orders are stuck — bar = count, label = avg days open",
+    dataKey: "pipelineBottleneck",
   },
-  ORDERS_OVER_TIME: {
-    id: "ORDERS_OVER_TIME",
-    title: "Orders Over Time",
-    desc: "Monthly order volume and estimated revenue",
-    dataKey: "ordersByMonth",
+  ORDER_AGING: {
+    id: "ORDER_AGING",
+    title: "Order Aging Risk",
+    desc: "Active orders by how long they have been open — chase 8+ day jobs first",
+    dataKey: "orderAging",
   },
-  PIPELINE_FUNNEL: {
-    id: "PIPELINE_FUNNEL",
+  CASH_POSITION: {
+    id: "CASH_POSITION",
+    title: "Cash Position",
+    desc: "Collected vs outstanding against approved quotations",
+    dataKey: "cashPosition",
+  },
+  SOURCE_CONVERSION: {
+    id: "SOURCE_CONVERSION",
+    title: "Lead Source Conversion",
+    desc: "Which enquiry sources actually convert to orders — double down here",
+    dataKey: "sourceConversion",
+  },
+  TEAM_WORKLOAD: {
+    id: "TEAM_WORKLOAD",
+    title: "Team Workload",
+    desc: "Open work vs completed per assignee — spot overload",
+    dataKey: "teamWorkload",
+  },
+  COLLECTION_TREND: {
+    id: "COLLECTION_TREND",
+    title: "Cash Collection Trend",
+    desc: "Money actually received per month",
+    dataKey: "collectionTrend",
+  },
+  CONVERSION_FUNNEL: {
+    id: "CONVERSION_FUNNEL",
     title: "Pipeline Funnel",
-    desc: "Enquiry → Order → Installation → Completed",
+    desc: "Enquiry → Order → Install → Completed drop-off",
     dataKey: "conversionFunnel",
   },
-  REVENUE_BY_CUSTOMER: {
-    id: "REVENUE_BY_CUSTOMER",
-    title: "Top 10 Customers",
-    desc: "Highest revenue generating customers",
-    dataKey: "revenueByCustomer",
+  TOP_CUSTOMERS: {
+    id: "TOP_CUSTOMERS",
+    title: "Top Customers by Revenue",
+    desc: "Highest value accounts — protect and upsell",
+    dataKey: "topCustomersByRevenue",
   },
-  TEAM_PERFORMANCE: {
-    id: "TEAM_PERFORMANCE",
-    title: "Team Performance",
-    desc: "Assigned vs completed orders per employee",
-    dataKey: "teamPerformance",
+  CUSTOMERS_TO_CHASE: {
+    id: "CUSTOMERS_TO_CHASE",
+    title: "Customers to Chase",
+    desc: "Largest outstanding balances — call these first",
+    dataKey: "customersToChase",
   },
-  ORDER_STAGE: {
-    id: "ORDER_STAGE",
-    title: "Order Stage Breakdown",
-    desc: "Distribution of orders by pipeline stage",
-    dataKey: "ordersByStage",
-  },
-  TICKET_ANALYSIS: {
-    id: "TICKET_ANALYSIS",
-    title: "Tickets by Priority",
-    desc: "Support ticket distribution by priority",
-    dataKey: "ticketsByPriority",
-  },
-  ENQUIRY_SOURCES: {
-    id: "ENQUIRY_SOURCES",
-    title: "Enquiry Sources",
-    desc: "Where your leads are coming from",
-    dataKey: "enquirySourceBreakdown",
-  },
-  ORDER_HEALTH: {
-    id: "ORDER_HEALTH",
-    title: "Order Health",
-    desc: "Active, on-hold, lost & completed breakdown",
-    dataKey: "orderHealthBreakdown",
+  OPEN_TICKETS: {
+    id: "OPEN_TICKETS",
+    title: "Open Tickets by Priority",
+    desc: "Unresolved service tickets needing action",
+    dataKey: "openTicketsByPriority",
   },
   CONVERSION_BY_MONTH: {
     id: "CONVERSION_BY_MONTH",
-    title: "Monthly Conversion Trend",
-    desc: "Enquiries vs orders with conversion rate",
+    title: "Monthly Conversion",
+    desc: "Enquiries vs orders and conversion rate over time",
     dataKey: "conversionByMonth",
-  },
-  CUSTOMER_RETENTION: {
-    id: "CUSTOMER_RETENTION",
-    title: "Customer Retention",
-    desc: "New vs returning customers per month",
-    dataKey: "customerRetention",
-  },
-  WEEKLY_COMPLETIONS: {
-    id: "WEEKLY_COMPLETIONS",
-    title: "Weekly Completions",
-    desc: "Orders completed per week (last 12 weeks)",
-    dataKey: "weeklyCompletions",
-  },
-  TICKET_STATUS: {
-    id: "TICKET_STATUS",
-    title: "Ticket Status Mix",
-    desc: "Open, in-progress, and resolved breakdown",
-    dataKey: "ticketStatusBreakdown",
   },
 };
 
 export const REPORT_IDS = Object.keys(REPORT_REGISTRY) as ReportType[];
 
 export const QUICK_SUGGESTIONS = [
-  "Show revenue trend",
-  "Top customers by revenue",
-  "Team performance",
-  "Pipeline funnel",
-  "Customer retention",
-  "Ticket analysis",
+  "Where are orders stuck?",
+  "Show cash outstanding",
+  "Which lead sources convert?",
+  "Customers to chase for payment",
+  "Team workload",
+  "Order aging risk",
 ];

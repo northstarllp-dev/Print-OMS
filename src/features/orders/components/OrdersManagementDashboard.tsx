@@ -177,15 +177,79 @@ export function OrdersManagementDashboard({
     }
   };
 
-  // Calculations for Admin
-  const activeOrders = orders.filter(o => o.stage !== "Completed" && o.stage !== "Closed").length;
-  const unassignedOrders = orders.filter(o => o.stage !== "Completed" && o.stage !== "Closed" && (!o.assignedEmployees || o.assignedEmployees.length === 0)).length;
-  const pendingApprovals = orders.filter(o => o.stageStatus && o.stageStatus !== "Normal").length;
-  const completedOrders = orders.filter(o => o.stage === "Completed" || o.stage === "Closed").length;
+  /** Shared toolbar filters (search / dates / stage / health / assignment) — used by KPIs + list */
+  const matchesToolbarFilters = useCallback((order: any) => {
+    if (debouncedSearch) {
+      const q = debouncedSearch;
+      const cust = customers.find((c: any) => c.id === order.customerId);
+      const custName = (cust?.name || order.customerName || "").toLowerCase();
+      const matches =
+        (order.clientName || "").toLowerCase().includes(q) ||
+        (order.businessName || "").toLowerCase().includes(q) ||
+        (order.orderCode || order.id || "").toLowerCase().includes(q) ||
+        custName.includes(q);
+      if (!matches) return false;
+    }
 
-  // Calculations for Staff
-  const myActiveOrders = orders.filter(o => o.stage !== "Completed" && o.stage !== "Closed" && (o.assignedEmployees.includes(employeeName) || o.assignedEmployees.includes(currentEmployeeId))).length;
-  const myCompletedOrders = orders.filter(o => (o.stage === "Completed" || o.stage === "Closed") && (o.assignedEmployees.includes(employeeName) || o.assignedEmployees.includes(currentEmployeeId))).length;
+    if (dateFilterType === "range") {
+      const orderDate = order.dateCreated
+        ? new Date(order.dateCreated).toISOString().split("T")[0]
+        : null;
+      if (!orderDate) return false;
+      if (startDate && orderDate < startDate) return false;
+      if (endDate && orderDate > endDate) return false;
+    }
+
+    if (stageFilter !== "ALL") {
+      const s = order.stage || "";
+      if (stageFilter === "Site Visit" && !s.includes("Site Visit")) return false;
+      if (stageFilter === "Quotation" && !s.includes("Quotation")) return false;
+      if (stageFilter === "Designing" && !s.includes("Design")) return false;
+      if (stageFilter === "Production" && s !== "Production") return false;
+      if (stageFilter === "Installation" && !s.includes("Installation")) return false;
+      if (stageFilter === "Completed" && !["Completed", "Closed"].includes(s)) return false;
+    }
+
+    if (healthFilter !== "ALL" && (order.health || "Active") !== healthFilter) return false;
+
+    if (currentUserRole === "Employee") {
+      return order.assignedEmployees?.includes(employeeName) || order.assignedEmployees?.includes(currentEmployeeId);
+    }
+
+    if (currentUserRole === "Admin" && adminAssignedFilter === "MINE") {
+      if (!currentUserId) return false;
+      return order.assignedAdmins?.includes(currentUserId);
+    }
+
+    return true;
+  }, [
+    debouncedSearch,
+    customers,
+    dateFilterType,
+    startDate,
+    endDate,
+    stageFilter,
+    healthFilter,
+    currentUserRole,
+    employeeName,
+    currentEmployeeId,
+    adminAssignedFilter,
+    currentUserId,
+  ]);
+
+  const toolbarFilteredOrders = useMemo(
+    () => queueScopedOrders.filter(matchesToolbarFilters),
+    [queueScopedOrders, matchesToolbarFilters]
+  );
+
+  // KPI counts reflect the same toolbar filters as the list
+  const activeOrders = toolbarFilteredOrders.filter(o => o.stage !== "Completed" && o.stage !== "Closed").length;
+  const unassignedOrders = toolbarFilteredOrders.filter(o => o.stage !== "Completed" && o.stage !== "Closed" && (!o.assignedEmployees || o.assignedEmployees.length === 0)).length;
+  const pendingApprovals = toolbarFilteredOrders.filter(o => o.stageStatus && o.stageStatus !== "Normal").length;
+  const completedOrders = toolbarFilteredOrders.filter(o => o.stage === "Completed" || o.stage === "Closed").length;
+
+  const myActiveOrders = toolbarFilteredOrders.filter(o => o.stage !== "Completed" && o.stage !== "Closed" && (o.assignedEmployees.includes(employeeName) || o.assignedEmployees.includes(currentEmployeeId))).length;
+  const myCompletedOrders = toolbarFilteredOrders.filter(o => (o.stage === "Completed" || o.stage === "Closed") && (o.assignedEmployees.includes(employeeName) || o.assignedEmployees.includes(currentEmployeeId))).length;
 
   const stats = currentUserRole === "Employee" ? [
     {
@@ -239,63 +303,23 @@ export function OrdersManagementDashboard({
     },
   ];
 
-  const getKpiFilteredOrders = () => {
-    if (selectedKpi === "active")       return queueScopedOrders.filter(o => o.stage !== "Completed" && o.stage !== "Closed");
-    if (selectedKpi === "unassigned")   return queueScopedOrders.filter(o => o.stage !== "Completed" && o.stage !== "Closed" && (!o.assignedEmployees || o.assignedEmployees.length === 0));
-    if (selectedKpi === "approvals")    return queueScopedOrders.filter(o => o.stageStatus && o.stageStatus !== "Normal");
-    if (selectedKpi === "completed")    return queueScopedOrders.filter(o => o.stage === "Completed" || o.stage === "Closed");
-    if (selectedKpi === "myactive")     return queueScopedOrders.filter(o => o.stage !== "Completed" && o.stage !== "Closed" && (o.assignedEmployees?.includes(employeeName) || o.assignedEmployees?.includes(currentEmployeeId)));
-    if (selectedKpi === "mycompleted")  return queueScopedOrders.filter(o => (o.stage === "Completed" || o.stage === "Closed") && (o.assignedEmployees?.includes(employeeName) || o.assignedEmployees?.includes(currentEmployeeId)));
-    return null;
-  };
-
-  const kpiFilteredOrders = getKpiFilteredOrders();
-
-  const filteredOrders = (kpiFilteredOrders ?? queueScopedOrders).filter(order => {
-    if (debouncedSearch) {
-      const q = debouncedSearch;
-      // Resolve customer name from customers list
-      const cust = customers.find((c: any) => c.id === order.customerId);
-      const custName = (cust?.name || order.customerName || "").toLowerCase();
-      const matches =
-        (order.clientName || "").toLowerCase().includes(q) ||
-        (order.businessName || "").toLowerCase().includes(q) ||
-        (order.orderCode || order.id || "").toLowerCase().includes(q) ||
-        custName.includes(q);
-      if (!matches) return false;
+  const filteredOrders = useMemo(() => {
+    let list = toolbarFilteredOrders;
+    if (selectedKpi === "active") {
+      list = list.filter(o => o.stage !== "Completed" && o.stage !== "Closed");
+    } else if (selectedKpi === "unassigned") {
+      list = list.filter(o => o.stage !== "Completed" && o.stage !== "Closed" && (!o.assignedEmployees || o.assignedEmployees.length === 0));
+    } else if (selectedKpi === "approvals") {
+      list = list.filter(o => o.stageStatus && o.stageStatus !== "Normal");
+    } else if (selectedKpi === "completed") {
+      list = list.filter(o => o.stage === "Completed" || o.stage === "Closed");
+    } else if (selectedKpi === "myactive") {
+      list = list.filter(o => o.stage !== "Completed" && o.stage !== "Closed" && (o.assignedEmployees?.includes(employeeName) || o.assignedEmployees?.includes(currentEmployeeId)));
+    } else if (selectedKpi === "mycompleted") {
+      list = list.filter(o => (o.stage === "Completed" || o.stage === "Closed") && (o.assignedEmployees?.includes(employeeName) || o.assignedEmployees?.includes(currentEmployeeId)));
     }
-
-    if (dateFilterType === "range") {
-      const orderDate = order.dateCreated
-        ? new Date(order.dateCreated).toISOString().split("T")[0]
-        : null;
-      if (!orderDate) return false;
-      if (startDate && orderDate < startDate) return false;
-      if (endDate && orderDate > endDate) return false;
-    }
-
-    if (stageFilter !== "ALL") {
-      const s = order.stage || "";
-      if (stageFilter === "Site Visit" && !s.includes("Site Visit")) return false;
-      if (stageFilter === "Quotation" && !s.includes("Quotation")) return false;
-      if (stageFilter === "Designing" && !s.includes("Design")) return false;
-      if (stageFilter === "Production" && s !== "Production") return false;
-      if (stageFilter === "Installation" && !s.includes("Installation")) return false;
-      if (stageFilter === "Completed" && !["Completed", "Closed"].includes(s)) return false;
-    }
-    if (healthFilter !== "ALL" && (order.health || "Active") !== healthFilter) return false;
-
-    if (currentUserRole === "Employee" && !kpiFilteredOrders) {
-      return order.assignedEmployees?.includes(employeeName) || order.assignedEmployees?.includes(currentEmployeeId);
-    }
-    
-    if (currentUserRole === "Admin" && adminAssignedFilter === "MINE") {
-      if (!currentUserId) return false;
-      return order.assignedAdmins?.includes(currentUserId);
-    }
-
-    return true;
-  });
+    return list;
+  }, [toolbarFilteredOrders, selectedKpi, employeeName, currentEmployeeId]);
 
   const resetFilters = () => {
     setDateFilterType("range");
@@ -327,8 +351,8 @@ export function OrdersManagementDashboard({
     >
       {/* Header Section */}
       <div className="mb-5 md:mb-8">
-        <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-start mb-4 md:mb-6">
-          <div className="min-w-0">
+        <div className="flex items-start justify-between gap-3 mb-4 md:mb-6">
+          <div className="min-w-0 flex-1">
             {!hideTitle && (
               <>
                 <h1 className="text-xl sm:text-2xl md:text-[28px] font-extrabold text-slate-900 m-0 mb-1 md:mb-2">
@@ -344,9 +368,9 @@ export function OrdersManagementDashboard({
             type="button"
             onClick={handleRefresh}
             disabled={isRefreshing}
-            className="inline-flex items-center justify-center gap-2 self-start px-3.5 py-2.5 text-xs sm:text-[13px] font-semibold text-slate-900 bg-white border border-slate-200 rounded-[10px] shrink-0 disabled:opacity-70 disabled:cursor-wait"
+            className="inline-flex items-center justify-center gap-1.5 sm:gap-2 shrink-0 mt-0.5 px-2.5 sm:px-3.5 py-2 sm:py-2.5 text-[11px] sm:text-[13px] font-semibold text-slate-900 bg-white border border-slate-200 rounded-[10px] disabled:opacity-70 disabled:cursor-wait"
           >
-            <RefreshCw size={16} className={isRefreshing ? "animate-spin" : ""} />
+            <RefreshCw size={15} className={isRefreshing ? "animate-spin" : ""} />
             Refresh
           </button>
         </div>

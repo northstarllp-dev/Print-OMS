@@ -5,7 +5,7 @@ import {
   Bell, CheckCircle, AlertCircle, Info, LogOut,
   History, RotateCcw, Lock, Loader2, Key,
   ShoppingBag, MapPin, Palette, Settings, Wrench,
-  ChevronLeft, ChevronRight, Search, Hammer, Truck, Menu,
+  ChevronLeft, ChevronRight, Search, Hammer, Truck, Menu, X,
   type LucideIcon,
 } from "lucide-react";
 import { Logo } from "@/components/ui/Logo";
@@ -59,7 +59,7 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
   const [collapsed, setCollapsed] = useState(true);
   const [isHovered, setIsHovered] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const isExpanded = !collapsed || isHovered;
+  const isExpanded = !collapsed || isHovered || isMobileMenuOpen;
 
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
@@ -208,8 +208,9 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
             padding: isExpanded ? "24px 20px" : "24px 12px",
             display: "flex",
             alignItems: "center",
-            justifyContent: "center",
+            justifyContent: "space-between",
             flexShrink: 0,
+            gap: 8,
             transition: "padding 0.25s cubic-bezier(0.4,0,0.2,1)",
           }}
         >
@@ -227,6 +228,16 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
           }}>
             <Logo width={isExpanded ? 160 : 32} height={40} />
           </div>
+          {isMobileMenuOpen && (
+            <button
+              type="button"
+              className="md:hidden flex items-center justify-center p-2 rounded-lg text-slate-200 hover:bg-white/10 shrink-0"
+              onClick={() => setIsMobileMenuOpen(false)}
+              aria-label="Close menu"
+            >
+              <X size={20} />
+            </button>
+          )}
         </div>
 
         {/* Nav Items */}
@@ -239,6 +250,7 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
               <button
                 key={item.href}
                 onClick={() => {
+                  setIsMobileMenuOpen(false);
                   router.push(item.href);
                 }}
                 title={!isExpanded ? item.label : undefined}
@@ -306,8 +318,9 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
           })}
         </nav>
 
-        {/* Collapse Button */}
+        {/* Collapse — desktop only */}
         <div
+          className="hidden md:block"
           style={{
             padding: "12px",
             flexShrink: 0,
@@ -352,6 +365,21 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
             </span>
           </button>
         </div>
+
+        {/* Close — mobile drawer only */}
+        {isMobileMenuOpen && (
+          <div className="md:hidden p-3 shrink-0 border-t border-white/10">
+            <button
+              type="button"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm font-semibold text-slate-200 bg-white/5 border border-white/15"
+              aria-label="Close menu"
+            >
+              <X size={16} />
+              Close
+            </button>
+          </div>
+        )}
       </aside>
 
       {/* ── MAIN WORKSPACE ── */}
@@ -519,6 +547,17 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
               </div>
             </div>
           </header>
+        )}
+
+        {isWorksheetPage && (
+          <button
+            type="button"
+            className="md:hidden fixed top-3 left-3 z-[70] flex items-center justify-center p-2.5 rounded-lg bg-white text-slate-600 shadow-md border border-slate-200"
+            onClick={() => setIsMobileMenuOpen(true)}
+            aria-label="Open navigation"
+          >
+            <Menu size={20} />
+          </button>
         )}
 
         {/* Main Content */}

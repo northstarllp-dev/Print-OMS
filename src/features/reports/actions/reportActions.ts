@@ -6,6 +6,70 @@ import { getServiceTickets } from "@/features/service-tickets/actions/serviceTic
 import { getCustomers } from "@/features/customers/actions/customerActions";
 import { getEmployees } from "@/features/employees/actions/employeeActions";
 
+const DONE = new Set(["Completed", "Closed", "Cancelled"]);
+const STUCK_DAYS = 7;
+
+function daysBetween(from: string | Date, to = new Date()): number {
+  const d = typeof from === "string" ? new Date(from) : from;
+  if (Number.isNaN(d.getTime())) return 0;
+  return Math.max(0, Math.floor((to.getTime() - d.getTime()) / (24 * 60 * 60 * 1000)));
+}
+
+function monthKey(dateStr: string) {
+  const d = new Date(dateStr);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+/** e.g. "Jul 2026" — avoids "Jul 26" looking like a day */
+function monthLabel(key: string) {
+  const [y, m] = key.split("-");
+  return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString("en-US", {
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function getApprovedQuoteTotal(o: any): number {
+  const quotations = Array.isArray(o.quotations) ? o.quotations : o.quotations ? [o.quotations] : [];
+  const approved = quotations.find((q: any) => q.status === "Approved");
+  return approved?.grand_total ? Number(approved.grand_total) : 0;
+}
+
+function getCollected(o: any): number {
+  const payments = Array.isArray(o.payments) ? o.payments : o.payments ? [o.payments] : [];
+  return payments.reduce((sum: number, p: any) => {
+    if (p.status && p.status !== "received") return sum;
+    return sum + (Number(p.amount) || Number(p.calculated_amount) || 0);
+  }, 0);
+}
+
+function getOrderRevenue(o: any): number {
+  const quote = getApprovedQuoteTotal(o);
+  if (quote > 0) return quote;
+  return getCollected(o);
+}
+
+function shortStage(stage: string): string {
+  const map: Record<string, string> = {
+    "Site Visit Pending": "Site Visit",
+    "Site Visit Scheduled": "SV Scheduled",
+    "Site Visit Completed": "SV Done",
+    "Quotation In Progress": "Quoting",
+    "Quotation Sent": "Quote Sent",
+    "Quotation Negotiation": "Negotiating",
+    "Quotation Approved": "Quote OK",
+    "Design In Progress": "Design",
+    "Design Approved": "Design OK",
+    Production: "Production",
+    "Ready For Installation": "Ready Install",
+    "Installation Scheduled": "Install Sched.",
+    Completed: "Completed",
+    Closed: "Closed",
+    Cancelled: "Cancelled",
+  };
+  return map[stage] || stage;
+}
+
 export async function getReportData(startDate?: string, endDate?: string) {
   let [orders, enquiries, tickets, customers, employees] = await Promise.all([
     getOrders(),
@@ -16,239 +80,256 @@ export async function getReportData(startDate?: string, endDate?: string) {
   ]);
 
   if (startDate) {
-    orders = orders?.filter(o => o.date_created && new Date(o.date_created).toISOString().split("T")[0] >= startDate);
-    enquiries = enquiries?.filter(e => e.date_received && new Date(e.date_received).toISOString().split("T")[0] >= startDate);
-    tickets = tickets?.filter(t => t.created_at && new Date(t.created_at).toISOString().split("T")[0] >= startDate);
+    orders = orders?.filter((o) => o.date_created && new Date(o.date_created).toISOString().split("T")[0] >= startDate);
+    enquiries = enquiries?.filter((e) => e.date_received && new Date(e.date_received).toISOString().split("T")[0] >= startDate);
+    tickets = tickets?.filter((t) => t.created_at && new Date(t.created_at).toISOString().split("T")[0] >= startDate);
   }
   if (endDate) {
-    orders = orders?.filter(o => o.date_created && new Date(o.date_created).toISOString().split("T")[0] <= endDate);
-    enquiries = enquiries?.filter(e => e.date_received && new Date(e.date_received).toISOString().split("T")[0] <= endDate);
-    tickets = tickets?.filter(t => t.created_at && new Date(t.created_at).toISOString().split("T")[0] <= endDate);
+    orders = orders?.filter((o) => o.date_created && new Date(o.date_created).toISOString().split("T")[0] <= endDate);
+    enquiries = enquiries?.filter((e) => e.date_received && new Date(e.date_received).toISOString().split("T")[0] <= endDate);
+    tickets = tickets?.filter((t) => t.created_at && new Date(t.created_at).toISOString().split("T")[0] <= endDate);
   }
 
-  // Helper: get YYYY-MM key from a date string
-  const monthKey = (dateStr: string) => {
-    const d = new Date(dateStr);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-  };
+  const list = orders || [];
+  const activeOrders = list.filter((o: any) => !DONE.has(o.stage || ""));
+  const now = new Date();
 
-  const monthLabel = (key: string) => {
-    const [y, m] = key.split("-");
-    return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString("en-US", { month: "short", year: "2-digit" });
-  };
-
-  // Helper: get revenue from an order (from quotations grand_total or payments amount)
-  const getOrderRevenue = (o: any): number => {
-    const quotations = Array.isArray(o.quotations) ? o.quotations : (o.quotations ? [o.quotations] : []);
-    const approved = quotations.find((q: any) => q.status === "Approved");
-    if (approved?.grand_total) return Number(approved.grand_total);
-    const payments = Array.isArray(o.payments) ? o.payments : (o.payments ? [o.payments] : []);
-    const totalPaid = payments.reduce((sum: number, p: any) => sum + (Number(p.amount) || Number(p.calculated_amount) || 0), 0);
-    if (totalPaid > 0) return totalPaid;
-    return 0;
-  };
-
-  // ─── 1. Orders Over Time (Monthly) ─────────────────────────────────────────
-  const ordersByMonthMap: Record<string, { count: number; revenue: number }> = {};
-  orders?.forEach((o: any) => {
-    if (!o.date_created) return;
-    const key = monthKey(o.date_created);
-    if (!ordersByMonthMap[key]) ordersByMonthMap[key] = { count: 0, revenue: 0 };
-    ordersByMonthMap[key].count += 1;
-    ordersByMonthMap[key].revenue += getOrderRevenue(o);
+  // ── Cash: collected vs outstanding (approved quotes) ─────────────────────
+  let cashCollected = 0;
+  let cashOutstanding = 0;
+  list.forEach((o: any) => {
+    const quote = getApprovedQuoteTotal(o);
+    const collected = getCollected(o);
+    cashCollected += collected;
+    if (quote > 0) cashOutstanding += Math.max(0, quote - collected);
+    else if (!DONE.has(o.stage || "")) cashOutstanding += 0;
   });
-  const ordersByMonth = Object.entries(ordersByMonthMap)
-    .map(([key, data]) => ({ month: monthLabel(key), monthKey: key, count: data.count, revenue: Math.round(data.revenue) }))
-    .sort((a, b) => a.monthKey.localeCompare(b.monthKey));
+  const cashPosition = [
+    { label: "Collected", amount: Math.round(cashCollected) },
+    { label: "Outstanding", amount: Math.round(cashOutstanding) },
+  ];
 
-  // ─── 2. Orders By Stage (Donut) ────────────────────────────────────────────
-  const ordersByStageMap: Record<string, number> = {};
-  orders?.forEach((o: any) => {
+  // ── Pipeline bottleneck: active orders by stage + avg age ────────────────
+  const bottleneckMap: Record<string, { count: number; totalDays: number }> = {};
+  activeOrders.forEach((o: any) => {
     const stage = o.stage || "Unknown";
-    ordersByStageMap[stage] = (ordersByStageMap[stage] || 0) + 1;
+    if (!bottleneckMap[stage]) bottleneckMap[stage] = { count: 0, totalDays: 0 };
+    bottleneckMap[stage].count += 1;
+    bottleneckMap[stage].totalDays += daysBetween(o.date_created || now, now);
   });
-  const ordersByStage = Object.entries(ordersByStageMap).map(([stage, count]) => ({ stage, count }));
+  const pipelineBottleneck = Object.entries(bottleneckMap)
+    .map(([stage, d]) => ({
+      stage: shortStage(stage),
+      fullStage: stage,
+      count: d.count,
+      avgAgeDays: d.count > 0 ? Math.round(d.totalDays / d.count) : 0,
+    }))
+    .sort((a, b) => b.count - a.count || b.avgAgeDays - a.avgAgeDays);
 
-  // ─── 3. Pipeline Funnel ────────────────────────────────────────────────────
+  // ── Aging risk buckets (active only) ─────────────────────────────────────
+  const agingBuckets = [
+    { bucket: "0–3 days", min: 0, max: 3, count: 0 },
+    { bucket: "4–7 days", min: 4, max: 7, count: 0 },
+    { bucket: "8–14 days", min: 8, max: 14, count: 0 },
+    { bucket: "15–30 days", min: 15, max: 30, count: 0 },
+    { bucket: "30+ days", min: 31, max: 99999, count: 0 },
+  ];
+  activeOrders.forEach((o: any) => {
+    const age = daysBetween(o.date_created || now, now);
+    const b = agingBuckets.find((x) => age >= x.min && age <= x.max);
+    if (b) b.count += 1;
+  });
+  const orderAging = agingBuckets.map(({ bucket, count }) => ({ bucket, count }));
+
+  const stuckOrders = activeOrders.filter((o: any) => daysBetween(o.date_created || now, now) >= STUCK_DAYS).length;
+
+  // ── Lead source conversion (decision: where to spend marketing) ──────────
+  const sourceStats: Record<string, { enquiries: number; converted: number }> = {};
+  (enquiries || []).forEach((e: any) => {
+    const source = e.source || "Unknown";
+    if (!sourceStats[source]) sourceStats[source] = { enquiries: 0, converted: 0 };
+    sourceStats[source].enquiries += 1;
+    if (e.status === "Converted" || e.orderId || e.order_id) sourceStats[source].converted += 1;
+  });
+  const sourceConversion = Object.entries(sourceStats)
+    .map(([source, d]) => ({
+      source,
+      enquiries: d.enquiries,
+      converted: d.converted,
+      rate: d.enquiries > 0 ? Math.round((d.converted / d.enquiries) * 100) : 0,
+    }))
+    .sort((a, b) => b.rate - a.rate || b.enquiries - a.enquiries);
+
+  // ── Team workload: open vs done ──────────────────────────────────────────
+  const teamMap: Record<string, { open: number; done: number }> = {};
+  list.forEach((o: any) => {
+    const empIds: string[] = o.assigned_employees || o.assignedEmployees || [];
+    empIds.forEach((empId: string) => {
+      if (!teamMap[empId]) teamMap[empId] = { open: 0, done: 0 };
+      if (DONE.has(o.stage || "")) teamMap[empId].done += 1;
+      else teamMap[empId].open += 1;
+    });
+  });
+  const teamWorkload = Object.entries(teamMap)
+    .map(([empId, d]) => {
+      const emp = employees?.find((e: any) => e.id === empId);
+      return {
+        employee: emp?.name || empId.slice(0, 8),
+        open: d.open,
+        done: d.done,
+        total: d.open + d.done,
+      };
+    })
+    .sort((a, b) => b.open - a.open)
+    .slice(0, 10);
+
+  // ── Collection trend (monthly cash received) ─────────────────────────────
+  const collectionMap: Record<string, number> = {};
+  list.forEach((o: any) => {
+    const payments = Array.isArray(o.payments) ? o.payments : o.payments ? [o.payments] : [];
+    payments.forEach((p: any) => {
+      if (p.status && p.status !== "received") return;
+      const when = p.paid_at || p.updated_at || p.created_at || o.date_created;
+      if (!when) return;
+      const key = monthKey(when);
+      collectionMap[key] = (collectionMap[key] || 0) + (Number(p.amount) || Number(p.calculated_amount) || 0);
+    });
+  });
+  const collectionTrend = Object.entries(collectionMap)
+    .map(([key, amount]) => ({ month: monthLabel(key), monthKey: key, collected: Math.round(amount) }))
+    .sort((a, b) => a.monthKey.localeCompare(b.monthKey))
+    .slice(-12);
+
+  // ── Funnel with drop-off ─────────────────────────────────────────────────
   const totalEnquiries = enquiries?.length || 0;
-  const totalOrders = orders?.length || 0;
-  const totalCompleted = orders?.filter((o: any) => o.stage === "Completed" || o.stage === "Closed").length || 0;
-  const totalInstallation = orders?.filter((o: any) => ["Installation Scheduled", "Ready For Installation"].includes(o.stage)).length || 0;
+  const totalOrders = list.length;
+  const totalCompleted = list.filter((o: any) => o.stage === "Completed" || o.stage === "Closed").length;
+  const inInstall = list.filter((o: any) =>
+    ["Installation Scheduled", "Ready For Installation"].includes(o.stage)
+  ).length;
   const conversionFunnel = [
     { stage: "Enquiries", count: totalEnquiries },
     { stage: "Orders", count: totalOrders },
-    { stage: "Installation", count: totalInstallation },
+    { stage: "Install", count: inInstall + totalCompleted },
     { stage: "Completed", count: totalCompleted },
   ];
 
-  // ─── 4. Revenue By Customer (Top 10) ───────────────────────────────────────
-  const revenueByCustomerMap: Record<string, number> = {};
-  orders?.forEach((o: any) => {
+  // ── Customers: revenue + outstanding (who to chase) ──────────────────────
+  const customerMoney: Record<string, { revenue: number; outstanding: number }> = {};
+  list.forEach((o: any) => {
     if (!o.customer_id) return;
-    revenueByCustomerMap[o.customer_id] = (revenueByCustomerMap[o.customer_id] || 0) + getOrderRevenue(o);
+    if (!customerMoney[o.customer_id]) customerMoney[o.customer_id] = { revenue: 0, outstanding: 0 };
+    const quote = getApprovedQuoteTotal(o);
+    const collected = getCollected(o);
+    customerMoney[o.customer_id].revenue += getOrderRevenue(o);
+    if (quote > 0) customerMoney[o.customer_id].outstanding += Math.max(0, quote - collected);
   });
-  const revenueByCustomer = Object.entries(revenueByCustomerMap)
-    .map(([customerId, revenue]) => {
+  const topCustomersByRevenue = Object.entries(customerMoney)
+    .map(([customerId, d]) => {
       const customer = customers?.find((c: any) => c.id === customerId);
-      return { customer: customer?.name || customer?.business_name || customerId.slice(0, 8), revenue: Math.round(revenue) };
+      return {
+        customer: customer?.name || customer?.business_name || customerId.slice(0, 8),
+        revenue: Math.round(d.revenue),
+        outstanding: Math.round(d.outstanding),
+      };
     })
     .sort((a, b) => b.revenue - a.revenue)
     .slice(0, 10);
 
-  // ─── 5. Team Performance ───────────────────────────────────────────────────
-  const teamPerformanceMap: Record<string, { ordersCompleted: number; ordersAssigned: number }> = {};
-  orders?.forEach((o: any) => {
-    const empIds: string[] = o.assigned_employees || o.assignedEmployees || [];
-    empIds.forEach((empId: string) => {
-      if (!teamPerformanceMap[empId]) teamPerformanceMap[empId] = { ordersCompleted: 0, ordersAssigned: 0 };
-      teamPerformanceMap[empId].ordersAssigned += 1;
-      if (o.stage === "Completed" || o.stage === "Closed") {
-        teamPerformanceMap[empId].ordersCompleted += 1;
-      }
-    });
-  });
-  const teamPerformance = Object.entries(teamPerformanceMap)
-    .map(([empId, data]) => {
-      const emp = employees?.find((e: any) => e.id === empId);
-      return { employee: emp?.name || empId.slice(0, 8), ordersCompleted: data.ordersCompleted, ordersAssigned: data.ordersAssigned };
+  const customersToChase = Object.entries(customerMoney)
+    .map(([customerId, d]) => {
+      const customer = customers?.find((c: any) => c.id === customerId);
+      return {
+        customer: customer?.name || customer?.business_name || customerId.slice(0, 8),
+        outstanding: Math.round(d.outstanding),
+      };
     })
-    .sort((a, b) => b.ordersCompleted - a.ordersCompleted)
+    .filter((c) => c.outstanding > 0)
+    .sort((a, b) => b.outstanding - a.outstanding)
     .slice(0, 10);
 
-  // ─── 6. Ticket Analysis by Priority ───────────────────────────────────────
-  const ticketsByPriorityMap: Record<string, number> = {};
-  tickets?.forEach((t: any) => {
+  // ── Open tickets by priority (action queue) ──────────────────────────────
+  const openTicketPriority: Record<string, number> = {};
+  let highPriorityOpen = 0;
+  (tickets || []).forEach((t: any) => {
+    const status = (t.status || "Open").toLowerCase();
+    if (status === "resolved" || status === "closed" || status === "completed") return;
     const priority = t.priority || "Normal";
-    ticketsByPriorityMap[priority] = (ticketsByPriorityMap[priority] || 0) + 1;
+    openTicketPriority[priority] = (openTicketPriority[priority] || 0) + 1;
+    if (/high|urgent|critical/i.test(priority)) highPriorityOpen += 1;
   });
-  const ticketsByPriority = Object.entries(ticketsByPriorityMap).map(([priority, count]) => ({ priority, count }));
+  const openTicketsByPriority = Object.entries(openTicketPriority).map(([priority, count]) => ({
+    priority,
+    count,
+  }));
 
-  // ─── 7. Enquiry Sources ────────────────────────────────────────────────────
-  const enquirySourcesMap: Record<string, number> = {};
-  enquiries?.forEach((e: any) => {
-    const source = e.source || "Unknown";
-    enquirySourcesMap[source] = (enquirySourcesMap[source] || 0) + 1;
-  });
-  const enquirySourceBreakdown = Object.entries(enquirySourcesMap).map(([source, count]) => ({ source, count }));
-
-  // ─── 8. Order Health Breakdown ────────────────────────────────────────────
-  const healthMap: Record<string, number> = {};
-  orders?.forEach((o: any) => {
-    const h = o.health || "Active";
-    healthMap[h] = (healthMap[h] || 0) + 1;
-  });
-  const orderHealthBreakdown = Object.entries(healthMap).map(([health, count]) => ({ health, count }));
-
-  // ─── 9. Revenue Trend (last 12 months, with MoM growth) ──────────────────
-  const revenueByMonthArr = ordersByMonth.slice(-12);
-  const revenueTrend = revenueByMonthArr.map((item, i) => {
-    const prev = i > 0 ? revenueByMonthArr[i - 1].revenue : 0;
-    const growth = prev > 0 ? Math.round(((item.revenue - prev) / prev) * 100) : 0;
-    return { month: item.month, revenue: item.revenue, orders: item.count, growth };
-  });
-
-  // ─── 10. Weekly Completions (last 12 weeks) ───────────────────────────────
-  const weeklyMap: Record<string, number> = {};
-  const now = new Date();
-  orders?.forEach((o: any) => {
-    if ((o.stage !== "Completed" && o.stage !== "Closed") || !o.date_created) return;
-    const d = new Date(o.date_created);
-    const diffMs = now.getTime() - d.getTime();
-    const weeksAgo = Math.floor(diffMs / (7 * 24 * 60 * 60 * 1000));
-    if (weeksAgo > 11) return;
-    const label = `W-${11 - weeksAgo}`;
-    weeklyMap[label] = (weeklyMap[label] || 0) + 1;
-  });
-  const weeklyCompletions = Array.from({ length: 12 }, (_, i) => {
-    const label = `W-${i}`;
-    return { week: i === 11 ? "This week" : i === 10 ? "Last week" : `-${11 - i}w`, completed: weeklyMap[label] || 0 };
-  });
-
-  // ─── 11. Conversion Rate by Month ─────────────────────────────────────────
-  const enquiriesByMonthMap: Record<string, number> = {};
-  enquiries?.forEach((e: any) => {
+  // ── Monthly conversion (enquiry → order) ─────────────────────────────────
+  const enquiriesByMonth: Record<string, number> = {};
+  (enquiries || []).forEach((e: any) => {
     const d = e.date_received || e.date_created;
     if (!d) return;
     const key = monthKey(d);
-    enquiriesByMonthMap[key] = (enquiriesByMonthMap[key] || 0) + 1;
+    enquiriesByMonth[key] = (enquiriesByMonth[key] || 0) + 1;
   });
-  const conversionByMonth = Object.entries(ordersByMonthMap)
-    .map(([key, data]) => {
-      const enqCount = enquiriesByMonthMap[key] || 0;
-      const rate = enqCount > 0 ? Math.round((data.count / enqCount) * 100) : 0;
-      return { month: monthLabel(key), monthKey: key, orders: data.count, enquiries: enqCount, rate };
-    })
-    .sort((a, b) => a.monthKey.localeCompare(b.monthKey))
-    .slice(-12);
-
-  // ─── 12. Customer Retention (new vs. returning) ───────────────────────────
-  const firstOrderByCustomer: Record<string, string> = {};
-  const sortedOrders = [...(orders || [])].sort((a: any, b: any) =>
-    (a.date_created || "").localeCompare(b.date_created || "")
-  );
-  sortedOrders.forEach((o: any) => {
-    if (!o.customer_id || !o.date_created) return;
-    if (!firstOrderByCustomer[o.customer_id]) firstOrderByCustomer[o.customer_id] = monthKey(o.date_created);
-  });
-
-  const customerRetentionMap: Record<string, { new: number; returning: number }> = {};
-  orders?.forEach((o: any) => {
-    if (!o.customer_id || !o.date_created) return;
+  const ordersByMonthMap: Record<string, number> = {};
+  list.forEach((o: any) => {
+    if (!o.date_created) return;
     const key = monthKey(o.date_created);
-    if (!customerRetentionMap[key]) customerRetentionMap[key] = { new: 0, returning: 0 };
-    if (firstOrderByCustomer[o.customer_id] === key) customerRetentionMap[key].new += 1;
-    else customerRetentionMap[key].returning += 1;
+    ordersByMonthMap[key] = (ordersByMonthMap[key] || 0) + 1;
   });
-  const customerRetention = Object.entries(customerRetentionMap)
-    .map(([key, data]) => ({ month: monthLabel(key), monthKey: key, new: data.new, returning: data.returning }))
-    .sort((a, b) => a.monthKey.localeCompare(b.monthKey))
-    .slice(-12);
-
-  // ─── 13. Ticket Status Breakdown ──────────────────────────────────────────
-  const ticketStatusMap: Record<string, number> = {};
-  tickets?.forEach((t: any) => {
-    const s = t.status || "Open";
-    ticketStatusMap[s] = (ticketStatusMap[s] || 0) + 1;
+  const allMonthKeys = Array.from(
+    new Set([...Object.keys(enquiriesByMonth), ...Object.keys(ordersByMonthMap)])
+  ).sort();
+  const conversionByMonth = allMonthKeys.slice(-12).map((key) => {
+    const enq = enquiriesByMonth[key] || 0;
+    const ord = ordersByMonthMap[key] || 0;
+    return {
+      month: monthLabel(key),
+      monthKey: key,
+      enquiries: enq,
+      orders: ord,
+      rate: enq > 0 ? Math.round((ord / enq) * 100) : 0,
+    };
   });
-  const ticketStatusBreakdown = Object.entries(ticketStatusMap).map(([status, count]) => ({ status, count }));
 
-  // ─── KPI Summary ─────────────────────────────────────────────────────────
-  const totalRevenue = orders?.reduce((sum: number, o: any) => sum + getOrderRevenue(o), 0) || 0;
-  const avgOrderValue = totalOrders > 0 ? Math.round(totalRevenue / totalOrders) : 0;
+  const totalRevenue = list.reduce((sum: number, o: any) => sum + getOrderRevenue(o), 0);
   const conversionRate = totalEnquiries > 0 ? Math.round((totalOrders / totalEnquiries) * 100) : 0;
-  const activeOrders = orders?.filter((o: any) => !["Completed", "Closed", "Cancelled"].includes(o.stage)).length || 0;
-  const openTickets = tickets?.filter((t: any) => t.status === "Open" || t.status === "In Progress").length || 0;
+  const openTickets = (tickets || []).filter((t: any) => {
+    const s = (t.status || "Open").toLowerCase();
+    return s !== "resolved" && s !== "closed" && s !== "completed";
+  }).length;
 
-  // MoM revenue growth (last 2 months)
-  const lastTwoMonths = ordersByMonth.slice(-2);
-  const revenueGrowth = lastTwoMonths.length === 2 && lastTwoMonths[0].revenue > 0
-    ? Math.round(((lastTwoMonths[1].revenue - lastTwoMonths[0].revenue) / lastTwoMonths[0].revenue) * 100)
-    : 0;
+  const avgAgeActive =
+    activeOrders.length > 0
+      ? Math.round(
+          activeOrders.reduce((s: number, o: any) => s + daysBetween(o.date_created || now, now), 0) /
+            activeOrders.length
+        )
+      : 0;
 
   return {
-    // Summary KPIs
     kpis: {
+      outstanding: Math.round(cashOutstanding),
+      collected: Math.round(cashCollected),
+      stuckOrders,
+      conversionRate,
+      activeOrders: activeOrders.length,
+      avgAgeDays: avgAgeActive,
+      highPriorityTickets: highPriorityOpen,
+      openTickets,
       totalRevenue: Math.round(totalRevenue),
       totalOrders,
-      avgOrderValue,
-      conversionRate,
-      activeOrders,
-      openTickets,
-      revenueGrowth,
     },
-    // Charts
-    ordersByMonth,
-    ordersByStage,
+    pipelineBottleneck,
+    orderAging,
+    cashPosition,
+    sourceConversion,
+    teamWorkload,
+    collectionTrend,
     conversionFunnel,
-    revenueByCustomer,
-    teamPerformance,
-    ticketsByPriority,
-    enquirySourceBreakdown,
-    orderHealthBreakdown,
-    revenueTrend,
-    weeklyCompletions,
+    topCustomersByRevenue,
+    customersToChase,
+    openTicketsByPriority,
     conversionByMonth,
-    customerRetention,
-    ticketStatusBreakdown,
   };
 }

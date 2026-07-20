@@ -5,8 +5,8 @@ import { ReportCard, C } from "./ReportCard";
 import { ReportChatBox } from "./ReportChatBox";
 import {
   BarChart2, MessageSquare, TrendingUp, TrendingDown, Package,
-  IndianRupee, Target, AlertCircle, Activity, Filter, X,
-  LayoutDashboard, Layers,
+  Target, AlertCircle, Activity, Filter, X,
+  LayoutDashboard, Layers, Clock, Wallet,
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -16,7 +16,6 @@ interface ReportsPageClientProps {
   initialTo?: string;
 }
 
-// ── KPI Card component ────────────────────────────────────────────────────────
 function KpiCard({ label, value, sub, icon: Icon, trend, trendLabel, color }: {
   label: string;
   value: string;
@@ -63,7 +62,6 @@ function KpiCard({ label, value, sub, icon: Icon, trend, trendLabel, color }: {
   );
 }
 
-// ── Quick preset buttons ────────────────────────────────────────────────────
 const PRESETS = [
   { label: "7 days", days: 7 },
   { label: "30 days", days: 30 },
@@ -81,7 +79,6 @@ function getPresetDates(days: number) {
   };
 }
 
-// ── Tab button ─────────────────────────────────────────────────────────────
 function Tab({ label, icon: Icon, active, onClick }: { label: string; icon: React.ElementType; active: boolean; onClick: () => void }) {
   return (
     <button
@@ -106,7 +103,6 @@ function Tab({ label, icon: Icon, active, onClick }: { label: string; icon: Reac
   );
 }
 
-// ── Format helpers ─────────────────────────────────────────────────────────
 function formatINR(n: number): string {
   if (n >= 10000000) return `₹${(n / 10000000).toFixed(1)}Cr`;
   if (n >= 100000) return `₹${(n / 100000).toFixed(1)}L`;
@@ -115,7 +111,7 @@ function formatINR(n: number): string {
 }
 
 export function ReportsPageClient({ reportData, initialFrom, initialTo }: ReportsPageClientProps) {
-  const [activeTab, setActiveTab] = useState<"overview" | "deep" | "chat">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "money" | "chat">("overview");
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -145,8 +141,6 @@ export function ReportsPageClient({ reportData, initialFrom, initialTo }: Report
 
   return (
     <div style={{ padding: "28px 32px", background: "#f8fafc", minHeight: "100%", display: "flex", flexDirection: "column", gap: 24 }}>
-
-      {/* ── Page Header ──────────────────────────────────────────────────────── */}
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -154,33 +148,30 @@ export function ReportsPageClient({ reportData, initialFrom, initialTo }: Report
               <BarChart2 size={20} color="#fff" />
             </div>
             <div>
-              <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: "#0f172a" }}>Reports & Analytics</h1>
-              <p style={{ margin: 0, fontSize: 13, color: "#64748b", marginTop: 2 }}>Real-time insights across your entire business pipeline</p>
+              <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: "#0f172a" }}>Decision Reports</h1>
+              <p style={{ margin: 0, fontSize: 13, color: "#64748b", marginTop: 2 }}>
+                Actionable views — what to chase, unblock, and invest in
+              </p>
             </div>
           </div>
         </div>
 
-        {/* Date filter panel */}
         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
-          {/* Preset chips */}
-          {PRESETS.map(p => (
+          {PRESETS.map((p) => (
             <button key={p.days} onClick={() => applyPreset(p.days)} style={{
               padding: "6px 12px", borderRadius: 8, border: "1px solid #e2e8f0",
               background: "#fff", cursor: "pointer", fontSize: 12, fontWeight: 600, color: "#475569",
-              transition: "all 0.15s",
-            }}
-            onMouseEnter={e => { e.currentTarget.style.background = "#f1f5f9"; }}
-            onMouseLeave={e => { e.currentTarget.style.background = "#fff"; }}>
+            }}>
               {p.label}
             </button>
           ))}
-          {/* Date range inputs */}
           <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "6px 12px" }}>
             <Filter size={13} color="#94a3b8" />
-            <input type="date" value={initialFrom || ""} onChange={e => handleDateChange("from", e.target.value)}
+            <span style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase" }}>From</span>
+            <input type="date" value={initialFrom || ""} onChange={(e) => handleDateChange("from", e.target.value)}
               style={{ fontSize: 12, border: "none", outline: "none", background: "transparent", color: "#475569", cursor: "pointer" }} />
-            <span style={{ fontSize: 12, color: "#94a3b8" }}>→</span>
-            <input type="date" value={initialTo || ""} onChange={e => handleDateChange("to", e.target.value)}
+            <span style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase" }}>To</span>
+            <input type="date" value={initialTo || ""} onChange={(e) => handleDateChange("to", e.target.value)}
               style={{ fontSize: 12, border: "none", outline: "none", background: "transparent", color: "#475569", cursor: "pointer" }} />
             {(initialFrom || initialTo) && (
               <button onClick={clearDates} style={{ display: "flex", background: "none", border: "none", cursor: "pointer", padding: 0, color: "#94a3b8" }}>
@@ -191,136 +182,106 @@ export function ReportsPageClient({ reportData, initialFrom, initialTo }: Report
         </div>
       </div>
 
-      {/* ── KPI Strip ────────────────────────────────────────────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12 }}>
-        <KpiCard label="Total Revenue"   value={formatINR(k.totalRevenue  || 0)} icon={IndianRupee} trend={k.revenueGrowth} trendLabel="vs last month" color={C.revenue}    />
-        <KpiCard label="Total Orders"     value={String(k.totalOrders   || 0)} sub="all time"       icon={Package}     color={C.orders}     />
-        <KpiCard label="Avg. Order Value" value={formatINR(k.avgOrderValue || 0)} sub="per order"   icon={TrendingUp}  color={C.customers}  />
-        <KpiCard label="Conversion Rate"  value={`${k.conversionRate || 0}%`}   sub="enquiry → order" icon={Target}   color={C.warning}    />
-        <KpiCard label="Active Orders"    value={String(k.activeOrders  || 0)} sub="in pipeline"   icon={Activity}    color={C.team}       />
-        <KpiCard label="Open Tickets"     value={String(k.openTickets   || 0)} sub="need attention" icon={AlertCircle} color={C.danger}     />
+      {/* Decision KPIs */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
+        <KpiCard label="Outstanding" value={formatINR(k.outstanding || 0)} sub="to collect" icon={Wallet} color={C.warning} />
+        <KpiCard label="Stuck Orders" value={String(k.stuckOrders || 0)} sub="open 7+ days" icon={Clock} color={C.danger} />
+        <KpiCard label="Avg Age" value={`${k.avgAgeDays || 0}d`} sub="active pipeline" icon={Activity} color={C.team} />
+        <KpiCard label="Conversion" value={`${k.conversionRate || 0}%`} sub="enquiry → order" icon={Target} color={C.completion} />
+        <KpiCard label="Active Orders" value={String(k.activeOrders || 0)} sub="in flight" icon={Package} color={C.orders} />
+        <KpiCard label="Urgent Tickets" value={String(k.highPriorityTickets || 0)} sub={`${k.openTickets || 0} open total`} icon={AlertCircle} color={C.danger} />
       </div>
 
-      {/* ── Tab Bar ──────────────────────────────────────────────────────────── */}
       <div style={{ display: "flex", alignItems: "center", gap: 4, background: "#f1f5f9", borderRadius: 14, padding: 4, width: "fit-content" }}>
-        <Tab label="Overview" icon={LayoutDashboard} active={activeTab === "overview"} onClick={() => setActiveTab("overview")} />
-        <Tab label="Deep Dive" icon={Layers} active={activeTab === "deep"} onClick={() => setActiveTab("deep")} />
+        <Tab label="Act Now" icon={LayoutDashboard} active={activeTab === "overview"} onClick={() => setActiveTab("overview")} />
+        <Tab label="Money & Growth" icon={Layers} active={activeTab === "money"} onClick={() => setActiveTab("money")} />
         <Tab label="AI Builder" icon={MessageSquare} active={activeTab === "chat"} onClick={() => setActiveTab("chat")} />
       </div>
 
-      {/* ── OVERVIEW TAB ─────────────────────────────────────────────────────── */}
       {activeTab === "overview" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 16, animation: "fadeSlideIn 0.3s ease" }}>
-          {/* Row 1: Revenue Trend (wide) + Order Health */}
-          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 16 }}>
             <ReportCard
-              type="REVENUE_TREND"
-              title="Revenue & Order Trend"
-              description="Monthly revenue (bars) overlaid with order count (line)"
-              data={reportData.revenueTrend}
+              type="PIPELINE_BOTTLENECK"
+              title="Pipeline Bottlenecks"
+              description="Where active work is stuck — label shows average days open (red = 14d+)"
+              data={reportData.pipelineBottleneck}
             />
             <ReportCard
-              type="ORDER_HEALTH"
-              title="Order Health"
-              description="Active, on-hold, lost & completed breakdown"
-              data={reportData.orderHealthBreakdown}
+              type="ORDER_AGING"
+              title="Order Aging Risk"
+              description="Chase 8–14 day and 15+ day jobs before they slip"
+              data={reportData.orderAging}
             />
           </div>
-
-          {/* Row 2: Orders Over Time + Pipeline Funnel */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
             <ReportCard
-              type="CUSTOMER_RETENTION"
-              title="Customer Retention"
-              description="New vs returning customers per month"
-              data={reportData.customerRetention}
+              type="CASH_POSITION"
+              title="Cash Position"
+              description="Collected vs still owed on approved quotes"
+              data={reportData.cashPosition}
             />
             <ReportCard
-              type="PIPELINE_FUNNEL"
+              type="CUSTOMERS_TO_CHASE"
+              title="Customers to Chase"
+              description="Largest outstanding balances — call these first"
+              data={reportData.customersToChase}
+            />
+            <ReportCard
+              type="OPEN_TICKETS"
+              title="Open Tickets by Priority"
+              description="Unresolved service work by urgency"
+              data={reportData.openTicketsByPriority}
+            />
+          </div>
+          <ReportCard
+            type="TEAM_WORKLOAD"
+            title="Team Workload"
+            description="Open vs completed load — rebalance overloaded staff"
+            data={reportData.teamWorkload}
+          />
+        </div>
+      )}
+
+      {activeTab === "money" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 16, animation: "fadeSlideIn 0.3s ease" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: 16 }}>
+            <ReportCard
+              type="COLLECTION_TREND"
+              title="Cash Collection Trend"
+              description="Actual money received month by month"
+              data={reportData.collectionTrend}
+            />
+            <ReportCard
+              type="CONVERSION_FUNNEL"
               title="Pipeline Funnel"
-              description="Enquiries → Orders → Installation → Completed"
+              description="Where leads drop off before completion"
               data={reportData.conversionFunnel}
             />
           </div>
-
-          {/* Row 3: Conversion by Month + Weekly Completions */}
-          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
             <ReportCard
-              type="CONVERSION_BY_MONTH"
-              title="Monthly Conversion Trend"
-              description="Enquiries vs orders placed with conversion rate %"
-              data={reportData.conversionByMonth}
+              type="SOURCE_CONVERSION"
+              title="Lead Source Conversion"
+              description="Invest in sources with the highest convert %"
+              data={reportData.sourceConversion}
             />
             <ReportCard
-              type="WEEKLY_COMPLETIONS"
-              title="Weekly Completions"
-              description="Orders completed per week (last 12 weeks)"
-              data={reportData.weeklyCompletions}
+              type="TOP_CUSTOMERS"
+              title="Top Customers by Revenue"
+              description="Highest value accounts to protect"
+              data={reportData.topCustomersByRevenue}
             />
           </div>
+          <ReportCard
+            type="CONVERSION_BY_MONTH"
+            title="Monthly Conversion"
+            description="Enquiries vs orders — is win-rate improving?"
+            data={reportData.conversionByMonth}
+          />
         </div>
       )}
 
-      {/* ── DEEP DIVE TAB ────────────────────────────────────────────────────── */}
-      {activeTab === "deep" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 16, animation: "fadeSlideIn 0.3s ease" }}>
-          {/* Row 1: Orders over time */}
-          <ReportCard
-            type="ORDERS_OVER_TIME"
-            title="Orders Over Time"
-            description="Monthly order volume and estimated revenue (dual-axis area chart)"
-            data={reportData.ordersByMonth}
-          />
-
-          {/* Row 2: Top Customers + Order Stage */}
-          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16 }}>
-            <ReportCard
-              type="REVENUE_BY_CUSTOMER"
-              title="Top 10 Customers by Revenue"
-              description="Highest revenue generating customers"
-              data={reportData.revenueByCustomer}
-            />
-            <ReportCard
-              type="ORDER_STAGE"
-              title="Order Stage Breakdown"
-              description="Distribution of orders by their current pipeline stage"
-              data={reportData.ordersByStage}
-            />
-          </div>
-
-          {/* Row 3: Team Performance */}
-          <ReportCard
-            type="TEAM_PERFORMANCE"
-            title="Team Performance"
-            description="Assigned vs completed orders per team member"
-            data={reportData.teamPerformance}
-          />
-
-          {/* Row 4: Enquiry Sources + Ticket Priority + Ticket Status */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
-            <ReportCard
-              type="ENQUIRY_SOURCES"
-              title="Enquiry Sources"
-              description="Where your leads are coming from"
-              data={reportData.enquirySourceBreakdown}
-            />
-            <ReportCard
-              type="TICKET_ANALYSIS"
-              title="Tickets by Priority"
-              description="Support ticket distribution by priority level"
-              data={reportData.ticketsByPriority}
-            />
-            <ReportCard
-              type="TICKET_STATUS"
-              title="Ticket Status Mix"
-              description="Open, in-progress, and resolved ticket breakdown"
-              data={reportData.ticketStatusBreakdown}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* ── AI BUILDER TAB ───────────────────────────────────────────────────── */}
       {activeTab === "chat" && (
         <div style={{ height: 700, animation: "fadeSlideIn 0.3s ease" }}>
           <ReportChatBox reportData={reportData} />
@@ -331,6 +292,9 @@ export function ReportsPageClient({ reportData, initialFrom, initialTo }: Report
         @keyframes fadeSlideIn {
           from { opacity: 0; transform: translateY(8px); }
           to   { opacity: 1; transform: translateY(0); }
+        }
+        @media (max-width: 900px) {
+          div[style*="grid-template-columns"] { grid-template-columns: 1fr !important; }
         }
       `}</style>
     </div>

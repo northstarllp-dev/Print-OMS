@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
-import LoadingLines from "@/components/ui/loading-lines";
+import { PrintomsLoading } from "@/components/ui/PrintomsLoading";
 
 function NavigationLoaderInner() {
   const pathname = usePathname();
@@ -56,11 +56,7 @@ function NavigationLoaderInner() {
 
   if (!isLoading) return null;
 
-  return (
-    <div className="fixed inset-0 z-[99999] flex flex-col items-center justify-center bg-white/95">
-      <LoadingLines logoWidth={160} logoHeight={48} />
-    </div>
-  );
+  return <PrintomsLoading fullScreen />;
 }
 
 export function GlobalNavigationLoader() {

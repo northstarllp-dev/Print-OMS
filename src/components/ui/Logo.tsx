@@ -10,9 +10,11 @@ interface LogoProps {
   width?: number;
   height?: number;
   align?: "left" | "center" | "right";
+  /** When false, skip client.logoScale (use for loaders so size stays predictable). */
+  applyScale?: boolean;
 }
 
-export function Logo({ className = "", forceText = false, width = 200, height = 48, align = "center" }: LogoProps) {
+export function Logo({ className = "", forceText = false, width = 200, height = 48, align = "center", applyScale = true }: LogoProps) {
   const [client, setClient] = useState<ClientConfig | null>(null);
 
   useEffect(() => {
@@ -26,7 +28,7 @@ export function Logo({ className = "", forceText = false, width = 200, height = 
   }
 
   if (client.logoUrl && !forceText) {
-    const scale = client.logoScale || 1;
+    const scale = applyScale ? (client.logoScale || 1) : 1;
     const finalWidth = width * scale;
     const finalHeight = height * scale;
 

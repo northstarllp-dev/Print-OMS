@@ -18,6 +18,7 @@ import {
   MapPin,
   TrendingUp,
   AlertCircle,
+  Calendar,
 } from "lucide-react";
 import { AddEnquiryModal, EnquiryFormData } from "@/features/enquiries/components/AddEnquiryModal";
 import { createEnquiry } from "@/features/enquiries/actions/enquiryActions";
@@ -318,43 +319,65 @@ export function AdminDashboardClient({
             Overview of your business performance
           </p>
         </div>
-        <div className="flex gap-2 sm:gap-2.5 items-center flex-wrap">
-          <div className="flex items-center gap-1.5 bg-white px-2 py-1 rounded-lg border border-slate-200 w-full sm:w-auto">
+        <div className="flex items-center gap-2 w-full sm:w-auto min-w-0">
+          {/* Date range — compact, clearly labeled */}
+          <div
+            className="flex items-center gap-1 sm:gap-1.5 bg-white px-2 py-1.5 rounded-lg border border-slate-200 min-w-0 flex-1 sm:flex-initial"
+            title="Filter by date range"
+          >
+            <Calendar size={14} className="text-slate-400 shrink-0" aria-hidden />
+            <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide text-slate-400 shrink-0">
+              From
+            </span>
+            <label className="sr-only" htmlFor="dash-start-date">Start date</label>
             <input
+              id="dash-start-date"
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="flex-1 min-w-0 border-none outline-none text-[13px] text-slate-600 bg-transparent"
+              aria-label="Start date"
+              className="w-[6.75rem] sm:w-[9.5rem] max-w-full border-none outline-none text-[11px] sm:text-[13px] text-slate-600 bg-transparent"
             />
-            <span className="text-[13px] text-slate-400">to</span>
+            <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide text-slate-400 shrink-0">
+              To
+            </span>
+            <label className="sr-only" htmlFor="dash-end-date">End date</label>
             <input
+              id="dash-end-date"
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              className="flex-1 min-w-0 border-none outline-none text-[13px] text-slate-600 bg-transparent"
+              aria-label="End date"
+              className="w-[6.75rem] sm:w-[9.5rem] max-w-full border-none outline-none text-[11px] sm:text-[13px] text-slate-600 bg-transparent"
             />
             {(startDate || endDate) && (
               <button
+                type="button"
                 onClick={() => { setStartDate(""); setEndDate(""); }}
-                className="flex items-center justify-center bg-transparent border-none cursor-pointer text-slate-400 p-0.5"
-                title="Clear Dates"
+                className="flex items-center justify-center bg-transparent border-none cursor-pointer text-slate-400 p-0.5 shrink-0"
+                title="Clear dates"
               >
                 <XCircle size={14} />
               </button>
             )}
           </div>
-          <button
-            onClick={() => setIsTicketModalOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-lg border-none bg-[var(--color-primary)] text-[12px] sm:text-[13px] font-bold text-white cursor-pointer"
-          >
-            <Plus size={14} /> <span className="hidden sm:inline">Add Service </span>Ticket
-          </button>
-          <button
-            onClick={() => setIsAddModalOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-lg border-none bg-[var(--color-primary)] text-[12px] sm:text-[13px] font-bold text-white cursor-pointer"
-          >
-            <Plus size={14} /> <span className="hidden sm:inline">Add </span>Enquiry
-          </button>
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => setIsTicketModalOpen(true)}
+              className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3.5 py-2 sm:py-2.5 rounded-lg border-none bg-[var(--color-primary)] text-[11px] sm:text-[13px] font-bold text-white cursor-pointer whitespace-nowrap"
+            >
+              <Plus size={14} /> Ticket
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsAddModalOpen(true)}
+              className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3.5 py-2 sm:py-2.5 rounded-lg border-none bg-[var(--color-primary)] text-[11px] sm:text-[13px] font-bold text-white cursor-pointer whitespace-nowrap"
+            >
+              <Plus size={14} /> Enquiry
+            </button>
+          </div>
         </div>
       </div>
 

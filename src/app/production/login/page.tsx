@@ -5,6 +5,7 @@ import { Eye, EyeOff } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { productionFloorSignIn } from "@/features/auth/actions/authActions";
 import { Logo } from "@/components/ui/Logo";
+import { PrintomsLoading } from "@/components/ui/PrintomsLoading";
 
 export default function ProductionLogin() {
   const router = useRouter();
@@ -24,12 +25,12 @@ export default function ProductionLogin() {
       const res = await productionFloorSignIn(email, password);
       if (res.error) {
         setError(res.error);
+        setLoading(false);
       } else {
         window.location.href = "/printoms/production/orders";
       }
     } catch (err: any) {
       setError(err.message || "An unexpected error occurred.");
-    } finally {
       setLoading(false);
     }
   };
@@ -43,7 +44,9 @@ export default function ProductionLogin() {
       justifyContent: "center",
       fontFamily: "var(--font-sans)",
       padding: 24,
+      position: "relative",
     }}>
+      {loading && <PrintomsLoading fullScreen />}
       {/* Card */}
       <div style={{
         width: "100%",

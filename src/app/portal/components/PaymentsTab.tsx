@@ -1,13 +1,14 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
-import { CreditCard, Loader2, IndianRupee } from "lucide-react";
+import { CreditCard, IndianRupee } from "lucide-react";
 import { Payment } from "@/types";
 import {
   getPaymentsByOrder,
   getPaymentBalanceSummary,
   type PaymentBalanceSummary,
 } from "@/features/payments/actions/paymentActions";
+import { PrintomsLoading } from "@/components/ui/PrintomsLoading";
 
 interface PaymentsTabProps {
   orderId: string;
@@ -44,11 +45,7 @@ export function PaymentsTab({ orderId }: PaymentsTabProps) {
   }, [load]);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-16 text-slate-400 gap-2 text-sm font-bold">
-        <Loader2 size={18} className="animate-spin" /> Loading payments…
-      </div>
-    );
+    return <PrintomsLoading />;
   }
 
   return (
