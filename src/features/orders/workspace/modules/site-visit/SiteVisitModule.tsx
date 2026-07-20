@@ -567,16 +567,16 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
       />
 
       {isConfirmSkipOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-sm shadow-xl p-6">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-end md:items-center justify-center p-0 md:p-4">
+          <div className="bg-white rounded-t-2xl md:rounded-2xl w-full max-w-sm shadow-xl p-5 md:p-6 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
             <h2 className="text-lg font-black text-slate-900 mb-2">Confirm Skip Site Visit</h2>
             <p className="text-sm text-slate-600 mb-6 leading-relaxed">
               Are you sure you want to skip the site visit? This will bypass the scheduling phase and move directly to adding measurements. This action cannot be undone.
             </p>
-            <div className="flex justify-end gap-3">
+            <div className="flex flex-col-reverse md:flex-row justify-end gap-2 md:gap-3">
               <button
                 onClick={() => setIsConfirmSkipOpen(false)}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm rounded-xl transition-colors"
+                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm rounded-xl transition-colors"
               >
                 Cancel
               </button>
@@ -588,7 +588,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
                     await onSkipSiteVisit();
                   }
                 }}
-                className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm rounded-xl transition-colors shadow-sm"
+                className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm rounded-xl transition-colors shadow-sm"
               >
                 Skip Site Visit
               </button>

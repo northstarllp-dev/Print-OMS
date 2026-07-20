@@ -675,36 +675,26 @@ export function ProductsView({
   const activeCount = products.filter(p => p.is_active).length;
 
   return (
-    <div style={{ padding: "28px 28px 40px", minHeight: "100%" }}>
+    <div className="p-3 sm:p-4 md:p-8 min-h-full">
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 24 }}>
-        <div>
-          <h1 style={{ fontSize: 26, fontWeight: 900, color: "#0f172a", margin: 0, letterSpacing: "-0.02em" }}>Product Master</h1>
-          <p style={{ fontSize: 13, color: "#64748b", margin: "4px 0 0", fontWeight: 500 }}>
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-5 md:mb-6">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl md:text-[26px] font-black text-slate-900 m-0 tracking-tight">Product Master</h1>
+          <p className="text-xs sm:text-[13px] text-slate-500 mt-1 m-0 font-medium">
             Catalogue of signage materials & components for quotation building.
-            <span style={{ marginLeft: 8, fontWeight: 700, color: "#1e40af" }}>{activeCount} active</span>
+            <span className="ml-2 font-bold text-[#1e40af]">{activeCount} active</span>
           </p>
         </div>
-        <div style={{ display: "flex", gap: 10 }}>
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-2.5 w-full sm:w-auto">
           <button
             onClick={() => setShowManageCategories(true)}
-            style={{
-              display: "flex", alignItems: "center", gap: 8,
-              padding: "10px 20px", background: "white", color: "#1e40af",
-              border: "1px solid #1e40af", borderRadius: 10, fontSize: 13, fontWeight: 800,
-              cursor: "pointer", boxShadow: "0 2px 8px rgba(30,64,175,0.05)", transition: "all 0.15s",
-            }}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white text-[#1e40af] border border-[#1e40af] rounded-[10px] text-[13px] font-extrabold"
           >
             <Tag size={16} /> Manage Categories
           </button>
           <button
             onClick={handleOpenAdd}
-            style={{
-              display: "flex", alignItems: "center", gap: 8,
-              padding: "10px 20px", background: "#1e40af", color: "white",
-              border: "none", borderRadius: 10, fontSize: 13, fontWeight: 800,
-              cursor: "pointer", boxShadow: "0 2px 8px rgba(30,64,175,0.3)", transition: "all 0.15s",
-            }}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-[#1e40af] text-white rounded-[10px] text-[13px] font-extrabold"
           >
             <Plus size={16} /> Add Product
           </button>
@@ -712,7 +702,7 @@ export function ProductsView({
       </div>
 
       {/* Stats */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14, marginBottom: 22 }}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 mb-5 md:mb-[22px]">
         {[
           { label: "Total Products", value: products.length, color: "#1e40af", bg: "#eff6ff" },
           { label: "Active", value: activeCount, color: "#16a34a", bg: "#f0fdf4" },
@@ -733,15 +723,16 @@ export function ProductsView({
       )}
 
       {/* Search + Filters */}
-      <div style={{ display: "flex", gap: 12, marginBottom: 22, alignItems: "center", flexWrap: "wrap" }}>
-        <div style={{ position: "relative", flex: 1, minWidth: 200 }}>
-          <Search size={14} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8", pointerEvents: "none" }} />
+      <div className="flex flex-col sm:flex-row gap-3 mb-5 md:mb-[22px] sm:items-center sm:flex-wrap">
+        <div className="relative w-full sm:flex-1 sm:min-w-[200px]">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
           <input
             type="text" placeholder="Search products..."
             value={search} onChange={e => setSearch(e.target.value)}
             style={{ ...inputStyle, paddingLeft: 36, height: 40 }}
           />
         </div>
+        <div className="flex flex-wrap gap-2 items-center">
         <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} style={{ ...inputStyle, width: "auto", height: 40, paddingRight: 28 }}>
           {uniqueCategories.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
@@ -789,6 +780,7 @@ export function ProductsView({
           <RefreshCw size={14} />
           Reset
         </button>
+        </div>
       </div>
 
       {/* Grid */}
@@ -801,7 +793,7 @@ export function ProductsView({
           </button>
         </div>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 16 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 260px), 1fr))", gap: 16 }}>
           {filtered.map(p => (
             <ProductCard
               key={p.id}

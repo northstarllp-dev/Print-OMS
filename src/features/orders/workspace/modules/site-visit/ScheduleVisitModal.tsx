@@ -128,15 +128,15 @@ export const ScheduleVisitModal: React.FC<ScheduleVisitModalProps> = ({ isOpen, 
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
-        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white/80 backdrop-blur-md z-10">
-          <h2 className="text-lg font-black text-slate-800">Schedule Site Visit</h2>
-          <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-colors">
+    <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center p-0 md:p-4 bg-slate-900/50 backdrop-blur-sm">
+      <div className="bg-white rounded-t-2xl md:rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[92dvh] md:max-h-[90vh]">
+        <div className="px-4 md:px-5 py-3.5 md:py-4 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white/80 backdrop-blur-md z-10 shrink-0">
+          <h2 className="text-base md:text-lg font-black text-slate-800">Schedule Site Visit</h2>
+          <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-colors" aria-label="Close">
             <X size={20} />
           </button>
         </div>
-        <div className="p-5 overflow-y-auto">
+        <div className="p-4 md:p-5 overflow-y-auto flex-1 min-h-0">
           <form id="schedule-visit-form" onSubmit={handleSubmit} className="space-y-5">
             {/* Date Picker */}
             <div>
@@ -168,7 +168,7 @@ export const ScheduleVisitModal: React.FC<ScheduleVisitModalProps> = ({ isOpen, 
               </div>
 
               {selectedDate && (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 mt-3">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 mt-3">
                   {["10 AM - 11 AM", "11 AM - 12 PM", "12 PM - 1 PM", "1 PM - 2 PM", "2 PM - 3 PM", "3 PM - 4 PM", "4 PM - 5 PM"].map(slot => {
                     const sel = selectedTime === slot;
                     return (
@@ -252,11 +252,11 @@ export const ScheduleVisitModal: React.FC<ScheduleVisitModalProps> = ({ isOpen, 
             </div>
           </form>
         </div>
-        <div className="px-5 py-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-2">
+        <div className="px-4 md:px-5 py-3.5 md:py-4 border-t border-slate-100 bg-slate-50 flex flex-col-reverse md:flex-row justify-end gap-2 shrink-0 pb-[max(0.875rem,env(safe-area-inset-bottom))]">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-200/50 rounded-xl transition-colors"
+            className="px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-200/50 rounded-xl transition-colors"
           >
             Cancel
           </button>
@@ -264,7 +264,7 @@ export const ScheduleVisitModal: React.FC<ScheduleVisitModalProps> = ({ isOpen, 
             type="submit"
             form="schedule-visit-form"
             disabled={!selectedDate || !selectedTime || !siteAddress || submitting}
-            className="px-5 py-2 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-colors shadow-sm"
+            className="px-5 py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-colors shadow-sm"
           >
             {submitting ? "Scheduling..." : "Schedule Visit"}
           </button>

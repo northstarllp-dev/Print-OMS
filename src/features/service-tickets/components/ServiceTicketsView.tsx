@@ -68,92 +68,121 @@ export function ServiceTicketsView({
   });
 
   return (
-    <div style={{ padding: "32px", background: "#f8fafc", minHeight: "100vh" }}>
+    <div className="p-3 sm:p-4 md:p-8 bg-slate-50 min-h-screen">
       {/* ─── Header ─── */}
-      <div style={{ marginBottom: "24px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px", flexWrap: "wrap" }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: "28px", fontWeight: 800, color: "#0f172a" }}>
+      <div className="mb-5 md:mb-6 flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-xl sm:text-2xl md:text-[28px] font-extrabold text-slate-900 m-0">
             Service Tickets
           </h1>
-          <p style={{ margin: "8px 0 0", color: "#64748b", fontSize: "14px" }}>
+          <p className="mt-1 sm:mt-2 text-xs sm:text-sm text-slate-500 m-0">
             Queue of customer support tickets linked to existing orders.
           </p>
         </div>
-        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+        <div className="flex flex-wrap gap-2 items-center shrink-0">
           {isAdmin && <CopyLinkButton companyId={companyId} />}
           {isAdmin && (
             <button
+              type="button"
               onClick={() => setIsCreateOpen(true)}
-              style={{
-                padding: "10px 14px",
-                background: "var(--color-primary)",
-                color: "#fff",
-                border: "none",
-                borderRadius: "8px",
-                fontSize: "13px",
-                fontWeight: 700,
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "8px",
-                cursor: "pointer",
-              }}
+              className="inline-flex items-center gap-2 px-3 sm:px-3.5 py-2 sm:py-2.5 bg-[var(--color-primary)] text-white rounded-lg text-[12px] sm:text-[13px] font-bold"
             >
               <Plus size={16} />
-              Add Service Ticket
+              <span className="hidden sm:inline">Add Service Ticket</span>
+              <span className="sm:hidden">Add</span>
             </button>
           )}
         </div>
       </div>
 
       {/* ─── Table Card ─── */}
-      <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: "12px", overflow: "hidden" }}>
+      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
         {/* Search */}
-        <div style={{ padding: "16px 20px", borderBottom: "1px solid #e2e8f0", display: "flex", gap: "12px", alignItems: "center" }}>
+        <div className="p-3 sm:p-4 border-b border-slate-200 flex flex-wrap gap-2 items-center">
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by ticket, customer, phone, description..."
-            style={{
-              width: "100%",
-              maxWidth: "380px",
-              border: "1px solid #cbd5e1",
-              borderRadius: "8px",
-              padding: "10px 12px",
-              fontSize: "13px",
-              outline: "none",
-            }}
+            className="w-full sm:max-w-[380px] flex-1 border border-slate-300 rounded-lg px-3 py-2.5 text-[13px] outline-none"
           />
           <button
             title="Reset Filters"
+            type="button"
             onClick={() => setSearch("")}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: "0 14px",
-              background: "#fef2f2",
-              border: "1px solid #fecaca",
-              borderRadius: "8px",
-              cursor: "pointer",
-              color: "#dc2626",
-              outline: "none",
-              height: "39px",
-              transition: "all 0.2s",
-              fontWeight: "600",
-              fontSize: "13px",
-              gap: "6px",
-              flexShrink: 0
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "#fee2e2"; e.currentTarget.style.borderColor = "#fca5a5"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "#fef2f2"; e.currentTarget.style.borderColor = "#fecaca"; }}
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 h-[39px] bg-red-50 border border-red-200 rounded-lg text-red-600 font-semibold text-[13px] shrink-0"
           >
             <RefreshCw size={14} />
             Reset
           </button>
         </div>
 
-        {/* Table */}
-        <div style={{ overflowX: "auto", minHeight: "200px" }}>
+        {/* Mobile cards */}
+        <div className="lg:hidden p-3 space-y-2.5 min-h-[200px] bg-slate-50/80">
+          {filteredTickets.length === 0 ? (
+            <div className="py-12 px-4 text-center text-sm text-slate-500 font-medium bg-white rounded-xl border border-slate-200">
+              <Wrench size={28} className="text-slate-300 mx-auto mb-2" />
+              No service tickets found.
+            </div>
+          ) : (
+            filteredTickets.map((ticket) => {
+              const statusStyle = getTicketStatusStyle(ticket.status);
+              return (
+                <div
+                  key={ticket.id}
+                  className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden"
+                >
+                  <div className="flex">
+                    <div className="w-1 shrink-0 self-stretch" style={{ background: statusStyle.text }} aria-hidden />
+                    <div className="flex-1 min-w-0 p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <span className="font-mono text-[13px] font-extrabold text-slate-900">
+                              {ticket.ticket_id}
+                            </span>
+                            <span
+                              className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold"
+                              style={{ background: statusStyle.bg, color: statusStyle.text }}
+                            >
+                              {statusStyle.label}
+                            </span>
+                          </div>
+                          <div className="text-[13px] font-semibold text-slate-800 truncate mt-1">
+                            {ticket.customer_name || ticket.customer_business_name || "—"}
+                          </div>
+                          {ticket.customer_name && ticket.customer_business_name ? (
+                            <div className="text-[11px] text-slate-500 truncate">{ticket.customer_business_name}</div>
+                          ) : null}
+                        </div>
+                      </div>
+                      <div className="mt-2 text-[11px] text-slate-500">
+                        {new Date(ticket.created_at).toLocaleDateString("en-US", {
+                          year: "numeric",
+                          month: "short",
+                          day: "numeric",
+                        })}
+                        {ticket.phone ? ` · ${ticket.phone}` : ""}
+                      </div>
+                      <div className="mt-2.5">
+                        <button
+                          type="button"
+                          onClick={() => void openTicket(ticket.id)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-[12px] font-bold text-slate-700"
+                        >
+                          <Eye size={13} />
+                          View
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Desktop Table */}
+        <div className="hidden lg:block overflow-x-auto min-h-[200px]">
           <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "860px" }}>
             <thead>
               <tr style={{ borderBottom: "1px solid #e2e8f0", background: "#f8fafc" }}>

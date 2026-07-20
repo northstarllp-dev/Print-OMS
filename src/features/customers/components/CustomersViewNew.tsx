@@ -161,22 +161,37 @@ export function CustomersViewNew({
   );
 
   return (
-    <div style={{ padding: "32px", background: "#f8fafc", minHeight: "100vh" }}>
+    <div className="p-3 sm:p-4 md:p-8 bg-slate-50 min-h-screen">
       {/* Header Section */}
-      <div style={{ marginBottom: "32px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "24px" }}>
-          <div>
-            <h1 style={{ fontSize: "28px", fontWeight: "800", color: "#0f172a", margin: "0 0 8px" }}>
+      <div className="mb-5 md:mb-8">
+        <div className="flex flex-wrap items-start justify-between gap-3 mb-4 md:mb-6">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-xl sm:text-2xl md:text-[28px] font-extrabold text-slate-900 m-0 mb-1 md:mb-2">
               Customers Database
             </h1>
-            <p style={{ fontSize: "14px", color: "#64748b", margin: 0 }}>
+            <p className="text-xs sm:text-sm text-slate-500 m-0">
               Browse customer contact details, profile info, and linked project orders
             </p>
           </div>
         </div>
 
-        {/* Stats Cards */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "16px" }}>
+        {/* Mobile KPI chips */}
+        <div className="lg:hidden flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
+          {stats.map((stat) => (
+            <div
+              key={stat.label}
+              className="shrink-0 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-bold border border-slate-200 bg-white text-slate-500"
+            >
+              <span>{stat.label}</span>
+              <span className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-extrabold bg-slate-100 text-slate-600">
+                {stat.value}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {/* Desktop Stats Cards */}
+        <div className="hidden lg:grid grid-cols-2 xl:grid-cols-4 gap-4">
           {stats.map((stat, idx) => {
             const Icon = stat.icon;
             return (
@@ -211,28 +226,20 @@ export function CustomersViewNew({
       </div>
 
       {/* Main Grid View */}
-      <div style={{ display: "flex", gap: "24px", alignItems: "flex-start" }}>
+      <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 items-stretch lg:items-start">
         
         {/* Left Hand: Customers List Table */}
-        <div style={{ flex: selectedCustomerId ? "7" : "10", transition: "all 0.3s", background: "white", borderRadius: "12px", border: "1px solid #e2e8f0", overflow: "hidden" }}>
+        <div className={`min-w-0 bg-white rounded-xl border border-slate-200 overflow-hidden transition-all ${selectedCustomerId ? "lg:flex-[7]" : "lg:flex-[10]"} ${selectedCustomer ? "hidden lg:block" : "w-full"}`}>
           {/* Search & Filter Bar */}
-          <div style={{ padding: "20px", borderBottom: "1px solid #e2e8f0", display: "flex", gap: "12px", alignItems: "center" }}>
-            <div style={{ flex: 1, position: "relative" }}>
-              <Search size={16} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
+          <div className="p-3 sm:p-4 border-b border-slate-200 flex flex-wrap gap-2 items-center">
+            <div className="relative flex-1 min-w-0 w-full sm:min-w-[12rem]">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
               <input
                 type="text"
                 placeholder="Search by customer ID, name, phone or email..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                style={{
-                  width: "100%",
-                  padding: "10px 12px 10px 36px",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: "8px",
-                  fontSize: "13px",
-                  fontFamily: "inherit",
-                  transition: "all 0.2s",
-                }}
+                className="w-full py-2.5 pl-9 pr-3 border border-slate-200 rounded-lg text-[13px] outline-none"
                 onFocus={(e) => {
                   e.currentTarget.style.borderColor = "#94a3b8";
                   e.currentTarget.style.boxShadow = "0 0 0 3px rgba(148, 163, 184, 0.1)";
@@ -244,38 +251,79 @@ export function CustomersViewNew({
               />
             </div>
             
-            {/* Reset Button */}
             <button
               title="Reset Filters"
+              type="button"
               onClick={() => setSearchTerm("")}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: "0 14px",
-                background: "#fef2f2",
-                border: "1px solid #fecaca",
-                borderRadius: "8px",
-                cursor: "pointer",
-                color: "#dc2626",
-                outline: "none",
-                height: "39px",
-                transition: "all 0.2s",
-                fontWeight: "600",
-                fontSize: "13px",
-                gap: "6px",
-                flexShrink: 0
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = "#fee2e2"; e.currentTarget.style.borderColor = "#fca5a5"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = "#fef2f2"; e.currentTarget.style.borderColor = "#fecaca"; }}
+              className="inline-flex items-center justify-center gap-1.5 px-3.5 h-[39px] bg-red-50 border border-red-200 rounded-lg text-red-600 font-semibold text-[13px] shrink-0"
             >
               <RefreshCw size={14} />
               Reset
             </button>
           </div>
 
-          {/* Table */}
-          <div style={{ overflowY: "auto", maxHeight: "650px", overflowX: "auto" }}>
+          {/* Mobile cards */}
+          <div className="lg:hidden p-3 space-y-2.5 min-h-[200px] bg-slate-50/80">
+            {filteredCustomers.length === 0 ? (
+              <div className="py-12 px-4 text-center text-sm text-slate-500 font-medium bg-white rounded-xl border border-slate-200">
+                No customers found.
+              </div>
+            ) : (
+              filteredCustomers.map((cust) => {
+                const statusColor = getStatusColor(cust.status);
+                const count = initialOrders.filter(o => o.customerId === cust.id).length;
+                return (
+                  <button
+                    key={cust.id}
+                    type="button"
+                    onClick={() => setSelectedCustomerId(cust.id)}
+                    className="w-full text-left rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden active:scale-[0.99] transition-transform"
+                  >
+                    <div className="flex">
+                      <div className="w-1 shrink-0 self-stretch" style={{ background: statusColor.text }} aria-hidden />
+                      <div className="flex-1 min-w-0 p-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                              <span className="text-[12px] font-bold text-slate-500">{cust.customerCode || cust.id}</span>
+                              <span
+                                className="inline-block px-2 py-0.5 rounded-md text-[10px] font-bold"
+                                style={{ background: statusColor.bg, color: statusColor.text }}
+                              >
+                                {statusColor.label}
+                              </span>
+                            </div>
+                            <div className="text-[13px] font-semibold text-slate-800 truncate mt-1">{cust.name}</div>
+                            <div className="text-[11px] text-slate-500 mt-0.5">{cust.phone}</div>
+                          </div>
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-700 shrink-0">
+                            <ShoppingBag size={11} />
+                            {count}
+                          </span>
+                        </div>
+                        <div className="mt-2.5" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            onClick={(e) => handleCopyLink(cust.customerId || cust.id, e)}
+                            className="px-2.5 py-1.5 rounded-md text-[11px] font-semibold text-white"
+                            style={{
+                              background: copiedCustomerId === (cust.customerId || cust.id) ? "#dcfce7" : "var(--color-secondary)",
+                              color: copiedCustomerId === (cust.customerId || cust.id) ? "#16a34a" : "white",
+                            }}
+                          >
+                            {copiedCustomerId === (cust.customerId || cust.id) ? "Copied!" : "Copy Magic Link"}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })
+            )}
+          </div>
+
+          {/* Desktop Table */}
+          <div className="hidden lg:block overflow-y-auto max-h-[650px] overflow-x-auto">
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead style={{ position: "sticky", top: 0, background: "#f8fafc", zIndex: 10 }}>
                 <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
@@ -352,7 +400,7 @@ export function CustomersViewNew({
 
         {/* Right Hand: Selected Customer Detail Panel */}
         {selectedCustomer && (
-          <div className="w-full md:w-[420px] shrink-0 bg-white border border-slate-200 rounded-xl shadow-lg p-6 sticky top-6 animate-in fade-in slide-in-from-right-4 duration-300">
+          <div className="w-full lg:w-[420px] shrink-0 bg-white border border-slate-200 rounded-xl shadow-lg p-4 sm:p-6 lg:sticky lg:top-6 animate-in fade-in slide-in-from-right-4 duration-300 order-first lg:order-none">
             <div className="flex justify-between items-start border-b border-slate-100 pb-4 mb-4">
               <div>
                 <span className="text-xs font-bold text-slate-400 block uppercase tracking-wider">{selectedCustomer.customerCode || selectedCustomer.id}</span>

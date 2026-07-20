@@ -347,7 +347,7 @@ export function OrdersManagementDashboard({
 
   return (
     <div 
-      className={`p-3 sm:p-4 md:p-8 bg-slate-50 min-h-screen transition-all duration-300 ${assignPanelOrderId ? "md:pr-[412px]" : ""}`}
+      className={`p-3 sm:p-4 md:p-8 bg-slate-50 min-h-screen transition-all duration-300 ${assignPanelOrderId ? "lg:pr-[412px]" : ""}`}
     >
       {/* Header Section */}
       <div className="mb-5 md:mb-8">
@@ -389,7 +389,7 @@ export function OrdersManagementDashboard({
         )}
 
         {/* Mobile: compact filter chips instead of large KPI cards */}
-        <div className="md:hidden flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
+        <div className="lg:hidden flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
           {stats.map((stat: any) => {
             const isActive = selectedKpi === stat.filterKey;
             return (
@@ -420,7 +420,7 @@ export function OrdersManagementDashboard({
         </div>
 
         {/* Desktop/tablet: Stats Cards */}
-        <div className="hidden md:grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="hidden lg:grid grid-cols-2 xl:grid-cols-4 gap-4">
           {stats.map((stat: any, idx) => {
             const Icon = stat.icon;
             const isActive = selectedKpi === stat.filterKey;
@@ -475,7 +475,7 @@ export function OrdersManagementDashboard({
           {/* Search & Filter Bar */}
         <div className="p-3 sm:p-4 border-b border-slate-200">
           {/* Mobile: Airbnb-style — search + Filters chip + icon reset */}
-          <div className="md:hidden flex items-center gap-2">
+          <div className="lg:hidden flex items-center gap-2">
             <div className="relative flex-1 min-w-0">
               <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
               <input
@@ -524,7 +524,7 @@ export function OrdersManagementDashboard({
 
           {/* Mobile filter sheet */}
           {mobileFiltersOpen && (
-            <div className="md:hidden fixed inset-0 z-[80]">
+            <div className="lg:hidden fixed inset-0 z-[80]">
               <button
                 type="button"
                 aria-label="Close filters"
@@ -635,7 +635,7 @@ export function OrdersManagementDashboard({
           )}
 
           {/* Desktop / tablet: inline filters */}
-          <div className="hidden md:flex flex-row flex-wrap gap-3 items-center">
+          <div className="hidden lg:flex flex-row flex-wrap gap-3 items-center">
             <div className="flex-1 relative min-w-[12rem]">
               <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
               <input
@@ -743,7 +743,7 @@ export function OrdersManagementDashboard({
         </div>
 
         {/* Mobile: compact inbox-style cards (not a tall divider stack) */}
-        <div className="md:hidden p-3 space-y-2.5 min-h-[200px] bg-slate-50/80">
+        <div className="lg:hidden p-3 space-y-2.5 min-h-[200px] bg-slate-50/80">
           {filteredOrders.length === 0 ? (
             <div className="py-12 px-4 text-center text-sm text-slate-500 font-medium bg-white rounded-xl border border-slate-200">
               No orders found matching your search.
@@ -848,7 +848,7 @@ export function OrdersManagementDashboard({
         </div>
 
         {/* Desktop table */}
-        <div className="hidden md:block overflow-x-auto min-h-[300px]">
+        <div className="hidden lg:block overflow-x-auto min-h-[300px]">
           <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "900px" }}>
             <thead style={{ position: "sticky", top: 0, background: "#f8fafc", zIndex: 10 }}>
               <tr style={{ borderBottom: "1px solid #e2e8f0" }}>

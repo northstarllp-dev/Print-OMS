@@ -160,7 +160,7 @@ export function AdminLayoutClient({
       <aside
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
-        className={`fixed inset-y-0 left-0 z-[60] transform ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"} md:sticky md:top-0 md:translate-x-0 transition-transform duration-300 md:transition-none flex flex-col flex-shrink-0 overflow-y-auto overflow-x-hidden`}
+        className={`fixed inset-y-0 left-0 z-[60] transform ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"} lg:sticky lg:top-0 lg:translate-x-0 transition-transform duration-300 lg:transition-none flex flex-col flex-shrink-0 overflow-y-auto overflow-x-hidden`}
         style={{
           width: isMobileMenuOpen ? "240px" : sidebarW,
           minHeight: "100vh",
@@ -198,7 +198,7 @@ export function AdminLayoutClient({
           {isMobileMenuOpen && (
             <button
               type="button"
-              className="md:hidden flex items-center justify-center p-2 rounded-lg text-slate-200 hover:bg-white/10 shrink-0"
+              className="lg:hidden flex items-center justify-center p-2 rounded-lg text-slate-200 hover:bg-white/10 shrink-0"
               onClick={() => setIsMobileMenuOpen(false)}
               aria-label="Close menu"
             >
@@ -306,7 +306,7 @@ export function AdminLayoutClient({
 
         {/* Collapse Button — desktop only */}
         <div
-          className="hidden md:block"
+          className="hidden lg:block"
           style={{
             padding: "12px",
             flexShrink: 0,
@@ -353,7 +353,7 @@ export function AdminLayoutClient({
         </div>
 
         {isMobileMenuOpen && (
-          <div className="md:hidden p-3 shrink-0 border-t border-white/10">
+          <div className="lg:hidden p-3 shrink-0 border-t border-white/10">
             <button
               type="button"
               onClick={() => setIsMobileMenuOpen(false)}
@@ -369,7 +369,7 @@ export function AdminLayoutClient({
 
       {isMobileMenuOpen && (
         <div
-          className="fixed inset-0 bg-slate-900/50 z-50 md:hidden"
+          className="fixed inset-0 bg-slate-900/50 z-50 lg:hidden"
           onClick={() => setIsMobileMenuOpen(false)}
           aria-hidden
         />
@@ -399,7 +399,7 @@ export function AdminLayoutClient({
           >
             <button
               type="button"
-              className="md:hidden flex items-center justify-center p-2 rounded-md text-slate-500 hover:bg-slate-100"
+              className="lg:hidden flex items-center justify-center p-2 rounded-md text-slate-500 hover:bg-slate-100"
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               aria-label="Open navigation"
             >
@@ -546,17 +546,6 @@ export function AdminLayoutClient({
               </div>
             </div>
           </header>
-        )}
-
-        {isWorksheetPage && (
-          <button
-            type="button"
-            className="md:hidden fixed top-3 left-3 z-[70] flex items-center justify-center p-2.5 rounded-lg bg-white text-slate-600 shadow-md border border-slate-200"
-            onClick={() => setIsMobileMenuOpen(true)}
-            aria-label="Open navigation"
-          >
-            <Menu size={20} />
-          </button>
         )}
 
         {/* Main Content */}

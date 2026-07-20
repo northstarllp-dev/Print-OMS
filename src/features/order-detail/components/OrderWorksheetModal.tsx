@@ -1170,30 +1170,29 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
         </div>
       )}
 
-      {/* ── TOP BAR ── */}
-      <header style={{ height: "52px", background: "white", borderBottom: "1px solid #E2E8F0", display: "flex", alignItems: "center", paddingLeft: "16px", paddingRight: "20px", gap: "12px", flexShrink: 0, zIndex: 30 }}>
-        <button
-          onClick={onClose}
-          style={{ display: "flex", alignItems: "center", gap: "6px", background: "none", border: "none", cursor: "pointer", color: "#64748B", fontSize: "13px", fontWeight: "600", padding: "0 8px 0 0" }}
-        >
-          <ArrowLeft size={14} /> Back
-        </button>
-        <div style={{ width: "1px", height: "20px", background: "#E2E8F0" }} />
-        <span style={{ fontSize: "14px", fontWeight: "700", color: "#0F172A" }}>Order Management</span>
-
-        <div style={{ marginLeft: "auto" }} />
-
-        {localAlert && (
-          <div style={{
-            marginLeft: "8px", padding: "6px 14px", borderRadius: "8px", fontSize: "12px", fontWeight: "600",
+      {localAlert && (
+        <div
+          style={{
+            position: "absolute",
+            top: "12px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 50,
+            padding: "6px 14px",
+            borderRadius: "8px",
+            fontSize: "12px",
+            fontWeight: "600",
+            maxWidth: "min(90vw, 420px)",
+            textAlign: "center",
+            boxShadow: "0 4px 12px rgba(15,23,42,0.08)",
             background: localAlert.type === "success" ? "#F0FDF4" : localAlert.type === "warning" ? "#FFFBEB" : localAlert.type === "error" ? "#FEF2F2" : "#EFF6FF",
             color: localAlert.type === "success" ? "#16A34A" : localAlert.type === "warning" ? "#D97706" : localAlert.type === "error" ? "#DC2626" : "#2563EB",
             border: `1px solid ${localAlert.type === "success" ? "#BBF7D0" : localAlert.type === "warning" ? "#FDE68A" : localAlert.type === "error" ? "#FECACA" : "#BFDBFE"}`,
-          }}>
-            {localAlert.message}
-          </div>
-        )}
-      </header>
+          }}
+        >
+          {localAlert.message}
+        </div>
+      )}
 
       {/* ── 3 PANELS ── */}
       <div style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
@@ -1312,104 +1311,139 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                   <h2 style={{ margin: 0, fontSize: "18px", fontWeight: "800", color: "#0F172A", lineHeight: 1.2 }}>
                     {order.businessName} - {order.clientName}
                   </h2>
+                  <button
+                    type="button"
+                    onClick={() => setActiveRightPanel((prev) => (prev === "timeline" ? null : "timeline"))}
+                    title="Order timeline"
+                    aria-label="Order timeline"
+                    aria-pressed={activeRightPanel === "timeline"}
+                    style={{
+                      position: "relative",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "6px",
+                      height: "32px",
+                      padding: "0 10px",
+                      borderRadius: "8px",
+                      border: activeRightPanel === "timeline" ? "none" : "1px solid #E2E8F0",
+                      background: activeRightPanel === "timeline" ? "var(--color-secondary)" : "transparent",
+                      color: activeRightPanel === "timeline" ? "white" : "#475569",
+                      fontSize: "11px",
+                      fontWeight: "700",
+                      cursor: "pointer",
+                      flexShrink: 0,
+                      transition: "all 0.15s",
+                    }}
+                  >
+                    <History size={14} />
+                    <span>Timeline</span>
+                    {timelineCount > 0 && (
+                      <span
+                        style={{
+                          minWidth: "18px",
+                          height: "18px",
+                          borderRadius: "9px",
+                          background: activeRightPanel === "timeline" ? "rgba(255,255,255,0.25)" : "#EF4444",
+                          color: "white",
+                          fontSize: "10px",
+                          fontWeight: "700",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          padding: "0 4px",
+                        }}
+                      >
+                        {timelineCount}
+                      </span>
+                    )}
+                  </button>
                 </div>
               </div>
 
-              {/* Customer Info & Actions */}
-              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <button
-                    onClick={() => setShowCustomerPanel(true)}
-                    style={{ background: "transparent", border: "1px solid #E2E8F0", color: "#475569", fontSize: "12px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px", padding: "6px 12px", borderRadius: "6px", transition: "all 0.15s" }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = "#F8FAFC"; e.currentTarget.style.color = "#0F172A"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#475569"; }}
-                  >
-                    <User size={14} /> Customer Details
-                  </button>
-                  {!isEmployee && (
-                    <button
-                      onClick={handleCopyMagicLink}
-                      style={{ background: "transparent", border: "1px solid #E2E8F0", color: "#475569", fontSize: "12px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px", padding: "6px 12px", borderRadius: "6px", transition: "all 0.15s" }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = "#F8FAFC"; e.currentTarget.style.color = "#0F172A"; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#475569"; }}
-                    >
-                      <Share2 size={14} /> {copiedLink ? "Copied!" : "Portal"}
-                    </button>
-                  )}
-                  {!isEmployee && (
-                    <button
-                      onClick={() => setActiveStepTab(ADMIN_TAB)}
-                      style={{
-                        background: activeStepTab === ADMIN_TAB ? "#0F172A" : "transparent",
-                        border: activeStepTab === ADMIN_TAB ? "none" : "1px solid #E2E8F0",
-                        color: activeStepTab === ADMIN_TAB ? "white" : "#475569",
-                        fontSize: "12px",
-                        fontWeight: "600",
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "6px",
-                        padding: "6px 12px",
-                        borderRadius: "6px",
-                        transition: "all 0.15s",
-                        boxShadow: activeStepTab === ADMIN_TAB ? "0 1px 2px rgba(0,0,0,0.05)" : "none",
-                      }}
-                      onMouseEnter={(e) => {
-                        if (activeStepTab !== ADMIN_TAB) {
-                          e.currentTarget.style.background = "#F8FAFC";
-                          e.currentTarget.style.color = "#0F172A";
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (activeStepTab !== ADMIN_TAB) {
-                          e.currentTarget.style.background = "transparent";
-                          e.currentTarget.style.color = "#475569";
-                        }
-                      }}
-                    >
-                      <Lock size={14} /> Admin Controls
-                      {order.stageStatus && order.stageStatus !== "Normal" && (
-                        <span className="flex items-center justify-center w-4 h-4 ml-1 text-[10px] font-bold text-white bg-red-500 rounded-full animate-pulse shadow-sm">
+              {/* Customer Info & Actions — equal-width boxes; text may truncate */}
+              <div className="w-full md:w-auto md:min-w-[280px] lg:min-w-[360px]" style={{ display: "flex", alignItems: "stretch", gap: "6px", flex: "1 1 220px", minWidth: 0, maxWidth: "100%" }}>
+                {([
+                  {
+                    key: "customer",
+                    label: "Customer Details",
+                    icon: User,
+                    onClick: () => setShowCustomerPanel(true),
+                    active: false,
+                    show: true,
+                    badge: null as React.ReactNode,
+                  },
+                  {
+                    key: "portal",
+                    label: copiedLink ? "Copied!" : "Portal",
+                    icon: Share2,
+                    onClick: handleCopyMagicLink,
+                    active: false,
+                    show: !isEmployee,
+                    badge: null as React.ReactNode,
+                  },
+                  {
+                    key: "admin",
+                    label: "Admin Controls",
+                    icon: Lock,
+                    onClick: () => setActiveStepTab(ADMIN_TAB),
+                    active: activeStepTab === ADMIN_TAB,
+                    show: !isEmployee,
+                    badge:
+                      order.stageStatus && order.stageStatus !== "Normal" ? (
+                        <span className="flex items-center justify-center w-3.5 h-3.5 shrink-0 text-[9px] font-bold text-white bg-red-500 rounded-full animate-pulse shadow-sm">
                           1
                         </span>
-                      )}
-                    </button>
-                  )}
-                  {!isEmployee && (
-                    <button
-                      onClick={() => setActiveStepTab(PAYMENTS_TAB)}
-                      style={{
-                        background: activeStepTab === PAYMENTS_TAB ? "#0F172A" : "transparent",
-                        border: activeStepTab === PAYMENTS_TAB ? "none" : "1px solid #E2E8F0",
-                        color: activeStepTab === PAYMENTS_TAB ? "white" : "#475569",
-                        fontSize: "12px",
-                        fontWeight: "600",
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "6px",
-                        padding: "6px 12px",
-                        borderRadius: "6px",
-                        transition: "all 0.15s",
-                        boxShadow: activeStepTab === PAYMENTS_TAB ? "0 1px 2px rgba(0,0,0,0.05)" : "none",
-                      }}
-                      onMouseEnter={(e) => {
-                        if (activeStepTab !== PAYMENTS_TAB) {
-                          e.currentTarget.style.background = "#F8FAFC";
-                          e.currentTarget.style.color = "#0F172A";
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (activeStepTab !== PAYMENTS_TAB) {
-                          e.currentTarget.style.background = "transparent";
-                          e.currentTarget.style.color = "#475569";
-                        }
-                      }}
-                    >
-                      <CreditCard size={14} /> Payment
-                    </button>
-                  )}
-                </div>
+                      ) : null,
+                  },
+                  {
+                    key: "payments",
+                    label: "Payments",
+                    icon: CreditCard,
+                    onClick: () => setActiveStepTab(PAYMENTS_TAB),
+                    active: activeStepTab === PAYMENTS_TAB,
+                    show: !isEmployee,
+                    badge: null as React.ReactNode,
+                  },
+                ] as const)
+                  .filter((btn) => btn.show)
+                  .map((btn) => {
+                    const Icon = btn.icon;
+                    return (
+                      <button
+                        key={btn.key}
+                        type="button"
+                        onClick={btn.onClick}
+                        title={btn.label}
+                        style={{
+                          flex: "1 1 0",
+                          minWidth: 0,
+                          height: "34px",
+                          background: btn.active ? "#0F172A" : "transparent",
+                          border: btn.active ? "none" : "1px solid #E2E8F0",
+                          color: btn.active ? "white" : "#475569",
+                          fontSize: "11px",
+                          fontWeight: "600",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: "4px",
+                          padding: "0 6px",
+                          borderRadius: "6px",
+                          transition: "all 0.15s",
+                          boxShadow: btn.active ? "0 1px 2px rgba(0,0,0,0.05)" : "none",
+                          overflow: "hidden",
+                        }}
+                      >
+                        <Icon size={13} className="shrink-0" />
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
+                          {btn.label}
+                        </span>
+                        {btn.badge}
+                      </button>
+                    );
+                  })}
               </div>
             </div>
 
@@ -1419,106 +1453,47 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
               const visibleSteps = workflowSteps.filter(
                 (s) => s.tabIndex !== ADMIN_TAB && s.tabIndex !== PAYMENTS_TAB
               );
-              const activeIndex = visibleSteps.findIndex(s => s.tabIndex === activeStepTab);
-              // Progress starts after Enquiries (always complete for an open order)
-              const progressIndex = activeIndex < 0 ? 0 : activeIndex;
-              const filledPct = visibleSteps.length > 1
-                ? (progressIndex / (visibleSteps.length - 1)) * 100
-                : 0;
-              const insetPct = visibleSteps.length > 0 ? 100 / (2 * visibleSteps.length) : 0;
               return (
-                <>
-                  {/* Desktop / tablet: full pipeline timeline */}
-                  <div className="hidden md:flex" style={{ position: "relative", paddingTop: "24px", paddingBottom: "16px", justifyContent: "space-between", alignItems: "flex-start" }}>
-                    {/* Grey base line */}
-                    <div style={{ position: "absolute", top: "42px", left: `${insetPct}%`, right: `${insetPct}%`, height: "2.5px", background: "#E2E8F0", borderRadius: "99px", zIndex: 0 }} />
-                    {/* Green filled progress line */}
-                    <div style={{ position: "absolute", top: "42px", left: `${insetPct}%`, width: `calc((100% - ${insetPct * 2}%) * ${filledPct / 100})`, height: "2.5px", background: "#22C55E", borderRadius: "99px", zIndex: 1, transition: "width 0.45s ease" }} />
-
+                <div className="py-3">
+                  {/* Workflow stages — toggleable bar like site-visit items */}
+                  <div
+                    className="flex items-center gap-1 overflow-x-auto p-1 bg-slate-100 border border-slate-200/60 rounded-xl w-full max-w-full"
+                    style={{ WebkitOverflowScrolling: "touch", scrollbarWidth: "none", msOverflowStyle: "none" }}
+                  >
                     {visibleSteps.map((step) => {
                       const isActive = activeStepTab === step.tabIndex;
                       const isDone = step.done || step.tabIndex < currentStageIndex;
-                      const StepIcon = step.icon as any;
-
                       const stageForStep = tabIndexToOrderStage(step.tabIndex, order.workflow_type);
-                      const isLocked = stageForStep != null && (!isTimelineStageAccessible(stageForStep, actor, entryStage) || !hasStageBeenReached(stageForStep));
-
-                      const nodeBg = isLocked ? "#F1F5F9" : isDone ? "#22C55E" : isActive ? "var(--color-secondary)" : "#F8FAFC";
-                      const nodeBorder = isLocked ? "#E2E8F0" : isDone ? "#22C55E" : isActive ? "var(--color-secondary)" : "#CBD5E1";
-                      const iconColor = isLocked ? "#CBD5E1" : (isDone || isActive) ? "white" : "#94A3B8";
-                      const labelColor = isLocked ? "#CBD5E1" : isDone ? "#16A34A" : isActive ? "var(--color-secondary)" : "#94A3B8";
-                      const labelWeight = isActive ? "800" : isDone ? "700" : "500";
+                      const isLocked =
+                        stageForStep != null &&
+                        (!isTimelineStageAccessible(stageForStep, actor, entryStage) ||
+                          !hasStageBeenReached(stageForStep));
+                      const canSelect = step.tabIndex >= 0 && !isLocked;
 
                       return (
                         <button
                           key={step.label}
-                          onClick={() => { if (step.tabIndex >= 0 && !isLocked) setActiveStepTab(step.tabIndex); }}
-                          disabled={step.tabIndex < 0 || isLocked}
-                          style={{
-                            position: "relative", zIndex: 2, background: "none", border: "none", padding: "0 4px",
-                            display: "flex", flexDirection: "column", alignItems: "center", gap: "10px",
-                            cursor: step.tabIndex >= 0 && !isLocked ? "pointer" : "default", flex: 1,
-                            outline: "none"
-                          }}
-                        >
-                          <div style={{
-                            width: "36px", height: "36px", borderRadius: "50%",
-                            background: nodeBg,
-                            border: `2px solid ${nodeBorder}`,
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                            boxShadow: isActive ? "0 0 0 5px #EFF6FF" : isDone ? "0 0 0 3px #DCFCE7" : "none",
-                            transition: "all 0.25s ease",
-                            flexShrink: 0,
-                          }}>
-                            {isDone ? (
-                              <Check size={16} color="white" strokeWidth={3} />
-                            ) : (
-                              StepIcon && <StepIcon size={15} color={iconColor} strokeWidth={2} />
-                            )}
-                          </div>
-                          <div style={{
-                            fontSize: "12px",
-                            fontWeight: labelWeight,
-                            color: labelColor,
-                            whiteSpace: "nowrap",
-                            textAlign: "center",
-                            letterSpacing: isActive ? "0.01em" : "normal",
-                            transition: "color 0.2s ease",
-                          }}>
-                            {step.label}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {/* Mobile: horizontal stage chips (tap to switch) */}
-                  <div className="md:hidden flex gap-2 overflow-x-auto py-3 -mx-1 px-1">
-                    {visibleSteps.map((step) => {
-                      const isActive = activeStepTab === step.tabIndex;
-                      const isDone = step.done || step.tabIndex < currentStageIndex;
-                      const stageForStep = tabIndexToOrderStage(step.tabIndex, order.workflow_type);
-                      const isLocked = stageForStep != null && (!isTimelineStageAccessible(stageForStep, actor, entryStage) || !hasStageBeenReached(stageForStep));
-                      return (
-                        <button
-                          key={`m-${step.label}`}
                           type="button"
-                          onClick={() => { if (step.tabIndex >= 0 && !isLocked) setActiveStepTab(step.tabIndex); }}
-                          disabled={step.tabIndex < 0 || isLocked}
-                          className="shrink-0 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-bold border transition-colors disabled:opacity-40"
-                          style={{
-                            background: isActive ? "var(--color-secondary)" : isDone ? "#F0FDF4" : "white",
-                            borderColor: isActive ? "var(--color-secondary)" : isDone ? "#BBF7D0" : "#E2E8F0",
-                            color: isActive ? "white" : isDone ? "#16A34A" : "#64748B",
+                          title={step.label}
+                          onClick={() => {
+                            if (canSelect) setActiveStepTab(step.tabIndex);
                           }}
+                          disabled={!canSelect}
+                          className={`flex-1 min-w-0 flex items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-[12px] font-semibold transition-all focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed ${
+                            isActive
+                              ? "bg-white text-[var(--color-secondary)] shadow-[0_1px_3px_rgba(0,0,0,0.1)] ring-1 ring-slate-900/5"
+                              : isDone
+                                ? "text-emerald-600 hover:bg-slate-200/50"
+                                : "text-slate-500 hover:bg-slate-200/50 hover:text-slate-700"
+                          }`}
                         >
-                          {isDone && !isActive ? <Check size={12} strokeWidth={3} /> : null}
-                          {step.label}
+                          {isDone && !isActive ? <Check size={12} strokeWidth={3} className="shrink-0" /> : null}
+                          <span className="truncate">{step.label}</span>
                         </button>
                       );
                     })}
                   </div>
-                </>
+                </div>
               );
             })()}
           </div>
@@ -1777,76 +1752,32 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
 
         {/* ══ PANEL 4: SLIDING DRAWER PANEL ══ */}
         {activeRightPanel && (
-          <aside style={{
-            width: "380px",
-            flexShrink: 0,
-            borderLeft: "1px solid #E2E8F0",
-            background: "white",
-            display: "flex",
-            flexDirection: "column",
-            overflow: "hidden",
-            height: "100%",
-            zIndex: 40
-          }}>
-            <OrderCommunicationCenter
-              orderId={order.orderId || order.id}
-              onClose={() => setActiveRightPanel(null)}
+          <>
+            <div
+              className="md:hidden fixed inset-0 z-[45] bg-slate-900/40 backdrop-blur-sm"
+              onClick={() => setActiveRightPanel(null)}
+              aria-hidden
             />
-          </aside>
+            <aside
+              className="fixed md:relative inset-y-0 right-0 z-[50] md:z-40 w-full max-w-[380px] md:w-[380px] md:max-w-none"
+              style={{
+                flexShrink: 0,
+                borderLeft: "1px solid #E2E8F0",
+                background: "white",
+                display: "flex",
+                flexDirection: "column",
+                overflow: "hidden",
+                height: "100%",
+              }}
+            >
+              <OrderCommunicationCenter
+                orderId={order.orderId || order.id}
+                onClose={() => setActiveRightPanel(null)}
+              />
+            </aside>
+          </>
         )}
       </div>
-
-      {/* ── FLOATING TIMELINE BUTTON ── */}
-      {!activeRightPanel && (
-        <button
-          type="button"
-          onClick={() => setActiveRightPanel("timeline")}
-          title="Order timeline"
-          style={{
-            position: "absolute",
-            bottom: "96px",
-            right: "24px",
-            width: "56px",
-            height: "56px",
-            borderRadius: "50%",
-            background: "var(--color-secondary)",
-            color: "white",
-            border: "none",
-            boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: "pointer",
-            zIndex: 50,
-            transition: "transform 0.2s, box-shadow 0.2s"
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.transform = "scale(1.05)"; e.currentTarget.style.boxShadow = "0 6px 16px rgba(0,0,0,0.2)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.15)"; }}
-        >
-          <History size={22} />
-          {timelineCount > 0 && (
-            <span style={{
-              position: "absolute",
-              top: "-2px",
-              right: "-2px",
-              background: "#EF4444",
-              color: "white",
-              minWidth: "20px",
-              height: "20px",
-              borderRadius: "10px",
-              fontSize: "11px",
-              fontWeight: "700",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: "0 4px",
-              boxShadow: "0 2px 4px rgba(0,0,0,0.2)"
-            }}>
-              {timelineCount}
-            </span>
-          )}
-        </button>
-      )}
 
       {/* ── WORKFLOW CHOICE MODAL ── */}
       {isWorkflowChoiceOpen && (

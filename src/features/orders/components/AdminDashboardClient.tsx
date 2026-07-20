@@ -382,7 +382,7 @@ export function AdminDashboardClient({
       </div>
 
       {/* Mobile: compact filter chips instead of large KPI cards */}
-      <div className="md:hidden flex gap-2 overflow-x-auto pb-3 -mx-1 px-1 mb-1">
+      <div className="lg:hidden flex gap-2 overflow-x-auto pb-3 -mx-1 px-1 mb-1">
         {STATS.filter((s) => s.filterKey).map((stat) => {
           const isActive = selectedKpi === stat.filterKey;
           return (
@@ -416,7 +416,7 @@ export function AdminDashboardClient({
       </div>
 
       {/* Desktop/tablet: Stat Cards */}
-      <div className="hidden md:grid grid-cols-2 lg:grid-cols-4 gap-4 mb-7">
+      <div className="hidden lg:grid grid-cols-2 xl:grid-cols-4 gap-4 mb-7">
         {STATS.map((stat, i) => {
           const Icon = stat.icon;
           const isActive = stat.filterKey ? selectedKpi === stat.filterKey : false;

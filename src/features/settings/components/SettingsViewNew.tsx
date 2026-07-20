@@ -254,14 +254,14 @@ export function SettingsViewNew({ initialAppSettings, companyDetails }: Settings
   };
 
   return (
-    <div style={{ padding: "32px", background: "#f8fafc", minHeight: "100vh", paddingBottom: "120px" }}>
+    <div className="p-3 sm:p-4 md:p-8 bg-slate-50 min-h-screen pb-[120px]">
       <div style={{ maxWidth: "900px", margin: "0 auto" }}>
         {/* Header */}
-        <div style={{ marginBottom: "32px" }}>
-          <h1 style={{ fontSize: "28px", fontWeight: "800", color: "#0f172a", margin: "0 0 8px" }}>
+        <div className="mb-5 md:mb-8">
+          <h1 className="text-xl sm:text-2xl md:text-[28px] font-extrabold text-slate-900 m-0 mb-1 md:mb-2">
             Settings
           </h1>
-          <p style={{ fontSize: "14px", color: "#64748b", margin: 0 }}>
+          <p className="text-xs sm:text-sm text-slate-500 m-0">
             Configure your account settings and preferences
           </p>
         </div>
@@ -567,7 +567,7 @@ export function SettingsViewNew({ initialAppSettings, companyDetails }: Settings
             </div>
           </div>
 
-          <div style={{ display: "grid", gap: "16px", gridTemplateColumns: "1fr 1fr" }}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label style={labelStyle}>Brand name</label>
               <input style={inputStyle} value={invoiceProfile.brandName || ""} onChange={(e) => setInvoiceField("brandName", e.target.value)} placeholder="THE BOARD COMPANY" />
@@ -626,7 +626,7 @@ export function SettingsViewNew({ initialAppSettings, companyDetails }: Settings
           <div style={{ marginTop: 24, marginBottom: 12, fontSize: 13, fontWeight: 700, color: "#0f172a" }}>
             Bank details
           </div>
-          <div style={{ display: "grid", gap: "16px", gridTemplateColumns: "1fr 1fr" }}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label style={labelStyle}>Account name</label>
               <input style={inputStyle} value={invoiceProfile.bank?.accountName || ""} onChange={(e) => setBankField("accountName", e.target.value)} />

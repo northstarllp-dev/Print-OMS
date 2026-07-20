@@ -1481,25 +1481,25 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
       )}
 
       {showDocumentPreview && typeof document !== "undefined" && createPortal(
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center overflow-hidden bg-black/50 p-4 sm:p-6 print:static print:inset-auto print:block print:bg-transparent print:p-0 print:overflow-visible">
-          <div className="relative flex w-full max-w-4xl max-h-full flex-col rounded-2xl bg-slate-100 shadow-2xl print:static print:max-w-none print:max-h-none print:shadow-none print:bg-transparent print:rounded-none">
-            <div className="shrink-0 flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 rounded-t-2xl quotation-no-print">
-              <div>
+        <div className="fixed inset-0 z-[99999] flex items-end md:items-center justify-center overflow-hidden bg-black/50 p-0 md:p-6 print:static print:inset-auto print:block print:bg-transparent print:p-0 print:overflow-visible">
+          <div className="relative flex w-full max-w-4xl max-h-[92dvh] md:max-h-full flex-col rounded-t-2xl md:rounded-2xl bg-slate-100 shadow-2xl print:static print:max-w-none print:max-h-none print:shadow-none print:bg-transparent print:rounded-none">
+            <div className="shrink-0 flex items-start md:items-center justify-between gap-3 border-b border-slate-200 bg-white px-3 md:px-4 py-3 rounded-t-2xl quotation-no-print">
+              <div className="min-w-0">
                 <h3 className="text-sm font-black text-slate-900">Customer quotation preview</h3>
-                <p className="text-[11px] text-slate-500">
+                <p className="text-[11px] text-slate-500 leading-snug">
                   Same layout as the portal. Use Print / Save as PDF on the document.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setShowDocumentPreview(false)}
-                className="rounded-lg border border-slate-200 bg-white p-2 text-slate-500 hover:bg-slate-50"
+                className="rounded-lg border border-slate-200 bg-white p-2 text-slate-500 hover:bg-slate-50 shrink-0"
                 aria-label="Close preview"
               >
                 <X size={16} />
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6 print:overflow-visible print:p-0">
+            <div className="flex-1 overflow-y-auto p-3 md:p-6 print:overflow-visible print:p-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
               <QuotationDocument
                 quotationId={quotationId}
                 quoteDate={quoteCreatedAt || new Date().toISOString()}
@@ -1844,15 +1844,16 @@ function QuotationConfirmModal({
         backdropFilter: "blur(2px)",
         zIndex: 99999,
         display: "flex",
-        alignItems: "center",
+        alignItems: "flex-end",
         justifyContent: "center",
-        padding: "16px",
+        padding: "0",
       }}
+      className="md:!items-center md:!p-4"
     >
       <div
         style={{
           backgroundColor: "white",
-          borderRadius: "16px",
+          borderRadius: "16px 16px 0 0",
           maxWidth: "400px",
           width: "100%",
           overflow: "hidden",
@@ -1860,36 +1861,38 @@ function QuotationConfirmModal({
           border: "1px solid #f1f5f9",
           display: "flex",
           flexDirection: "column",
+          maxHeight: "92dvh",
         }}
+        className="md:!rounded-2xl md:!max-h-[90vh]"
       >
         {/* Header */}
-        <div style={{ padding: "16px 20px", borderBottom: "1px solid #f1f5f9", backgroundColor: "#f8fafc", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div>
+        <div style={{ padding: "14px 16px", borderBottom: "1px solid #f1f5f9", backgroundColor: "#f8fafc", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", flexShrink: 0 }}>
+          <div style={{ minWidth: 0 }}>
             <h4 style={{ margin: 0, fontSize: "14px", fontWeight: 800, color: "#0f172a", textTransform: "uppercase" }}>
               Confirm Quotation
             </h4>
-            <span style={{ fontSize: "10px", color: "#64748b", fontWeight: 600 }}>
+            <span style={{ fontSize: "10px", color: "#64748b", fontWeight: 600, display: "block", marginTop: "2px" }}>
               {getSendConfirmSubtitle(status)}
             </span>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 shrink-0 p-1" aria-label="Close">
             <X size={16} />
           </button>
         </div>
 
         {/* Content */}
-        <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "12px" }}>
+        <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "12px", overflowY: "auto", flex: 1, minHeight: 0 }}>
           {/* Section Summaries Breakdown */}
           {sectionSummaries && sectionSummaries.length > 0 && (
             <div style={{ maxHeight: "160px", overflowY: "auto", borderBottom: "1px dashed #cbd5e1", paddingBottom: "12px", marginBottom: "4px", display: "flex", flexDirection: "column", gap: "10px" }}>
               {sectionSummaries.map((sec) => (
                 <div key={sec.id} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                    <div style={{ display: "flex", flexDirection: "column" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px" }}>
+                    <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
                       <span style={{ fontSize: "12px", color: "#334155", fontWeight: 700 }}>{sec.name}</span>
                       <span style={{ fontSize: "10px", color: "#94a3b8", fontWeight: 600 }}>{sec.linesCount} line item{sec.linesCount !== 1 ? 's' : ''}</span>
                     </div>
-                    <span style={{ fontSize: "12px", color: "#0f172a", fontWeight: 700 }}>
+                    <span style={{ fontSize: "12px", color: "#0f172a", fontWeight: 700, flexShrink: 0 }}>
                       ₹{sec.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                     </span>
                   </div>
@@ -1897,11 +1900,11 @@ function QuotationConfirmModal({
                   {sec.lines && sec.lines.length > 0 && (
                     <div style={{ paddingLeft: "8px", borderLeft: "2px solid #e2e8f0", display: "flex", flexDirection: "column", gap: "4px" }}>
                       {sec.lines.map(line => (
-                        <div key={line.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <span style={{ fontSize: "11px", color: "#64748b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "220px" }}>
+                        <div key={line.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
+                          <span style={{ fontSize: "11px", color: "#64748b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: 1 }}>
                             {line.description}
                           </span>
-                          <span style={{ fontSize: "11px", color: "#475569", fontWeight: 600 }}>
+                          <span style={{ fontSize: "11px", color: "#475569", fontWeight: 600, flexShrink: 0 }}>
                             ₹{line.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                           </span>
                         </div>
@@ -1938,17 +1941,30 @@ function QuotationConfirmModal({
             </div>
           )}
           <div style={{ borderTop: "1px dashed #cbd5e1", margin: "4px 0" }} />
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
             <span style={{ fontSize: "14px", color: "#0f172a", fontWeight: 900 }}>Grand Total</span>
-            <span style={{ fontSize: "16px", color: "#2563eb", fontWeight: 900 }}>₹{grandTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+            <span style={{ fontSize: "16px", color: "#2563eb", fontWeight: 900, wordBreak: "break-all", textAlign: "right" }}>₹{grandTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
           </div>
         </div>
 
         {/* Footer */}
-        <div style={{ padding: "16px 20px", borderTop: "1px solid #f1f5f9", backgroundColor: "#f8fafc", display: "flex", justifyContent: "flex-end", gap: "8px" }}>
+        <div
+          style={{
+            padding: "12px 16px",
+            paddingBottom: "max(12px, env(safe-area-inset-bottom))",
+            borderTop: "1px solid #f1f5f9",
+            backgroundColor: "#f8fafc",
+            display: "flex",
+            flexDirection: "column-reverse",
+            gap: "8px",
+            flexShrink: 0,
+          }}
+          className="md:!flex-row md:!justify-end"
+        >
           <button
             onClick={onClose}
-            style={{ padding: "8px 16px", backgroundColor: "white", color: "#475569", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}
+            style={{ padding: "10px 16px", backgroundColor: "white", color: "#475569", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "12px", fontWeight: 700, cursor: "pointer", width: "100%" }}
+            className="md:!w-auto"
             onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#f1f5f9"}
             onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "white"}
           >
@@ -1956,7 +1972,8 @@ function QuotationConfirmModal({
           </button>
           <button
             onClick={onConfirm}
-            style={{ padding: "8px 16px", backgroundColor: "#22c55e", color: "white", border: "none", borderRadius: "8px", fontSize: "12px", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}
+            style={{ padding: "10px 16px", backgroundColor: "#22c55e", color: "white", border: "none", borderRadius: "8px", fontSize: "12px", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "4px", width: "100%" }}
+            className="md:!w-auto"
             onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#16a34a"}
             onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "#22c55e"}
           >
@@ -2009,15 +2026,16 @@ function WorkflowAdvanceConfirmModal({
         backdropFilter: "blur(2px)",
         zIndex: 99999,
         display: "flex",
-        alignItems: "center",
+        alignItems: "flex-end",
         justifyContent: "center",
-        padding: "16px",
+        padding: "0",
       }}
+      className="md:!items-center md:!p-4"
     >
       <div
         style={{
           backgroundColor: "white",
-          borderRadius: "14px",
+          borderRadius: "14px 14px 0 0",
           maxWidth: "420px",
           width: "100%",
           overflow: "hidden",
@@ -2025,24 +2043,39 @@ function WorkflowAdvanceConfirmModal({
           border: "1px solid #f1f5f9",
           display: "flex",
           flexDirection: "column",
+          maxHeight: "92dvh",
         }}
+        className="md:!rounded-[14px]"
       >
-        <div style={{ padding: "16px 20px", borderBottom: "1px solid #f1f5f9", backgroundColor: "#f8fafc" }}>
+        <div style={{ padding: "16px", borderBottom: "1px solid #f1f5f9", backgroundColor: "#f8fafc" }}>
           <h4 style={{ margin: 0, fontSize: "14px", fontWeight: 800, color: "#0f172a", textTransform: "uppercase" }}>
             {title}
           </h4>
           <p style={{ margin: "8px 0 0", fontSize: "12px", color: "#64748b", lineHeight: 1.5 }}>{description}</p>
         </div>
-        <div style={{ padding: "16px 20px", borderTop: "1px solid #f1f5f9", backgroundColor: "#f8fafc", display: "flex", justifyContent: "flex-end", gap: "8px" }}>
+        <div
+          style={{
+            padding: "12px 16px",
+            paddingBottom: "max(12px, env(safe-area-inset-bottom))",
+            borderTop: "1px solid #f1f5f9",
+            backgroundColor: "#f8fafc",
+            display: "flex",
+            flexDirection: "column-reverse",
+            gap: "8px",
+          }}
+          className="md:!flex-row md:!justify-end"
+        >
           <button
             onClick={onClose}
-            style={{ padding: "8px 16px", backgroundColor: "white", color: "#475569", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}
+            style={{ padding: "10px 16px", backgroundColor: "white", color: "#475569", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "12px", fontWeight: 700, cursor: "pointer", width: "100%" }}
+            className="md:!w-auto"
           >
             Cancel
           </button>
           <button
             onClick={onConfirm}
-            style={{ padding: "8px 16px", backgroundColor: mode === "override" ? "#d97706" : "#16a34a", color: "white", border: "none", borderRadius: "8px", fontSize: "12px", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}
+            style={{ padding: "10px 16px", backgroundColor: mode === "override" ? "#d97706" : "#16a34a", color: "white", border: "none", borderRadius: "8px", fontSize: "12px", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "4px", width: "100%" }}
+            className="md:!w-auto"
           >
             <Check size={14} /> {confirmLabel}
           </button>

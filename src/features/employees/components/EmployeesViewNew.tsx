@@ -178,22 +178,37 @@ export function EmployeesViewNew({ initialEmployees, companyId = null }: Employe
   );
 
   return (
-    <div style={{ padding: "32px", background: "#f8fafc", minHeight: "100vh" }}>
+    <div className="p-3 sm:p-4 md:p-8 bg-slate-50 min-h-screen">
       {/* Header Section */}
-      <div style={{ marginBottom: "32px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "24px" }}>
-          <div>
-            <h1 style={{ fontSize: "28px", fontWeight: "800", color: "#0f172a", margin: "0 0 8px" }}>
+      <div className="mb-5 md:mb-8">
+        <div className="flex flex-wrap items-start justify-between gap-3 mb-4 md:mb-6">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-xl sm:text-2xl md:text-[28px] font-extrabold text-slate-900 m-0 mb-1 md:mb-2">
               Employees Directory
             </h1>
-            <p style={{ fontSize: "14px", color: "#64748b", margin: 0 }}>
+            <p className="text-xs sm:text-sm text-slate-500 m-0">
               Monitor team members, assigned workloads, and performance ratings
             </p>
           </div>
         </div>
 
-        {/* Stats Cards */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "16px" }}>
+        {/* Mobile KPI chips */}
+        <div className="lg:hidden flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
+          {stats.map((stat) => (
+            <div
+              key={stat.label}
+              className="shrink-0 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-bold border border-slate-200 bg-white text-slate-500"
+            >
+              <span>{stat.label}</span>
+              <span className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-extrabold bg-slate-100 text-slate-600">
+                {stat.value}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {/* Desktop Stats Cards */}
+        <div className="hidden lg:grid grid-cols-2 xl:grid-cols-4 gap-4">
           {stats.map((stat, idx) => {
             const Icon = stat.icon;
             return (
@@ -237,79 +252,120 @@ export function EmployeesViewNew({ initialEmployees, companyId = null }: Employe
       </div>
 
       {/* Table Section */}
-      <div style={{ background: "white", borderRadius: "12px", border: "1px solid #e2e8f0", overflow: "visible" }}>
+      <div className="bg-white rounded-xl border border-slate-200 overflow-visible">
         {/* Search & Filter Bar */}
-        <div style={{ padding: "20px", borderBottom: "1px solid #e2e8f0", display: "flex", gap: "12px", alignItems: "center" }}>
-          <div style={{ flex: 1, position: "relative" }}>
-            <Search size={16} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
+        <div className="p-3 sm:p-4 border-b border-slate-200 flex flex-wrap gap-2 items-center">
+          <div className="relative flex-1 min-w-0 w-full sm:min-w-[12rem]">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
             <input
               type="text"
               placeholder="Search by employee name, role or ID..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              style={{
-                width: "100%",
-                padding: "10px 12px 10px 36px",
-                border: "1px solid #e2e8f0",
-                borderRadius: "8px",
-                fontSize: "13px",
-                fontFamily: "inherit",
-                transition: "all 0.2s",
-              }}
+              className="w-full py-2.5 pl-9 pr-3 border border-slate-200 rounded-lg text-[13px] outline-none"
             />
           </div>
           <button
-            style={{
-              padding: "10px 16px",
-              background: "#f1f5f9",
-              border: "1px solid #cbd5e1",
-              borderRadius: "8px",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              fontSize: "13px",
-              fontWeight: "600",
-              color: "#475569",
-              transition: "all 0.2s",
-            }}
+            type="button"
+            className="inline-flex items-center gap-2 px-3.5 py-2.5 bg-slate-100 border border-slate-300 rounded-lg text-[13px] font-semibold text-slate-600"
           >
             <Filter size={16} /> Filters
           </button>
           
-          {/* Reset Button */}
           <button
             title="Reset Filters"
+            type="button"
             onClick={() => setSearchTerm("")}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: "0 14px",
-              background: "#fef2f2",
-              border: "1px solid #fecaca",
-              borderRadius: "8px",
-              cursor: "pointer",
-              color: "#dc2626",
-              outline: "none",
-              height: "39px",
-              transition: "all 0.2s",
-              fontWeight: "600",
-              fontSize: "13px",
-              gap: "6px",
-              flexShrink: 0
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "#fee2e2"; e.currentTarget.style.borderColor = "#fca5a5"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "#fef2f2"; e.currentTarget.style.borderColor = "#fecaca"; }}
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 h-[39px] bg-red-50 border border-red-200 rounded-lg text-red-600 font-semibold text-[13px] shrink-0"
           >
             <RefreshCw size={14} />
             Reset
           </button>
         </div>
 
-        {/* Table View */}
-        <div style={{ overflow: "visible" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        {/* Mobile cards */}
+        <div className="lg:hidden p-3 space-y-2.5 min-h-[200px] bg-slate-50/80">
+          {filteredEmployees.length === 0 ? (
+            <div className="py-12 px-4 text-center text-sm text-slate-500 font-medium bg-white rounded-xl border border-slate-200">
+              No employees found.
+            </div>
+          ) : (
+            filteredEmployees.map((emp) => (
+              <div
+                key={emp.id}
+                className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden"
+              >
+                <div className="flex">
+                  <div className="w-1 shrink-0 self-stretch bg-[var(--color-primary)]" aria-hidden />
+                  <div className="flex-1 min-w-0 p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="text-[12px] font-bold text-slate-500">
+                          {emp.employeeId || emp.id.substring(0, 8)}
+                        </div>
+                        <div className="text-[14px] font-extrabold text-slate-900 mt-0.5 truncate">{emp.name}</div>
+                        <div className="text-[12px] text-slate-500 mt-0.5">{emp.role}</div>
+                        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-500">
+                          <span>{emp.phone || "—"}</span>
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-semibold">
+                            {emp.jobsAssigned || 0} jobs
+                          </span>
+                        </div>
+                      </div>
+                      <div className="relative shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setActionDropdownId(actionDropdownId === emp.id ? null : emp.id)}
+                          className="p-1.5 text-slate-400"
+                        >
+                          <MoreVertical size={16} />
+                        </button>
+                        {actionDropdownId === emp.id && (
+                          <>
+                            <div
+                              className="fixed inset-0 z-[49]"
+                              onClick={() => setActionDropdownId(null)}
+                            />
+                            <div className="absolute right-0 top-8 z-50 min-w-[140px] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-md">
+                              <button
+                                type="button"
+                                onClick={() => handleEditEmployee(emp)}
+                                className="flex w-full items-center gap-2 border-b border-slate-100 px-4 py-2.5 text-left text-[13px] text-slate-600"
+                              >
+                                <Edit size={14} /> Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setResetModalEmpId(emp.id);
+                                  setActionDropdownId(null);
+                                }}
+                                className="flex w-full items-center gap-2 border-b border-slate-100 px-4 py-2.5 text-left text-[13px] text-amber-500"
+                              >
+                                <Key size={14} /> Reset Password
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteEmployee(emp.id)}
+                                className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-[13px] text-red-500"
+                              >
+                                <Trash2 size={14} /> Delete
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Desktop Table View */}
+        <div className="hidden lg:block overflow-x-auto">
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "800px" }}>
             <thead style={{ position: "sticky", top: 0, background: "#f8fafc", zIndex: 10 }}>
               <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
                 <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", borderTopLeftRadius: "12px" }}>EMPLOYEE ID</th>

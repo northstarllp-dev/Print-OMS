@@ -315,13 +315,13 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
     </div>
 
     {showRejectModal && (
-      <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-4">
-        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-100 bg-slate-50">
+      <div className="fixed inset-0 z-[200] flex items-end md:items-center justify-center bg-black/50 p-0 md:p-4">
+        <div className="bg-white rounded-t-2xl md:rounded-2xl shadow-2xl max-w-md w-full overflow-hidden max-h-[92dvh] flex flex-col">
+          <div className="px-4 md:px-5 py-4 border-b border-slate-100 bg-slate-50 shrink-0">
             <h3 className="text-sm font-extrabold text-slate-800 uppercase tracking-wider">Request Changes</h3>
             <p className="text-xs text-slate-500 mt-1">Send the order back to staff with mandatory feedback.</p>
           </div>
-          <div className="p-5 space-y-4">
+          <div className="p-4 md:p-5 space-y-4 overflow-y-auto">
             <textarea
               value={rejectNotes}
               onChange={(e) => setRejectNotes(e.target.value)}
@@ -330,21 +330,21 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
               className="w-full p-3 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/40"
               autoFocus
             />
-            <div className="flex justify-end gap-2">
+            <div className="flex flex-col-reverse md:flex-row justify-end gap-2 pb-[max(0,env(safe-area-inset-bottom))]">
               <button
                 onClick={() => {
                   setShowRejectModal(false);
                   setRejectNotes("");
                 }}
                 disabled={rejecting}
-                className="px-4 py-2 text-slate-600 text-xs font-bold hover:bg-slate-100 rounded-lg"
+                className="px-4 py-2.5 text-slate-600 text-xs font-bold hover:bg-slate-100 rounded-lg"
               >
                 Cancel
               </button>
               <button
                 onClick={handleRejectSubmit}
                 disabled={rejecting || !rejectNotes.trim()}
-                className="px-4 py-2 bg-amber-600 text-white text-xs font-bold rounded-lg hover:bg-amber-700 disabled:opacity-50"
+                className="px-4 py-2.5 bg-amber-600 text-white text-xs font-bold rounded-lg hover:bg-amber-700 disabled:opacity-50"
               >
                 {rejecting ? "Sending..." : "Send Back to Staff"}
               </button>
