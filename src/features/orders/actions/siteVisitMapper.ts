@@ -62,6 +62,36 @@ export function formatSiteMeasurementLabel(item: {
   return label;
 }
 
+const PLACEHOLDER_INSTALLATION_ADDRESSES = new Set([
+  "Installation Address Pending Survey",
+  "Not Provided",
+]);
+
+/** Site visit address is the source of truth for installation location when available. */
+export function resolveSiteVisitInstallationAddress(
+  siteVisit?: Partial<SiteVisitDetails> | Record<string, unknown> | null,
+  fallback?: string | null
+): string | null {
+  const sv = (siteVisit || {}) as Record<string, unknown>;
+  const candidates = [
+    sv.customerAddress,
+    sv.customer_address,
+    sv.siteAddress,
+    sv.site_address,
+  ];
+
+  for (const value of candidates) {
+    if (typeof value !== "string") continue;
+    const trimmed = value.trim();
+    if (!trimmed || trimmed.startsWith("Skipped")) continue;
+    return trimmed;
+  }
+
+  const fb = typeof fallback === "string" ? fallback.trim() : "";
+  if (!fb || PLACEHOLDER_INSTALLATION_ADDRESSES.has(fb)) return null;
+  return fb;
+}
+
 export function mapSiteVisitFromDb(sv: any): SiteVisitDetails | null {
   if (!sv) return null;
 

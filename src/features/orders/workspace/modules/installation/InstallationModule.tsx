@@ -5,6 +5,7 @@ import { ArrowLeft, Sparkles, Check, Loader2, CheckCircle, Save, UploadCloud, Ca
 import { InstallationScheduleModule } from "@/features/installations/components/InstallationScheduleModule";
 import { deleteStorageFilesAction } from "@/features/orders/actions/storageActions";
 import { createClient } from "@/utils/supabase/client";
+import { resolveSiteVisitInstallationAddress } from "@/features/orders/actions/siteVisitMapper";
 import type { StageModuleProps } from "../../shared/types";
 
 export interface InstallationModuleData {
@@ -68,7 +69,10 @@ export function InstallationModule({
   
   const installationDetails = installation || {};
   const gmapLink = svDetails.gmap_link || svDetails.gmapLink;
-  const siteAddress = svDetails.site_address || svDetails.siteAddress || client?.shippingAddress || "Installation Location";
+  const installationSiteAddress =
+    resolveSiteVisitInstallationAddress(svDetails, client?.shippingAddress) ||
+    "Installation Location";
+  const siteAddress = installationSiteAddress;
 
   const defaultChecklist = [
     { id: "prep", label: "Site preparation completed", checked: false },
@@ -175,7 +179,7 @@ export function InstallationModule({
   const canAct = canEdit && !isCompleted;
 
   return (
-    <div className={embedded ? "space-y-6" : "p-8 bg-slate-50/50 min-h-screen"}>
+    <div className={`min-w-0 max-w-full overflow-x-hidden ${embedded ? "space-y-6" : "p-4 sm:p-8 bg-slate-50/50 min-h-screen"}`}>
       {/* ── ADMIN OVERRIDE BANNER ── */}
       {baseFrozen && currentUserRole === "Admin" && setAdminOverrideUnlocked && (
         <div className={`mb-6 p-4 rounded-xl border flex flex-col md:flex-row md:items-center gap-3 md:justify-between transition-colors ${adminOverrideUnlocked ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}>
@@ -306,17 +310,17 @@ export function InstallationModule({
           />
           
           {/* CHECKLIST */}
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm">
-            <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <CheckCircle size={18} className="text-green-600" />
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-6 shadow-sm min-w-0 max-w-full overflow-hidden">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-4 pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2 min-w-0">
+                <CheckCircle size={18} className="text-green-600 shrink-0" />
                 <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider">
                   Installation Checklist
                 </h2>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               {checklist.map((step: any) => (
                 <div 
                   key={step.id}
@@ -341,7 +345,7 @@ export function InstallationModule({
               ))}
             </div>
 
-            <div className="mt-8 bg-slate-50/50 rounded-xl p-4 border border-slate-100">
+            <div className="mt-6 sm:mt-8 bg-slate-50/50 rounded-xl p-3 sm:p-4 border border-slate-100 min-w-0">
               <div className="flex items-center gap-2 mb-3">
                 <FileText size={16} className="text-slate-500" />
                 <label className="block text-xs font-bold text-slate-700">Installation Notes / Remarks</label>
@@ -358,11 +362,11 @@ export function InstallationModule({
                 className="w-full min-h-[100px] bg-white text-slate-800 text-sm p-4 border border-slate-200 rounded-xl focus:outline-none focus:border-green-500 focus:ring-4 focus:ring-green-500/10 transition-all resize-y shadow-sm"
               />
               {!isCompleted && (
-                <div className="mt-3 flex justify-end">
+                <div className="mt-3 flex justify-stretch sm:justify-end">
                   <button 
                     onClick={handleSaveNotes}
                     disabled={saving || !canEdit}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-white text-slate-700 hover:bg-slate-50 border border-slate-200 shadow-sm rounded-lg text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-white text-slate-700 hover:bg-slate-50 border border-slate-200 shadow-sm rounded-lg text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Save size={14} /> Save Notes
                   </button>
@@ -440,7 +444,7 @@ export function InstallationModule({
 
           {/* DESIGN REFERENCE */}
           {designImage && (
-            <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm">
+            <div className="bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-6 shadow-sm min-w-0 max-w-full overflow-hidden">
               <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
                 <Sparkles size={18} className="text-purple-600" />
                 <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider">
@@ -498,10 +502,10 @@ export function InstallationModule({
                     </div>
                   )}
 
-                  {client.shippingAddress && (
+                  {installationSiteAddress && (
                     <div className="pt-2 border-t border-slate-100 mt-2">
                       <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Installation / Shipping Address</div>
-                      <div className="font-medium text-slate-600 leading-relaxed p-2 bg-slate-50 rounded-lg border border-slate-100">{client.shippingAddress}</div>
+                      <div className="font-medium text-slate-600 leading-relaxed p-2 bg-slate-50 rounded-lg border border-slate-100">{installationSiteAddress}</div>
                     </div>
                   )}
                 </div>

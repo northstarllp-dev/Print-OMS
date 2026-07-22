@@ -1,5 +1,6 @@
 import React from "react";
 import { getOrders } from "@/features/orders/actions/orderActions";
+import { resolveSiteVisitInstallationAddress } from "@/features/orders/actions/siteVisitMapper";
 import { InstallationDashboardClient } from "./InstallationDashboardClient";
 import { filterFloorQueueOrders } from "@/features/orders/workspace/shared/staffQueueStages";
 
@@ -21,7 +22,7 @@ export default async function InstallationOrdersPage() {
     workflow_type: o.workflow_type,
     scheduledDate: o.installationDetails?.scheduledDate ?? null,
     scheduledTime: o.installationDetails?.scheduledTime ?? null,
-    siteAddress: o.siteVisitDetails?.site_address || o.siteVisitDetails?.siteAddress || null,
+    siteAddress: resolveSiteVisitInstallationAddress(o.siteVisitDetails),
   }));
 
   return (

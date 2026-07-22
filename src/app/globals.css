@@ -392,6 +392,12 @@ body {
   height: 0;
 }
 
+@keyframes prt-refresh-spin {
+  to {
+    transform: rotate(270deg);
+  }
+}
+
 /* FORM INPUT */
 .prt-input {
   width: 100%;

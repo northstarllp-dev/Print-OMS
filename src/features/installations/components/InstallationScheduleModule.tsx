@@ -98,19 +98,19 @@ export const InstallationScheduleModule: React.FC<InstallationScheduleModuleProp
   const timeSlots = ["09:00 AM", "10:30 AM", "12:00 PM", "02:00 PM", "03:30 PM", "05:00 PM"];
 
   return (
-    <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm">
+    <div className="bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-6 shadow-sm min-w-0 max-w-full overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
-        <div className="flex items-center gap-2">
-          <Calendar size={18} className="text-blue-600" />
-          <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-4 pb-3 border-b border-slate-100">
+        <div className="flex items-center gap-2 min-w-0">
+          <Calendar size={18} className="text-blue-600 shrink-0" />
+          <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider truncate">
             Installation Schedule
           </h2>
         </div>
 
         {alert && (
           <div
-            className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border ${
+            className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border shrink-0 ${
               alert.type === "success"
                 ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                 : "bg-rose-50 text-rose-700 border-rose-200"
@@ -123,17 +123,17 @@ export const InstallationScheduleModule: React.FC<InstallationScheduleModuleProp
 
       {/* Confirmed state */}
       {!showForm ? (
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-5">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 sm:p-5 min-w-0">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex items-start gap-3 min-w-0 flex-1">
+              <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center shrink-0">
                 <CheckCircle size={20} className="text-white" />
               </div>
-              <div>
+              <div className="min-w-0 flex-1">
                 <p className="text-[10px] font-bold text-blue-500 uppercase tracking-wider mb-0.5">
                   Your installation has been scheduled
                 </p>
-                <p className="font-black text-blue-900 text-base leading-snug">
+                <p className="font-black text-blue-900 text-sm sm:text-base leading-snug break-words">
                   {new Date(confirmedDate + "T00:00:00").toLocaleDateString("en-IN", {
                     weekday: "long",
                     month: "long",
@@ -142,20 +142,20 @@ export const InstallationScheduleModule: React.FC<InstallationScheduleModuleProp
                   at {confirmedTime}
                 </p>
                 {(locationText || locationLink) && (
-                  <div className="flex items-center gap-1.5 mt-2 min-w-0 max-w-full">
-                    <MapPin size={12} className="text-blue-500 shrink-0" />
+                  <div className="flex items-start gap-1.5 mt-2 min-w-0">
+                    <MapPin size={12} className="text-blue-500 shrink-0 mt-0.5" />
                     {locationLink ? (
                       <a
                         href={locationLink}
                         target="_blank"
                         rel="noreferrer"
                         title={locationText || "View on Map"}
-                        className="text-[11px] font-bold text-blue-600 hover:underline truncate min-w-0"
+                        className="text-[11px] font-bold text-blue-600 hover:underline break-words min-w-0"
                       >
                         {locationText || "View on Map"}
                       </a>
                     ) : (
-                      <span className="text-[11px] font-bold text-blue-600 truncate min-w-0" title={locationText}>
+                      <span className="text-[11px] font-bold text-blue-600 break-words min-w-0" title={locationText}>
                         {locationText}
                       </span>
                     )}
@@ -167,7 +167,7 @@ export const InstallationScheduleModule: React.FC<InstallationScheduleModuleProp
             {!isCompleted && !isCustomerView && (
               <button
                 onClick={() => setIsRescheduling(true)}
-                className="flex items-center gap-1.5 px-3 py-2 bg-white text-blue-700 font-bold text-xs rounded-lg border border-blue-200 hover:bg-blue-50 transition-colors shadow-sm flex-shrink-0"
+                className="flex items-center justify-center gap-1.5 px-3 py-2.5 bg-white text-blue-700 font-bold text-xs rounded-lg border border-blue-200 hover:bg-blue-50 transition-colors shadow-sm w-full sm:w-auto shrink-0"
               >
                 <RefreshCw size={12} />
                 Reschedule
@@ -184,13 +184,13 @@ export const InstallationScheduleModule: React.FC<InstallationScheduleModuleProp
             Your installation schedule is pending confirmation from our team.
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 min-w-0">
             {/* Date picker */}
-            <div>
+            <div className="min-w-0">
               <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
                 Select Date
               </label>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {nextDays.map((date) => {
                   const isSelected = selectedDate === date;
                   const dateObj = new Date(date + "T00:00:00");
@@ -221,7 +221,7 @@ export const InstallationScheduleModule: React.FC<InstallationScheduleModuleProp
             </div>
 
             {/* Time picker */}
-            <div>
+            <div className="min-w-0">
               <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
                 Select Time
               </label>
@@ -247,11 +247,11 @@ export const InstallationScheduleModule: React.FC<InstallationScheduleModuleProp
               </div>
 
               {!isCompleted && (
-                <div className="mt-4 flex justify-end gap-2">
+                <div className="mt-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
                   {isRescheduling && (
                     <button
                       onClick={handleCancelReschedule}
-                      className="px-4 py-2 bg-white text-slate-600 border border-slate-200 rounded-xl text-xs font-bold hover:bg-slate-50 transition-colors"
+                      className="w-full sm:w-auto px-4 py-2.5 bg-white text-slate-600 border border-slate-200 rounded-xl text-xs font-bold hover:bg-slate-50 transition-colors"
                     >
                       Cancel
                     </button>
@@ -259,7 +259,7 @@ export const InstallationScheduleModule: React.FC<InstallationScheduleModuleProp
                   <button
                     onClick={handleSchedule}
                     disabled={scheduling || !selectedDate || !selectedTime}
-                    className="inline-flex items-center gap-2 px-5 py-2 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-sm"
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-sm"
                   >
                     {scheduling ? (
                       <Loader2 size={13} className="animate-spin" />

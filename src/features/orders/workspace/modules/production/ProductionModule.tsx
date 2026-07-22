@@ -13,6 +13,7 @@ import {
   resolveChecklistProgress,
   type ProductionChecklistItem,
 } from "@/features/settings/productionChecklist";
+import { resolveSiteVisitInstallationAddress } from "@/features/orders/actions/siteVisitMapper";
 
 interface LocationMeasurement {
   id: string;
@@ -156,7 +157,10 @@ export function ProductionModule({
   };
 
   const client = customers.find(c => c.id === order.customerId);
-
+  const installationSiteAddress = resolveSiteVisitInstallationAddress(
+    order.siteVisitDetails,
+    client?.shippingAddress
+  );
 
   const svDetails = order.siteVisitDetails || {};
   const locations: LocationMeasurement[] = svDetails.locations || [];
@@ -455,10 +459,10 @@ export function ProductionModule({
                     <div className="font-semibold text-slate-700">{maskEmail(client.email)}</div>
                   </div>
                 )}
-                {client.shippingAddress && (
+                {installationSiteAddress && (
                   <div className="flex-1 min-w-[200px]">
                     <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Installation Site Address</div>
-                    <div className="font-medium text-slate-600 leading-relaxed">{client.shippingAddress}</div>
+                    <div className="font-medium text-slate-600 leading-relaxed">{installationSiteAddress}</div>
                   </div>
                 )}
                 {(order.notes || quotation?.notes) && (

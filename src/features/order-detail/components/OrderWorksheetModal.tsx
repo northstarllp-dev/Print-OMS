@@ -50,7 +50,11 @@ import {
   approveSiteVisitAction,
   freezeSiteVisitAction,
   setWorkflowTypeAction,
+  getOrderById,
 } from "@/features/orders/actions/orderActions";
+import { mapDbOrderToWorksheetOrder } from "@/features/orders/actions/orderClientMapper";
+import { getQuotationByOrderId } from "@/features/quotations/actions/quotationActions";
+import { PullToRefresh } from "@/components/ui/PullToRefresh";
 import {
   markInstallationCompleted,
   updateInstallationDetails as updateInstallationDetailsServer,
@@ -301,10 +305,12 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   const [selectedLostReason, setSelectedLostReason] = useState("");
   const [orderSearch, setOrderSearch] = useState("");
   const [orderTab, setOrderTab] = useState<"all" | "active" | "pending">("all");
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const [messages, setMessages] = useState<any[]>([]);
   const orderRef = useRef(order);
   orderRef.current = order;
+  const moduleBodyScrollRef = useRef<HTMLDivElement>(null);
   /** Sync ref so Save Draft always sends the latest locations, not a stale render snapshot. */
   const siteVisitDetailsRef = useRef(initialOrder.siteVisitDetails);
   const [quotationRealtimeRow, setQuotationRealtimeRow] = useState<Record<string, unknown> | null>(null);
@@ -316,6 +322,44 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     setLocalAlert({ message, type });
     setTimeout(() => setLocalAlert(null), 3500);
   }, []);
+
+  const handleRefreshOrder = useCallback(async () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    const started = Date.now();
+    try {
+      const [freshOrder, freshQuotation, activityRes] = await Promise.all([
+        getOrderById(orderRef.current.id),
+        getQuotationByOrderId(orderRef.current.id).catch(() => null),
+        createClient()
+          .from("order_activity")
+          .select("*")
+          .eq("order_id", orderRef.current.orderId || orderRef.current.id)
+          .eq("activity_type", "timeline"),
+      ]);
+
+      if (freshOrder) {
+        const mapped = mapDbOrderToWorksheetOrder(freshOrder as Record<string, unknown>);
+        setOrder(mapped);
+        siteVisitDetailsRef.current = mapped.siteVisitDetails;
+      }
+
+      if (freshQuotation) {
+        setQuotationRealtimeRow(freshQuotation as Record<string, unknown>);
+      }
+
+      if (activityRes.data) {
+        setMessages(activityRes.data);
+      }
+
+      router.refresh();
+    } catch {
+      triggerLocalAlert("Could not refresh this order. Please try again.", "error");
+    } finally {
+      const wait = Math.max(0, 650 - (Date.now() - started));
+      window.setTimeout(() => setIsRefreshing(false), wait);
+    }
+  }, [isRefreshing, router, triggerLocalAlert]);
 
   const entryStageRef = useRef(entryStage);
   entryStageRef.current = entryStage;
@@ -331,6 +375,10 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     if (lockInitialTabRef.current) return;
     setActiveStepTab(stageToTabIndex(order.stage, order.workflow_type));
   }, [order.stage, order.workflow_type]);
+
+  useEffect(() => {
+    moduleBodyScrollRef.current?.scrollTo({ top: 0 });
+  }, [activeStepTab]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -1327,6 +1375,23 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                 <div className="flex items-center gap-1.5 shrink-0">
                   <button
                     type="button"
+                    onClick={() => void handleRefreshOrder()}
+                    disabled={isRefreshing}
+                    title="Refresh order"
+                    aria-label="Refresh order"
+                    className={`inline-flex items-center justify-center w-10 h-10 rounded-lg border transition-all ${
+                      isRefreshing
+                        ? "border-[var(--color-secondary)]/25 bg-[var(--color-secondary)]/5 text-[var(--color-secondary)]"
+                        : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    <RefreshCw
+                      size={16}
+                      className={isRefreshing ? "animate-[spin_0.85s_linear_infinite]" : ""}
+                    />
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setActiveRightPanel((prev) => (prev === "timeline" ? null : "timeline"))}
                     title="Order timeline"
                     aria-label="Order timeline"
@@ -1557,8 +1622,19 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
             </div>
           </div>
 
-          {/* Module body (scrollable) */}
-          <div className="px-3 sm:px-4 md:px-6 pb-4 md:pb-6" style={{ flex: 1, overflowY: "auto" }}>
+          {/* Module body (scrollable) — pull down on mobile to refresh */}
+          <PullToRefresh
+            ref={moduleBodyScrollRef}
+            onRefresh={handleRefreshOrder}
+            refreshing={isRefreshing}
+            className="px-3 sm:px-4 md:px-6 pb-4 md:pb-6"
+            style={{ flex: 1, overflowY: "auto", minHeight: 0 }}
+          >
+            <div
+              className={`transition-opacity duration-300 ease-out ${
+                isRefreshing ? "opacity-[0.72] pointer-events-none" : "opacity-100"
+              }`}
+            >
 
             {order.stageAdminNotes &&
               order.stageStatus === "Normal" &&
@@ -1587,13 +1663,14 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
               </div>
             )}
 
-            <div style={{ background: "white", border: "1px solid #E2E8F0", borderTop: "none", borderBottomLeftRadius: "12px", borderBottomRightRadius: "12px", borderTopRightRadius: "12px", overflow: "visible", minHeight: "100%", borderTopLeftRadius: activeStepTab === ADMIN_TAB || activeStepTab === PAYMENTS_TAB ? "12px" : "0px", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.05)" }}>
-              <div className="p-3 sm:p-4 md:p-6">
+            <div style={{ background: "white", border: "1px solid #E2E8F0", borderTop: "none", borderBottomLeftRadius: "12px", borderBottomRightRadius: "12px", borderTopRightRadius: "12px", overflowX: "hidden", minHeight: "100%", minWidth: 0, borderTopLeftRadius: activeStepTab === ADMIN_TAB || activeStepTab === PAYMENTS_TAB ? "12px" : "0px", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.05)" }}>
+              <div className="p-3 sm:p-4 md:p-6 min-w-0">
                 {renderModule()}
               </div>
             </div>
 
-          </div>
+            </div>
+          </PullToRefresh>
 
           {/* Sticky footer actions — hidden entirely when the active stage is inaccessible */}
           <div className="px-3 sm:px-5 py-3 flex flex-row flex-wrap items-stretch sm:items-center justify-end gap-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]" style={{ background: "#F8FAFC", borderTop: "1px solid #E2E8F0", flexShrink: 0, boxShadow: "0 -2px 10px rgba(0,0,0,0.05)" }}>
