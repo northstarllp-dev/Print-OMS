@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { X, MapPin } from "lucide-react";
 import { GoogleMap, useJsApiLoader, Marker, Autocomplete } from "@react-google-maps/api";
 
@@ -64,6 +65,20 @@ export const ScheduleVisitModal: React.FC<ScheduleVisitModalProps> = ({ isOpen, 
     }
   }, [isLoaded]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setSiteAddress(defaultAddress || "");
+  }, [isOpen, defaultAddress]);
+
   const reverseGeocode = (lat: number, lng: number) => {
     if (!geocoder.current) return;
     geocoder.current.geocode({ location: { lat, lng } }, (results: any, status: any) => {
@@ -106,7 +121,7 @@ export const ScheduleVisitModal: React.FC<ScheduleVisitModalProps> = ({ isOpen, 
     }
   };
 
-  if (!isOpen) return null;
+  if (!isOpen || typeof document === "undefined") return null;
 
   const getBusinessDays = () => {
     const days: Date[] = [];
@@ -127,16 +142,35 @@ export const ScheduleVisitModal: React.FC<ScheduleVisitModalProps> = ({ isOpen, 
     onClose();
   };
 
-  return (
-    <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center p-0 md:p-4 bg-slate-900/50 backdrop-blur-sm">
-      <div className="bg-white rounded-t-2xl md:rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[92dvh] md:max-h-[90vh]">
-        <div className="px-4 md:px-5 py-3.5 md:py-4 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white/80 backdrop-blur-md z-10 shrink-0">
-          <h2 className="text-base md:text-lg font-black text-slate-800">Schedule Site Visit</h2>
-          <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-colors" aria-label="Close">
+  return createPortal(
+    <div className="fixed inset-0 z-[99999] flex items-end md:items-center justify-center">
+      <button
+        type="button"
+        className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
+        onClick={onClose}
+        aria-label="Close schedule dialog"
+      />
+      <div
+        className="relative z-10 w-full max-w-lg max-h-[min(92dvh,100%)] md:max-h-[90vh] bg-white rounded-t-2xl md:rounded-2xl shadow-xl flex flex-col overflow-hidden mx-0 md:mx-4"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="schedule-visit-title"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-4 md:px-5 py-3.5 md:py-4 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
+          <h2 id="schedule-visit-title" className="text-base md:text-lg font-black text-slate-800">
+            Schedule Site Visit
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-colors"
+            aria-label="Close"
+          >
             <X size={20} />
           </button>
         </div>
-        <div className="p-4 md:p-5 overflow-y-auto flex-1 min-h-0">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y p-4 md:p-5">
           <form id="schedule-visit-form" onSubmit={handleSubmit} className="space-y-5">
             {/* Date Picker */}
             <div>
@@ -221,14 +255,19 @@ export const ScheduleVisitModal: React.FC<ScheduleVisitModalProps> = ({ isOpen, 
 
               {/* Map visual */}
               <div className="mt-2 border border-slate-200 rounded-xl overflow-hidden bg-slate-50">
-                <div className="h-40 bg-[#e8edf2] relative">
+                <div className="h-40 bg-[#e8edf2] relative touch-pan-y">
                   {isLoaded ? (
                     <GoogleMap
                       mapContainerStyle={containerStyle}
                       center={mapCenter}
                       zoom={14}
                       onClick={onMapClick}
-                      options={{ streetViewControl: false, mapTypeControl: false, fullscreenControl: false }}
+                      options={{
+                        streetViewControl: false,
+                        mapTypeControl: false,
+                        fullscreenControl: false,
+                        gestureHandling: "cooperative",
+                      }}
                     >
                       <Marker position={markerPosition} />
                     </GoogleMap>
@@ -270,6 +309,7 @@ export const ScheduleVisitModal: React.FC<ScheduleVisitModalProps> = ({ isOpen, 
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

@@ -7,6 +7,7 @@ import { createClient } from "@/utils/supabase/client";
 import { updateDesignDetailsAction } from "@/features/designs/actions/designActions";
 import { deleteStorageFilesAction } from "@/features/orders/actions/storageActions";
 import { getServerActionErrorMessage } from "@/lib/serverActionError";
+import { OverlayPortal } from "@/components/ui/OverlayPortal";
 import type { StagePermission } from "@/features/orders/workspace/shared/types";
 
 interface DesignModuleProps {
@@ -667,7 +668,8 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
       {/* Workflow Action Buttons (Global) */}
       {/* Upload Preview & Rotate Modal */}
       {previewUrl && pendingUploadFile && (
-        <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm p-0 md:p-4">
+        <OverlayPortal>
+        <div className="fixed inset-0 z-[100000] flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm p-0 md:p-4">
           <div className="prt-card prt-animate-in max-w-2xl w-full flex flex-col overflow-hidden max-h-[92dvh] md:max-h-[90vh] rounded-t-2xl md:rounded-2xl">
             <div className="p-3 md:p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0 gap-2">
               <h3 className="font-bold text-slate-800 text-sm md:text-base">Preview & Rotate Image</h3>
@@ -739,6 +741,7 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
             </div>
           </div>
         </div>
+        </OverlayPortal>
       )}
 
     </div>

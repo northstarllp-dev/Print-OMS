@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Order, Customer, Employee, SiteVisitDetails, PipelineStage } from "@/types";
 import { Users, Settings, Briefcase, FileText, CheckCircle2, XCircle, AlertTriangle, Shield, ShieldOff } from "lucide-react";
+import { OverlayPortal } from "@/components/ui/OverlayPortal";
 import { fetchEmployeeStats, assignTeamToOrder } from "@/features/orders/actions/orderActions";
 import { revokePortalAccessAction } from "@/features/portal/actions/portalAdminActions";
 
@@ -316,7 +317,8 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
     </div>
 
     {showRejectModal && (
-      <div className="fixed inset-0 z-[200] flex items-end md:items-center justify-center bg-black/50 p-0 md:p-4">
+      <OverlayPortal>
+      <div className="fixed inset-0 z-[100000] flex items-end md:items-center justify-center bg-black/50 backdrop-blur-sm p-0 md:p-4">
         <div className="bg-white rounded-t-2xl md:rounded-2xl shadow-2xl max-w-md w-full overflow-hidden max-h-[92dvh] flex flex-col">
           <div className="px-4 md:px-5 py-4 border-b border-slate-100 bg-slate-50 shrink-0">
             <h3 className="text-sm font-extrabold text-slate-800 uppercase tracking-wider">Request Changes</h3>
@@ -353,6 +355,7 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
           </div>
         </div>
       </div>
+      </OverlayPortal>
     )}
     </>
   );

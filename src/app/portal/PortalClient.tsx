@@ -23,9 +23,10 @@ import {
   ChevronLeft, ChevronRight, Phone,
   Package, Wrench, Palette, BarChart3, CreditCard,
   RefreshCw, AlertTriangle, Loader2,
-  Download, CalendarDays, Hammer
+  Download, CalendarDays, Hammer, Heart
 } from "lucide-react";
 import { Logo } from "@/components/ui/Logo";
+import { withBasePath } from "@/lib/appBasePath";
 import { createClient } from "@/utils/supabase/client";
 import { scheduleSiteVisitAction } from "@/features/orders/actions/orderActions";
 import { getAppSettings } from "@/features/settings/actions/settingsActions";
@@ -203,7 +204,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
     let mounted = true;
     (async () => {
       try {
-        const res = await fetch("/api/portal/session", {
+        const res = await fetch(withBasePath("/api/portal/session"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ token }),
@@ -1123,7 +1124,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
             pointerEvents: "auto",
           }}
         >
-          Made with <span style={{ color: "#EF4444", fontSize: "14px" }}>??</span> by
+          Made with <Heart size={14} fill="#EF4444" color="#EF4444" /> by
           <img
             src="/printoms/clients/light%20withoutbg.png"
             alt="Polaris"

@@ -10,6 +10,7 @@ import {
   AlertTriangle,
   Trash2,
 } from "lucide-react";
+import { OverlayPortal } from "@/components/ui/OverlayPortal";
 import type { Payment } from "@/types";
 import {
   getPaymentsByOrder,
@@ -120,7 +121,8 @@ export function InstallationPaymentApprovalModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-end md:items-center justify-center p-0 md:p-4 bg-black/50 backdrop-blur-sm">
+    <OverlayPortal>
+    <div className="fixed inset-0 z-[100000] flex items-end md:items-center justify-center p-0 md:p-4 bg-black/50 backdrop-blur-sm">
       <div className="bg-white rounded-t-2xl md:rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92dvh] md:max-h-[90vh] flex flex-col overflow-hidden border border-slate-200">
         <div className="px-4 md:px-6 py-3.5 md:py-4 border-b border-slate-100 flex items-start justify-between gap-3 bg-slate-50 shrink-0">
           <div className="min-w-0">
@@ -328,5 +330,6 @@ export function InstallationPaymentApprovalModal({
         </div>
       </div>
     </div>
+    </OverlayPortal>
   );
 }

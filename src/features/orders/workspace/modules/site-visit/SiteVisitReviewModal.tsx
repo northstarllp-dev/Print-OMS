@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { OverlayPortal } from "@/components/ui/OverlayPortal";
 import {
   X,
   Lock,
@@ -259,8 +260,9 @@ export const SiteVisitReviewModal: React.FC<SiteVisitReviewModalProps> = ({
   const locations = siteVisit.locations || [];
 
   return (
+    <OverlayPortal>
     <div
-      className="fixed inset-0 z-[200] flex items-end md:items-center justify-center p-0 md:p-4 bg-slate-900/60 backdrop-blur-sm"
+      className="fixed inset-0 z-[100000] flex items-end md:items-center justify-center p-0 md:p-4 bg-slate-900/60 backdrop-blur-sm"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -488,5 +490,6 @@ export const SiteVisitReviewModal: React.FC<SiteVisitReviewModalProps> = ({
         </div>
       </div>
     </div>
+    </OverlayPortal>
   );
 };

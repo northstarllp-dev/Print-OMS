@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { FileText, Palette, X, ArrowRight } from "lucide-react";
+import { OverlayPortal } from "@/components/ui/OverlayPortal";
 
 interface WorkflowChoiceModalProps {
   isOpen: boolean;
@@ -40,7 +41,8 @@ export function WorkflowChoiceModal({ isOpen, onClose, onChoose }: WorkflowChoic
   };
 
   return (
-    <div className="fixed inset-0 z-[2000] flex items-end md:items-center justify-center bg-slate-900/50 backdrop-blur-sm p-0 md:p-5">
+    <OverlayPortal>
+    <div className="fixed inset-0 z-[100000] flex items-end md:items-center justify-center bg-slate-900/50 backdrop-blur-sm p-0 md:p-5">
       <div className="bg-white rounded-t-2xl md:rounded-2xl w-full max-w-[680px] max-h-[92dvh] md:max-h-[90vh] shadow-2xl overflow-hidden flex flex-col animate-[slideUp_0.3s_cubic-bezier(0.16,1,0.3,1)]">
         {/* Header */}
         <div className="px-4 py-4 md:px-6 border-b border-slate-200 flex justify-between items-start gap-3 bg-slate-50 shrink-0">
@@ -157,5 +159,6 @@ export function WorkflowChoiceModal({ isOpen, onClose, onChoose }: WorkflowChoic
         `}</style>
       </div>
     </div>
+    </OverlayPortal>
   );
 }

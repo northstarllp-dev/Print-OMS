@@ -106,9 +106,73 @@ export function QuotationDocument({
   const bank = invoiceProfile?.bank;
   const termsLines = parseTermsLines(terms);
   const colCount = taxSplit === "cgst_sgst" ? 8 : 7;
+  const printTargetRef = React.useRef<HTMLDivElement>(null);
 
   const handlePrint = () => {
-    window.print();
+    const printRoot = printTargetRef.current;
+    if (!printRoot || typeof document === "undefined") return;
+
+    const iframe = document.createElement("iframe");
+    iframe.setAttribute("aria-hidden", "true");
+    iframe.style.cssText =
+      "position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none";
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentDocument;
+    const win = iframe.contentWindow;
+    if (!doc || !win) {
+      iframe.remove();
+      return;
+    }
+
+    const stylesheetTags = Array.from(
+      document.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]')
+    )
+      .map((link) => link.outerHTML)
+      .join("\n");
+
+    const inlineStyleTags = Array.from(document.querySelectorAll("style"))
+      .map((style) => style.outerHTML)
+      .join("\n");
+
+    const htmlClass = document.documentElement.className;
+    const bodyClass = document.body.className;
+
+    doc.open();
+    doc.write(`<!DOCTYPE html>
+<html lang="en" class="${htmlClass}">
+<head>
+  <meta charset="utf-8" />
+  <title></title>
+  ${stylesheetTags}
+  ${inlineStyleTags}
+  <style>${QUOTATION_IFRAME_PRINT_CSS}</style>
+</head>
+<body class="${bodyClass}">
+  <div class="quotation-document-root">${printRoot.innerHTML}</div>
+</body>
+</html>`);
+    doc.close();
+
+    const cleanup = () => {
+      iframe.remove();
+    };
+    win.onafterprint = cleanup;
+
+    const runPrint = async () => {
+      try {
+        await doc.fonts.ready;
+      } catch {
+        /* fonts API unavailable */
+      }
+      win.focus();
+      win.print();
+      setTimeout(cleanup, 2000);
+    };
+
+    setTimeout(() => {
+      void runPrint();
+    }, 400);
   };
 
   return (
@@ -117,7 +181,7 @@ export function QuotationDocument({
         @media print {
           @page {
             size: A4 portrait;
-            margin: 10mm 8mm;
+            margin: 4mm;
           }
           html, body {
             margin: 0 !important;
@@ -136,9 +200,9 @@ export function QuotationDocument({
             left: 0 !important;
             top: 0 !important;
             /* Lock to A4 content width so phone/tablet print matches laptop */
-            width: 194mm !important;
-            max-width: 194mm !important;
-            min-width: 194mm !important;
+            width: 202mm !important;
+            max-width: 202mm !important;
+            min-width: 202mm !important;
             margin: 0 !important;
             padding: 0 !important;
             box-sizing: border-box !important;
@@ -172,7 +236,7 @@ export function QuotationDocument({
             justify-content: space-between !important;
             align-items: flex-start !important;
             gap: 1.5rem !important;
-            padding: 2rem !important;
+            padding: 1rem 1.25rem !important;
           }
           .quotation-sheet-title {
             font-size: 1.875rem !important;
@@ -183,13 +247,13 @@ export function QuotationDocument({
             display: grid !important;
             grid-template-columns: 1fr 1fr !important;
             gap: 1rem !important;
-            padding: 1.25rem 2rem !important;
+            padding: 0.75rem 1.25rem !important;
           }
           .quotation-sheet-meta-right {
             text-align: right !important;
           }
           .quotation-sheet-section {
-            padding: 1.25rem 2rem !important;
+            padding: 0.75rem 1.25rem !important;
           }
           .quotation-sheet-bank-grid {
             display: grid !important;
@@ -211,10 +275,8 @@ export function QuotationDocument({
         </div>
       )}
 
+      <div ref={printTargetRef}>
       <table className="w-full border-collapse min-w-0">
-        <thead className="hidden print:table-header-group">
-          <tr><td><div className="h-[8mm]" /></td></tr>
-        </thead>
         <tbody>
           <tr>
             <td className="p-0 align-top min-w-0">
@@ -658,15 +720,87 @@ export function QuotationDocument({
             </td>
           </tr>
         </tbody>
-        <tfoot className="hidden print:table-footer-group">
-          <tr><td><div className="h-[8mm]" /></td></tr>
-        </tfoot>
       </table>
+      </div>
 
 
     </div>
   );
 }
+
+const QUOTATION_IFRAME_PRINT_CSS = `
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 210mm !important;
+    background: white !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .quotation-document-root {
+    width: 210mm !important;
+    max-width: 210mm !important;
+    min-width: 210mm !important;
+    margin: 0 !important;
+    padding: 4mm !important;
+    box-sizing: border-box !important;
+    overflow: visible !important;
+    background: white !important;
+  }
+  .quotation-sheet {
+    border: none !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+    width: 100% !important;
+  }
+  .quotation-no-print { display: none !important; }
+  .quotation-mobile-only { display: none !important; }
+  .quotation-print-table {
+    display: block !important;
+    overflow: visible !important;
+    width: 100% !important;
+  }
+  .quotation-print-table > table {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+  .quotation-logo-mobile { display: none !important; }
+  .quotation-logo-desktop { display: block !important; }
+  .quotation-sheet-header {
+    display: flex !important;
+    flex-direction: row !important;
+    justify-content: space-between !important;
+    align-items: flex-start !important;
+    gap: 1.5rem !important;
+    padding: 1rem 1.25rem !important;
+  }
+  .quotation-sheet-title {
+    font-size: 1.875rem !important;
+    line-height: 2.25rem !important;
+    text-align: right !important;
+  }
+  .quotation-sheet-meta {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 1rem !important;
+    padding: 0.75rem 1.25rem !important;
+  }
+  .quotation-sheet-meta-right {
+    text-align: right !important;
+  }
+  .quotation-sheet-section {
+    padding: 0.75rem 1.25rem !important;
+  }
+  .quotation-sheet-bank-grid {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    column-gap: 2rem !important;
+  }
+`;
 
 function formatQty(qty: number): string {
   if (!Number.isFinite(qty)) return "0";

@@ -38,6 +38,8 @@ import { ScheduleVisitModal } from "./ScheduleVisitModal";
 import { updateSiteVisitDetailsAction } from "@/features/orders/actions/orderActions";
 import { deleteStorageFilesAction } from "@/features/orders/actions/storageActions";
 import { scheduleSiteVisitAction } from "@/features/orders/actions/orderActions";
+import { readFileForStorageUpload } from "@/utils/supabase/uploadStorageFile";
+import { OverlayPortal } from "@/components/ui/OverlayPortal";
 import { GoogleMap, useJsApiLoader, Marker } from "@react-google-maps/api";
 
 const libraries: ("places")[] = ["places"];
@@ -185,11 +187,11 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
 
   const uploadSitePhoto = async (file: File) => {
     const supabase = createClient();
-    const ext = file.name.split(".").pop() || "jpg";
+    const { body, contentType, ext } = await readFileForStorageUpload(file);
     const path = `${order.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
     const { error } = await supabase.storage
       .from("site-visit-photos")
-      .upload(path, file, { upsert: false, contentType: file.type });
+      .upload(path, body, { upsert: false, contentType });
     if (error) throw error;
     const { data } = supabase.storage.from("site-visit-photos").getPublicUrl(path);
     return data.publicUrl;
@@ -199,15 +201,16 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
     if (!files || files.length === 0 || !selectedLocationId) return;
     setUploadingPhotos(true);
     try {
-      const uploadPromises = Array.from(files).map(file => uploadSitePhoto(file));
+      const uploadPromises = Array.from(files).map((file) => uploadSitePhoto(file));
       const urls = await Promise.all(uploadPromises);
-      
-      const activeLoc = (siteVisit.locations || []).find(l => l.id === selectedLocationId);
+
+      const activeLoc = (siteVisit.locations || []).find((l) => l.id === selectedLocationId);
       const newUrls = [...(activeLoc?.photos || []), ...urls];
-      
+
       updateSignLocation(selectedLocationId, { photos: newUrls });
-    } catch (err: any) {
-      alert("Upload failed: " + (err?.message || "Unknown error"));
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      alert("Upload failed: " + message);
     } finally {
       setUploadingPhotos(false);
     }
@@ -567,7 +570,8 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
       />
 
       {isConfirmSkipOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-end md:items-center justify-center p-0 md:p-4">
+        <OverlayPortal>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100000] flex items-end md:items-center justify-center p-0 md:p-4">
           <div className="bg-white rounded-t-2xl md:rounded-2xl w-full max-w-sm shadow-xl p-5 md:p-6 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
             <h2 className="text-lg font-black text-slate-900 mb-2">Confirm Skip Site Visit</h2>
             <p className="text-sm text-slate-600 mb-6 leading-relaxed">
@@ -595,9 +599,9 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
             </div>
           </div>
         </div>
+        </OverlayPortal>
       )}
-      
-      {/* ── TOP TOGGLABLE BAR & READY CHECKBOX ── */}
+            {/* ── TOP TOGGLABLE BAR & READY CHECKBOX ── */}
       <div className="bg-gradient-to-r from-slate-50 to-slate-100/50 border border-slate-200/80 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all duration-300">
         
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200/60 pb-3 w-full">
@@ -1288,14 +1292,24 @@ const SitePhotoUploader: React.FC<{
   onView: (idx: number) => void;
 }> = ({ photos, uploading, disabled, onFiles, onRemove, onView }) => {
   const galleryRef = useRef<HTMLInputElement>(null);
-  const cameraRef = useRef<HTMLInputElement>(null);
 
   return (
     <div className="pt-4 space-y-4">
       {/* Upload buttons */}
       {!disabled && (
         <div className="flex gap-3">
-          <input ref={galleryRef} type="file" accept="image/*" multiple className="hidden" onChange={e => onFiles(e.target.files)} />
+          <input
+            ref={galleryRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              const picked = e.target.files;
+              void onFiles(picked);
+              e.target.value = "";
+            }}
+          />
           <button
             onClick={() => galleryRef.current?.click()}
             disabled={uploading}

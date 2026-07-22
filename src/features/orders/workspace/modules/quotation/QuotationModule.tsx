@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useTransition } from "react";
+import React, { useState, useEffect, useRef, useTransition, useCallback } from "react";
 import { createPortal } from "react-dom";
+import { OverlayPortal } from "@/components/ui/OverlayPortal";
 import {
   Plus, Trash2, Search, Check, ChevronDown, Info, X,
   ClipboardList, IndianRupee, Loader2, AlertCircle, Package, Save, Sparkles, Shield,
@@ -194,17 +195,44 @@ function ProductSearch({
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState(value);
-  const ref = useRef<HTMLDivElement>(null);
+  const [dropdownRect, setDropdownRect] = useState<DOMRect | null>(null);
+  const [isMounted, setIsMounted] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   useEffect(() => {
     setQuery(value);
   }, [value]);
 
+  const updateDropdownRect = useCallback(() => {
+    if (inputRef.current) {
+      setDropdownRect(inputRef.current.getBoundingClientRect());
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    updateDropdownRect();
+    const onReposition = () => updateDropdownRect();
+    window.addEventListener("scroll", onReposition, true);
+    window.addEventListener("resize", onReposition);
+    return () => {
+      window.removeEventListener("scroll", onReposition, true);
+      window.removeEventListener("resize", onReposition);
+    };
+  }, [open, updateDropdownRect]);
+
   useEffect(() => {
     function handler(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
+      const target = e.target as Node;
+      if (rootRef.current?.contains(target)) return;
+      if (dropdownRef.current?.contains(target)) return;
+      setOpen(false);
     }
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -220,36 +248,23 @@ function ProductSearch({
     )
     : [];
 
-  return (
-    <div ref={ref} className="relative w-full min-w-0">
-      <div className="relative">
-        <Search
-          size={14}
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
-        />
-        <input
-          type="text"
-          value={query}
-          disabled={disabled}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            onChange(e.target.value);
-            setOpen(true);
-          }}
-          onFocus={() => {
-            setQuery(value);
-            setOpen(true);
-          }}
-          placeholder="Search product or type description…"
-          className="w-full min-h-[40px] border border-slate-200 rounded-xl text-[13px] text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 bg-white pl-9 pr-3 py-2.5 font-medium placeholder:text-slate-400 placeholder:font-normal disabled:bg-slate-50 disabled:text-slate-500"
-        />
-      </div>
+  const visibleResults = filtered.slice(0, 6);
+  const hasMore = filtered.length > visibleResults.length;
 
-      {open && filtered.length > 0 && (
+  const dropdown =
+    isMounted && open && visibleResults.length > 0 && dropdownRect
+      ? createPortal(
         <div
-          className="absolute top-[calc(100%+4px)] left-0 right-0 bg-white border border-slate-200 rounded-xl shadow-lg z-[9999] max-h-[220px] overflow-y-auto"
+          ref={dropdownRef}
+          className="fixed z-[10000] bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden"
+          style={{
+            top: dropdownRect.bottom + 4,
+            left: dropdownRect.left,
+            width: dropdownRect.width,
+            maxWidth: "calc(100vw - 16px)",
+          }}
         >
-          {filtered.map((p) => {
+          {visibleResults.map((p) => {
             const resolved = resolveInitialPricing(p);
             return (
               <button
@@ -261,45 +276,63 @@ function ProductSearch({
                   setQuery(p.name);
                   setOpen(false);
                 }}
-                style={{
-                  width: "100%",
-                  textAlign: "left",
-                  padding: "8px 12px",
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  borderBottom: "1px solid #f1f5f9",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: 8,
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "#f8fafc";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "none";
-                }}
+                className="flex w-full items-center justify-between gap-2 border-b border-slate-100 px-3 py-2.5 text-left last:border-b-0 hover:bg-slate-50"
               >
-                <div>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: "#0f172a" }}>{p.name}</span>
+                <div className="min-w-0">
+                  <span className="text-[11px] font-bold text-slate-900">{p.name}</span>
                   {p.category && (
-                    <span style={{ fontSize: 9, color: "#94a3b8", marginLeft: 6 }}>{p.category}</span>
+                    <span className="ml-1.5 text-[9px] text-slate-400">{p.category}</span>
                   )}
                 </div>
-                <div style={{ textAlign: "right", flexShrink: 0 }}>
-                  <div style={{ fontSize: 10, fontWeight: 800, color: "#0f172a", fontFamily: "monospace" }}>
+                <div className="shrink-0 text-right">
+                  <div className="text-[10px] font-extrabold text-slate-900 font-mono">
                     ₹{resolved.price.toLocaleString("en-IN")}
                   </div>
-                  <div style={{ fontSize: 9, color: "#64748b" }}>
+                  <div className="text-[9px] text-slate-500">
                     per {resolved.pricingType === "per_sqft" ? "sqft" : "unit"}
                   </div>
                 </div>
               </button>
             );
           })}
-        </div>
-      )}
+          {hasMore && (
+            <div className="px-3 py-2 text-[10px] font-semibold text-slate-400 bg-slate-50 border-t border-slate-100">
+              Type more to narrow {filtered.length - visibleResults.length} more…
+            </div>
+          )}
+        </div>,
+        document.body
+      )
+      : null;
+
+  return (
+    <div ref={rootRef} className="relative w-full min-w-0">
+      <div className="relative">
+        <Search
+          size={14}
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+        />
+        <input
+          ref={inputRef}
+          type="text"
+          value={query}
+          disabled={disabled}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            onChange(e.target.value);
+            setOpen(true);
+            updateDropdownRect();
+          }}
+          onFocus={() => {
+            setQuery(value);
+            setOpen(true);
+            updateDropdownRect();
+          }}
+          placeholder="Search product or type description…"
+          className="w-full min-h-[40px] border border-slate-200 rounded-xl text-[13px] text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 bg-white pl-9 pr-3 py-2.5 font-medium placeholder:text-slate-400 placeholder:font-normal disabled:bg-slate-50 disabled:text-slate-500"
+        />
+      </div>
+      {dropdown}
     </div>
   );
 }
@@ -872,7 +905,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
 
               {/* Line Items Table — wide horizontal scroll on phone/tablet */}
               <div
-                className="overflow-x-auto overscroll-x-contain -mx-px"
+                className="overflow-x-auto overscroll-x-contain -mx-px scrollbar-none"
                 style={{ WebkitOverflowScrolling: "touch" }}
               >
               <div className="min-w-[980px] md:min-w-[1040px]">
@@ -1150,9 +1183,9 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
               value={terms}
               disabled={isLocked}
               onChange={(e) => { markDirty(); setTerms(e.target.value); }}
-              rows={3}
+              rows={10}
               placeholder="Terms and conditions - late fees, payment methods, delivery schedule"
-              className={`${inputCls} w-full px-3.5 py-2.5 resize-none bg-white font-medium`}
+              className={`${inputCls} w-full min-h-[280px] px-3.5 py-2.5 resize-y bg-white font-medium`}
             />
           </div>
         </div>
@@ -1572,213 +1605,123 @@ function ProductInfoModal({ product, onClose }: { product: Product; onClose: () 
   const [activeImgIdx, setActiveImgIdx] = useState(0);
   const images = product.images && product.images.length > 0 ? product.images : [];
 
-  return (
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
     <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        backgroundColor: "rgba(0, 0, 0, 0.6)",
-        backdropFilter: "blur(4px)",
-        zIndex: 99999,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "16px",
-      }}
+      className="fixed inset-0 z-[100000] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4"
+      onClick={onClose}
+      role="presentation"
     >
       <div
-        style={{
-          backgroundColor: "white",
-          borderRadius: "24px",
-          maxWidth: "500px",
-          width: "100%",
-          overflow: "hidden",
-          boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
-          border: "1px solid #f1f5f9",
-          display: "flex",
-          flexDirection: "column",
-          maxHeight: "90vh",
-        }}
+        className="relative flex w-full sm:max-w-[500px] max-h-[min(92dvh,100%)] flex-col overflow-hidden rounded-t-2xl sm:rounded-2xl bg-white shadow-2xl border border-slate-100"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="product-info-title"
       >
         {/* Header */}
-        <div
-          style={{
-            padding: "16px 24px",
-            borderBottom: "1px solid #f1f5f9",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            backgroundColor: "#f8fafc",
-          }}
-        >
-          <div>
-            <h4 style={{ margin: 0, fontSize: "14px", fontWeight: 900, color: "#1e293b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+        <div className="shrink-0 flex items-start justify-between gap-3 border-b border-slate-100 bg-slate-50 px-4 py-3 sm:px-6 sm:py-4">
+          <div className="min-w-0 flex-1 pr-2">
+            <h4
+              id="product-info-title"
+              className="m-0 text-sm font-black text-slate-800 uppercase tracking-wide truncate"
+            >
               {product.name}
             </h4>
-            <span style={{ fontSize: "10px", color: "#94a3b8", fontWeight: 700, textTransform: "uppercase", marginTop: "2px", display: "block" }}>
+            <span className="mt-0.5 block text-[10px] font-bold uppercase text-slate-400 truncate">
               {product.product_id} • {product.category || "General"}
             </span>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            style={{
-              padding: "6px",
-              backgroundColor: "transparent",
-              border: "none",
-              cursor: "pointer",
-              borderRadius: "9999px",
-              color: "#94a3b8",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              transition: "all 0.2s",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#e2e8f0"; e.currentTarget.style.color = "#475569"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; e.currentTarget.style.color = "#94a3b8"; }}
+            className="shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-full text-slate-400 hover:bg-slate-200 hover:text-slate-600 transition-colors"
+            aria-label="Close"
           >
             <X size={16} />
           </button>
         </div>
 
-        {/* Scrollable Content */}
-        <div style={{ padding: "24px", overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: "20px" }}>
-          {/* Images Section */}
+        {/* Scrollable content */}
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5 flex flex-col gap-5">
           {images.length > 0 ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-              <div
-                style={{
-                  aspectRatio: "16/9",
-                  backgroundColor: "#f8fafc",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: "16px",
-                  overflow: "hidden",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  position: "relative",
-                }}
-              >
+            <div className="flex flex-col gap-2">
+              <div className="aspect-video bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden flex items-center justify-center">
                 <img
                   src={images[activeImgIdx]}
                   alt={product.name}
-                  style={{ maxHeight: "100%", maxWidth: "100%", objectFit: "contain" }}
-                  onError={(e) => { e.currentTarget.src = "https://images.unsplash.com/photo-1542744094-3a31f103e35f?w=400&auto=format&fit=crop"; }}
+                  className="max-h-full max-w-full object-contain"
+                  onError={(e) => {
+                    e.currentTarget.src =
+                      "https://images.unsplash.com/photo-1542744094-3a31f103e35f?w=400&auto=format&fit=crop";
+                  }}
                 />
               </div>
               {images.length > 1 && (
-                <div style={{ display: "flex", gap: "8px", overflowX: "auto", paddingBottom: "4px" }}>
+                <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1">
                   {images.map((img: string, idx: number) => (
                     <button
                       key={idx}
+                      type="button"
                       onClick={() => setActiveImgIdx(idx)}
-                      style={{
-                        width: "56px",
-                        height: "56px",
-                        borderRadius: "8px",
-                        overflow: "hidden",
-                        border: activeImgIdx === idx ? "2px solid #2563eb" : "2px solid #cbd5e1",
-                        padding: 0,
-                        backgroundColor: "transparent",
-                        cursor: "pointer",
-                        flexShrink: 0,
-                        transition: "all 0.2s",
-                      }}
+                      className={`shrink-0 w-14 h-14 rounded-lg overflow-hidden border-2 transition-colors ${
+                        activeImgIdx === idx ? "border-blue-600" : "border-slate-300"
+                      }`}
                     >
-                      <img src={img} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      <img src={img} alt="" className="w-full h-full object-cover" />
                     </button>
                   ))}
                 </div>
               )}
             </div>
           ) : (
-            <div
-              style={{
-                aspectRatio: "16/9",
-                backgroundColor: "#f8fafc",
-                border: "1px solid #e2e8f0",
-                borderRadius: "16px",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "#cbd5e1",
-                gap: "4px",
-              }}
-            >
-              <Package size={32} style={{ strokeWidth: 1.5 }} />
-              <span style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase" }}>No images uploaded</span>
+            <div className="aspect-video bg-slate-50 border border-slate-200 rounded-2xl flex flex-col items-center justify-center text-slate-300 gap-1">
+              <Package size={32} strokeWidth={1.5} />
+              <span className="text-[10px] font-bold uppercase">No images uploaded</span>
             </div>
           )}
 
-          {/* Pricing Info */}
-          <div
-            style={{
-              backgroundColor: "rgba(219, 234, 254, 0.3)",
-              border: "1px solid #dbeafe",
-              borderRadius: "16px",
-              padding: "16px",
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: "16px",
-            }}
-          >
+          <div className="grid grid-cols-2 gap-4 rounded-2xl border border-blue-100 bg-blue-50/30 p-4">
             <div>
-              <span style={{ fontSize: "9px", color: "#94a3b8", fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.05em", display: "block" }}>Pricing Type</span>
-              <span style={{ fontSize: "12px", fontWeight: 800, color: "#334155", textTransform: "capitalize", display: "block", marginTop: "2px" }}>
+              <span className="block text-[9px] font-black uppercase tracking-wider text-slate-400">Pricing Type</span>
+              <span className="mt-0.5 block text-xs font-extrabold text-slate-700 capitalize">
                 {product.pricing_type?.replace("_", " ")}
               </span>
             </div>
             <div>
-              <span style={{ fontSize: "9px", color: "#94a3b8", fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.05em", display: "block" }}>Standard Rate</span>
-              <span style={{ fontSize: "12px", fontWeight: 900, color: "#1d4ed8", fontFamily: "monospace", display: "block", marginTop: "2px" }}>
+              <span className="block text-[9px] font-black uppercase tracking-wider text-slate-400">Standard Rate</span>
+              <span className="mt-0.5 block text-xs font-black text-blue-700 font-mono">
                 ₹{(product.price_per_unit || product.price_per_sqft || 0).toLocaleString("en-IN")}
-                <span style={{ fontSize: "10px", color: "#94a3b8", fontWeight: 500, fontFamily: "sans-serif" }}>
+                <span className="text-[10px] font-medium text-slate-400 font-sans">
                   /{product.pricing_type === "per_sqft" ? "sqft" : "unit"}
                 </span>
               </span>
             </div>
           </div>
 
-          {/* Additional details */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-            <span style={{ fontSize: "9px", color: "#94a3b8", fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.05em" }}>Product Description</span>
-            <p style={{ margin: 0, fontSize: "12px", color: "#475569", lineHeight: 1.6, fontWeight: 500 }}>
-              High-quality {product.name} suitable for premium indoor and outdoor signage applications. Manufactured with durable materials to ensure long-lasting visibility and brand representation.
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">Product Description</span>
+            <p className="m-0 text-xs text-slate-600 leading-relaxed font-medium">
+              High-quality {product.name} suitable for premium indoor and outdoor signage applications.
+              Manufactured with durable materials to ensure long-lasting visibility and brand representation.
             </p>
           </div>
         </div>
 
         {/* Footer */}
-        <div
-          style={{
-            padding: "12px 24px",
-            borderTop: "1px solid #f1f5f9",
-            backgroundColor: "#f8fafc",
-            display: "flex",
-            justifyContent: "end",
-          }}
-        >
+        <div className="shrink-0 border-t border-slate-100 bg-slate-50 px-4 py-3 sm:px-6 flex justify-end pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <button
+            type="button"
             onClick={onClose}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#1e293b",
-              color: "white",
-              border: "none",
-              borderRadius: "12px",
-              fontSize: "12px",
-              fontWeight: 700,
-              cursor: "pointer",
-              transition: "background-color 0.2s",
-            }}
-            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#0f172a"}
-            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "#1e293b"}
+            className="w-full sm:w-auto px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-colors"
           >
             Close
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -1827,20 +1770,12 @@ function QuotationConfirmModal({
   const confirmLabel = status === "Rejected" ? "Resend to Customer" : "Send to Customer";
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        backgroundColor: "rgba(0, 0, 0, 0.5)",
-        backdropFilter: "blur(2px)",
-        zIndex: 99999,
-        display: "flex",
-        alignItems: "flex-end",
-        justifyContent: "center",
-        padding: "0",
-      }}
-      className="md:!items-center md:!p-4"
-    >
+    <OverlayPortal>
+      <div
+        className="fixed inset-0 z-[100000] flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm p-0 md:p-4"
+        onClick={onClose}
+        role="presentation"
+      >
       <div
         style={{
           backgroundColor: "white",
@@ -1855,6 +1790,9 @@ function QuotationConfirmModal({
           maxHeight: "92dvh",
         }}
         className="md:!rounded-2xl md:!max-h-[90vh]"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
       >
         {/* Header */}
         <div style={{ padding: "14px 16px", borderBottom: "1px solid #f1f5f9", backgroundColor: "#f8fafc", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", flexShrink: 0 }}>
@@ -1973,6 +1911,7 @@ function QuotationConfirmModal({
         </div>
       </div>
     </div>
+    </OverlayPortal>
   );
 }
 
@@ -2009,20 +1948,12 @@ function WorkflowAdvanceConfirmModal({
         : `Move to ${nextStageLabel}`;
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        backgroundColor: "rgba(0, 0, 0, 0.5)",
-        backdropFilter: "blur(2px)",
-        zIndex: 99999,
-        display: "flex",
-        alignItems: "flex-end",
-        justifyContent: "center",
-        padding: "0",
-      }}
-      className="md:!items-center md:!p-4"
-    >
+    <OverlayPortal>
+      <div
+        className="fixed inset-0 z-[100000] flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm p-0 md:p-4"
+        onClick={onClose}
+        role="presentation"
+      >
       <div
         style={{
           backgroundColor: "white",
@@ -2037,6 +1968,9 @@ function WorkflowAdvanceConfirmModal({
           maxHeight: "92dvh",
         }}
         className="md:!rounded-[14px]"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
       >
         <div style={{ padding: "16px", borderBottom: "1px solid #f1f5f9", backgroundColor: "#f8fafc" }}>
           <h4 style={{ margin: 0, fontSize: "14px", fontWeight: 800, color: "#0f172a", textTransform: "uppercase" }}>
@@ -2073,5 +2007,6 @@ function WorkflowAdvanceConfirmModal({
         </div>
       </div>
     </div>
+    </OverlayPortal>
   );
 }
