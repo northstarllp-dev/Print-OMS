@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import {
   Plus, Trash2, Search, Check, ChevronDown, Info, X,
   ClipboardList, IndianRupee, Loader2, AlertCircle, Package, Save, Sparkles, Shield,
-  Eye
+  Eye, ArrowLeft
 } from "lucide-react";
 import {
   upsertQuotation,
@@ -221,18 +221,11 @@ function ProductSearch({
     : [];
 
   return (
-    <div ref={ref} style={{ position: "relative", width: "100%" }}>
-      <div style={{ position: "relative" }}>
+    <div ref={ref} className="relative w-full min-w-0">
+      <div className="relative">
         <Search
-          size={11}
-          style={{
-            position: "absolute",
-            left: 8,
-            top: "50%",
-            transform: "translateY(-50%)",
-            color: "#94a3b8",
-            pointerEvents: "none",
-          }}
+          size={14}
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
         />
         <input
           type="text"
@@ -247,27 +240,14 @@ function ProductSearch({
             setQuery(value);
             setOpen(true);
           }}
-          placeholder="Item description or search..."
-          className="w-full border border-slate-200 rounded-lg text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
-          style={{ padding: "6px 8px 6px 24px", fontFamily: "inherit" }}
+          placeholder="Search product or type description…"
+          className="w-full min-h-[40px] border border-slate-200 rounded-xl text-[13px] text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 bg-white pl-9 pr-3 py-2.5 font-medium placeholder:text-slate-400 placeholder:font-normal disabled:bg-slate-50 disabled:text-slate-500"
         />
       </div>
 
       {open && filtered.length > 0 && (
         <div
-          style={{
-            position: "absolute",
-            top: "calc(100% + 4px)",
-            left: 0,
-            right: 0,
-            background: "white",
-            border: "1px solid #e2e8f0",
-            borderRadius: 8,
-            boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
-            zIndex: 9999,
-            maxHeight: 200,
-            overflowY: "auto",
-          }}
+          className="absolute top-[calc(100%+4px)] left-0 right-0 bg-white border border-slate-200 rounded-xl shadow-lg z-[9999] max-h-[220px] overflow-y-auto"
         >
           {filtered.map((p) => {
             const resolved = resolveInitialPricing(p);
@@ -745,7 +725,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
     }
   };
 
-  const inputCls = "border border-slate-200 rounded-lg text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500";
+  const inputCls = "border border-slate-200 rounded-xl text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 min-h-[40px]";
 
   return (
     <div className="space-y-6" style={{ fontFamily: "inherit" }}>
@@ -858,22 +838,22 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
           return (
             <div key={section.siteVisitItemId} className="border border-slate-200 rounded-2xl bg-white shadow-sm overflow-visible">
               {/* Section Header */}
-              <div className="bg-[#f8fafc] px-5 py-3.5 border-b border-slate-100 flex items-center justify-between rounded-t-2xl">
-                <div className="flex flex-col gap-0.5">
+              <div className="bg-[#f8fafc] px-4 md:px-5 py-3.5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center gap-2 sm:justify-between rounded-t-2xl">
+                <div className="flex flex-col gap-0.5 min-w-0">
                   <span className="text-xs font-black text-[#0f172a] uppercase tracking-wider">{section.itemLabel}</span>
                   {(() => {
                     const measurementLabel = formatSiteMeasurementLabel(svItem);
                     return measurementLabel ? (
-                      <span className="text-[10px] text-slate-450 font-bold uppercase tracking-wider">
+                      <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
                         {measurementLabel}
                       </span>
                     ) : null;
                   })()}
                 </div>
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-slate-400 font-black uppercase">Total (incl. GST):</span>
-                    <span className="text-sm font-black text-[#1e40af] font-mono">
+                <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-[10px] text-slate-400 font-black uppercase shrink-0">Total (incl. GST):</span>
+                    <span className="text-sm font-black text-[#1e40af] font-mono truncate">
                       ₹{itemTotal.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                   </div>
@@ -881,22 +861,25 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                     <button
                       type="button"
                       onClick={() => removeSection(section.siteVisitItemId)}
-                      className="text-slate-400 hover:text-rose-500 transition-colors p-1"
+                      className="text-slate-400 hover:text-rose-500 transition-colors p-2"
                       title="Remove section"
                     >
-                      <Trash2 size={13} />
+                      <Trash2 size={14} />
                     </button>
                   )}
                 </div>
               </div>
 
-              {/* Line Items Table — horizontal scroll on phone/tablet */}
-              <div className="overflow-x-auto -mx-0">
-              <div className="min-w-[640px]">
+              {/* Line Items Table — wide horizontal scroll on phone/tablet */}
               <div
-                className="grid gap-2 px-4 py-2.5 text-[10px] font-black text-[#64748b] uppercase tracking-wider bg-slate-50 border-b border-slate-100"
+                className="overflow-x-auto overscroll-x-contain -mx-px"
+                style={{ WebkitOverflowScrolling: "touch" }}
+              >
+              <div className="min-w-[980px] md:min-w-[1040px]">
+              <div
+                className="grid gap-3 px-4 py-2.5 text-[10px] font-black text-[#64748b] uppercase tracking-wider bg-slate-50 border-b border-slate-100"
                 style={{
-                  gridTemplateColumns: "1fr 72px 105px 110px 95px 40px 90px 28px",
+                  gridTemplateColumns: "minmax(300px, 2.5fr) 80px 120px 120px 100px 56px 100px 36px",
                 }}
               >
                 <div>Item Description</div>
@@ -918,9 +901,9 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                   return (
                     <div key={line.id} className="flex flex-col hover:bg-slate-50 transition-colors">
                       <div
-                        className="grid gap-2 px-4 py-3.5 items-center overflow-visible"
+                        className="grid gap-3 px-4 py-3 items-center overflow-visible"
                         style={{
-                          gridTemplateColumns: "1fr 72px 105px 110px 95px 40px 90px 28px",
+                          gridTemplateColumns: "minmax(300px, 2.5fr) 80px 120px 120px 100px 56px 100px 36px",
                           position: "relative",
                           zIndex: activeRowId === line.id ? 50 : 1,
                         }}
@@ -932,7 +915,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                         }}
                       >
                         {/* Product Search / Description */}
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px", width: "100%" }}>
+                        <div className="flex items-center gap-2 w-full min-w-0">
                           <ProductSearch
                             value={line.description}
                             products={products}
@@ -952,20 +935,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                                 const prod = products.find((p) => p.id === line.productId);
                                 if (prod) setSelectedProductInfo(prod);
                               }}
-                              style={{
-                                padding: "4px",
-                                color: "#2563eb",
-                                background: "none",
-                                border: "none",
-                                cursor: "pointer",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                borderRadius: "4px",
-                                flexShrink: 0
-                              }}
-                              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#eff6ff"}
-                              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
+                              className="shrink-0 p-2 text-blue-600 rounded-lg hover:bg-blue-50"
                               title="Product Details"
                             >
                               <Info size={14} style={{ strokeWidth: 2.5 }} />
@@ -1384,12 +1354,12 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
         const actionButtons = (
           <>
             {!isLocked ? (
-              <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 w-full">
+              <div className="flex flex-row flex-wrap items-stretch sm:items-center gap-2 w-full">
                 <button
                   type="button"
                   onClick={handleSave}
                   disabled={isPending}
-                  className="py-2.5 px-4 bg-slate-100 border border-slate-200 text-slate-700 hover:bg-slate-200 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm w-full sm:w-auto"
+                  className="py-2.5 px-4 bg-slate-100 border border-slate-200 text-slate-700 hover:bg-slate-200 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm flex-1 sm:flex-none min-w-0"
                 >
                   {isPending ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
                   Save Draft
@@ -1400,7 +1370,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                     type="button"
                     onClick={() => setShowSendConfirm(true)}
                     disabled={isPending || sendingToCustomer || sections.length === 0}
-                    className="py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto"
+                    className="py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex-1 sm:flex-none min-w-0"
                   >
                     {sendingToCustomer ? (
                       <Loader2 size={14} className="animate-spin" />
@@ -1416,7 +1386,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                     type="button"
                     onClick={() => setAdvanceConfirmType("override")}
                     disabled={isPending}
-                    className="py-2.5 px-4 md:px-5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 w-full sm:w-auto"
+                    className="py-2.5 px-4 md:px-5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 flex-1 sm:flex-none min-w-0"
                   >
                     <Sparkles size={13} className="shrink-0" />
                     <span className="text-center leading-tight">
@@ -1430,7 +1400,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                   <button
                     type="button"
                     onClick={() => setAdvanceConfirmType("advance")}
-                    className="py-2.5 px-4 md:px-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm w-full sm:w-auto"
+                    className="py-2.5 px-4 md:px-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm flex-1 sm:flex-none min-w-0"
                   >
                     <Sparkles size={13} className="shrink-0" />
                     {advanceButtonLabel}
@@ -1438,8 +1408,8 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                 )}
               </div>
             ) : (
-              <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 w-full">
-                <div className="py-2.5 px-4 bg-slate-100 border border-slate-200 text-slate-500 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 shadow-sm w-full sm:w-auto">
+              <div className="flex flex-row flex-wrap items-stretch sm:items-center gap-2 w-full">
+                <div className="py-2.5 px-4 bg-slate-100 border border-slate-200 text-slate-500 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 shadow-sm flex-1 sm:flex-none min-w-0">
                   <Check size={14} /> Submitted & Locked
                 </div>
                 {canAdminApproveWithoutCustomer && (
@@ -1447,7 +1417,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                     type="button"
                     onClick={() => setAdvanceConfirmType("override")}
                     disabled={isPending}
-                    className="py-2.5 px-4 md:px-5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 w-full sm:w-auto"
+                    className="py-2.5 px-4 md:px-5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 flex-1 sm:flex-none min-w-0"
                   >
                     <Sparkles size={13} className="shrink-0" />
                     <span className="text-center leading-tight">
@@ -1460,7 +1430,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                   <button
                     type="button"
                     onClick={() => setAdvanceConfirmType("advance")}
-                    className="py-2.5 px-4 md:px-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm w-full sm:w-auto"
+                    className="py-2.5 px-4 md:px-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm flex-1 sm:flex-none min-w-0"
                   >
                     <Sparkles size={13} className="shrink-0" />
                     {advanceButtonLabel}
@@ -1491,12 +1461,23 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
       )}
 
       {showDocumentPreview && typeof document !== "undefined" && createPortal(
-        <div className="fixed inset-0 z-[99999] flex items-end md:items-center justify-center overflow-hidden bg-black/50 p-0 md:p-6 print:static print:inset-auto print:block print:bg-transparent print:p-0 print:overflow-visible">
-          <div className="relative flex w-full max-w-4xl max-h-[92dvh] md:max-h-full flex-col rounded-t-2xl md:rounded-2xl bg-slate-100 shadow-2xl print:static print:max-w-none print:max-h-none print:shadow-none print:bg-transparent print:rounded-none">
-            <div className="shrink-0 flex items-start md:items-center justify-between gap-3 border-b border-slate-200 bg-white px-3 md:px-4 py-3 rounded-t-2xl quotation-no-print">
-              <div className="min-w-0">
-                <h3 className="text-sm font-black text-slate-900">Customer quotation preview</h3>
-                <p className="text-[11px] text-slate-500 leading-snug">
+        <div className="fixed inset-0 z-[99999] flex items-stretch md:items-center justify-center overflow-hidden bg-black/50 p-0 md:p-4 lg:p-6 print:static print:inset-auto print:block print:bg-transparent print:p-0 print:overflow-visible">
+          <div className="relative flex w-full h-full md:h-auto md:max-h-[92dvh] max-w-4xl flex-col rounded-none md:rounded-2xl bg-slate-100 shadow-2xl print:static print:max-w-none print:max-h-none print:shadow-none print:bg-transparent print:rounded-none print:h-auto">
+            <div className="shrink-0 flex items-start justify-between gap-2 sm:gap-3 border-b border-slate-200 bg-white px-3 sm:px-4 py-3 md:rounded-t-2xl quotation-no-print">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 mb-1 md:mb-0">
+                  <button
+                    type="button"
+                    onClick={() => setShowDocumentPreview(false)}
+                    className="md:hidden inline-flex items-center gap-1.5 shrink-0 rounded-lg px-2.5 py-1.5 bg-slate-100 text-slate-700 text-xs font-bold hover:bg-slate-200 transition-colors"
+                    aria-label="Back"
+                  >
+                    <ArrowLeft size={14} />
+                    Back
+                  </button>
+                  <h3 className="text-sm font-black text-slate-900 truncate">Customer quotation preview</h3>
+                </div>
+                <p className="text-[11px] text-slate-500 leading-snug hidden sm:block md:mt-0.5">
                   Same layout as the portal. Use Print / Save as PDF on the document.
                 </p>
               </div>
@@ -1509,7 +1490,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                 <X size={16} />
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto p-3 md:p-6 print:overflow-visible print:p-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-2 sm:p-3 md:p-6 print:overflow-visible print:p-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
               <QuotationDocument
                 quotationId={quotationId}
                 quoteDate={quoteCreatedAt || new Date().toISOString()}

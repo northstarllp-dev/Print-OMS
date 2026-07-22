@@ -252,6 +252,8 @@ interface OrderWorksheetModalProps {
   entryStage?: OrderStage;
   /** Tenant key for per-company stage grant overrides (Phase 4b). */
   companyId?: string | null;
+  /** Open a specific worksheet tab on mount (e.g. payments). */
+  initialStepTab?: number;
 }
 
 /* ─── Component ─────────────────────────────────────────────────── */
@@ -269,6 +271,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   siteVisitItems = [],
   entryStage,
   companyId = null,
+  initialStepTab,
 }) => {
   const router = useRouter();
   const [order, setOrder] = useState<Order>(initialOrder);
@@ -278,9 +281,11 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   } | null>(null);
   const [activeTab, setActiveTab] = useState(0);
   const [activeStepTab, setActiveStepTab] = useState(
-    entryStage != null
-      ? orderStageToTabIndex(entryStage, initialOrder.workflow_type)
-      : stageToTabIndex(initialOrder.stage, initialOrder.workflow_type)
+    initialStepTab != null
+      ? initialStepTab
+      : entryStage != null
+        ? orderStageToTabIndex(entryStage, initialOrder.workflow_type)
+        : stageToTabIndex(initialOrder.stage, initialOrder.workflow_type)
   );
   const [showCustomerPanel, setShowCustomerPanel] = useState(false);
   const [activeRightPanel, setActiveRightPanel] = useState<"timeline" | null>(null);
@@ -313,6 +318,8 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
 
   const entryStageRef = useRef(entryStage);
   entryStageRef.current = entryStage;
+  /** When opened via ?tab=payments (or similar), do not auto-jump to pipeline stage. */
+  const lockInitialTabRef = useRef(initialStepTab != null);
 
   useEffect(() => {
     setOrder(initialOrder);
@@ -320,6 +327,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   }, [initialOrder]);
   useEffect(() => {
     if (entryStageRef.current != null) return;
+    if (lockInitialTabRef.current) return;
     setActiveStepTab(stageToTabIndex(order.stage, order.workflow_type));
   }, [order.stage, order.workflow_type]);
 
@@ -1301,80 +1309,57 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           {/* Customer Strip & Horizontal Timeline Header */}
           <div className="px-3 sm:px-4 md:px-6" style={{ background: "white", flexShrink: 0 }}>
 
-            {/* Top row: Order Info & Customer */}
+            {/* Top row: Order Info & icon actions */}
             <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: "12px", padding: "16px 0", borderBottom: "1px solid #F1F5F9" }}>
-              <div>
+              <div className="min-w-0 flex-1">
                 <div style={{ fontSize: "11px", fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "6px" }}>
                   {order.orderCode}
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-                  <h2 style={{ margin: 0, fontSize: "18px", fontWeight: "800", color: "#0F172A", lineHeight: 1.2 }}>
+                <div className="flex items-center gap-2 min-w-0">
+                  <h2 className="m-0 text-base sm:text-lg font-extrabold text-slate-900 leading-tight truncate min-w-0">
                     {order.businessName} - {order.clientName}
                   </h2>
-                  <button
-                    type="button"
-                    onClick={() => setActiveRightPanel((prev) => (prev === "timeline" ? null : "timeline"))}
-                    title="Order timeline"
-                    aria-label="Order timeline"
-                    aria-pressed={activeRightPanel === "timeline"}
-                    style={{
-                      position: "relative",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: "6px",
-                      minHeight: "40px",
-                      height: "40px",
-                      padding: "0 12px",
-                      borderRadius: "8px",
-                      border: activeRightPanel === "timeline" ? "none" : "1px solid #E2E8F0",
-                      background: activeRightPanel === "timeline" ? "var(--color-secondary)" : "transparent",
-                      color: activeRightPanel === "timeline" ? "white" : "#475569",
-                      fontSize: "11px",
-                      fontWeight: "700",
-                      cursor: "pointer",
-                      flexShrink: 0,
-                      transition: "all 0.15s",
-                    }}
-                  >
-                    <History size={14} />
-                    <span>Timeline</span>
-                    {timelineCount > 0 && (
-                      <span
-                        style={{
-                          minWidth: "18px",
-                          height: "18px",
-                          borderRadius: "9px",
-                          background: activeRightPanel === "timeline" ? "rgba(255,255,255,0.25)" : "#EF4444",
-                          color: "white",
-                          fontSize: "10px",
-                          fontWeight: "700",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          padding: "0 4px",
-                        }}
-                      >
-                        {timelineCount}
-                      </span>
-                    )}
-                  </button>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setActiveRightPanel((prev) => (prev === "timeline" ? null : "timeline"))}
+                      title="Order timeline"
+                      aria-label="Order timeline"
+                      aria-pressed={activeRightPanel === "timeline"}
+                      className={`relative inline-flex items-center justify-center w-10 h-10 rounded-lg border transition-colors ${
+                        activeRightPanel === "timeline"
+                          ? "border-transparent bg-[var(--color-secondary)] text-white"
+                          : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                      }`}
+                    >
+                      <History size={16} />
+                      {timelineCount > 0 && (
+                        <span
+                          className={`absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold inline-flex items-center justify-center text-white border-2 border-white ${
+                            activeRightPanel === "timeline" ? "bg-white/30" : "bg-red-500"
+                          }`}
+                        >
+                          {timelineCount}
+                        </span>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowCustomerPanel(true)}
+                      title="Customer details"
+                      aria-label="Customer details"
+                      className="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-colors"
+                    >
+                      <User size={16} />
+                    </button>
+                  </div>
                 </div>
               </div>
 
-              {/* Customer Info & Actions — equal-width boxes; text may truncate */}
+              {/* Portal / Admin / Payments — Customer moved next to title */}
+              {!isEmployee && (
               <div className="w-full grid grid-cols-2 md:flex md:min-w-[280px] lg:min-w-[360px] gap-1.5 md:gap-[6px]" style={{ flex: "1 1 220px", minWidth: 0, maxWidth: "100%" }}>
                 {([
-                  {
-                    key: "customer",
-                    label: "Customer Details",
-                    shortLabel: "Customer",
-                    icon: User,
-                    onClick: () => setShowCustomerPanel(true),
-                    active: false,
-                    show: true,
-                    badge: null as React.ReactNode,
-                  },
                   {
                     key: "portal",
                     label: copiedLink ? "Copied!" : "Portal",
@@ -1382,7 +1367,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                     icon: Share2,
                     onClick: handleCopyMagicLink,
                     active: false,
-                    show: !isEmployee,
+                    show: true,
                     badge: null as React.ReactNode,
                   },
                   {
@@ -1392,7 +1377,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                     icon: Lock,
                     onClick: () => setActiveStepTab(ADMIN_TAB),
                     active: activeStepTab === ADMIN_TAB,
-                    show: !isEmployee,
+                    show: true,
                     badge:
                       order.stageStatus && order.stageStatus !== "Normal" ? (
                         <span className="flex items-center justify-center w-3.5 h-3.5 shrink-0 text-[9px] font-bold text-white bg-red-500 rounded-full animate-pulse shadow-sm">
@@ -1407,7 +1392,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                     icon: CreditCard,
                     onClick: () => setActiveStepTab(PAYMENTS_TAB),
                     active: activeStepTab === PAYMENTS_TAB,
-                    show: !isEmployee,
+                    show: true,
                     badge: null as React.ReactNode,
                   },
                 ] as const)
@@ -1454,6 +1439,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                     );
                   })}
               </div>
+              )}
             </div>
 
             {/* Horizontal Timeline */}
@@ -1605,7 +1591,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           </div>
 
           {/* Sticky footer actions — hidden entirely when the active stage is inaccessible */}
-          <div className="px-3 sm:px-5 py-3 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center justify-end gap-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]" style={{ background: "#F8FAFC", borderTop: "1px solid #E2E8F0", flexShrink: 0, boxShadow: "0 -2px 10px rgba(0,0,0,0.05)" }}>
+          <div className="px-3 sm:px-5 py-3 flex flex-row flex-wrap items-stretch sm:items-center justify-end gap-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]" style={{ background: "#F8FAFC", borderTop: "1px solid #E2E8F0", flexShrink: 0, boxShadow: "0 -2px 10px rgba(0,0,0,0.05)" }}>
             {isActiveStageInaccessible ? (
               <span style={{ fontSize: "12px", fontWeight: "700", color: "#94A3B8", display: "flex", alignItems: "center", gap: "6px" }}>
                 <Lock size={13} /> No actions available for this stage
@@ -1621,10 +1607,10 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                   </button>
                 </div>
               ) : (
-                <div id="modal-footer-portal" className="flex flex-col sm:flex-row gap-2 sm:gap-2.5 items-stretch sm:items-center w-full sm:w-auto flex-wrap" />
+                <div id="modal-footer-portal" className="flex flex-row gap-2 sm:gap-2.5 items-stretch sm:items-center w-full sm:w-auto flex-wrap" />
               )
             ) : (
-              <div className="flex flex-col sm:flex-row gap-2 sm:gap-2.5 items-stretch sm:items-center w-full sm:w-auto flex-wrap">
+              <div className="flex flex-row gap-2 sm:gap-2.5 items-stretch sm:items-center w-full sm:w-auto flex-wrap">
                 {order.health && order.health !== "Active" ? (
                   <>
                     <span style={{ fontSize: "12px", color: "#64748B", fontWeight: "600", display: "none" }}>
@@ -1653,7 +1639,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                             <>
                               <button
                                 onClick={handleSaveDraft}
-                                className="w-full sm:w-auto justify-center"
+                                className="flex-1 sm:flex-none min-w-0 justify-center"
                                 style={
                                   activeStepTab === designTab
                                     ? {
@@ -1696,7 +1682,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                                     activeStepTab === designTab &&
                                     !areAllDesignItemsApproved((dd.items || []) as any);
                                   return (
-                                  <div className="w-full sm:w-auto">
+                                  <div className="flex-1 sm:flex-none min-w-0">
                                     <button
                                       onClick={() => {
                                         if (advanceBlocked) {
@@ -1713,7 +1699,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                                             ? siteVisitAdvanceTooltip
                                             : undefined
                                       }
-                                      className="w-full sm:w-auto justify-center"
+                                      className="w-full justify-center"
                                       style={{
                                         padding: "10px 16px",
                                         background: advanceBlocked ? "#94A3B8" : "#22C55E",
@@ -1738,14 +1724,14 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                                 })()
                               ) : (
                                 showAdminApproveButton && (
-                                  <div className="w-full sm:w-auto">
+                                  <div className="flex-1 sm:flex-none min-w-0">
                                     <button onClick={() => {
                                       if ((activeStepTab === 0 || activeStepTab === designTab) && !canAdvanceSiteVisit) {
                                         alert(siteVisitAdvanceTooltip);
                                         return;
                                       }
                                       handleAdminApprove();
-                                    }} className="w-full sm:w-auto justify-center" style={{ padding: "10px 16px", background: "#22C55E", border: "none", color: "white", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
+                                    }} className="w-full justify-center" style={{ padding: "10px 16px", background: "#22C55E", border: "none", color: "white", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
                                       <Check size={13} /> Approve & Advance
                                     </button>
                                   </div>
@@ -1763,7 +1749,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           </div>
         </div>
 
-        {/* ══ PANEL 4: SLIDING DRAWER PANEL ══ */}
+        {/* ══ PANEL 4: SLIDING DRAWER PANEL (full-screen on mobile/tablet) ══ */}
         {activeRightPanel && (
           <>
             <div
@@ -1771,8 +1757,8 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
               onClick={() => setActiveRightPanel(null)}
               aria-hidden
             />
-                    <aside
-              className="fixed lg:relative inset-y-0 right-0 z-[50] lg:z-40 w-full max-w-[380px] lg:w-[380px] lg:max-w-none"
+            <aside
+              className="fixed lg:relative inset-0 lg:inset-y-0 lg:right-0 lg:left-auto z-[50] lg:z-40 w-full lg:w-[380px] max-w-none"
               style={{
                 flexShrink: 0,
                 borderLeft: "1px solid #E2E8F0",

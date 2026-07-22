@@ -42,6 +42,8 @@ interface OrderDetailPageClientProps {
   /** Where "Back" navigates to. Defaults to /admin/orders (Admin) or /staff/orders (Employee). */
   backHref?: string;
   companyId?: string | null;
+  /** Open Payments tab when landing from collections. */
+  openPaymentsTab?: boolean;
 }
 
 export function OrderDetailPageClient({
@@ -57,6 +59,7 @@ export function OrderDetailPageClient({
   entryStage,
   backHref,
   companyId,
+  openPaymentsTab,
 }: OrderDetailPageClientProps) {
   const router = useRouter();
 
@@ -79,6 +82,7 @@ export function OrderDetailPageClient({
         siteVisitItems={siteVisitItems}
         entryStage={entryStage}
         companyId={companyId}
+        initialStepTab={openPaymentsTab ? 98 /* PAYMENTS_TAB */ : undefined}
       />
     </div>
   );

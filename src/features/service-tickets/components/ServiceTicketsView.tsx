@@ -78,7 +78,7 @@ export function ServiceTicketsView({
   const activeFilterCount = [statusFilter !== "ALL"].filter(Boolean).length;
 
   return (
-    <div className="p-3 sm:p-4 md:p-8 bg-slate-50 min-h-screen">
+    <div className="p-3 sm:p-4 md:p-8 bg-slate-50 min-h-0 pb-6">
       {/* ─── Header ─── */}
       <div className="mb-5 md:mb-6 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">

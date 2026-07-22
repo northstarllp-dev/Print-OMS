@@ -3,9 +3,16 @@ import { EmployeesViewNew } from "@/features/employees/components/EmployeesViewN
 import { getEmployees } from "@/features/employees/actions/employeeActions";
 import { getCurrentUser } from "@/features/auth/actions/authActions";
 
-export default async function EmployeesPage() {
-  const employeesData = await getEmployees();
-  const profile = await getCurrentUser();
+export default async function EmployeesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
+  const [{ tab }, employeesData, profile] = await Promise.all([
+    searchParams,
+    getEmployees(),
+    getCurrentUser(),
+  ]);
 
   const mappedEmployees = employeesData?.map(e => ({
     id: e.id,
@@ -20,5 +27,12 @@ export default async function EmployeesPage() {
     jobsAssigned: e.jobsAssigned || 0
   })) || [];
 
-  return <EmployeesViewNew initialEmployees={mappedEmployees} companyId={profile?.company_id ?? null} />;
+  return (
+    <EmployeesViewNew
+      initialEmployees={mappedEmployees}
+      companyId={profile?.company_id ?? null}
+      showRolesTab
+      initialTab={tab === "roles" ? "roles" : "directory"}
+    />
+  );
 }

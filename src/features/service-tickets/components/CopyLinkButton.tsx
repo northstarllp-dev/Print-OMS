@@ -25,24 +25,17 @@ export function CopyLinkButton({ companyId }: CopyLinkButtonProps) {
 
   return (
     <button
+      type="button"
       onClick={handleCopy}
-      style={{
-        padding: "10px 14px",
-        background: copied ? "#dcfce7" : "#f1f5f9",
-        color: copied ? "#166534" : "#475569",
-        border: "1px solid #cbd5e1",
-        borderRadius: "8px",
-        fontSize: "13px",
-        fontWeight: 700,
-        display: "inline-flex",
-        alignItems: "center",
-        gap: "8px",
-        cursor: "pointer",
-      }}
+      title={copied ? "Link copied" : "Copy public ticket link"}
+      className={`inline-flex items-center justify-center gap-1.5 shrink-0 whitespace-nowrap rounded-lg border px-2.5 sm:px-3.5 py-2 text-[12px] sm:text-[13px] font-bold transition-colors ${
+        copied
+          ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+          : "bg-slate-100 border-slate-300 text-slate-600 hover:bg-slate-200"
+      }`}
     >
-      <Link2 size={16} />
-      {copied ? "Link Copied" : "Copy Link"}
+      <Link2 size={15} className="shrink-0" />
+      {copied ? "Copied" : "Copy"}
     </button>
   );
 }
-

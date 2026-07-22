@@ -106,7 +106,7 @@ export function OrdersManagementDashboard({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [stageFilter, setStageFilter] = useState("ALL");
   const [healthFilter, setHealthFilter] = useState("ALL");
-  const [adminAssignedFilter, setAdminAssignedFilter] = useState<"ALL" | "MINE">("MINE");
+  const [adminAssignedFilter, setAdminAssignedFilter] = useState<"ALL" | "MINE">("ALL");
   const [selectedKpi, setSelectedKpi] = useState<string | null>(null);
   const clientConfig = loadClientConfig();
   const parsedEntryStage = parseOrderStage(entryStage);
@@ -331,7 +331,7 @@ export function OrdersManagementDashboard({
     setEndDate("");
     setStageFilter("ALL");
     setHealthFilter("ALL");
-    setAdminAssignedFilter("MINE");
+    setAdminAssignedFilter("ALL");
     setSearchTerm("");
     setSelectedKpi(null);
   };
@@ -342,7 +342,7 @@ export function OrdersManagementDashboard({
     Boolean(startDate || endDate),
     currentUserRole === "Admin" &&
       clientConfig.features.enableAdminAssignment &&
-      adminAssignedFilter !== "MINE",
+      adminAssignedFilter !== "ALL",
     Boolean(selectedKpi),
   ].filter(Boolean).length;
 
@@ -351,7 +351,7 @@ export function OrdersManagementDashboard({
 
   return (
     <div 
-      className={`p-3 sm:p-4 md:p-8 bg-slate-50 min-h-screen transition-all duration-300 ${assignPanelOrderId ? "lg:pr-[412px]" : ""}`}
+      className={`p-3 sm:p-4 md:p-8 bg-slate-50 min-h-0 pb-6 transition-all duration-300 ${assignPanelOrderId ? "lg:pr-[412px]" : ""}`}
     >
       {/* Header Section */}
       <div className="mb-5 md:mb-8">
@@ -392,36 +392,38 @@ export function OrdersManagementDashboard({
           </div>
         )}
 
-        {/* Mobile: compact filter chips instead of large KPI cards */}
-        <div className="lg:hidden flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
-          {stats.map((stat: any) => {
-            const isActive = selectedKpi === stat.filterKey;
-            return (
-              <button
-                key={stat.filterKey}
-                type="button"
-                onClick={() => setSelectedKpi(isActive ? null : stat.filterKey)}
-                className="shrink-0 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-bold border transition-colors"
-                style={{
-                  background: isActive ? `${stat.color}14` : "white",
-                  borderColor: isActive ? stat.color : "#e2e8f0",
-                  color: isActive ? stat.color : "#64748b",
-                }}
-              >
-                <span>{stat.label}</span>
-                <span
-                  className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-extrabold"
+        {/* Mobile: compact filter chips — admin KPIs only (hide staff Assigned/My Completed) */}
+        {currentUserRole !== "Employee" && (
+          <div className="lg:hidden flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
+            {stats.map((stat: any) => {
+              const isActive = selectedKpi === stat.filterKey;
+              return (
+                <button
+                  key={stat.filterKey}
+                  type="button"
+                  onClick={() => setSelectedKpi(isActive ? null : stat.filterKey)}
+                  className="shrink-0 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-bold border transition-colors"
                   style={{
-                    background: isActive ? stat.color : "#f1f5f9",
-                    color: isActive ? "white" : "#475569",
+                    background: isActive ? `${stat.color}14` : "white",
+                    borderColor: isActive ? stat.color : "#e2e8f0",
+                    color: isActive ? stat.color : "#64748b",
                   }}
                 >
-                  {stat.value}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+                  <span>{stat.label}</span>
+                  <span
+                    className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-extrabold"
+                    style={{
+                      background: isActive ? stat.color : "#f1f5f9",
+                      color: isActive ? "white" : "#475569",
+                    }}
+                  >
+                    {stat.value}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* Desktop/tablet: Stats Cards */}
         <div className="hidden lg:grid grid-cols-2 xl:grid-cols-4 gap-4">
@@ -813,17 +815,6 @@ export function OrdersManagementDashboard({
                         </span>
                       </div>
 
-                      {(visitDate && visitTime) ? (
-                        <div className="mt-2 rounded-lg bg-slate-50 border border-slate-100 px-2.5 py-1.5">
-                          <div className="text-[11px] font-bold text-slate-800">{visitDate} • {visitTime}</div>
-                          {mapAddress ? (
-                            <div className="text-[10px] text-slate-500 mt-0.5 truncate" title={mapAddress}>
-                              {mapAddress}
-                            </div>
-                          ) : null}
-                        </div>
-                      ) : null}
-
                       <div className="mt-2.5 flex items-center gap-1">
                         {order.assignedEmployees?.slice(0, 4).map((empId: string, i: number) => {
                           const staff = employees.find(e => e.id === empId);
@@ -843,6 +834,17 @@ export function OrdersManagementDashboard({
                           <span className="text-[11px] text-slate-400 italic">Unassigned</span>
                         )}
                       </div>
+
+                      {(visitDate && visitTime) ? (
+                        <div className="mt-2 rounded-lg bg-slate-50 border border-slate-100 px-2.5 py-1.5">
+                          <div className="text-[11px] font-bold text-slate-800">{visitDate} • {visitTime}</div>
+                          {mapAddress ? (
+                            <div className="text-[10px] text-slate-500 mt-0.5 truncate" title={mapAddress}>
+                              {mapAddress}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 </button>

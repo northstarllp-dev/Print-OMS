@@ -254,7 +254,7 @@ export function SettingsViewNew({ initialAppSettings, companyDetails }: Settings
   };
 
   return (
-    <div className="p-3 sm:p-4 md:p-8 bg-slate-50 min-h-screen pb-[120px]">
+    <div className="p-3 sm:p-4 md:p-8 bg-slate-50 min-h-0 pb-[120px]">
       <div style={{ maxWidth: "900px", margin: "0 auto" }}>
         {/* Header */}
         <div className="mb-5 md:mb-8">

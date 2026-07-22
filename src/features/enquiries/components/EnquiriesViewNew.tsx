@@ -291,7 +291,7 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
   };
 
   return (
-    <div className="p-3 sm:p-4 md:p-8 bg-slate-50 min-h-screen">
+    <div className="p-3 sm:p-4 md:p-8 bg-slate-50 min-h-0 pb-6">
       {/* Header Section */}
       <div className="mb-5 md:mb-8">
         <div className="flex flex-wrap items-start justify-between gap-3 mb-4 md:mb-6">

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Image from "next/image";
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
@@ -364,7 +364,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
       setSelectedDate(sv.auditDate || "");
       setSelectedTime(sv.auditTime || "");
       setSiteAddress(sv.customerAddress || customer.shippingAddress || "");
-      setGpsCoords(sv.gpsLocation || "12.9716Â° N, 77.5946Â° E");
+      setGpsCoords(sv.gpsLocation || "12.9716° N, 77.5946° E");
     }
   }, [activeOrderId, activeOrder?.siteVisitDetails]);
 
@@ -488,7 +488,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                 className="w-full sm:w-auto text-xs border border-slate-200 rounded-lg px-3 py-2 text-slate-600 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
               >
                 {orders.map(o => (
-                  <option key={o.id} value={o.id}>{o.orderCode || o.id} — {o.stage}</option>
+                  <option key={o.id} value={o.id}>{o.orderCode || o.id} � {o.stage}</option>
                 ))}
               </select>
             )}
@@ -500,9 +500,9 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-5">
           <div className="flex items-start gap-1 sm:justify-between relative overflow-x-auto pb-1 -mx-1 px-1">
-            {/* Background line — desktop only */}
+            {/* Background line � desktop only */}
             <div className="hidden sm:block absolute top-[18px] left-0 right-0 h-[2px] bg-slate-100 z-0" />
-            {/* Progress fill — desktop only */}
+            {/* Progress fill � desktop only */}
             <div
               className="hidden sm:block absolute top-[18px] left-0 h-[2px] bg-emerald-500 z-0 portal-stepper-line"
               style={{ width: `${(currentStep / Math.max(STEPS.filter(s => s.key !== "payments").length - 1, 1)) * 100}%` }}
@@ -742,7 +742,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                                   )}
                                 </div>
                                 <div className="px-3 py-2 bg-white border-t border-slate-200 flex items-center justify-between">
-                                  <span className="text-[10px] font-mono font-semibold text-slate-600">ðŸ“ {gpsCoords}</span>
+                                  <span className="text-[10px] font-mono font-semibold text-slate-600">📍 {gpsCoords}</span>
                                   <button
                                     type="button"
                                     onClick={handleCurrentLocation}
@@ -901,7 +901,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                         {(sv.scaffoldingRequired || sv.craneRequired || sv.overnightInstallation !== undefined) && (
                           <div className="space-y-3">
                             <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-2">
-                              ðŸ—ï¸ Installation Requirements
+                              🏗️ Installation Requirements
                             </h3>
                             <div className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-wrap gap-2">
                               {sv.scaffoldingRequired && (
@@ -912,7 +912,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                               )}
                               {sv.overnightInstallation !== undefined && (
                                 <span className={`text-[11px] font-bold px-3 py-1.5 rounded-full border ${sv.overnightInstallation ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-slate-50 text-slate-500 border-slate-200"}`}>
-                                  ðŸŒ™ Overnight Installation: {sv.overnightInstallation ? "Yes" : "No"}
+                                  🌙 Overnight Installation: {sv.overnightInstallation ? "Yes" : "No"}
                                 </span>
                               )}
                             </div>
@@ -923,11 +923,11 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                         {(sv.extraAnglesRequired !== undefined || sv.extraAcpSheetRequired !== undefined || sv.oldBoardRemovalRequired !== undefined || sv.extraWireRequired !== undefined) && (
                           <div className="space-y-3">
                             <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-2">
-                              ðŸ”§ Fabrication Requirements
+                              🔧 Fabrication Requirements
                             </h3>
                             <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
                               {[
-                                { label: "Extra Angles Required", value: sv.extraAnglesRequired, note: sv.extraAnglesRequired && sv.extraAnglesLength ? ` — ${sv.extraAnglesLength}` : "" },
+                                { label: "Extra Angles Required", value: sv.extraAnglesRequired, note: sv.extraAnglesRequired && sv.extraAnglesLength ? ` � ${sv.extraAnglesLength}` : "" },
                                 { label: "Extra ACP Sheet to Cover Gap", value: sv.extraAcpSheetRequired },
                                 { label: "Old Board Removal Required", value: sv.oldBoardRemovalRequired },
                                 { label: "Extra Wire Required", value: sv.extraWireRequired },
@@ -949,7 +949,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                         {(sv.designBriefAvailable || sv.fabricationRequired !== undefined || sv.civilWorkRequired !== undefined) && (
                           <div className="space-y-3">
                             <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-2">
-                              ðŸŽ¨ Design Inputs
+                              🎨 Design Inputs
                             </h3>
                             <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
                               {[
@@ -1062,7 +1062,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                           <img src={inst.photoUrl} alt="Installation" className="w-full h-full object-cover" onError={e => { e.currentTarget.src = "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?w=400&auto=format&fit=crop"; }} />
                         </div>
                         <div className="space-y-3">
-                          <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-800">✓ Job Completed & Signed off by Client</div>
+                          <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-800">? Job Completed & Signed off by Client</div>
                           <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-xs">
                             <span className="text-slate-400 uppercase font-bold text-[10px] block mb-1">Signature</span>
                             <span className="font-serif italic text-slate-800 text-sm">{inst.customerSignature}</span>
@@ -1095,14 +1095,15 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
           bottom: 0,
           left: 0,
           textAlign: "center",
-          padding: "12px 0",
+          padding: "8px 0 calc(8px + env(safe-area-inset-bottom, 0px))",
           borderTop: "1px solid #E2E8F0",
           color: "#94A3B8",
           fontSize: "13px",
           fontWeight: "600",
           width: "100%",
           background: "#f4f6fb",
-          zIndex: 40
+          zIndex: 40,
+          pointerEvents: "none",
         }}>
           <a
           href="https://printoms.thepolarislabs.com/"
@@ -1122,11 +1123,11 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
             pointerEvents: "auto",
           }}
         >
-          Made with <span style={{ color: "#EF4444", fontSize: "14px" }}>❤️</span> by
+          Made with <span style={{ color: "#EF4444", fontSize: "14px" }}>??</span> by
           <img
             src="/printoms/clients/light%20withoutbg.png"
             alt="Polaris"
-            style={{ height: "40px", marginLeft: "-2px", marginTop: "-12px", marginBottom: "-10px" }}
+            className="h-8 lg:h-9 w-auto ml-0.5"
           />
         </a>
         </div>
@@ -1259,7 +1260,7 @@ function ProductInfoModal({ product, onClose }: { product: any; onClose: () => v
               {product.name}
             </h4>
             <span style={{ fontSize: "10px", color: "#94a3b8", fontWeight: 700, textTransform: "uppercase", marginTop: "2px", display: "block" }}>
-              {product.product_id} • {product.category || "General"}
+              {product.product_id} � {product.category || "General"}
             </span>
           </div>
           <button
@@ -1374,7 +1375,7 @@ function ProductInfoModal({ product, onClose }: { product: any; onClose: () => v
             <div>
               <span style={{ fontSize: "9px", color: "#94a3b8", fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.05em", display: "block" }}>Standard Rate</span>
               <span style={{ fontSize: "12px", fontWeight: 900, color: "#1d4ed8", fontFamily: "monospace", display: "block", marginTop: "2px" }}>
-                ₹{(product.price_per_unit || product.price_per_sqft || 0).toLocaleString("en-IN")}
+                ?{(product.price_per_unit || product.price_per_sqft || 0).toLocaleString("en-IN")}
                 <span style={{ fontSize: "10px", color: "#94a3b8", fontWeight: 500, fontFamily: "sans-serif" }}>
                   /{product.pricing_type === "per_sqft" ? "sqft" : "unit"}
                 </span>

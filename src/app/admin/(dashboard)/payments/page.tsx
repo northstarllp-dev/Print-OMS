@@ -1,16 +1,16 @@
-import { IndianRupee } from "lucide-react";
-import { ComingSoonPage } from "@/features/admin/components/ComingSoonPage";
+import { getCompanyCollectionsData } from "@/features/payments/actions/paymentActions";
+import { PaymentsCollectionsClient } from "@/features/payments/components/PaymentsCollectionsClient";
 
 export const metadata = {
   title: "Payments | Admin",
 };
 
-export default function AdminPaymentsPage() {
+export default async function AdminPaymentsPage() {
+  const data = await getCompanyCollectionsData();
+
   return (
-    <ComingSoonPage
-      title="Payments & Collections"
-      description="Track outstanding invoices, partial payments, and customer follow-ups from one place."
-      icon={IndianRupee}
-    />
+    <div className="flex-1 bg-slate-50 min-h-screen">
+      <PaymentsCollectionsClient data={data} />
+    </div>
   );
 }

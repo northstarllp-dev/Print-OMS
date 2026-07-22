@@ -77,6 +77,7 @@ async function revalidatePaymentPaths(orderId: string) {
   await revalidateStaffQueuePaths();
   revalidatePath(`/admin/orders/${orderId}`);
   revalidatePath(`/staff/orders/${orderId}`);
+  revalidatePath("/admin/payments");
   revalidatePath("/printoms/portal");
   revalidatePath(`/printoms/portal/order/${orderId}`);
 }
@@ -377,4 +378,193 @@ export async function updatePayment(
   if (error) throw new Error(error.message);
   await revalidatePaymentPaths(current.order_id);
   return mapPayment(data);
+}
+
+export type OrderPaymentPayStatus = "fully_paid" | "partial" | "unpaid";
+
+export type OrderPaymentSummary = {
+  orderId: string;
+  orderCode: string;
+  clientName: string;
+  businessName: string;
+  stage: string;
+  quoteTotal: number;
+  receivedTotal: number;
+  expectedTotal: number;
+  outstanding: number;
+  payStatus: OrderPaymentPayStatus;
+  lastPaymentName: string | null;
+  lastPaidAt: string | null;
+  dateCreated: string;
+};
+
+export type RecentReceipt = {
+  paymentId: string;
+  paymentName: string;
+  amount: number;
+  paidAt: string;
+  orderId: string;
+  orderCode: string;
+  clientName: string;
+  businessName: string;
+};
+
+export type CompanyCollectionsData = {
+  kpis: {
+    collected: number;
+    outstanding: number;
+    expected: number;
+    ordersWithBalance: number;
+    fullyPaidOrders: number;
+  };
+  orders: OrderPaymentSummary[];
+  recentReceipts: RecentReceipt[];
+};
+
+function paymentAmount(p: { calculated_amount?: unknown; amount?: unknown }): number {
+  return Number(p.calculated_amount ?? p.amount ?? 0) || 0;
+}
+
+function isReceivedPayment(p: { status?: unknown }): boolean {
+  const status = String(p.status ?? "received").toLowerCase();
+  return status === "received" || status === "";
+}
+
+/** Prefer Approved quote; else highest grand_total (matches order Payment tab visibility). */
+function quoteTotalForOrder(quotations: unknown): number {
+  const list = Array.isArray(quotations) ? quotations : quotations ? [quotations] : [];
+  if (list.length === 0) return 0;
+
+  const approved = list.find((q: any) => String(q.status || "") === "Approved");
+  if (approved?.grand_total != null && Number(approved.grand_total) > 0) {
+    return Number(approved.grand_total) || 0;
+  }
+
+  let max = 0;
+  for (const q of list as any[]) {
+    const total = Number(q.grand_total) || 0;
+    if (total > max) max = total;
+  }
+  return max;
+}
+
+/** Company-wide collections rollup for /admin/payments (admin only). */
+export async function getCompanyCollectionsData(): Promise<CompanyCollectionsData> {
+  await assertAdminOnly();
+  const supabase = await getSupabase();
+  const { data, error } = await supabase
+    .from("orders")
+    .select(
+      `
+      id,
+      order_id,
+      client_name,
+      business_name,
+      stage,
+      date_created,
+      quotations(grand_total, status),
+      payments(id, payment_name, amount, calculated_amount, status, paid_at, created_at, updated_at)
+    `
+    )
+    .order("date_created", { ascending: false });
+
+  if (error) throw new Error(error.message);
+
+  const orders: OrderPaymentSummary[] = [];
+  const recentReceipts: RecentReceipt[] = [];
+  let collected = 0;
+  let outstandingSum = 0;
+  let expectedSum = 0;
+  let ordersWithBalance = 0;
+  let fullyPaidOrders = 0;
+
+  for (const o of data || []) {
+    const payments = Array.isArray(o.payments) ? o.payments : o.payments ? [o.payments] : [];
+    const quoteTotal = quoteTotalForOrder(o.quotations);
+    if (quoteTotal <= 0 && payments.length === 0) continue;
+
+    let receivedTotal = 0;
+    let expectedTotal = 0;
+    let lastPaidAt: string | null = null;
+    let lastPaymentName: string | null = null;
+
+    for (const p of payments as any[]) {
+      const amt = paymentAmount(p);
+      if (isReceivedPayment(p)) {
+        receivedTotal += amt;
+        const when = p.paid_at || p.updated_at || p.created_at;
+        if (when && (!lastPaidAt || when > lastPaidAt)) {
+          lastPaidAt = when;
+          lastPaymentName = p.payment_name || "Payment";
+        }
+        if (when) {
+          recentReceipts.push({
+            paymentId: p.id,
+            paymentName: p.payment_name || "Payment",
+            amount: Math.round(amt * 100) / 100,
+            paidAt: when,
+            orderId: o.id,
+            orderCode: o.order_id || o.id,
+            clientName: o.client_name || "",
+            businessName: o.business_name || "",
+          });
+        }
+      } else {
+        expectedTotal += amt;
+      }
+    }
+
+    receivedTotal = Math.round(receivedTotal * 100) / 100;
+    expectedTotal = Math.round(expectedTotal * 100) / 100;
+    const outstanding =
+      quoteTotal > 0 ? Math.max(0, Math.round((quoteTotal - receivedTotal) * 100) / 100) : 0;
+
+    let payStatus: OrderPaymentPayStatus = "unpaid";
+    if (quoteTotal > 0 && outstanding === 0 && receivedTotal > 0) {
+      payStatus = "fully_paid";
+    } else if (receivedTotal > 0 && outstanding > 0) {
+      payStatus = "partial";
+    } else if (quoteTotal <= 0 && receivedTotal > 0) {
+      payStatus = "fully_paid";
+    } else if (quoteTotal > 0 && receivedTotal === 0) {
+      payStatus = "unpaid";
+    }
+
+    collected += receivedTotal;
+    outstandingSum += outstanding;
+    expectedSum += expectedTotal;
+    if (outstanding > 0) ordersWithBalance += 1;
+    if (payStatus === "fully_paid") fullyPaidOrders += 1;
+
+    orders.push({
+      orderId: o.id,
+      orderCode: o.order_id || o.id,
+      clientName: o.client_name || "",
+      businessName: o.business_name || "",
+      stage: o.stage || "",
+      quoteTotal,
+      receivedTotal,
+      expectedTotal,
+      outstanding,
+      payStatus,
+      lastPaymentName,
+      lastPaidAt,
+      dateCreated: o.date_created || "",
+    });
+  }
+
+  orders.sort((a, b) => b.outstanding - a.outstanding || b.dateCreated.localeCompare(a.dateCreated));
+  recentReceipts.sort((a, b) => b.paidAt.localeCompare(a.paidAt));
+
+  return {
+    kpis: {
+      collected: Math.round(collected),
+      outstanding: Math.round(outstandingSum),
+      expected: Math.round(expectedSum),
+      ordersWithBalance,
+      fullyPaidOrders,
+    },
+    orders,
+    recentReceipts: recentReceipts.slice(0, 25),
+  };
 }

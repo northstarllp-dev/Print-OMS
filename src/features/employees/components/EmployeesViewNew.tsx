@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Search, Filter, Plus, MoreVertical, Users, Star, Clock, AlertCircle, Edit, Trash2, Briefcase, BarChart2, Key, X, RefreshCw } from "lucide-react";
+import { Search, Filter, Plus, MoreVertical, Users, Star, Clock, AlertCircle, Edit, Trash2, Briefcase, BarChart2, Key, X, RefreshCw, Shield } from "lucide-react";
 import { Employee } from "@/types";
 import { EmployeeModal } from "./EmployeeModal";
 import {
@@ -10,14 +10,34 @@ import {
   deleteEmployee as deleteEmployeeAction
 } from "@/features/employees/actions/employeeActions";
 import { adminResetUserPassword } from "@/features/auth/actions/authActions";
+import { useRouter } from "next/navigation";
 
 interface EmployeesViewNewProps {
   initialEmployees: Employee[];
   /** Tenant id — drives the available staff_role options in EmployeeModal. */
   companyId?: string | null;
+  /** Admin-only: show Directory / Roles tabs inside Employees. */
+  showRolesTab?: boolean;
+  initialTab?: "directory" | "roles";
 }
 
-export function EmployeesViewNew({ initialEmployees, companyId = null }: EmployeesViewNewProps) {
+export function EmployeesViewNew({
+  initialEmployees,
+  companyId = null,
+  showRolesTab = false,
+  initialTab = "directory",
+}: EmployeesViewNewProps) {
+  const router = useRouter();
+  const [activeTab, setActiveTabState] = useState<"directory" | "roles">(
+    showRolesTab && initialTab === "roles" ? "roles" : "directory"
+  );
+
+  const setActiveTab = (tab: "directory" | "roles") => {
+    setActiveTabState(tab);
+    if (!showRolesTab) return;
+    router.replace(tab === "roles" ? "/admin/employees?tab=roles" : "/admin/employees");
+  };
+
   const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
   const [searchTerm, setSearchTerm] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -178,7 +198,7 @@ export function EmployeesViewNew({ initialEmployees, companyId = null }: Employe
   );
 
   return (
-    <div className="p-3 sm:p-4 md:p-8 bg-slate-50 min-h-screen">
+    <div className="p-3 sm:p-4 md:p-8 bg-slate-50 min-h-0 pb-6">
       {/* Header Section */}
       <div className="mb-5 md:mb-8">
         <div className="flex flex-wrap items-start justify-between gap-3 mb-4 md:mb-6">
@@ -192,6 +212,36 @@ export function EmployeesViewNew({ initialEmployees, companyId = null }: Employe
           </div>
         </div>
 
+        {showRolesTab && (
+          <div className="mb-4 md:mb-6 inline-flex w-full sm:w-auto rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+            <button
+              type="button"
+              onClick={() => setActiveTab("directory")}
+              className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-[12px] font-bold transition-colors ${
+                activeTab === "directory"
+                  ? "bg-[var(--color-primary,#1E40AF)] text-white"
+                  : "text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              Employees
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("roles")}
+              className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-[12px] font-bold transition-colors inline-flex items-center justify-center gap-1.5 ${
+                activeTab === "roles"
+                  ? "bg-[var(--color-primary,#1E40AF)] text-white"
+                  : "text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              <Shield size={13} />
+              Roles
+            </button>
+          </div>
+        )}
+
+        {activeTab === "directory" && (
+          <>
         {/* Mobile KPI chips */}
         <div className="lg:hidden flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
           {stats.map((stat) => (
@@ -249,7 +299,29 @@ export function EmployeesViewNew({ initialEmployees, companyId = null }: Employe
             );
           })}
         </div>
+          </>
+        )}
       </div>
+
+      {activeTab === "roles" ? (
+        <div className="flex items-center justify-center py-10 sm:py-16">
+          <div className="w-full max-w-lg text-center bg-white border border-slate-200 rounded-2xl px-6 py-12 sm:px-10 shadow-sm">
+            <div className="mx-auto mb-5 w-14 h-14 rounded-2xl bg-[rgba(30,64,175,0.08)] flex items-center justify-center">
+              <Shield size={26} className="text-[var(--color-primary,#1E40AF)]" />
+            </div>
+            <p className="m-0 mb-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-[var(--color-primary,#1E40AF)]">
+              Coming soon
+            </p>
+            <h2 className="m-0 mb-3 text-xl sm:text-2xl font-extrabold text-slate-900">
+              Roles & Permissions
+            </h2>
+            <p className="m-0 text-sm text-slate-500 leading-relaxed">
+              Control who can approve Design, Production, and other stage gates with finer access rules.
+            </p>
+          </div>
+        </div>
+      ) : (
+      <>
 
       {/* Table Section */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-visible">
@@ -305,56 +377,39 @@ export function EmployeesViewNew({ initialEmployees, companyId = null }: Employe
                         </div>
                         <div className="text-[14px] font-extrabold text-slate-900 mt-0.5 truncate">{emp.name}</div>
                         <div className="text-[12px] text-slate-500 mt-0.5">{emp.role}</div>
-                        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-500">
-                          <span>{emp.phone || "—"}</span>
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-semibold">
-                            {emp.jobsAssigned || 0} jobs
-                          </span>
-                        </div>
                       </div>
-                      <div className="relative shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => setActionDropdownId(actionDropdownId === emp.id ? null : emp.id)}
-                          className="p-1.5 text-slate-400"
-                        >
-                          <MoreVertical size={16} />
-                        </button>
-                        {actionDropdownId === emp.id && (
-                          <>
-                            <div
-                              className="fixed inset-0 z-[49]"
-                              onClick={() => setActionDropdownId(null)}
-                            />
-                            <div className="absolute right-0 top-8 z-50 min-w-[140px] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-md">
-                              <button
-                                type="button"
-                                onClick={() => handleEditEmployee(emp)}
-                                className="flex w-full items-center gap-2 border-b border-slate-100 px-4 py-2.5 text-left text-[13px] text-slate-600"
-                              >
-                                <Edit size={14} /> Edit
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setResetModalEmpId(emp.id);
-                                  setActionDropdownId(null);
-                                }}
-                                className="flex w-full items-center gap-2 border-b border-slate-100 px-4 py-2.5 text-left text-[13px] text-amber-500"
-                              >
-                                <Key size={14} /> Reset Password
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteEmployee(emp.id)}
-                                className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-[13px] text-red-500"
-                              >
-                                <Trash2 size={14} /> Delete
-                              </button>
-                            </div>
-                          </>
-                        )}
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteEmployee(emp.id)}
+                        className="p-1.5 text-slate-400 hover:text-red-500 shrink-0"
+                        title="Delete"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleEditEmployee(emp)}
+                        className="flex-1 min-w-0 inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2 py-2 text-[12px] font-bold text-slate-700"
+                      >
+                        <Edit size={13} className="shrink-0" /> Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setResetModalEmpId(emp.id)}
+                        className="flex-1 min-w-0 inline-flex items-center justify-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2 py-2 text-[12px] font-bold text-amber-600"
+                      >
+                        <Key size={13} className="shrink-0" /> Reset
+                      </button>
+                    </div>
+
+                    <div className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-500">
+                      <span>{emp.phone || "—"}</span>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-semibold">
+                        {emp.jobsAssigned || 0} jobs
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -438,6 +493,8 @@ export function EmployeesViewNew({ initialEmployees, companyId = null }: Employe
           </table>
         </div>
       </div>
+      </>
+      )}
 
       <EmployeeModal
         isOpen={isModalOpen}

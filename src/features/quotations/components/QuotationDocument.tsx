@@ -112,7 +112,7 @@ export function QuotationDocument({
   };
 
   return (
-    <div className={`quotation-document-root ${className}`}>
+    <div className={`quotation-document-root min-w-0 max-w-full ${className}`}>
       <style>{`
         @media print {
           @page { margin: 0; }
@@ -130,14 +130,16 @@ export function QuotationDocument({
             box-shadow: none !important;
           }
           .quotation-no-print { display: none !important; }
+          .quotation-mobile-only { display: none !important; }
+          .quotation-print-table { display: block !important; }
         }
       `}</style>
       {showPrintButton && (
-        <div className="quotation-no-print mb-3 flex justify-end">
+        <div className="quotation-no-print mb-3 flex justify-stretch sm:justify-end">
           <button
             type="button"
             onClick={handlePrint}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm hover:bg-slate-50"
+            className="inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-700 shadow-sm hover:bg-slate-50"
           >
             <Printer size={14} />
             Print / Save as PDF
@@ -145,51 +147,56 @@ export function QuotationDocument({
         </div>
       )}
 
-      <table className="w-full border-collapse">
+      <table className="w-full border-collapse min-w-0">
         <thead className="hidden print:table-header-group">
           <tr><td><div className="h-[12mm]" /></td></tr>
         </thead>
         <tbody>
           <tr>
-            <td className="p-0 align-top">
-              <article className="quotation-sheet bg-white text-[#1a1a1a] border border-slate-200 shadow-sm overflow-hidden">
+            <td className="p-0 align-top min-w-0">
+              <article className="quotation-sheet bg-white text-[#1a1a1a] border border-slate-200 shadow-sm overflow-hidden min-w-0">
                 {/* Header */}
-                <header className="flex flex-col sm:flex-row gap-6 justify-between p-6 sm:p-8 border-b border-slate-200">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-start gap-3">
-                      <div className="flex flex-col">
-                        <div className="mb-2">
-                          <Logo width={220} height={40} align="left" />
+                <header className="flex flex-col sm:flex-row gap-4 sm:gap-6 justify-between p-4 sm:p-6 lg:p-8 border-b border-slate-200">
+                  <div className="min-w-0 flex-1 overflow-hidden">
+                    <div className="flex items-start gap-3 min-w-0">
+                      <div className="flex flex-col min-w-0">
+                        <div className="mb-2 max-w-full overflow-hidden">
+                          <div className="sm:hidden">
+                            <Logo width={150} height={32} align="left" />
+                          </div>
+                          <div className="hidden sm:block">
+                            <Logo width={220} height={40} align="left" />
+                          </div>
                         </div>
                         {legalName && legalName !== brand && (
-                          <p className="text-xs font-semibold text-slate-600 mt-0.5">
+                          <p className="text-xs font-semibold text-slate-600 mt-0.5 break-words">
                             {legalName}
                           </p>
                         )}
                       </div>
                     </div>
                     {invoiceProfile?.address && (
-                      <p className="mt-3 text-[11px] leading-relaxed text-slate-600 whitespace-pre-line max-w-md">
+                      <p className="mt-3 text-[11px] leading-relaxed text-slate-600 whitespace-pre-line max-w-md break-words">
                         {invoiceProfile.address}
                       </p>
                     )}
-                    <div className="mt-2 space-y-0.5 text-[11px] text-slate-600">
+                    <div className="mt-2 space-y-0.5 text-[11px] text-slate-600 break-words">
                       {invoiceProfile?.gstin && (
                         <p>
                           <span className="font-semibold text-slate-800">GSTIN</span>{" "}
                           {invoiceProfile.gstin}
                         </p>
                       )}
-                      {invoiceProfile?.email && <p>{invoiceProfile.email}</p>}
-                      {invoiceProfile?.website && <p>{invoiceProfile.website}</p>}
+                      {invoiceProfile?.email && <p className="break-all">{invoiceProfile.email}</p>}
+                      {invoiceProfile?.website && <p className="break-all">{invoiceProfile.website}</p>}
                     </div>
                   </div>
 
                   <div className="sm:text-right shrink-0">
-                    <p className="text-2xl sm:text-3xl font-black tracking-wide text-[#1e293b]">
+                    <p className="text-xl sm:text-2xl lg:text-3xl font-black tracking-wide text-[#1e293b]">
                       QUOTATION
                     </p>
-                    <p className="mt-1 text-sm font-mono font-bold text-slate-700">
+                    <p className="mt-1 text-sm font-mono font-bold text-slate-700 break-all">
                       {quotationId || "—"}
                     </p>
                     {showStatus && status && (
@@ -201,14 +208,14 @@ export function QuotationDocument({
                 </header>
 
                 {/* Meta */}
-                <section className="grid grid-cols-1 sm:grid-cols-2 gap-4 px-6 sm:px-8 py-5 border-b border-slate-200">
-                  <div>
+                <section className="grid grid-cols-1 sm:grid-cols-2 gap-4 px-4 sm:px-6 lg:px-8 py-4 sm:py-5 border-b border-slate-200">
+                  <div className="min-w-0">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                       Bill To
                     </p>
-                    <p className="mt-1 text-sm font-bold text-slate-900">{billToName}</p>
+                    <p className="mt-1 text-sm font-bold text-slate-900 break-words">{billToName}</p>
                     {billToAddress && (
-                      <p className="mt-1 text-xs text-slate-600 whitespace-pre-line">
+                      <p className="mt-1 text-xs text-slate-600 whitespace-pre-line break-words">
                         {billToAddress}
                       </p>
                     )}
@@ -238,8 +245,109 @@ export function QuotationDocument({
                   </div>
                 </section>
 
-                {/* Lines table — Zoho-style dark header, pre-tax Amount = Qty × Rate */}
-                <div className="overflow-x-auto print:overflow-visible px-0">
+                {/* Mobile / tablet line cards — screen only */}
+                <div className="quotation-mobile-only lg:hidden print:hidden px-4 py-4 space-y-3 border-b border-slate-200">
+                  {lines.length === 0 ? (
+                    <p className="py-6 text-center text-sm text-slate-400">No line items</p>
+                  ) : (
+                    lines.map((line) => (
+                      <div
+                        key={`m-${line.index}-${line.description}`}
+                        className="rounded-xl border border-slate-200 bg-slate-50/80 p-3"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                              #{line.index}
+                            </p>
+                            <p className="mt-0.5 text-sm font-bold text-slate-900 break-words">
+                              {line.description}
+                            </p>
+                            {line.detailLines.map((detail, i) => (
+                              <p key={i} className="mt-0.5 text-[11px] text-slate-500 leading-snug break-words">
+                                {detail}
+                              </p>
+                            ))}
+                          </div>
+                          <p className="shrink-0 text-sm font-extrabold tabular-nums text-slate-900">
+                            {formatInr(line.preTax)}
+                          </p>
+                        </div>
+                        <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-slate-600">
+                          <p>
+                            <span className="text-slate-400">HSN: </span>
+                            {line.hsn || "—"}
+                          </p>
+                          <p className="text-right tabular-nums">
+                            <span className="text-slate-400">Qty: </span>
+                            {formatQty(line.qty)}
+                          </p>
+                          <p className="tabular-nums">
+                            <span className="text-slate-400">Rate: </span>
+                            {formatInr(line.rate)}
+                          </p>
+                          {taxSplit === "cgst_sgst" ? (
+                            <p className="text-right tabular-nums">
+                              <span className="text-slate-400">GST: </span>
+                              {formatInr((line.cgstAmount + line.sgstAmount) * taxScale)}
+                            </p>
+                          ) : (
+                            <p className="text-right tabular-nums">
+                              <span className="text-slate-400">IGST: </span>
+                              {formatInr(line.igstAmount * taxScale)}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+
+                  <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-1.5 text-[12px]">
+                    <p className="text-[11px] font-bold text-slate-800 leading-relaxed">
+                      Total In Words:{" "}
+                      <span className="italic font-semibold text-slate-700">
+                        Indian Rupee {amountToIndianWords(totalForWords)}
+                      </span>
+                    </p>
+                    <div className="flex justify-between gap-3 pt-1">
+                      <span className="text-slate-600">Sub Total</span>
+                      <span className="font-semibold tabular-nums">{formatInr(displaySubtotal)}</span>
+                    </div>
+                    {discount > 0 && (
+                      <div className="flex justify-between gap-3">
+                        <span className="text-slate-600">Discount</span>
+                        <span className="font-semibold tabular-nums">−{formatInr(discount)}</span>
+                      </div>
+                    )}
+                    {taxRows.map((row) => (
+                      <div key={`m-${row.label}`} className="flex justify-between gap-3">
+                        <span className="text-slate-600">{row.label}</span>
+                        <span className="font-semibold tabular-nums">{formatInr(row.amount)}</span>
+                      </div>
+                    ))}
+                    {shipping > 0 && (
+                      <div className="flex justify-between gap-3">
+                        <span className="text-slate-600">Shipping</span>
+                        <span className="font-semibold tabular-nums">{formatInr(shipping)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between gap-3 rounded-lg bg-[#eef1f4] px-2.5 py-2 mt-1">
+                      <span className="font-bold text-slate-900">Total</span>
+                      <span className="font-bold tabular-nums">{formatInr(totalForWords)}</span>
+                    </div>
+                    {notes?.trim() && (
+                      <div className="pt-2 border-t border-slate-100">
+                        <p className="font-bold text-slate-800 mb-1">Notes</p>
+                        <p className="whitespace-pre-line text-slate-600 text-[11px] break-words">
+                          {notes}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Desktop / print lines table */}
+                <div className="quotation-print-table hidden lg:block print:block overflow-x-auto print:overflow-visible px-0">
                   <table className="w-full min-w-[720px] print:min-w-0 border-collapse text-[11px]">
                     <thead>
                       <tr className="bg-[#334155] text-white">
@@ -424,13 +532,13 @@ export function QuotationDocument({
 
                 {/* Bank — sample uses "FULL NAME OF ACCOUNT" */}
                 {hasBankDetails(bank) && (
-                  <section className="px-6 sm:px-8 py-5 border-t border-slate-200">
+                  <section className="px-4 sm:px-6 lg:px-8 py-4 sm:py-5 border-t border-slate-200">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">
                       Full Name of Account
                     </p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1 text-xs text-slate-700">
                       {bank?.accountName && (
-                        <p>
+                        <p className="break-words">
                           <span className="text-slate-400">Account Name: </span>
                           {bank.accountName}
                         </p>
@@ -442,19 +550,19 @@ export function QuotationDocument({
                         </p>
                       )}
                       {bank?.accountNumber && (
-                        <p>
+                        <p className="break-all">
                           <span className="text-slate-400">Account Number: </span>
                           {bank.accountNumber}
                         </p>
                       )}
                       {bank?.bankName && (
-                        <p>
+                        <p className="break-words">
                           <span className="text-slate-400">Bank: </span>
                           {bank.bankName}
                         </p>
                       )}
                       {bank?.branch && (
-                        <p>
+                        <p className="break-words">
                           <span className="text-slate-400">Branch: </span>
                           {bank.branch}
                         </p>
@@ -471,7 +579,7 @@ export function QuotationDocument({
 
                 {/* Terms */}
                 {termsLines.length > 0 && (
-                  <section className="px-6 sm:px-8 py-5 border-t border-slate-200">
+                  <section className="px-4 sm:px-6 lg:px-8 py-4 sm:py-5 border-t border-slate-200">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">
                       Terms &amp; Conditions
                     </p>

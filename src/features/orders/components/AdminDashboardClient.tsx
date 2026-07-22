@@ -316,7 +316,7 @@ export function AdminDashboardClient({
   }));
 
   return (
-    <div className="p-3 sm:p-5 md:p-8 bg-slate-50 min-h-screen">
+    <div className="p-3 sm:p-5 md:p-8 bg-slate-50 min-h-0 pb-6">
 
       {/* ── Header ── */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-5 md:mb-7">

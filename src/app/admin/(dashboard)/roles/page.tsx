@@ -1,16 +1,9 @@
-import { Shield } from "lucide-react";
-import { ComingSoonPage } from "@/features/admin/components/ComingSoonPage";
+import { redirect } from "next/navigation";
 
 export const metadata = {
   title: "Roles | Admin",
 };
 
 export default function AdminRolesPage() {
-  return (
-    <ComingSoonPage
-      title="Roles & Permissions"
-      description="Control who can approve Design, Production, and other stage gates with finer access rules."
-      icon={Shield}
-    />
-  );
+  redirect("/admin/employees?tab=roles");
 }

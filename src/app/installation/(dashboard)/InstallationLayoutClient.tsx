@@ -4,9 +4,10 @@ import React, { useState } from "react";
 import { 
   Bell, CheckCircle, AlertCircle, Info, LogOut,
   Lock, Loader2, Key,
-  ChevronLeft, ChevronRight, Hammer, MapPin, Menu
+  ChevronLeft, ChevronRight, Hammer, MapPin, Menu, X
 } from "lucide-react";
 import { Logo } from "@/components/ui/Logo";
+import { PullToRefresh } from "@/components/ui/PullToRefresh";
 import { useRouter, usePathname } from "next/navigation";
 import { signOut, updateUserPassword } from "@/features/auth/actions/authActions";
 import { getEditableStages } from "@/features/orders/workspace/shared/stageGrants";
@@ -133,19 +134,19 @@ export function InstallationLayoutClient({ children, profile }: InstallationLayo
   const sidebarW = isExpanded ? "240px" : "64px";
 
   return (
-    <div style={{ display: "flex", height: "100vh", maxHeight: "100vh", overflow: "hidden", background: "var(--color-background)" }}>
+    <div style={{ display: "flex", height: "100dvh", maxHeight: "100dvh", overflow: "hidden", background: "var(--color-background)" }}>
 
       {/* ── DARK SIDEBAR ── */}
       <aside
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
-        className={`fixed inset-y-0 left-0 z-[60] transform ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"} lg:sticky lg:top-0 lg:translate-x-0 transition-transform duration-300 lg:transition-none flex flex-col flex-shrink-0 overflow-y-auto overflow-x-hidden`}
+        className={`fixed inset-y-0 left-0 z-[60] transform ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"} lg:sticky lg:top-0 lg:translate-x-0 transition-transform duration-300 lg:transition-none flex flex-col flex-shrink-0 overflow-hidden`}
         style={{
           width: isMobileMenuOpen ? "240px" : sidebarW,
-          minHeight: "100vh",
+          minHeight: "100dvh",
           background: "var(--sidebar-bg)",
           transition: "width 0.25s cubic-bezier(0.4,0,0.2,1)",
-          height: "100vh",
+          height: "100dvh",
         }}
       >
         {/* Logo */}
@@ -177,7 +178,7 @@ export function InstallationLayoutClient({ children, profile }: InstallationLayo
         </div>
 
         {/* Nav Items */}
-        <nav style={{ flex: 1, padding: "8px 0", overflowY: "auto" }}>
+        <nav className="scrollbar-none" style={{ flex: 1, minHeight: 0, padding: "8px 0", overflowY: "auto", overflowX: "hidden" }}>
           {navItems.map((item) => {
             const isActive = isActivePath(item);
             const Icon = item.icon;
@@ -295,10 +296,36 @@ export function InstallationLayoutClient({ children, profile }: InstallationLayo
             </span>
           </button>
         </div>
+
+        {isMobileMenuOpen && (
+          <div className="lg:hidden p-3 shrink-0 border-t border-white/10 space-y-2">
+            <button
+              type="button"
+              onClick={() => {
+                setIsMobileMenuOpen(false);
+                void handleLogout();
+              }}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm font-semibold text-red-300 bg-red-500/10 border border-red-400/25"
+              aria-label="Logout"
+            >
+              <LogOut size={16} />
+              Logout
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm font-semibold text-slate-200 bg-white/5 border border-white/15"
+              aria-label="Close menu"
+            >
+              <X size={16} />
+              Close
+            </button>
+          </div>
+        )}
       </aside>
 
       {/* ── MAIN WORKSPACE ── */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0, overflow: "hidden" }}>
 
         {/* Top Bar — hidden on worksheet pages */}
         {!isWorksheetPage && (
@@ -421,28 +448,38 @@ export function InstallationLayoutClient({ children, profile }: InstallationLayo
         )}
 
         {/* Main Content */}
-        <main style={{ flex: 1, display: "flex", flexDirection: "column", background: "var(--color-background)", minHeight: 0, overflowY: isWorksheetPage ? "hidden" : "auto" }}>
-          <div
+        <main style={{ flex: 1, display: "flex", flexDirection: "column", background: "var(--color-background)", minHeight: 0, overflow: "hidden" }}>
+          <PullToRefresh
+            disabled={isWorksheetPage}
+            className="flex-1 min-h-0"
             style={
               isWorksheetPage
-                ? { width: "100%", display: "flex", flexDirection: "column", flex: 1, minHeight: 0, height: "100%" }
-                : { width: "100%", maxWidth: 1400, margin: "0 auto" }
+                ? { display: "flex", flexDirection: "column", overflow: "hidden", height: "100%" }
+                : { overflowY: "auto" }
             }
           >
-            {children}
-          </div>
+            <div
+              style={
+                isWorksheetPage
+                  ? { width: "100%", display: "flex", flexDirection: "column", flex: 1, minHeight: 0, height: "100%" }
+                  : { width: "100%", maxWidth: 1400, margin: "0 auto" }
+              }
+            >
+              {children}
+            </div>
+          </PullToRefresh>
         </main>
         {!isWorksheetPage && (
           <div style={{
             textAlign: "center",
-            padding: "12px 0",
+            padding: "8px 0 calc(8px + env(safe-area-inset-bottom, 0px))",
             borderTop: "1px solid #E2E8F0",
             color: "#94A3B8",
             fontSize: "13px",
             fontWeight: "600",
             width: "100%",
             background: "var(--color-background)",
-            zIndex: 10,
+            zIndex: 10, flexShrink: 0, position: "relative",
           }}>
             <a
               href="https://printoms.thepolarislabs.com/"
@@ -466,7 +503,7 @@ export function InstallationLayoutClient({ children, profile }: InstallationLayo
               <img
                 src="/printoms/clients/light%20withoutbg.png"
                 alt="Polaris"
-                style={{ height: "40px", marginLeft: "-2px", marginTop: "-12px", marginBottom: "-10px" }}
+                className="h-8 lg:h-9 w-auto ml-0.5"
               />
             </a>
           </div>
@@ -553,7 +590,7 @@ export function InstallationLayoutClient({ children, profile }: InstallationLayo
         </div>
       )}
       <style>{`
-        html, body { overflow: hidden !important; margin: 0; padding: 0; width: 100%; height: 100%; }
+        html, body { overflow: hidden !important; margin: 0; padding: 0; width: 100%; height: 100%; height: 100dvh; }
       `}</style>
     </div>
   );

@@ -173,7 +173,7 @@ export function CustomersViewNew({
   const activeFilterCount = [statusFilter !== "ALL"].filter(Boolean).length;
 
   return (
-    <div className="p-3 sm:p-4 md:p-8 bg-slate-50 min-h-screen">
+    <div className="p-3 sm:p-4 md:p-8 bg-slate-50 min-h-0 pb-6">
       {/* Header Section */}
       <div className="mb-5 md:mb-8">
         <div className="flex flex-wrap items-start justify-between gap-3 mb-4 md:mb-6">
@@ -400,11 +400,18 @@ export function CustomersViewNew({
                 const statusColor = getStatusColor(cust.status);
                 const count = initialOrders.filter(o => o.customerId === cust.id).length;
                 return (
-                  <button
+                  <div
                     key={cust.id}
-                    type="button"
+                    role="button"
+                    tabIndex={0}
                     onClick={() => setSelectedCustomerId(cust.id)}
-                    className="w-full text-left rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden active:scale-[0.99] transition-transform"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setSelectedCustomerId(cust.id);
+                      }
+                    }}
+                    className="w-full text-left rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden active:scale-[0.99] transition-transform cursor-pointer"
                   >
                     <div className="flex">
                       <div className="w-1 shrink-0 self-stretch" style={{ background: statusColor.text }} aria-hidden />
@@ -443,7 +450,7 @@ export function CustomersViewNew({
                         </div>
                       </div>
                     </div>
-                  </button>
+                  </div>
                 );
               })
             )}

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { History, Search, X } from "lucide-react";
+import { History, Search, X, ArrowLeft } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { ensureRealtimeAuth } from "@/utils/supabase/ensureRealtimeAuth";
 
@@ -103,12 +103,23 @@ export function OrderCommunicationCenter({
 
   return (
     <div className="w-full h-full flex flex-col bg-white overflow-hidden text-slate-800">
-      <header className="px-4 py-3.5 bg-slate-900 text-white flex flex-col shrink-0 gap-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <History size={16} className="text-emerald-400" />
-            <h2 className="text-sm font-extrabold tracking-wider uppercase">Timeline</h2>
-            <span className="text-[10px] font-mono bg-slate-700 px-2 py-0.5 rounded-full text-sky-300 font-bold">
+      <header className="px-3 sm:px-4 py-3 sm:py-3.5 bg-slate-900 text-white flex flex-col shrink-0 gap-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            {onClose && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="lg:hidden inline-flex items-center gap-1.5 shrink-0 rounded-lg px-2.5 py-1.5 bg-slate-700/80 text-white text-xs font-bold hover:bg-slate-600 transition-colors"
+                aria-label="Back"
+              >
+                <ArrowLeft size={14} />
+                Back
+              </button>
+            )}
+            <History size={16} className="text-emerald-400 shrink-0" />
+            <h2 className="text-sm font-extrabold tracking-wider uppercase truncate">Timeline</h2>
+            <span className="hidden sm:inline text-[10px] font-mono bg-slate-700 px-2 py-0.5 rounded-full text-sky-300 font-bold truncate max-w-[8rem]">
               {orderId}
             </span>
           </div>
@@ -116,9 +127,10 @@ export function OrderCommunicationCenter({
             <button
               type="button"
               onClick={onClose}
-              className="p-1 hover:bg-slate-700 rounded-full text-slate-400 hover:text-white transition-all"
+              className="p-2 hover:bg-slate-700 rounded-full text-slate-300 hover:text-white transition-all shrink-0"
+              aria-label="Close timeline"
             >
-              <X size={16} />
+              <X size={18} />
             </button>
           )}
         </div>
