@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { Calendar, Clock, Save, Loader2, CheckCircle, RefreshCw, MapPin } from "lucide-react";
 import { scheduleInstallationAction } from "@/features/installations/actions/installationActions";
+import { buildGoogleMapsSearchUrl } from "@/features/orders/actions/siteVisitMapper";
 
 interface InstallationScheduleModuleProps {
   orderId: string;
@@ -96,6 +97,7 @@ export const InstallationScheduleModule: React.FC<InstallationScheduleModuleProp
 
   const nextDays = getNextDays(6);
   const timeSlots = ["09:00 AM", "10:30 AM", "12:00 PM", "02:00 PM", "03:30 PM", "05:00 PM"];
+  const mapsHref = locationLink || buildGoogleMapsSearchUrl(locationText);
 
   return (
     <div className="bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-6 shadow-sm min-w-0 max-w-full overflow-hidden">
@@ -141,18 +143,18 @@ export const InstallationScheduleModule: React.FC<InstallationScheduleModuleProp
                   })}{" "}
                   at {confirmedTime}
                 </p>
-                {(locationText || locationLink) && (
+                {(locationText || mapsHref) && (
                   <div className="flex items-start gap-1.5 mt-2 min-w-0">
                     <MapPin size={12} className="text-blue-500 shrink-0 mt-0.5" />
-                    {locationLink ? (
+                    {mapsHref ? (
                       <a
-                        href={locationLink}
+                        href={mapsHref}
                         target="_blank"
                         rel="noreferrer"
-                        title={locationText || "View on Map"}
-                        className="text-[11px] font-bold text-blue-600 hover:underline break-words min-w-0"
+                        title={locationText || "Open in Google Maps"}
+                        className="text-[11px] font-bold text-blue-600 hover:underline break-words min-w-0 active:opacity-80"
                       >
-                        {locationText || "View on Map"}
+                        {locationText || "Open in Google Maps"}
                       </a>
                     ) : (
                       <span className="text-[11px] font-bold text-blue-600 break-words min-w-0" title={locationText}>

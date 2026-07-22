@@ -628,8 +628,12 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
         setIsProcessing(false);
         return;
       }
-      // Installation completion always goes through payment review — never skip Job Done.
-      if (order.stageStatus === "Pending Admin Approval: Job Done") {
+      // Installation completion always goes through payment review — admin can complete without a staff push.
+      if (
+        activeStepTab === 4 &&
+        order.stage === "Installation Scheduled" &&
+        (order.stageStatus === "Pending Admin Approval: Job Done" || order.stageStatus === "Normal")
+      ) {
         setIsInstallationPaymentModalOpen(true);
         setIsProcessing(false);
         return;
@@ -931,13 +935,27 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   const isDesignAdvanceReady =
     areAllDesignItemsApproved(designItemsForGate) &&
     designItemsForGate.some((item: any) => item.productionFiles && item.productionFiles.length > 0);
-  // Stage-page Approve only when Normal — staff-push pending (incl. Job Done) is Admin Control only.
+  const isJobDonePending = order.stageStatus === "Pending Admin Approval: Job Done";
+  const isInstallationStageTab =
+    activeStepTab === 4 &&
+    (order.stage === "Ready For Installation" || order.stage === "Installation Scheduled");
+  const showAdminInstallationComplete =
+    !isEmployee &&
+    currentStageIndex === activeStepTab &&
+    order.stage === "Installation Scheduled" &&
+    (order.stageStatus === "Normal" || isJobDonePending);
+  // Stage-page Approve when Normal; installation tab also supports admin completion (with or without staff push).
   const showAdminApproveButton =
     !isEmployee &&
     currentStageIndex === activeStepTab &&
-    order.stageStatus === "Normal" &&
-    activeStepTab !== 4 &&
-    !(order.stage === "Design In Progress" && !isDesignAdvanceReady);
+    (
+      (
+        order.stageStatus === "Normal" &&
+        !(order.stage === "Design In Progress" && !isDesignAdvanceReady) &&
+        (!isInstallationStageTab || order.stage === "Ready For Installation")
+      ) ||
+      showAdminInstallationComplete
+    );
   // Hide staff advance while any approval is pending, or while waiting to schedule (Ready For Installation).
   const hideStaffAdvanceRequest =
     order.stage === "Ready For Installation" ||
@@ -1814,7 +1832,15 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                                       }
                                       handleAdminApprove();
                                     }} className="w-full justify-center" style={{ padding: "10px 16px", background: "#22C55E", border: "none", color: "white", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
-                                      <Check size={13} /> Approve & Advance
+                                      <Check size={13} />
+                                      {showAdminInstallationComplete ? (
+                                        <>
+                                          <span className="md:hidden">Complete Order</span>
+                                          <span className="hidden md:inline">Review Payments &amp; Complete</span>
+                                        </>
+                                      ) : (
+                                        "Approve & Advance"
+                                      )}
                                     </button>
                                   </div>
                                 )

@@ -3,9 +3,16 @@ import { cookies } from "next/headers";
 import { checkRateLimit } from "@/utils/rate-limiter";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
-import { uploadFileToStorageBucket } from "@/utils/supabase/serverStorageUpload";
+import {
+  uploadBase64ToStorageBucket,
+  uploadFileToStorageBucket,
+} from "@/utils/supabase/serverStorageUpload";
+import {
+  assertUploadPayload,
+  parseUploadRequest,
+} from "@/utils/supabase/parseUploadRequest";
 
-const BUCKET = "site-visit-photos";
+export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
   const ip = req.headers.get("x-forwarded-for") || "local";
@@ -28,30 +35,30 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Server not configured" }, { status: 500 });
   }
 
-  let formData: FormData;
+  let parsed;
   try {
-    formData = await req.formData();
-  } catch {
-    return NextResponse.json({ error: "Invalid upload request" }, { status: 400 });
-  }
-
-  const file = formData.get("file");
-  const orderId = String(formData.get("orderId") || "").trim();
-  const purposeRaw = String(formData.get("purpose") || "site_visit_photo");
-  const purpose =
-    purposeRaw === "design_resource" ? "design_resource" : "site_visit_photo";
-
-  if (!(file instanceof File) || !orderId) {
-    return NextResponse.json({ error: "Missing file or orderId" }, { status: 400 });
+    parsed = await parseUploadRequest(req, "site_visit_photo");
+    assertUploadPayload(parsed);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Invalid upload request";
+    return NextResponse.json({ error: message }, { status: 400 });
   }
 
   try {
-    const result = await uploadFileToStorageBucket(admin, {
-      bucket: BUCKET,
-      orderId,
-      file,
-      purpose,
-    });
+    const result = parsed.fileBase64
+      ? await uploadBase64ToStorageBucket(admin, {
+          orderId: parsed.orderId,
+          purpose: parsed.purpose,
+          fileBase64: parsed.fileBase64,
+          fileName: parsed.fileName || "upload.jpg",
+          contentType: parsed.contentType,
+        })
+      : await uploadFileToStorageBucket(admin, {
+          orderId: parsed.orderId,
+          file: parsed.file!,
+          fileName: parsed.fileName,
+          purpose: parsed.purpose,
+        });
 
     return NextResponse.json(result);
   } catch (err: unknown) {

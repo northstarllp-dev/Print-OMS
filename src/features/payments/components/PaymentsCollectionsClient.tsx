@@ -157,78 +157,78 @@ export function PaymentsCollectionsClient({ data }: PaymentsCollectionsClientPro
         />
       </div>
 
-      {/* Filters — full width above both columns */}
-      <div className="flex flex-nowrap items-center gap-2 bg-white border border-[var(--border)] rounded-[var(--radius-lg)] p-2.5 sm:p-3 overflow-x-auto">
-        <div className="relative shrink-0 w-40 sm:w-48 lg:w-56">
-          <Search
-            size={13}
-            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
-          />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search order, client…"
-            className="w-full text-xs font-medium border border-slate-200 rounded-md pl-8 pr-2.5 py-1.5 bg-white text-slate-700 outline-none focus:border-slate-400"
-          />
-        </div>
+      {/* Orders + receipts — side by side on laptop; filters only above orders table */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-5 lg:items-start">
+        <div className="lg:col-span-8 flex flex-col gap-3 min-h-0">
+          {/* Compact filters — not full-page width */}
+          <div className="inline-flex flex-wrap items-center gap-1.5 sm:gap-2 bg-white border border-slate-200 rounded-lg px-2 py-1.5 sm:px-2.5 sm:py-2 w-full lg:w-fit lg:max-w-full">
+            <div className="relative shrink-0 w-[9.5rem] sm:w-44">
+              <Search
+                size={12}
+                className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+              />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search order, client…"
+                className="w-full text-[11px] sm:text-xs font-medium border border-slate-200 rounded-md pl-7 pr-2 py-1 bg-white text-slate-700 outline-none focus:border-slate-400"
+              />
+            </div>
 
-        <div className="flex shrink-0 items-center gap-1.5">
-          {(
-            [
-              ["outstanding", "Outstanding"],
-              ["paid", "Fully paid"],
-              ["all", "All"],
-            ] as const
-          ).map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              aria-pressed={balanceFilter === value}
-              onClick={() => setBalanceFilter(value)}
-              className={`px-2.5 py-1.5 rounded-md text-xs font-semibold border whitespace-nowrap cursor-pointer transition-colors ${
-                balanceFilter === value
-                  ? "bg-slate-900 text-white border-slate-900"
-                  : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-              }`}
+            <div className="flex shrink-0 items-center gap-1">
+              {(
+                [
+                  ["outstanding", "Outstanding"],
+                  ["paid", "Fully paid"],
+                  ["all", "All"],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={balanceFilter === value}
+                  onClick={() => setBalanceFilter(value)}
+                  className={`px-2 py-1 rounded-md text-[11px] sm:text-xs font-semibold border whitespace-nowrap cursor-pointer transition-colors ${
+                    balanceFilter === value
+                      ? "bg-slate-900 text-white border-slate-900"
+                      : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            <select
+              value={stageFilter}
+              onChange={(e) => setStageFilter(e.target.value)}
+              className="shrink-0 text-[11px] sm:text-xs font-medium border border-slate-200 rounded-md px-2 py-1 bg-white text-slate-700"
             >
-              {label}
-            </button>
-          ))}
-        </div>
+              <option value="all">All stages</option>
+              {stages.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
 
-        <select
-          value={stageFilter}
-          onChange={(e) => setStageFilter(e.target.value)}
-          className="shrink-0 text-xs font-medium border border-slate-200 rounded-md px-2.5 py-1.5 bg-white text-slate-700"
-        >
-          <option value="all">All stages</option>
-          {stages.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
+            <div className="flex shrink-0 items-center gap-1">
+              <span className="text-[11px] sm:text-xs font-semibold text-slate-500 whitespace-nowrap">
+                Sort:
+              </span>
+              <select
+                value={sortKey}
+                onChange={(e) => setSortKey(e.target.value as SortKey)}
+                className="shrink-0 text-[11px] sm:text-xs font-medium border border-slate-200 rounded-md px-2 py-1 bg-white text-slate-700"
+              >
+                <option value="outstanding">outstanding</option>
+                <option value="last_paid">last paid</option>
+                <option value="date">order date</option>
+              </select>
+            </div>
+          </div>
 
-        <div className="flex shrink-0 items-center gap-1.5">
-          <span className="text-xs font-semibold text-slate-500 whitespace-nowrap">
-            Sort:
-          </span>
-          <select
-            value={sortKey}
-            onChange={(e) => setSortKey(e.target.value as SortKey)}
-            className="shrink-0 text-xs font-medium border border-slate-200 rounded-md px-2.5 py-1.5 bg-white text-slate-700"
-          >
-            <option value="outstanding">outstanding</option>
-            <option value="last_paid">last paid</option>
-            <option value="date">order date</option>
-          </select>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 sm:gap-6 xl:items-stretch">
-        {/* Orders table — stretches to match receipts column height */}
-        <div className="xl:col-span-8 flex flex-col gap-3 min-h-0 h-full">
           <div className="flex items-center justify-between gap-2 px-0.5 shrink-0">
             <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-500 m-0">
               Orders
@@ -286,8 +286,8 @@ export function PaymentsCollectionsClient({ data }: PaymentsCollectionsClientPro
           </div>
         </div>
 
-        {/* Recent receipts */}
-        <div className="xl:col-span-4 flex flex-col gap-3">
+        {/* Recent receipts — top-aligned beside orders on laptop */}
+        <div className="lg:col-span-4 flex flex-col gap-3 lg:sticky lg:top-4">
           <div className="flex items-center justify-between gap-2 shrink-0">
             <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-500 m-0">
               Recent receipts

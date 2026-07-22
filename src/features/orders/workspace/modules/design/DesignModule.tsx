@@ -3,7 +3,8 @@
 import React, { useState, useRef, useEffect } from "react";
 import { FileText, ZoomIn, ZoomOut, UploadCloud, Upload, X, Trash, RefreshCw, Download, Maximize, RotateCw, Shield, AlertTriangle, CheckCircle } from "lucide-react";
 import { Order, DesignRecord, DesignVersion } from "@/types";
-import { createClient } from "@/utils/supabase/client";
+import { uploadFileViaStaffApi } from "@/utils/supabase/uploadStorageFile";
+import type { StorageUploadPurpose } from "@/utils/supabase/serverStorageUpload";
 import { updateDesignDetailsAction } from "@/features/designs/actions/designActions";
 import { deleteStorageFilesAction } from "@/features/orders/actions/storageActions";
 import { getServerActionErrorMessage } from "@/lib/serverActionError";
@@ -105,16 +106,11 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
   const handleResetZoom = () => setZoomLevel(100);
 
   const uploadFile = async (file: File | Blob, originalFileName?: string, folder: string = "designs") => {
-    const supabase = createClient();
     const fileName = file instanceof File ? file.name : (originalFileName || "image.png");
-    const ext = fileName.split(".").pop() || "jpg";
-    const path = `${order.id}/${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-    const { error } = await supabase.storage
-      .from("site-visit-photos")
-      .upload(path, file, { upsert: false, contentType: file.type });
-    if (error) throw error;
-    const { data } = supabase.storage.from("site-visit-photos").getPublicUrl(path);
-    return data.publicUrl;
+    const purpose: StorageUploadPurpose =
+      folder === "production" ? "production_asset" : "design_proof";
+    const { url } = await uploadFileViaStaffApi(file, order.id, purpose, fileName);
+    return url;
   };
 
   const handleDesignerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {

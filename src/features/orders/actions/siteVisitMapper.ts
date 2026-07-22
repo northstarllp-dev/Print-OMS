@@ -92,6 +92,13 @@ export function resolveSiteVisitInstallationAddress(
   return fb;
 }
 
+/** Open address or "lat, lng" in Google Maps. */
+export function buildGoogleMapsSearchUrl(query?: string | null): string | null {
+  const trimmed = typeof query === "string" ? query.trim() : "";
+  if (!trimmed || trimmed === "N/A" || trimmed.startsWith("Skipped")) return null;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(trimmed)}`;
+}
+
 export function mapSiteVisitFromDb(sv: any): SiteVisitDetails | null {
   if (!sv) return null;
 

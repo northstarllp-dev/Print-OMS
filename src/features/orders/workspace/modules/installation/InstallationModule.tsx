@@ -1,11 +1,12 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { ArrowLeft, Sparkles, Check, Loader2, CheckCircle, Save, UploadCloud, Calendar, Clock, Shield, FileText, Image as ImageIcon } from "lucide-react";
+import { ArrowLeft, Sparkles, Check, Loader2, CheckCircle, Save, UploadCloud, Calendar, Clock, Shield, FileText, Image as ImageIcon, Eye, Download, Trash, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { InstallationScheduleModule } from "@/features/installations/components/InstallationScheduleModule";
 import { deleteStorageFilesAction } from "@/features/orders/actions/storageActions";
-import { createClient } from "@/utils/supabase/client";
-import { resolveSiteVisitInstallationAddress } from "@/features/orders/actions/siteVisitMapper";
+import { uploadFileViaStaffApi } from "@/utils/supabase/uploadStorageFile";
+import { resolveSiteVisitInstallationAddress, buildGoogleMapsSearchUrl } from "@/features/orders/actions/siteVisitMapper";
+import { OverlayPortal } from "@/components/ui/OverlayPortal";
 import type { StageModuleProps } from "../../shared/types";
 
 export interface InstallationModuleData {
@@ -73,6 +74,10 @@ export function InstallationModule({
     resolveSiteVisitInstallationAddress(svDetails, client?.shippingAddress) ||
     "Installation Location";
   const siteAddress = installationSiteAddress;
+  const siteMapsLink =
+    gmapLink ||
+    buildGoogleMapsSearchUrl(svDetails.gpsLocation) ||
+    buildGoogleMapsSearchUrl(installationSiteAddress !== "Installation Location" ? installationSiteAddress : null);
 
   const defaultChecklist = [
     { id: "prep", label: "Site preparation completed", checked: false },
@@ -88,6 +93,13 @@ export function InstallationModule({
   const [afterPhotos, setAfterPhotos] = useState<string[]>(
     installation?.photos || installation?.afterPhotos || []
   );
+  const [viewerPhotos, setViewerPhotos] = useState<string[]>([]);
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+
+  const openPhotoViewer = (index: number) => {
+    setViewerPhotos(afterPhotos);
+    setViewerIndex(index);
+  };
 
   // Keep local worksheet fields in sync when realtime/parent installation props change.
   useEffect(() => {
@@ -111,15 +123,8 @@ export function InstallationModule({
   };
 
   const uploadInstallationPhoto = async (file: File) => {
-    const supabase = createClient();
-    const ext = file.name.split(".").pop() || "jpg";
-    const path = `${order.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-    const { error } = await supabase.storage
-      .from("installation-photos")
-      .upload(path, file, { upsert: false, contentType: file.type });
-    if (error) throw error;
-    const { data } = supabase.storage.from("installation-photos").getPublicUrl(path);
-    return data.publicUrl;
+    const { url } = await uploadFileViaStaffApi(file, order.id, "installation_photo");
+    return url;
   };
 
   const handlePhotoFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -179,6 +184,7 @@ export function InstallationModule({
   const canAct = canEdit && !isCompleted;
 
   return (
+    <>
     <div className={`min-w-0 max-w-full overflow-x-hidden ${embedded ? "space-y-6" : "p-4 sm:p-8 bg-slate-50/50 min-h-screen"}`}>
       {/* ── ADMIN OVERRIDE BANNER ── */}
       {baseFrozen && currentUserRole === "Admin" && setAdminOverrideUnlocked && (
@@ -304,7 +310,7 @@ export function InstallationModule({
             initialScheduledDate={installationDetails.scheduledDate}
             initialScheduledTime={installationDetails.scheduledTime}
             isCompleted={!canAct}
-            locationLink={gmapLink}
+            locationLink={siteMapsLink || undefined}
             locationText={siteAddress}
             onScheduled={onInstallationScheduled}
           />
@@ -384,20 +390,40 @@ export function InstallationModule({
                 {afterPhotos.length > 0 && (
                   <div className="flex flex-wrap gap-4">
                     {afterPhotos.map((photo, index) => (
-                      <div key={index} className="group relative w-24 h-24 sm:w-32 sm:h-32 bg-slate-100 rounded-xl overflow-hidden border border-slate-200 shadow-sm">
+                      <div key={photo} className="group relative w-24 h-24 sm:w-32 sm:h-32 bg-slate-100 rounded-xl overflow-hidden border border-slate-200 shadow-sm">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={photo} alt="Installation Photo" className="w-full h-full object-cover" />
-                        {!isCompleted && (
-                          <div className="absolute inset-0 bg-black/50 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <img src={photo} alt={`Installation photo ${index + 1}`} className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-slate-900/70 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); openPhotoViewer(index); }}
+                            className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/40 flex items-center justify-center text-white transition-colors"
+                            title="View"
+                            aria-label="View photo"
+                          >
+                            <Eye size={15} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); window.open(`${photo}?download=`, "_blank"); }}
+                            className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/40 flex items-center justify-center text-white transition-colors"
+                            title="Download"
+                            aria-label="Download photo"
+                          >
+                            <Download size={15} />
+                          </button>
+                          {!isCompleted && canEdit && (
                             <button
-                              onClick={() => removeInstallationPhoto(photo)}
-                              disabled={!canEdit}
-                              className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-lg text-xs font-bold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105 transition-transform"
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); void removeInstallationPhoto(photo); }}
+                              className="w-8 h-8 rounded-full bg-red-500/80 hover:bg-red-500 flex items-center justify-center text-white transition-colors"
+                              title="Remove"
+                              aria-label="Remove photo"
                             >
-                              Remove
+                              <Trash size={15} />
                             </button>
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -505,7 +531,18 @@ export function InstallationModule({
                   {installationSiteAddress && (
                     <div className="pt-2 border-t border-slate-100 mt-2">
                       <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Installation / Shipping Address</div>
-                      <div className="font-medium text-slate-600 leading-relaxed p-2 bg-slate-50 rounded-lg border border-slate-100">{installationSiteAddress}</div>
+                      {siteMapsLink ? (
+                        <a
+                          href={siteMapsLink}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-medium text-blue-600 leading-relaxed p-2 bg-slate-50 rounded-lg border border-slate-100 hover:underline block"
+                        >
+                          {installationSiteAddress}
+                        </a>
+                      ) : (
+                        <div className="font-medium text-slate-600 leading-relaxed p-2 bg-slate-50 rounded-lg border border-slate-100">{installationSiteAddress}</div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -516,5 +553,74 @@ export function InstallationModule({
 
       </div>
     </div>
+
+    {viewerIndex !== null && viewerPhotos.length > 0 && (
+      <OverlayPortal>
+        <div
+          className="fixed inset-0 z-[99999] bg-black/90 flex items-center justify-center backdrop-blur-sm"
+          onClick={() => setViewerIndex(null)}
+          role="presentation"
+        >
+          <button
+            type="button"
+            className="absolute top-6 right-6 text-white/70 hover:text-white bg-black/50 hover:bg-black/80 rounded-full p-2 transition-all"
+            onClick={() => setViewerIndex(null)}
+            aria-label="Close photo viewer"
+          >
+            <X size={24} />
+          </button>
+
+          <div className="relative max-w-4xl max-h-[85vh] w-full h-full flex items-center justify-center p-4">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={viewerPhotos[viewerIndex]}
+              className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+              alt={`Installation photo ${viewerIndex + 1}`}
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+
+          {viewerIndex > 0 && (
+            <button
+              type="button"
+              className="absolute left-4 sm:left-6 top-1/2 -translate-y-1/2 text-white/70 hover:text-white bg-black/50 hover:bg-black/80 rounded-full p-3 transition-all"
+              onClick={(e) => { e.stopPropagation(); setViewerIndex(viewerIndex - 1); }}
+              aria-label="Previous photo"
+            >
+              <ChevronLeft size={28} />
+            </button>
+          )}
+
+          {viewerIndex < viewerPhotos.length - 1 && (
+            <button
+              type="button"
+              className="absolute right-4 sm:right-6 top-1/2 -translate-y-1/2 text-white/70 hover:text-white bg-black/50 hover:bg-black/80 rounded-full p-3 transition-all"
+              onClick={(e) => { e.stopPropagation(); setViewerIndex(viewerIndex + 1); }}
+              aria-label="Next photo"
+            >
+              <ChevronRight size={28} />
+            </button>
+          )}
+
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-3">
+            <div className="bg-black/60 text-white text-sm font-medium px-4 py-1.5 rounded-full backdrop-blur-md">
+              {viewerIndex + 1} / {viewerPhotos.length}
+            </div>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                window.open(`${viewerPhotos[viewerIndex]}?download=`, "_blank");
+              }}
+              className="inline-flex items-center gap-1.5 bg-black/60 hover:bg-black/80 text-white text-sm font-semibold px-4 py-1.5 rounded-full backdrop-blur-md transition-colors"
+            >
+              <Download size={14} />
+              Download
+            </button>
+          </div>
+        </div>
+      </OverlayPortal>
+    )}
+    </>
   );
 }
