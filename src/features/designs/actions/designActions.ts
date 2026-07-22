@@ -286,8 +286,6 @@ export async function sendDesignToCustomerAction(orderId: string): Promise<Desig
 
   const result = await updateDesignDetailsAction(orderId, { items }, design.updated_at);
 
-  const supabase = await getSupabase();
-  const orderUuid = await resolveOrderUuid(supabase, orderId);
   const baseUrl = await getRequestBaseUrl();
   await dispatchWhatsAppNotification(supabase, {
     templateKey: hadChangesRequested

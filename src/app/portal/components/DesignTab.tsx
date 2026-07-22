@@ -22,7 +22,7 @@ import {
 } from "@/features/designs/actions/designActions";
 import { areAllDesignItemsApproved } from "@/features/designs/utils/designApproval";
 import { toCustomerVisibleDesign } from "@/features/designs/utils/customerVisibleDesign";
-import { readFileForStorageUpload } from "@/utils/supabase/uploadStorageFile";
+import { uploadFileViaPortalApi } from "@/utils/supabase/uploadStorageFile";
 import { getServerActionErrorMessage } from "@/lib/serverActionError";
 
 interface Customer {
@@ -139,18 +139,17 @@ export function DesignTab({ order, customer, siteVisitItems = [], portalToken }:
       const newResources = [];
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        const { body, contentType, ext } = await readFileForStorageUpload(file);
-        const path = `${order.id}/resources/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-        const { error } = await supabase.storage
-          .from("site-visit-photos")
-          .upload(path, body, { contentType });
-        if (error) throw error;
-        const { data } = supabase.storage.from("site-visit-photos").getPublicUrl(path);
-        
+        const { url, name } = await uploadFileViaPortalApi(
+          file,
+          order.id,
+          "design_resource",
+          portalToken
+        );
+
         newResources.push({
           id: (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36),
-          url: data.publicUrl,
-          name: file.name,
+          url,
+          name,
           type: "file" as const,
           uploadedBy: "Customer" as const,
           createdAt: new Date().toISOString()
@@ -349,7 +348,7 @@ export function DesignTab({ order, customer, siteVisitItems = [], portalToken }:
           <label className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-xs font-bold cursor-pointer hover:bg-gray-100 flex items-center gap-2">
             {uploading ? <Loader2 size={14} className="animate-spin" /> : <UploadCloud size={14} />}
             {uploading ? "Uploading..." : "Upload File"}
-            <input type="file" multiple onChange={handleResourceUpload} accept=".png,.pdf,.jpg,.jpeg,.cdr,.ai,.psd,.svg" className="hidden" disabled={uploading} />
+            <input type="file" multiple onChange={handleResourceUpload} accept="image/*,.pdf,.png,.jpg,.jpeg,.heic,.heif,.cdr,.ai,.psd,.svg" className="hidden" disabled={uploading} />
           </label>
         </div>
         )}

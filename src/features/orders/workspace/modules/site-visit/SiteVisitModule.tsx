@@ -1,11 +1,11 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { createClient } from "@/utils/supabase/client";
 import { 
   X, 
   Plus, 
   Camera, 
+  Image as ImageIcon,
   MapPin, 
   Calendar, 
   Clock, 
@@ -38,7 +38,7 @@ import { ScheduleVisitModal } from "./ScheduleVisitModal";
 import { updateSiteVisitDetailsAction } from "@/features/orders/actions/orderActions";
 import { deleteStorageFilesAction } from "@/features/orders/actions/storageActions";
 import { scheduleSiteVisitAction } from "@/features/orders/actions/orderActions";
-import { readFileForStorageUpload } from "@/utils/supabase/uploadStorageFile";
+import { uploadFileViaStaffApi } from "@/utils/supabase/uploadStorageFile";
 import { OverlayPortal } from "@/components/ui/OverlayPortal";
 import { GoogleMap, useJsApiLoader, Marker } from "@react-google-maps/api";
 
@@ -186,15 +186,8 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
   };
 
   const uploadSitePhoto = async (file: File) => {
-    const supabase = createClient();
-    const { body, contentType, ext } = await readFileForStorageUpload(file);
-    const path = `${order.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-    const { error } = await supabase.storage
-      .from("site-visit-photos")
-      .upload(path, body, { upsert: false, contentType });
-    if (error) throw error;
-    const { data } = supabase.storage.from("site-visit-photos").getPublicUrl(path);
-    return data.publicUrl;
+    const { url } = await uploadFileViaStaffApi(file, order.id, "site_visit_photo");
+    return url;
   };
 
   const handlePhotoFiles = async (files: FileList | null) => {
@@ -1291,13 +1284,29 @@ const SitePhotoUploader: React.FC<{
   onRemove: (url: string) => void;
   onView: (idx: number) => void;
 }> = ({ photos, uploading, disabled, onFiles, onRemove, onView }) => {
+  const cameraRef = useRef<HTMLInputElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
+
+  const handlePick = (files: FileList | null) => {
+    void onFiles(files);
+  };
 
   return (
     <div className="pt-4 space-y-4">
       {/* Upload buttons */}
       {!disabled && (
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
+          <input
+            ref={cameraRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => {
+              handlePick(e.target.files);
+              e.target.value = "";
+            }}
+          />
           <input
             ref={galleryRef}
             type="file"
@@ -1305,18 +1314,27 @@ const SitePhotoUploader: React.FC<{
             multiple
             className="hidden"
             onChange={(e) => {
-              const picked = e.target.files;
-              void onFiles(picked);
+              handlePick(e.target.files);
               e.target.value = "";
             }}
           />
           <button
-            onClick={() => galleryRef.current?.click()}
+            type="button"
+            onClick={() => cameraRef.current?.click()}
             disabled={uploading}
             className="flex items-center gap-2 px-4 py-2.5 bg-[var(--color-secondary)] text-white rounded-xl text-xs font-bold hover:opacity-90 transition-opacity disabled:opacity-50"
           >
             <Camera size={14} />
-            Add Photos
+            Take Photo
+          </button>
+          <button
+            type="button"
+            onClick={() => galleryRef.current?.click()}
+            disabled={uploading}
+            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-bold hover:bg-slate-50 transition-colors disabled:opacity-50"
+          >
+            <ImageIcon size={14} />
+            Gallery
           </button>
 
           {uploading && (
@@ -1365,11 +1383,11 @@ const SitePhotoUploader: React.FC<{
       ) : (
         <div
           className={`flex flex-col items-center justify-center py-10 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50/50 transition-colors ${disabled ? "" : "cursor-pointer hover:border-[var(--color-secondary)] hover:bg-slate-100/50"}`}
-          onClick={() => !disabled && galleryRef.current?.click()}
+          onClick={() => !disabled && cameraRef.current?.click()}
         >
           <Camera size={28} className="text-slate-300 mb-2" />
           <p className="text-xs font-bold text-slate-400">No photos yet</p>
-          {!disabled && <p className="text-[10px] text-slate-400 mt-0.5">Tap "Add Photos" to upload</p>}
+          {!disabled && <p className="text-[10px] text-slate-400 mt-0.5">Tap &quot;Take Photo&quot; or &quot;Gallery&quot;</p>}
         </div>
       )}
     </div>
