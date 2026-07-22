@@ -88,7 +88,7 @@ export default function InstallationLogin() {
               value={email}
               onChange={e => setEmail(e.target.value)}
               className="prt-input"
-              placeholder="installation@printoms.co.in"
+              placeholder="installation@thepolarislabs.com"
             />
           </div>
 

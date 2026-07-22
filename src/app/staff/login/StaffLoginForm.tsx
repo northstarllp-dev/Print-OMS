@@ -96,7 +96,7 @@ export function StaffLoginForm({ employees }: StaffLoginFormProps) {
               value={email}
               onChange={e => setEmail(e.target.value)}
               className="prt-input"
-              placeholder="staff@printoms.com"
+              placeholder="staff@thepolarislabs.com"
             />
           </div>
 
