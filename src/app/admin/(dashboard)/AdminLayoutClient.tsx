@@ -593,7 +593,6 @@ export function AdminLayoutClient({
             background: "var(--color-background)",
             flexShrink: 0,
             position: "relative",
-            zIndex: 5,
           }}>
             <a
               href="https://printoms.thepolarislabs.com/"

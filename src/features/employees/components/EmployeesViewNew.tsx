@@ -42,6 +42,7 @@ export function EmployeesViewNew({
   const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "Active" | "Inactive">("ALL");
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | undefined>(undefined);
   const [actionDropdownId, setActionDropdownId] = useState<string | null>(null);
@@ -226,6 +227,13 @@ export function EmployeesViewNew({
     );
   });
 
+  const resetFilters = () => {
+    setSearchTerm("");
+    setStatusFilter("ALL");
+  };
+
+  const activeFilterCount = [statusFilter !== "ALL"].filter(Boolean).length;
+
   return (
     <div className="p-3 sm:p-4 md:p-8 bg-slate-50 min-h-0 pb-6">
       {/* Header Section */}
@@ -355,40 +363,140 @@ export function EmployeesViewNew({
       {/* Table Section */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-visible">
         {/* Search & Filter Bar */}
-        <div className="p-3 sm:p-4 border-b border-slate-200 flex flex-nowrap gap-2 items-center overflow-x-auto">
-          <div className="relative flex-1 min-w-[10rem] sm:min-w-[12rem]">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-            <input
-              type="text"
-              placeholder="Search by employee name, role or ID..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full py-2.5 pl-9 pr-3 border border-slate-200 rounded-lg text-[13px] outline-none"
-            />
+        <div className="p-3 sm:p-4 border-b border-slate-200">
+          {/* Mobile / tablet: search + Filters + Reset */}
+          <div className="lg:hidden flex items-center gap-2">
+            <div className="relative flex-1 min-w-0">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Search employees…"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-[34px] pr-8 py-2.5 border border-slate-200 rounded-full text-[13px] outline-none focus:border-[var(--color-primary)] bg-slate-50"
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => setMobileFiltersOpen(true)}
+              className={`relative shrink-0 inline-flex items-center gap-1.5 h-10 px-3.5 rounded-full border text-[12px] font-bold transition-colors ${
+                activeFilterCount > 0
+                  ? "bg-slate-900 text-white border-slate-900"
+                  : "bg-white text-slate-700 border-slate-200"
+              }`}
+            >
+              <Filter size={14} />
+              Filters
+              {activeFilterCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-[var(--color-primary)] text-white text-[10px] font-extrabold flex items-center justify-center border-2 border-white">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              title="Reset filters"
+              onClick={resetFilters}
+              className="shrink-0 w-10 h-10 inline-flex items-center justify-center rounded-full bg-red-50 border border-red-200 text-red-600"
+            >
+              <RefreshCw size={14} />
+            </button>
           </div>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as "ALL" | "Active" | "Inactive")}
-            className="shrink-0 px-3 py-2.5 bg-white border border-slate-200 rounded-lg text-[13px] font-semibold text-slate-600"
-            aria-label="Filter by status"
-          >
-            <option value="ALL">All statuses</option>
-            <option value="Active">Active</option>
-            <option value="Inactive">Inactive</option>
-          </select>
-          
-          <button
-            title="Reset Filters"
-            type="button"
-            onClick={() => {
-              setSearchTerm("");
-              setStatusFilter("ALL");
-            }}
-            className="inline-flex items-center justify-center gap-1.5 px-3.5 h-[39px] bg-red-50 border border-red-200 rounded-lg text-red-600 font-semibold text-[13px] shrink-0"
-          >
-            <RefreshCw size={14} />
-            Reset
-          </button>
+
+          {mobileFiltersOpen && (
+            <div className="lg:hidden fixed inset-0 z-[80]">
+              <button
+                type="button"
+                aria-label="Close filters"
+                className="absolute inset-0 bg-slate-900/40"
+                onClick={() => setMobileFiltersOpen(false)}
+              />
+              <div className="absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-2xl bg-white shadow-xl">
+                <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-white rounded-t-2xl">
+                  <h3 className="text-sm font-extrabold text-slate-900">Filters</h3>
+                  <button
+                    type="button"
+                    onClick={() => setMobileFiltersOpen(false)}
+                    className="w-8 h-8 inline-flex items-center justify-center rounded-full bg-slate-100 text-slate-500"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+                <div className="p-4 space-y-4">
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Status</label>
+                    <select
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value as "ALL" | "Active" | "Inactive")}
+                      className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[13px] font-medium text-slate-700"
+                    >
+                      <option value="ALL">All statuses</option>
+                      <option value="Active">Active</option>
+                      <option value="Inactive">Inactive</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="sticky bottom-0 flex gap-2 px-4 py-3 border-t border-slate-100 bg-white pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+                  <button
+                    type="button"
+                    onClick={resetFilters}
+                    className="flex-1 h-10 inline-flex items-center justify-center gap-1.5 rounded-xl bg-red-50 border border-red-200 text-red-600 text-[13px] font-bold"
+                  >
+                    <RefreshCw size={14} /> Reset
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMobileFiltersOpen(false)}
+                    className="flex-1 h-10 inline-flex items-center justify-center rounded-xl bg-slate-900 text-white text-[13px] font-bold"
+                  >
+                    Apply
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Desktop: inline filters */}
+          <div className="hidden lg:flex flex-nowrap gap-2 items-center">
+            <div className="relative flex-1 min-w-[12rem]">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Search by employee name, role or ID..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full py-2.5 pl-9 pr-3 border border-slate-200 rounded-lg text-[13px] outline-none"
+              />
+            </div>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as "ALL" | "Active" | "Inactive")}
+              className="shrink-0 px-3 py-2.5 bg-white border border-slate-200 rounded-lg text-[13px] font-semibold text-slate-600"
+              aria-label="Filter by status"
+            >
+              <option value="ALL">All statuses</option>
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+            </select>
+            <button
+              title="Reset Filters"
+              type="button"
+              onClick={resetFilters}
+              className="inline-flex items-center justify-center gap-1.5 px-3.5 h-[39px] bg-red-50 border border-red-200 rounded-lg text-red-600 font-semibold text-[13px] shrink-0"
+            >
+              <RefreshCw size={14} />
+              Reset
+            </button>
+          </div>
         </div>
 
         {/* Mobile cards */}

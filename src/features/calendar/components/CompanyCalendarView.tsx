@@ -11,6 +11,7 @@ import {
   Phone,
   User,
   Filter,
+  RefreshCw,
 } from "lucide-react";
 import {
   buildCalendarEvents,
@@ -129,6 +130,13 @@ export function CompanyCalendarView({
   const [upcomingOnly, setUpcomingOnly] = useState(false);
   const [showDeadlines, setShowDeadlines] = useState(true);
 
+  const resetFilters = () => {
+    setTypeFilter("all");
+    if (!lockedEmployeeId) setEmployeeFilter("all");
+    setUpcomingOnly(false);
+    setShowDeadlines(true);
+  };
+
   const employeeNameById = useMemo(() => {
     const map = new Map<string, string>();
     for (const e of employees) map.set(e.id, e.name);
@@ -232,9 +240,20 @@ export function CompanyCalendarView({
 
       {/* Filters */}
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center bg-white border border-[var(--border)] rounded-[var(--radius-lg)] p-3">
-        <div className="flex items-center gap-1.5 text-slate-500 text-xs font-semibold uppercase tracking-wide">
-          <Filter size={13} />
-          Filters
+        <div className="flex items-center justify-between gap-2 sm:contents">
+          <div className="flex items-center gap-1.5 text-slate-500 text-xs font-semibold uppercase tracking-wide">
+            <Filter size={13} />
+            Filters
+          </div>
+          <button
+            type="button"
+            title="Reset filters"
+            onClick={resetFilters}
+            className="inline-flex items-center justify-center gap-1.5 h-8 px-3 rounded-lg bg-red-50 border border-red-200 text-red-600 text-xs font-bold shrink-0 sm:order-last sm:ml-auto"
+          >
+            <RefreshCw size={13} />
+            Reset
+          </button>
         </div>
 
         <div className="flex flex-wrap gap-2">
@@ -279,7 +298,7 @@ export function CompanyCalendarView({
           </select>
         )}
 
-        <label className="flex items-center gap-2 text-xs font-medium text-slate-600 cursor-pointer select-none sm:ml-auto">
+        <label className="flex items-center gap-2 text-xs font-medium text-slate-600 cursor-pointer select-none">
           <input
             type="checkbox"
             checked={upcomingOnly}

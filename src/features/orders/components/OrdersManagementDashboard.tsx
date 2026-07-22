@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { 
   Search,
@@ -528,17 +529,18 @@ export function OrdersManagementDashboard({
             </button>
           </div>
 
-          {/* Mobile filter sheet */}
-          {mobileFiltersOpen && (
-            <div className="lg:hidden fixed inset-0 z-[80]">
+          {/* Mobile filter sheet — portaled so layout footer z-index can't cover it */}
+          {mobileFiltersOpen &&
+            createPortal(
+            <div className="lg:hidden fixed inset-0 z-[200]">
               <button
                 type="button"
                 aria-label="Close filters"
                 className="absolute inset-0 bg-slate-900/40"
                 onClick={() => setMobileFiltersOpen(false)}
               />
-              <div className="absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-2xl bg-white shadow-xl">
-                <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-white rounded-t-2xl">
+              <div className="absolute inset-x-0 bottom-0 flex max-h-[85vh] max-h-[85dvh] flex-col overscroll-contain rounded-t-2xl bg-white shadow-xl">
+                <div className="flex shrink-0 items-center justify-between px-4 py-3 border-b border-slate-100 rounded-t-2xl">
                   <h3 className="text-sm font-extrabold text-slate-900">Filters</h3>
                   <button
                     type="button"
@@ -548,7 +550,7 @@ export function OrdersManagementDashboard({
                     <X size={16} />
                   </button>
                 </div>
-                <div className="p-4 space-y-4">
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 space-y-4">
                   <div>
                     <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Stage</label>
                     <select
@@ -618,7 +620,7 @@ export function OrdersManagementDashboard({
                     </div>
                   </div>
                 </div>
-                <div className="sticky bottom-0 flex gap-2 px-4 py-3 border-t border-slate-100 bg-white pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+                <div className="flex shrink-0 gap-2 px-4 py-3 border-t border-slate-100 bg-white pb-[max(0.75rem,env(safe-area-inset-bottom))]">
                   <button
                     type="button"
                     onClick={() => {
@@ -637,7 +639,8 @@ export function OrdersManagementDashboard({
                   </button>
                 </div>
               </div>
-            </div>
+            </div>,
+            document.body
           )}
 
           {/* Desktop / tablet: inline filters */}
@@ -806,33 +809,34 @@ export function OrdersManagementDashboard({
                         <ChevronRight size={18} className="shrink-0 text-slate-300 mt-0.5" />
                       </div>
 
-                      <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500">
-                        <span className="font-medium">{dateStr}</span>
-                        <span
-                          className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border ${getHealthBadgeColor(order.health || "Active")}`}
-                        >
-                          {order.health || "Active"}
-                        </span>
-                      </div>
-
-                      <div className="mt-2.5 flex items-center gap-1">
-                        {order.assignedEmployees?.slice(0, 4).map((empId: string, i: number) => {
-                          const staff = employees.find(e => e.id === empId);
-                          const name = staff ? staff.name : "Un";
-                          return (
-                            <div
-                              key={i}
-                              title={name}
-                              className="w-6 h-6 rounded-full bg-[var(--color-primary)] text-white flex items-center justify-center text-[9px] font-bold border-2 border-white"
-                              style={{ marginLeft: i > 0 ? "-6px" : "0" }}
-                            >
-                              {name.substring(0, 2).toUpperCase()}
-                            </div>
-                          );
-                        })}
-                        {(!order.assignedEmployees || order.assignedEmployees.length === 0) && (
-                          <span className="text-[11px] text-slate-400 italic">Unassigned</span>
-                        )}
+                      <div className="mt-2 flex items-center justify-between gap-2 min-w-0">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500 min-w-0">
+                          <span className="font-medium">{dateStr}</span>
+                          <span
+                            className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border ${getHealthBadgeColor(order.health || "Active")}`}
+                          >
+                            {order.health || "Active"}
+                          </span>
+                        </div>
+                        <div className="flex items-center shrink-0">
+                          {order.assignedEmployees?.slice(0, 4).map((empId: string, i: number) => {
+                            const staff = employees.find(e => e.id === empId);
+                            const name = staff ? staff.name : "Un";
+                            return (
+                              <div
+                                key={i}
+                                title={name}
+                                className="w-6 h-6 rounded-full bg-[var(--color-primary)] text-white flex items-center justify-center text-[9px] font-bold border-2 border-white"
+                                style={{ marginLeft: i > 0 ? "-6px" : "0" }}
+                              >
+                                {name.substring(0, 2).toUpperCase()}
+                              </div>
+                            );
+                          })}
+                          {(!order.assignedEmployees || order.assignedEmployees.length === 0) && (
+                            <span className="text-[11px] text-slate-400 italic">Unassigned</span>
+                          )}
+                        </div>
                       </div>
 
                       {(visitDate && visitTime) ? (

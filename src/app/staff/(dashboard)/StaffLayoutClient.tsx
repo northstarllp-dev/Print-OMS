@@ -586,7 +586,7 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
             fontWeight: "600",
             width: "100%",
             background: "var(--color-background)",
-            zIndex: 10, flexShrink: 0, position: "relative",
+            flexShrink: 0, position: "relative",
           }}>
             <a
               href="https://printoms.thepolarislabs.com/"

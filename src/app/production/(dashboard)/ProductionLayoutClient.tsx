@@ -493,7 +493,7 @@ export function ProductionLayoutClient({ children, profile }: ProductionLayoutCl
             fontWeight: "600",
             width: "100%",
             background: "var(--color-background)",
-            zIndex: 10, flexShrink: 0, position: "relative",
+            flexShrink: 0, position: "relative",
           }}>
             <a
               href="https://printoms.thepolarislabs.com/"

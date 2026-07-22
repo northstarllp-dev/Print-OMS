@@ -1,9 +1,12 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
+import { createPortal } from "react-dom";
 import { Search, Filter, MapPin, Mail, Phone, X, ShoppingBag, ExternalLink, Share2, Pencil, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { updateCustomer } from "@/features/customers/actions/customerActions";
+import { withBasePath } from "@/lib/appBasePath";
 
 const getStatusColor = (status: string | undefined) => {
   const colors: Record<string, { bg: string; text: string; label: string }> = {
@@ -90,7 +93,7 @@ export function CustomersViewNew({
   const handleCopyLink = async (customerId: string, e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent row selection when copying portal link
     try {
-      const res = await fetch(`/printoms/api/portal-token?customer_id=${customerId}`);
+      const res = await fetch(withBasePath(`/api/portal-token?customer_id=${customerId}`));
       const data = await res.json();
       if (data.url) {
         await navigator.clipboard.writeText(data.url);
@@ -106,7 +109,7 @@ export function CustomersViewNew({
   const handleCopyOrderLink = async (customerId: string, orderId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      const res = await fetch(`/printoms/api/portal-token?customer_id=${customerId}&order_id=${orderId}`);
+      const res = await fetch(withBasePath(`/api/portal-token?customer_id=${customerId}&order_id=${orderId}`));
       const data = await res.json();
       if (data.url) {
         await navigator.clipboard.writeText(data.url);
@@ -291,16 +294,17 @@ export function CustomersViewNew({
               </button>
             </div>
 
-            {mobileFiltersOpen && (
-              <div className="lg:hidden fixed inset-0 z-[80]">
+            {mobileFiltersOpen &&
+              createPortal(
+              <div className="lg:hidden fixed inset-0 z-[200]">
                 <button
                   type="button"
                   aria-label="Close filters"
                   className="absolute inset-0 bg-slate-900/40"
                   onClick={() => setMobileFiltersOpen(false)}
                 />
-                <div className="absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-2xl bg-white shadow-xl">
-                  <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-white rounded-t-2xl">
+                <div className="absolute inset-x-0 bottom-0 flex max-h-[85vh] max-h-[85dvh] flex-col overscroll-contain rounded-t-2xl bg-white shadow-xl">
+                  <div className="flex shrink-0 items-center justify-between px-4 py-3 border-b border-slate-100 rounded-t-2xl">
                     <h3 className="text-sm font-extrabold text-slate-900">Filters</h3>
                     <button
                       type="button"
@@ -310,7 +314,7 @@ export function CustomersViewNew({
                       <X size={16} />
                     </button>
                   </div>
-                  <div className="p-4 space-y-4">
+                  <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 space-y-4">
                     <div>
                       <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Status</label>
                       <select
@@ -325,7 +329,7 @@ export function CustomersViewNew({
                       </select>
                     </div>
                   </div>
-                  <div className="sticky bottom-0 flex gap-2 px-4 py-3 border-t border-slate-100 bg-white pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+                  <div className="flex shrink-0 gap-2 px-4 py-3 border-t border-slate-100 bg-white pb-[max(0.75rem,env(safe-area-inset-bottom))]">
                     <button
                       type="button"
                       onClick={resetFilters}
@@ -342,7 +346,8 @@ export function CustomersViewNew({
                     </button>
                   </div>
                 </div>
-              </div>
+              </div>,
+              document.body
             )}
 
             <div className="hidden lg:flex flex-row flex-wrap gap-3 items-center">
@@ -620,13 +625,14 @@ export function CustomersViewNew({
                           >
                             <Share2 size={12} />
                           </button>
-                          <a 
+                          <Link
                             href={`/admin/orders/${o.orderId || o.id}`}
                             className="p-1 rounded bg-white border border-slate-200 text-slate-500 hover:text-slate-700 hover:bg-slate-50 transition"
                             title="Open Worksheet"
+                            onClick={(e) => e.stopPropagation()}
                           >
                             <ExternalLink size={12} />
-                          </a>
+                          </Link>
                         </div>
                       </div>
 

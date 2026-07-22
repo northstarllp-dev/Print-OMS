@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import Link from "next/link";
+import { createPortal } from "react-dom";
 import { Search, Filter, Plus, AlertCircle, CheckCircle, Clock, Phone, Copy, MessageSquare, Mail, X, Check, ArrowRight, Calendar, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
 import { AddEnquiryModal, EnquiryFormData } from "./AddEnquiryModal";
 import { ConvertEnquiryModal } from "./ConvertEnquiryModal";
@@ -8,6 +10,7 @@ import { AssignTeamModal } from "./AssignTeamModal";
 import { createEnquiry, updateEnquiry, convertEnquiryToOrderAction } from "@/features/enquiries/actions/enquiryActions";
 import { createOrder } from "@/features/orders/actions/orderActions";
 import { createCustomer } from "@/features/customers/actions/customerActions";
+import { withBasePath } from "@/lib/appBasePath";
 
 const getStatusColor = (status: string) => {
   const colors: Record<string, { bg: string; text: string; label: string }> = {
@@ -445,16 +448,17 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
             </button>
           </div>
 
-          {mobileFiltersOpen && (
-            <div className="lg:hidden fixed inset-0 z-[80]">
+          {mobileFiltersOpen &&
+            createPortal(
+            <div className="lg:hidden fixed inset-0 z-[200]">
               <button
                 type="button"
                 aria-label="Close filters"
                 className="absolute inset-0 bg-slate-900/40"
                 onClick={() => setMobileFiltersOpen(false)}
               />
-              <div className="absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-2xl bg-white shadow-xl">
-                <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-white rounded-t-2xl">
+              <div className="absolute inset-x-0 bottom-0 flex max-h-[85vh] max-h-[85dvh] flex-col overscroll-contain rounded-t-2xl bg-white shadow-xl">
+                <div className="flex shrink-0 items-center justify-between px-4 py-3 border-b border-slate-100 rounded-t-2xl">
                   <h3 className="text-sm font-extrabold text-slate-900">Filters</h3>
                   <button
                     type="button"
@@ -464,7 +468,7 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
                     <X size={16} />
                   </button>
                 </div>
-                <div className="p-4 space-y-4">
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 space-y-4">
                   <div>
                     <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Source</label>
                     <select
@@ -518,7 +522,7 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
                     </div>
                   </div>
                 </div>
-                <div className="sticky bottom-0 flex gap-2 px-4 py-3 border-t border-slate-100 bg-white pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+                <div className="flex shrink-0 gap-2 px-4 py-3 border-t border-slate-100 bg-white pb-[max(0.75rem,env(safe-area-inset-bottom))]">
                   <button
                     type="button"
                     onClick={resetFilters}
@@ -535,7 +539,8 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
                   </button>
                 </div>
               </div>
-            </div>
+            </div>,
+            document.body
           )}
 
           {/* Desktop: inline filters */}
@@ -688,12 +693,12 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
                             Convert to Order
                           </button>
                         ) : enq.orderId ? (
-                          <a
+                          <Link
                             href={`/admin/orders/${enq.orderId}`}
                             className="px-3 py-1.5 rounded-md text-[12px] font-semibold text-slate-600 bg-slate-100 border border-slate-200 whitespace-nowrap"
                           >
                             View Order
-                          </a>
+                          </Link>
                         ) : (
                           <span className="text-[12px] font-bold text-emerald-600 whitespace-nowrap">Converted</span>
                         )}
@@ -759,7 +764,7 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
                             Convert to Order
                           </button>
                         ) : enq.orderId ? (
-                          <a
+                          <Link
                             href={`/admin/orders/${enq.orderId}`}
                             style={{
                               display: "inline-flex",
@@ -786,7 +791,7 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
                             }}
                           >
                             View Order
-                          </a>
+                          </Link>
                         ) : (
                           <span style={{ fontSize: "12px", fontWeight: "700", color: "#16a34a", whiteSpace: "nowrap" }}>Converted</span>
                         )}
@@ -910,7 +915,7 @@ export function WelcomeMessageModal({ isOpen, onClose, customerInfo }: WelcomeMe
       if (customerInfo.orderId) {
         params.append("order_id", customerInfo.orderId);
       }
-      fetch(`/printoms/api/portal-token?${params.toString()}`)
+      fetch(withBasePath(`/api/portal-token?${params.toString()}`))
         .then((res) => res.json())
         .then((data) => {
           if (data.url) {

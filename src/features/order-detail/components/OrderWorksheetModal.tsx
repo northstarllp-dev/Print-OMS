@@ -28,6 +28,7 @@ import { WorkflowChoiceModal } from "./WorkflowChoiceModal";
 import { ProductionModule } from "@/features/orders/workspace/modules/production/ProductionModule";
 import { InstallationModule } from "@/features/orders/workspace/modules/installation/InstallationModule";
 import { InstallationPaymentApprovalModal } from "./InstallationPaymentApprovalModal";
+import { withBasePath } from "@/lib/appBasePath";
 
 import {
   isTimelineStageAccessible,
@@ -752,7 +753,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   const handleCopyMagicLink = async () => {
     if (!client) return;
     try {
-      const res = await fetch(`/printoms/api/portal-token?customer_id=${client.customerId || client.id}&order_id=${order.orderId || order.id}`);
+      const res = await fetch(withBasePath(`/api/portal-token?customer_id=${client.customerId || client.id}&order_id=${order.orderId || order.id}`));
       const data = await res.json();
       if (data.url) {
         await navigator.clipboard.writeText(data.url);
@@ -1309,136 +1310,136 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           {/* Customer Strip & Horizontal Timeline Header */}
           <div className="px-3 sm:px-4 md:px-6" style={{ background: "white", flexShrink: 0 }}>
 
-            {/* Top row: Order Info & icon actions */}
-            <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: "12px", padding: "16px 0", borderBottom: "1px solid #F1F5F9" }}>
-              <div className="min-w-0 flex-1">
-                <div style={{ fontSize: "11px", fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "6px" }}>
-                  {order.orderCode}
-                </div>
-                <div className="flex items-center gap-2 min-w-0">
-                  <h2 className="m-0 text-base sm:text-lg font-extrabold text-slate-900 leading-tight truncate min-w-0">
-                    {order.businessName} - {order.clientName}
-                  </h2>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => setActiveRightPanel((prev) => (prev === "timeline" ? null : "timeline"))}
-                      title="Order timeline"
-                      aria-label="Order timeline"
-                      aria-pressed={activeRightPanel === "timeline"}
-                      className={`relative inline-flex items-center justify-center w-10 h-10 rounded-lg border transition-colors ${
-                        activeRightPanel === "timeline"
-                          ? "border-transparent bg-[var(--color-secondary)] text-white"
-                          : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                      }`}
-                    >
-                      <History size={16} />
-                      {timelineCount > 0 && (
-                        <span
-                          className={`absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold inline-flex items-center justify-center text-white border-2 border-white ${
-                            activeRightPanel === "timeline" ? "bg-white/30" : "bg-red-500"
-                          }`}
-                        >
-                          {timelineCount}
-                        </span>
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowCustomerPanel(true)}
-                      title="Customer details"
-                      aria-label="Customer details"
-                      className="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-colors"
-                    >
-                      <User size={16} />
-                    </button>
-                  </div>
+            <div className="py-3 sm:py-4 border-b border-slate-100 space-y-3">
+              {/* Row 1: Back + icon actions */}
+              <div className="flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  title="Back"
+                  aria-label="Back to orders"
+                  className="inline-flex items-center justify-center gap-1.5 h-10 px-3 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-colors shrink-0"
+                >
+                  <ArrowLeft size={16} className="shrink-0" />
+                  <span className="text-[12px] font-bold">Back</span>
+                </button>
+
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setActiveRightPanel((prev) => (prev === "timeline" ? null : "timeline"))}
+                    title="Order timeline"
+                    aria-label="Order timeline"
+                    aria-pressed={activeRightPanel === "timeline"}
+                    className={`relative inline-flex items-center justify-center w-10 h-10 rounded-lg border transition-colors ${
+                      activeRightPanel === "timeline"
+                        ? "border-transparent bg-[var(--color-secondary)] text-white"
+                        : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    <History size={16} />
+                    {timelineCount > 0 && (
+                      <span
+                        className={`absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold inline-flex items-center justify-center text-white border-2 border-white ${
+                          activeRightPanel === "timeline" ? "bg-white/30" : "bg-red-500"
+                        }`}
+                      >
+                        {timelineCount}
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowCustomerPanel(true)}
+                    title="Customer details"
+                    aria-label="Customer details"
+                    className="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-colors"
+                  >
+                    <User size={16} />
+                  </button>
                 </div>
               </div>
 
-              {/* Portal / Admin / Payments — Customer moved next to title */}
-              {!isEmployee && (
-              <div className="w-full grid grid-cols-2 md:flex md:min-w-[280px] lg:min-w-[360px] gap-1.5 md:gap-[6px]" style={{ flex: "1 1 220px", minWidth: 0, maxWidth: "100%" }}>
-                {([
-                  {
-                    key: "portal",
-                    label: copiedLink ? "Copied!" : "Portal",
-                    shortLabel: copiedLink ? "Copied!" : "Portal",
-                    icon: Share2,
-                    onClick: handleCopyMagicLink,
-                    active: false,
-                    show: true,
-                    badge: null as React.ReactNode,
-                  },
-                  {
-                    key: "admin",
-                    label: "Admin Controls",
-                    shortLabel: "Admin",
-                    icon: Lock,
-                    onClick: () => setActiveStepTab(ADMIN_TAB),
-                    active: activeStepTab === ADMIN_TAB,
-                    show: true,
-                    badge:
-                      order.stageStatus && order.stageStatus !== "Normal" ? (
-                        <span className="flex items-center justify-center w-3.5 h-3.5 shrink-0 text-[9px] font-bold text-white bg-red-500 rounded-full animate-pulse shadow-sm">
-                          1
-                        </span>
-                      ) : null,
-                  },
-                  {
-                    key: "payments",
-                    label: "Payments",
-                    shortLabel: "Payments",
-                    icon: CreditCard,
-                    onClick: () => setActiveStepTab(PAYMENTS_TAB),
-                    active: activeStepTab === PAYMENTS_TAB,
-                    show: true,
-                    badge: null as React.ReactNode,
-                  },
-                ] as const)
-                  .filter((btn) => btn.show)
-                  .map((btn) => {
-                    const Icon = btn.icon;
-                    return (
-                      <button
-                        key={btn.key}
-                        type="button"
-                        onClick={btn.onClick}
-                        title={btn.label}
-                        style={{
-                          flex: "1 1 0",
-                          minWidth: 0,
-                          minHeight: "40px",
-                          height: "40px",
-                          background: btn.active ? "#0F172A" : "transparent",
-                          border: btn.active ? "none" : "1px solid #E2E8F0",
-                          color: btn.active ? "white" : "#475569",
-                          fontSize: "11px",
-                          fontWeight: "600",
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          gap: "4px",
-                          padding: "0 6px",
-                          borderRadius: "6px",
-                          transition: "all 0.15s",
-                          boxShadow: btn.active ? "0 1px 2px rgba(0,0,0,0.05)" : "none",
-                          overflow: "hidden",
-                        }}
-                      >
-                        <Icon size={13} className="shrink-0" />
-                        <span className="md:hidden" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
-                          {btn.shortLabel}
-                        </span>
-                        <span className="hidden md:inline" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
-                          {btn.label}
-                        </span>
-                        {btn.badge}
-                      </button>
-                    );
-                  })}
+              {/* Row 2: Order identity — business + lead names */}
+              <div className="min-w-0">
+                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                  {order.orderCode}
+                </div>
+                <div className="mt-1 text-base sm:text-lg font-extrabold text-slate-900 leading-snug truncate">
+                  {order.businessName || "—"}
+                </div>
+                <div className="mt-0.5 text-sm text-slate-500 truncate">
+                  Lead: {order.clientName || "—"}
+                </div>
               </div>
+
+              {/* Row 3: Portal / Admin / Payments — always one line, equal thirds */}
+              {!isEmployee && (
+                <div className="grid grid-cols-3 gap-1.5 w-full md:max-w-md md:ml-auto">
+                  {([
+                    {
+                      key: "portal",
+                      label: copiedLink ? "Copied!" : "Portal",
+                      shortLabel: copiedLink ? "Copied!" : "Portal",
+                      icon: Share2,
+                      onClick: handleCopyMagicLink,
+                      active: false,
+                      show: true,
+                      badge: null as React.ReactNode,
+                    },
+                    {
+                      key: "admin",
+                      label: "Admin Controls",
+                      shortLabel: "Admin",
+                      icon: Lock,
+                      onClick: () => setActiveStepTab(ADMIN_TAB),
+                      active: activeStepTab === ADMIN_TAB,
+                      show: true,
+                      badge:
+                        order.stageStatus && order.stageStatus !== "Normal" ? (
+                          <span className="flex items-center justify-center w-3.5 h-3.5 shrink-0 text-[9px] font-bold text-white bg-red-500 rounded-full animate-pulse shadow-sm">
+                            1
+                          </span>
+                        ) : null,
+                    },
+                    {
+                      key: "payments",
+                      label: "Payments",
+                      shortLabel: "Payments",
+                      icon: CreditCard,
+                      onClick: () => setActiveStepTab(PAYMENTS_TAB),
+                      active: activeStepTab === PAYMENTS_TAB,
+                      show: true,
+                      badge: null as React.ReactNode,
+                    },
+                  ] as const)
+                    .filter((btn) => btn.show)
+                    .map((btn) => {
+                      const Icon = btn.icon;
+                      return (
+                        <button
+                          key={btn.key}
+                          type="button"
+                          onClick={btn.onClick}
+                          title={btn.label}
+                          className="min-w-0 h-10 inline-flex items-center justify-center gap-1 px-1.5 sm:px-2 rounded-lg text-[11px] font-semibold transition-all overflow-hidden"
+                          style={{
+                            background: btn.active ? "#0F172A" : "transparent",
+                            border: btn.active ? "none" : "1px solid #E2E8F0",
+                            color: btn.active ? "white" : "#475569",
+                            boxShadow: btn.active ? "0 1px 2px rgba(0,0,0,0.05)" : "none",
+                          }}
+                        >
+                          <Icon size={13} className="shrink-0" />
+                          <span className="truncate min-w-0">
+                            <span className="md:hidden">{btn.shortLabel}</span>
+                            <span className="hidden md:inline">{btn.label}</span>
+                          </span>
+                          {btn.badge}
+                        </button>
+                      );
+                    })}
+                </div>
               )}
             </div>
 
