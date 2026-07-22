@@ -88,7 +88,7 @@ export default function ProductionLogin() {
               value={email}
               onChange={e => setEmail(e.target.value)}
               className="prt-input"
-              placeholder="production@printoms.co.in"
+              placeholder="production@thepolarislabs.com"
             />
           </div>
 

@@ -42,7 +42,7 @@ function merge(...maps: RoleStageGrantMap[]): RoleStageGrantMap {
  * exists in TENANT_ROLE_STAGE_GRANTS for the actor's company_id.
  */
 export const DEFAULT_STAGE_GRANTS_BY_ROLE: Record<string, RoleStageGrantMap> = {
-  Production: edit("production"),
+  Production: edit("production", "service_tickets"),
   Installation: edit("site_visit", "installation"),
   Designer: edit("site_visit", "design"),
   Marketer: edit("site_visit", "quotation"),
@@ -53,6 +53,8 @@ export const DEFAULT_STAGE_GRANTS_BY_ROLE: Record<string, RoleStageGrantMap> = {
  */
 export const TENANT_ROLE_STAGE_GRANTS: Record<string, Record<string, RoleStageGrantMap>> = {
   [PRINTOMS_COMPANY_ID]: {
+    Designer: merge(view("site_visit"), edit("design", "quotation")),
+    Production: merge(view("site_visit"), edit("production", "service_tickets")),
     Installation: edit("installation"),
   },
   [BOARD_COMPANY_ID]: {

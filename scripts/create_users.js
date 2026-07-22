@@ -20,11 +20,11 @@ const newUsers = [
   { email: 'design@theboardcompany.in', role: 'Designer', passwordOrPhone: '8341313869' },
   { email: 'likith.s@theboardcompany.in', role: 'Production & Service', passwordOrPhone: '9743108886' },
   { email: 'basavaraj.s@theboardcompany.in', role: 'Recce & Installation', passwordOrPhone: '9535848661' },
-  { email: 'admin@printec.in', role: 'Admin', passwordOrPhone: '9000000001' },
-  { email: 'staff@printec.in', role: 'Staff', passwordOrPhone: '9000000002' },
-  { email: 'designer@printec.in', role: 'Designer', passwordOrPhone: '9000000003' },
-  { email: 'production@printec.in', role: 'Production', passwordOrPhone: '9000000004' },
-  { email: 'installation@printec.in', role: 'Installation', passwordOrPhone: '9000000005' },
+  { email: 'admin@thepolarislabs.com', role: 'Admin', passwordOrPhone: '9000000001' },
+  { email: 'marketer@thepolarislabs.com', role: 'Marketer', passwordOrPhone: '9000000002' },
+  { email: 'designer@thepolarislabs.com', role: 'Designer', passwordOrPhone: '9000000003' },
+  { email: 'production@thepolarislabs.com', role: 'Production', passwordOrPhone: '9000000004' },
+  { email: 'installation@thepolarislabs.com', role: 'Installation', passwordOrPhone: '9000000005' },
 ];
 
 async function createNewUsers() {
