@@ -1,13 +1,14 @@
 "use client";
 
 import React, { useState } from "react";
-import { Search, Filter, Plus, MoreVertical, Users, Star, Clock, AlertCircle, Edit, Trash2, Briefcase, BarChart2, Key, X, RefreshCw, Shield } from "lucide-react";
+import { Search, Plus, MoreVertical, Users, Star, Clock, AlertCircle, Edit, Trash2, Briefcase, BarChart2, Key, X, RefreshCw, Shield, Ban, CircleCheck } from "lucide-react";
 import { Employee } from "@/types";
 import { EmployeeModal } from "./EmployeeModal";
 import {
   createEmployee as createEmployeeAction,
   updateEmployee as updateEmployeeAction,
-  deleteEmployee as deleteEmployeeAction
+  deleteEmployee as deleteEmployeeAction,
+  setEmployeeStatus as setEmployeeStatusAction,
 } from "@/features/employees/actions/employeeActions";
 import { adminResetUserPassword } from "@/features/auth/actions/authActions";
 import { useRouter } from "next/navigation";
@@ -40,6 +41,7 @@ export function EmployeesViewNew({
 
   const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
   const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | "Active" | "Inactive">("ALL");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | undefined>(undefined);
   const [actionDropdownId, setActionDropdownId] = useState<string | null>(null);
@@ -93,6 +95,27 @@ export function EmployeesViewNew({
         console.error(err);
         alert("Failed to delete employee.");
       }
+    }
+    setActionDropdownId(null);
+  };
+
+  const handleToggleFreeze = async (emp: Employee) => {
+    const nextStatus = emp.status === "Inactive" ? "Active" : "Inactive";
+    const label = nextStatus === "Inactive" ? "freeze" : "reactivate";
+    if (!confirm(`Are you sure you want to ${label} ${emp.name}?`)) {
+      setActionDropdownId(null);
+      return;
+    }
+    try {
+      const result = await setEmployeeStatusAction(emp.id, nextStatus);
+      setEmployees((prev) =>
+        prev.map((e) =>
+          e.id === emp.id ? { ...e, status: result.status || nextStatus } : e
+        )
+      );
+    } catch (err: any) {
+      console.error(err);
+      alert(err?.message || `Failed to ${label} employee.`);
     }
     setActionDropdownId(null);
   };
@@ -190,12 +213,18 @@ export function EmployeesViewNew({
     },
   ];
 
-  const filteredEmployees = employees.filter(emp => 
-    emp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    emp.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    emp.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (emp.employeeId && emp.employeeId.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filteredEmployees = employees.filter((emp) => {
+    const status = emp.status || "Active";
+    if (statusFilter !== "ALL" && status !== statusFilter) return false;
+    const q = searchTerm.toLowerCase();
+    if (!q) return true;
+    return (
+      emp.name.toLowerCase().includes(q) ||
+      emp.role.toLowerCase().includes(q) ||
+      emp.id.toLowerCase().includes(q) ||
+      (!!emp.employeeId && emp.employeeId.toLowerCase().includes(q))
+    );
+  });
 
   return (
     <div className="p-3 sm:p-4 md:p-8 bg-slate-50 min-h-0 pb-6">
@@ -326,8 +355,8 @@ export function EmployeesViewNew({
       {/* Table Section */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-visible">
         {/* Search & Filter Bar */}
-        <div className="p-3 sm:p-4 border-b border-slate-200 flex flex-wrap gap-2 items-center">
-          <div className="relative flex-1 min-w-0 w-full sm:min-w-[12rem]">
+        <div className="p-3 sm:p-4 border-b border-slate-200 flex flex-nowrap gap-2 items-center overflow-x-auto">
+          <div className="relative flex-1 min-w-[10rem] sm:min-w-[12rem]">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
             <input
               type="text"
@@ -337,17 +366,24 @@ export function EmployeesViewNew({
               className="w-full py-2.5 pl-9 pr-3 border border-slate-200 rounded-lg text-[13px] outline-none"
             />
           </div>
-          <button
-            type="button"
-            className="inline-flex items-center gap-2 px-3.5 py-2.5 bg-slate-100 border border-slate-300 rounded-lg text-[13px] font-semibold text-slate-600"
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as "ALL" | "Active" | "Inactive")}
+            className="shrink-0 px-3 py-2.5 bg-white border border-slate-200 rounded-lg text-[13px] font-semibold text-slate-600"
+            aria-label="Filter by status"
           >
-            <Filter size={16} /> Filters
-          </button>
+            <option value="ALL">All statuses</option>
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+          </select>
           
           <button
             title="Reset Filters"
             type="button"
-            onClick={() => setSearchTerm("")}
+            onClick={() => {
+              setSearchTerm("");
+              setStatusFilter("ALL");
+            }}
             className="inline-flex items-center justify-center gap-1.5 px-3.5 h-[39px] bg-red-50 border border-red-200 rounded-lg text-red-600 font-semibold text-[13px] shrink-0"
           >
             <RefreshCw size={14} />
@@ -365,17 +401,31 @@ export function EmployeesViewNew({
             filteredEmployees.map((emp) => (
               <div
                 key={emp.id}
-                className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden"
+                className={`rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden ${
+                  emp.status === "Inactive" ? "opacity-75" : ""
+                }`}
               >
                 <div className="flex">
-                  <div className="w-1 shrink-0 self-stretch bg-[var(--color-primary)]" aria-hidden />
+                  <div
+                    className={`w-1 shrink-0 self-stretch ${
+                      emp.status === "Inactive" ? "bg-slate-400" : "bg-[var(--color-primary)]"
+                    }`}
+                    aria-hidden
+                  />
                   <div className="flex-1 min-w-0 p-3">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <div className="text-[12px] font-bold text-slate-500">
                           {emp.employeeId || emp.id.substring(0, 8)}
                         </div>
-                        <div className="text-[14px] font-extrabold text-slate-900 mt-0.5 truncate">{emp.name}</div>
+                        <div className="flex items-center gap-2 mt-0.5 min-w-0">
+                          <div className="text-[14px] font-extrabold text-slate-900 truncate">{emp.name}</div>
+                          {emp.status === "Inactive" && (
+                            <span className="shrink-0 text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
+                              Frozen
+                            </span>
+                          )}
+                        </div>
                         <div className="text-[12px] text-slate-500 mt-0.5">{emp.role}</div>
                       </div>
                       <button
@@ -402,6 +452,21 @@ export function EmployeesViewNew({
                         className="flex-1 min-w-0 inline-flex items-center justify-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2 py-2 text-[12px] font-bold text-amber-600"
                       >
                         <Key size={13} className="shrink-0" /> Reset
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleFreeze(emp)}
+                        className={`flex-1 min-w-0 inline-flex items-center justify-center gap-1.5 rounded-lg border px-2 py-2 text-[12px] font-bold ${
+                          emp.status === "Inactive"
+                            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                            : "border-slate-300 bg-slate-50 text-slate-700"
+                        }`}
+                      >
+                        {emp.status === "Inactive" ? (
+                          <><CircleCheck size={13} className="shrink-0" /> Activate</>
+                        ) : (
+                          <><Ban size={13} className="shrink-0" /> Freeze</>
+                        )}
                       </button>
                     </div>
 
@@ -434,10 +499,29 @@ export function EmployeesViewNew({
             </thead>
             <tbody>
               {filteredEmployees.map((emp) => {
+                const isInactive = emp.status === "Inactive";
                 return (
-                  <tr key={emp.id} style={{ borderBottom: "1px solid #e2e8f0", transition: "background 0.2s" }} onMouseEnter={(e) => { e.currentTarget.style.background = "#f8fafc"; }} onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
+                  <tr
+                    key={emp.id}
+                    style={{
+                      borderBottom: "1px solid #e2e8f0",
+                      transition: "background 0.2s",
+                      opacity: isInactive ? 0.72 : 1,
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "#f8fafc"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                  >
                     <td style={{ padding: "16px 20px", fontSize: "13px", fontWeight: "700", color: "#0f172a" }}>{emp.employeeId || emp.id.substring(0, 8)}</td>
-                    <td style={{ padding: "16px 20px", fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>{emp.name}</td>
+                    <td style={{ padding: "16px 20px", fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <span>{emp.name}</span>
+                        {isInactive && (
+                          <span style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.04em", padding: "2px 6px", borderRadius: "999px", background: "#f1f5f9", color: "#475569", border: "1px solid #e2e8f0" }}>
+                            Frozen
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td style={{ padding: "16px 20px", fontSize: "13px", color: "#64748b" }}>{emp.role}</td>
                     <td style={{ padding: "16px 20px", fontSize: "13px", color: "#0f172a" }}>{emp.phone}</td>
                     <td style={{ padding: "16px 20px", fontSize: "13px", color: "#0f172a" }}>{emp.email}</td>
@@ -460,27 +544,48 @@ export function EmployeesViewNew({
                             style={{ position: "fixed", inset: 0, zIndex: 49 }} 
                             onClick={() => setActionDropdownId(null)} 
                           />
-                          <div style={{ position: "absolute", right: "40px", top: "50%", transform: "translateY(-50%)", background: "white", border: "1px solid #e2e8f0", borderRadius: "8px", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)", zIndex: 50, overflow: "hidden", minWidth: "120px" }}>
+                          <div style={{ position: "absolute", right: "40px", top: "50%", transform: "translateY(-50%)", background: "white", border: "1px solid #e2e8f0", borderRadius: "8px", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)", zIndex: 50, overflow: "hidden", minWidth: "168px", whiteSpace: "nowrap" }}>
                             <button 
                               onClick={() => handleEditEmployee(emp)}
-                              style={{ display: "flex", alignItems: "center", gap: "8px", width: "100%", padding: "10px 16px", background: "none", border: "none", borderBottom: "1px solid #f1f5f9", cursor: "pointer", fontSize: "13px", color: "#475569", textAlign: "left" }}
+                              style={{ display: "flex", alignItems: "center", gap: "8px", width: "100%", padding: "10px 16px", background: "none", border: "none", borderBottom: "1px solid #f1f5f9", cursor: "pointer", fontSize: "13px", color: "#475569", textAlign: "left", whiteSpace: "nowrap" }}
                             >
-                              <Edit size={14} /> Edit
+                              <Edit size={14} className="shrink-0" /> Edit
                             </button>
                             <button 
                               onClick={() => {
                                 setResetModalEmpId(emp.id);
                                 setActionDropdownId(null);
                               }}
-                              style={{ display: "flex", alignItems: "center", gap: "8px", width: "100%", padding: "10px 16px", background: "none", border: "none", borderBottom: "1px solid #f1f5f9", cursor: "pointer", fontSize: "13px", color: "#f59e0b", textAlign: "left" }}
+                              style={{ display: "flex", alignItems: "center", gap: "8px", width: "100%", padding: "10px 16px", background: "none", border: "none", borderBottom: "1px solid #f1f5f9", cursor: "pointer", fontSize: "13px", color: "#f59e0b", textAlign: "left", whiteSpace: "nowrap" }}
                             >
-                              <Key size={14} /> Reset Password
+                              <Key size={14} className="shrink-0" /> Reset Password
+                            </button>
+                            <button
+                              onClick={() => handleToggleFreeze(emp)}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "8px",
+                                width: "100%",
+                                padding: "10px 16px",
+                                background: "none",
+                                border: "none",
+                                borderBottom: "1px solid #f1f5f9",
+                                cursor: "pointer",
+                                fontSize: "13px",
+                                color: isInactive ? "#059669" : "#475569",
+                                textAlign: "left",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {isInactive ? <CircleCheck size={14} className="shrink-0" /> : <Ban size={14} className="shrink-0" />}
+                              {isInactive ? "Reactivate" : "Freeze"}
                             </button>
                             <button 
                               onClick={() => handleDeleteEmployee(emp.id)}
-                              style={{ display: "flex", alignItems: "center", gap: "8px", width: "100%", padding: "10px 16px", background: "none", border: "none", cursor: "pointer", fontSize: "13px", color: "#ef4444", textAlign: "left" }}
+                              style={{ display: "flex", alignItems: "center", gap: "8px", width: "100%", padding: "10px 16px", background: "none", border: "none", cursor: "pointer", fontSize: "13px", color: "#ef4444", textAlign: "left", whiteSpace: "nowrap" }}
                             >
-                              <Trash2 size={14} /> Delete
+                              <Trash2 size={14} className="shrink-0" /> Delete
                             </button>
                           </div>
                         </>

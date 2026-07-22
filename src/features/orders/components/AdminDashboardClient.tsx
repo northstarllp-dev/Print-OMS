@@ -769,7 +769,7 @@ export function AdminDashboardClient({
       {/* ── Order Pipeline ── */}
       <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 md:p-6">
         <h2 className="m-0 mb-4 text-sm font-bold text-slate-900">Order Pipeline</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-1.5 sm:gap-2">
           {pipelineCounts.map((item, i) => {
             const isSelected = selectedPipelineStage === item.stage;
             return (
@@ -779,14 +779,10 @@ export function AdminDashboardClient({
                   setSelectedPipelineStage(isSelected ? null : item.stage);
                   setSelectedKpi(null);
                 }}
+                className="text-center cursor-pointer rounded-[10px] transition-all duration-150 min-w-0 px-1 py-2.5 sm:px-1.5 sm:py-3 lg:px-1 lg:py-2.5"
                 style={{
-                  textAlign: "center",
-                  padding: "12px 8px",
-                  cursor: "pointer",
-                  borderRadius: "10px",
                   background: isSelected ? "rgba(30, 64, 175, 0.05)" : "transparent",
                   border: isSelected ? "1.5px solid var(--color-primary)" : "1.5px solid transparent",
-                  transition: "all 0.18s cubic-bezier(0.4, 0, 0.2, 1)",
                   transform: isSelected ? "scale(1.02)" : "scale(1)",
                   boxShadow: isSelected ? "0 4px 10px rgba(30, 64, 175, 0.05)" : "none",
                 }}
@@ -801,18 +797,17 @@ export function AdminDashboardClient({
                   }
                 }}
               >
-                <div style={{ fontSize: "28px", fontWeight: "800", color: isSelected ? "var(--color-primary)" : "#0F172A", marginBottom: "4px", transition: "color 0.15s" }}>
+                <div
+                  className="font-extrabold mb-1 transition-colors text-[22px] sm:text-[26px] lg:text-[22px] xl:text-[26px]"
+                  style={{ color: isSelected ? "var(--color-primary)" : "#0F172A" }}
+                >
                   {item.count}
                 </div>
                 <div
+                  className="w-full rounded-full mb-1.5 sm:mb-2 overflow-hidden transition-[height]"
                   style={{
-                    width: "100%",
                     height: isSelected ? "6px" : "4px",
-                    borderRadius: "99px",
                     background: PIPELINE_COLORS[i] + "30",
-                    marginBottom: "8px",
-                    overflow: "hidden",
-                    transition: "height 0.15s",
                   }}
                 >
                   <div
@@ -825,7 +820,13 @@ export function AdminDashboardClient({
                     }}
                   />
                 </div>
-                <div style={{ fontSize: "11px", fontWeight: isSelected ? "800" : "600", color: isSelected ? "var(--color-primary)" : "#64748B", transition: "color 0.15s" }}>
+                <div
+                  className="font-semibold leading-tight px-0.5 transition-colors text-[10px] sm:text-[11px] lg:text-[10px] xl:text-[11px]"
+                  style={{
+                    fontWeight: isSelected ? 800 : 600,
+                    color: isSelected ? "var(--color-primary)" : "#64748B",
+                  }}
+                >
                   {item.label}
                 </div>
               </div>

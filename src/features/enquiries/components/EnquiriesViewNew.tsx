@@ -683,19 +683,19 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
                           <button
                             type="button"
                             onClick={() => openConvert(enq)}
-                            className="px-3 py-1.5 rounded-md text-[12px] font-semibold text-white bg-[var(--color-primary)]"
+                            className="px-3 py-1.5 rounded-md text-[12px] font-semibold text-white bg-[var(--color-primary)] whitespace-nowrap"
                           >
                             Convert to Order
                           </button>
                         ) : enq.orderId ? (
                           <a
                             href={`/admin/orders/${enq.orderId}`}
-                            className="px-3 py-1.5 rounded-md text-[12px] font-semibold text-slate-600 bg-slate-100 border border-slate-200"
+                            className="px-3 py-1.5 rounded-md text-[12px] font-semibold text-slate-600 bg-slate-100 border border-slate-200 whitespace-nowrap"
                           >
                             View Order
                           </a>
                         ) : (
-                          <span className="text-[12px] font-bold text-emerald-600">Converted</span>
+                          <span className="text-[12px] font-bold text-emerald-600 whitespace-nowrap">Converted</span>
                         )}
                       </div>
                     </div>
@@ -742,37 +742,7 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
                     </td>
                     <td style={{ padding: "16px 20px", fontSize: "13px", color: "#0f172a" }}>
                       {enq.orderId ? (
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                          <span style={{ fontWeight: "700", color: "#0f172a" }}>{enq.orderId}</span>
-                          <a
-                            href={`/admin/orders/${enq.orderId}`}
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: "4px",
-                              padding: "4px 8px",
-                              background: "#f1f5f9",
-                              border: "1px solid #cbd5e1",
-                              borderRadius: "6px",
-                              fontSize: "11px",
-                              fontWeight: "600",
-                              color: "#475569",
-                              textDecoration: "none",
-                              cursor: "pointer",
-                              transition: "all 0.15s"
-                            }}
-                            onMouseEnter={e => {
-                              e.currentTarget.style.background = "#e2e8f0";
-                              e.currentTarget.style.color = "#0f172a";
-                            }}
-                            onMouseLeave={e => {
-                              e.currentTarget.style.background = "#f1f5f9";
-                              e.currentTarget.style.color = "#475569";
-                            }}
-                          >
-                            View Order
-                          </a>
-                        </div>
+                        <span style={{ fontWeight: "700", color: "#0f172a" }}>{enq.orderId}</span>
                       ) : (
                         <span style={{ color: "#cbd5e1" }}>-</span>
                       )}
@@ -782,16 +752,43 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
                         {enq.status !== "Converted" ? (
                           <button 
                             onClick={() => openConvert(enq)}
-                            style={{ padding: "6px 12px", background: "var(--color-primary)", border: "none", borderRadius: "6px", fontSize: "12px", fontWeight: "600", color: "white", cursor: "pointer", transition: "all 0.2s" }}
+                            style={{ padding: "6px 12px", background: "var(--color-primary)", border: "none", borderRadius: "6px", fontSize: "12px", fontWeight: "600", color: "white", cursor: "pointer", transition: "all 0.2s", whiteSpace: "nowrap" }}
                             onMouseEnter={(e) => e.currentTarget.style.background = "var(--color-primary-container)"}
                             onMouseLeave={(e) => e.currentTarget.style.background = "var(--color-primary)"}
                           >
                             Convert to Order
                           </button>
+                        ) : enq.orderId ? (
+                          <a
+                            href={`/admin/orders/${enq.orderId}`}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              padding: "6px 12px",
+                              background: "#f1f5f9",
+                              border: "1px solid #cbd5e1",
+                              borderRadius: "6px",
+                              fontSize: "12px",
+                              fontWeight: "600",
+                              color: "#475569",
+                              textDecoration: "none",
+                              cursor: "pointer",
+                              whiteSpace: "nowrap",
+                              transition: "all 0.15s",
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = "#e2e8f0";
+                              e.currentTarget.style.color = "#0f172a";
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = "#f1f5f9";
+                              e.currentTarget.style.color = "#475569";
+                            }}
+                          >
+                            View Order
+                          </a>
                         ) : (
-                          <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-                            <span style={{ fontSize: "12px", fontWeight: "700", color: "#16a34a" }}>Converted</span>
-                          </div>
+                          <span style={{ fontSize: "12px", fontWeight: "700", color: "#16a34a", whiteSpace: "nowrap" }}>Converted</span>
                         )}
                       </div>
                     </td>

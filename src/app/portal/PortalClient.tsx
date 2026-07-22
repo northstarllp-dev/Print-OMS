@@ -488,7 +488,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                 className="w-full sm:w-auto text-xs border border-slate-200 rounded-lg px-3 py-2 text-slate-600 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
               >
                 {orders.map(o => (
-                  <option key={o.id} value={o.id}>{o.orderCode || o.id} — {o.stage}</option>
+                  <option key={o.id} value={o.id}>{o.orderCode || o.id} â€” {o.stage}</option>
                 ))}
               </select>
             )}
@@ -500,9 +500,9 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-5">
           <div className="flex items-start gap-1 sm:justify-between relative overflow-x-auto pb-1 -mx-1 px-1">
-            {/* Background line — desktop only */}
+            {/* Background line â€” desktop only */}
             <div className="hidden sm:block absolute top-[18px] left-0 right-0 h-[2px] bg-slate-100 z-0" />
-            {/* Progress fill — desktop only */}
+            {/* Progress fill â€” desktop only */}
             <div
               className="hidden sm:block absolute top-[18px] left-0 h-[2px] bg-emerald-500 z-0 portal-stepper-line"
               style={{ width: `${(currentStep / Math.max(STEPS.filter(s => s.key !== "payments").length - 1, 1)) * 100}%` }}
@@ -927,7 +927,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                             </h3>
                             <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
                               {[
-                                { label: "Extra Angles Required", value: sv.extraAnglesRequired, note: sv.extraAnglesRequired && sv.extraAnglesLength ? ` — ${sv.extraAnglesLength}` : "" },
+                                { label: "Extra Angles Required", value: sv.extraAnglesRequired, note: sv.extraAnglesRequired && sv.extraAnglesLength ? ` â€” ${sv.extraAnglesLength}` : "" },
                                 { label: "Extra ACP Sheet to Cover Gap", value: sv.extraAcpSheetRequired },
                                 { label: "Old Board Removal Required", value: sv.oldBoardRemovalRequired },
                                 { label: "Extra Wire Required", value: sv.extraWireRequired },
@@ -1260,7 +1260,7 @@ function ProductInfoModal({ product, onClose }: { product: any; onClose: () => v
               {product.name}
             </h4>
             <span style={{ fontSize: "10px", color: "#94a3b8", fontWeight: 700, textTransform: "uppercase", marginTop: "2px", display: "block" }}>
-              {product.product_id} • {product.category || "General"}
+              {product.product_id} â€¢ {product.category || "General"}
             </span>
           </div>
           <button
