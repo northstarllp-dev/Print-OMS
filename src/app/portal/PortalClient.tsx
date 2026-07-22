@@ -1013,7 +1013,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
 
                 {/* ------ DESIGN STAGE ------ */}
                 {STEPS[activeStepToRender]?.key === "design" && (
-                  <DesignTab order={activeOrder as any} customer={customer} siteVisitItems={activeOrder?.siteVisitItems || []} />
+                  <DesignTab order={activeOrder as any} customer={customer} siteVisitItems={activeOrder?.siteVisitItems || []} portalToken={token} />
                 )}
 
                 {/* ------ PRODUCTION STAGE ------ */}

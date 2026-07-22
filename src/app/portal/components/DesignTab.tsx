@@ -22,6 +22,8 @@ import {
 } from "@/features/designs/actions/designActions";
 import { areAllDesignItemsApproved } from "@/features/designs/utils/designApproval";
 import { toCustomerVisibleDesign } from "@/features/designs/utils/customerVisibleDesign";
+import { readFileForStorageUpload } from "@/utils/supabase/uploadStorageFile";
+import { getServerActionErrorMessage } from "@/lib/serverActionError";
 
 interface Customer {
   id: string;
@@ -51,9 +53,18 @@ export interface DesignTabProps {
   order: Order;
   customer: Customer;
   siteVisitItems?: Array<{ id: string; name: string }>;
+  portalToken?: string;
 }
 
-export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabProps) {
+function friendlyPortalError(error: unknown): string {
+  const message = getServerActionErrorMessage(error);
+  if (message === "Unauthorized" || message.toLowerCase().includes("unauthorized")) {
+    return "Your session has expired. Please refresh the page and try again.";
+  }
+  return message;
+}
+
+export function DesignTab({ order, customer, siteVisitItems = [], portalToken }: DesignTabProps) {
   const isLocked =
     Boolean(order.stageStatus && order.stageStatus !== "Normal") &&
     (order.stage === "Design In Progress" || order.stage === "Design Approved");
@@ -113,10 +124,10 @@ export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabPro
       return item;
     });
 
-    await updateDesignDetailsAction(order.id, { items: updatedItems }, dd.updated_at);
+    await updateDesignDetailsAction(order.id, { items: updatedItems }, dd.updated_at, portalToken);
 
     if (updateStage) {
-      await transitionDesignOrderStageAction(order.id, updateStage);
+      await transitionDesignOrderStageAction(order.id, updateStage, portalToken);
     }
   };
 
@@ -128,9 +139,11 @@ export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabPro
       const newResources = [];
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        const ext = file.name.split(".").pop() || "jpg";
+        const { body, contentType, ext } = await readFileForStorageUpload(file);
         const path = `${order.id}/resources/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-        const { error } = await supabase.storage.from("site-visit-photos").upload(path, file, { contentType: file.type });
+        const { error } = await supabase.storage
+          .from("site-visit-photos")
+          .upload(path, body, { contentType });
         if (error) throw error;
         const { data } = supabase.storage.from("site-visit-photos").getPublicUrl(path);
         
@@ -146,10 +159,10 @@ export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabPro
       
       await updateDesignDetailsAction(order.id, {
         resources: [...(dd.resources || []), ...newResources]
-      }, dd.updated_at);
-    } catch (err: any) {
+      }, dd.updated_at, portalToken);
+    } catch (err: unknown) {
       console.error("Upload error:", err);
-      alert("Upload failed: " + (err.message || JSON.stringify(err)));
+      alert("Upload failed: " + friendlyPortalError(err));
     } finally {
       setUploading(false);
       e.target.value = "";
@@ -160,7 +173,7 @@ export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabPro
     if (!confirm("Are you sure you want to delete this file?")) return;
     try {
       const updatedResources = (dd.resources || []).filter((r: any) => r.id !== resourceId);
-      await updateDesignDetailsAction(order.id, { resources: updatedResources }, dd.updated_at);
+      await updateDesignDetailsAction(order.id, { resources: updatedResources }, dd.updated_at, portalToken);
 
       const pathPart = resourceUrl.split("/public/site-visit-photos/")[1];
       if (pathPart) {

@@ -827,7 +827,7 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
           />
         )}
         {activeTab === "design" && (
-          <DesignTab order={order} customer={customer} siteVisitItems={siteVisitItems} />
+          <DesignTab order={order} customer={customer} siteVisitItems={siteVisitItems} portalToken={token} />
         )}
         {activeTab === "payments" && <PaymentsTab orderId={order.id} />}
         {activeTab === "billing" && <BillingTab order={order} />}
