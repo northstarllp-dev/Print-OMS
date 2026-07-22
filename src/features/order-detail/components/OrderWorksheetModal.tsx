@@ -1360,87 +1360,91 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                 </div>
               </div>
 
-              {/* Row 2: Order identity — business + lead names */}
+              {/* Row 2: Order identity + Portal/Admin/Payments (parallel to business name) */}
               <div className="min-w-0">
                 <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                   {order.orderCode}
                 </div>
-                <div className="mt-1 text-base sm:text-lg font-extrabold text-slate-900 leading-snug truncate">
-                  {order.businessName || "—"}
-                </div>
-                <div className="mt-0.5 text-sm text-slate-500 truncate">
-                  Lead: {order.clientName || "—"}
+
+                <div className="mt-1 flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-base sm:text-lg font-extrabold text-slate-900 leading-snug truncate">
+                      {order.businessName || "—"}
+                    </div>
+                    <div className="mt-0.5 text-sm text-slate-500 truncate">
+                      Lead: {order.clientName || "—"}
+                    </div>
+                  </div>
+
+                  {!isEmployee && (
+                    <div className="grid grid-cols-3 gap-1.5 w-full sm:w-auto sm:shrink-0 sm:min-w-[260px] md:min-w-[320px]">
+                      {([
+                        {
+                          key: "portal",
+                          label: copiedLink ? "Copied!" : "Portal",
+                          shortLabel: copiedLink ? "Copied!" : "Portal",
+                          icon: Share2,
+                          onClick: handleCopyMagicLink,
+                          active: false,
+                          show: true,
+                          badge: null as React.ReactNode,
+                        },
+                        {
+                          key: "admin",
+                          label: "Admin Controls",
+                          shortLabel: "Admin",
+                          icon: Lock,
+                          onClick: () => setActiveStepTab(ADMIN_TAB),
+                          active: activeStepTab === ADMIN_TAB,
+                          show: true,
+                          badge:
+                            order.stageStatus && order.stageStatus !== "Normal" ? (
+                              <span className="flex items-center justify-center w-3.5 h-3.5 shrink-0 text-[9px] font-bold text-white bg-red-500 rounded-full animate-pulse shadow-sm">
+                                1
+                              </span>
+                            ) : null,
+                        },
+                        {
+                          key: "payments",
+                          label: "Payments",
+                          shortLabel: "Payments",
+                          icon: CreditCard,
+                          onClick: () => setActiveStepTab(PAYMENTS_TAB),
+                          active: activeStepTab === PAYMENTS_TAB,
+                          show: true,
+                          badge: null as React.ReactNode,
+                        },
+                      ] as const)
+                        .filter((btn) => btn.show)
+                        .map((btn) => {
+                          const Icon = btn.icon;
+                          return (
+                            <button
+                              key={btn.key}
+                              type="button"
+                              onClick={btn.onClick}
+                              title={btn.label}
+                              className="min-w-0 h-9 sm:h-10 inline-flex items-center justify-center gap-1 px-1.5 sm:px-2 rounded-lg text-[11px] font-semibold transition-all overflow-hidden"
+                              style={{
+                                background: btn.active ? "#0F172A" : "transparent",
+                                border: btn.active ? "none" : "1px solid #E2E8F0",
+                                color: btn.active ? "white" : "#475569",
+                                boxShadow: btn.active ? "0 1px 2px rgba(0,0,0,0.05)" : "none",
+                              }}
+                            >
+                              <Icon size={13} className="shrink-0" />
+                              <span className="truncate min-w-0">
+                                <span className="sm:hidden">{btn.shortLabel}</span>
+                                <span className="hidden sm:inline">{btn.label}</span>
+                              </span>
+                              {btn.badge}
+                            </button>
+                          );
+                        })}
+                    </div>
+                  )}
                 </div>
               </div>
-
-              {/* Row 3: Portal / Admin / Payments — always one line, equal thirds */}
-              {!isEmployee && (
-                <div className="grid grid-cols-3 gap-1.5 w-full md:max-w-md md:ml-auto">
-                  {([
-                    {
-                      key: "portal",
-                      label: copiedLink ? "Copied!" : "Portal",
-                      shortLabel: copiedLink ? "Copied!" : "Portal",
-                      icon: Share2,
-                      onClick: handleCopyMagicLink,
-                      active: false,
-                      show: true,
-                      badge: null as React.ReactNode,
-                    },
-                    {
-                      key: "admin",
-                      label: "Admin Controls",
-                      shortLabel: "Admin",
-                      icon: Lock,
-                      onClick: () => setActiveStepTab(ADMIN_TAB),
-                      active: activeStepTab === ADMIN_TAB,
-                      show: true,
-                      badge:
-                        order.stageStatus && order.stageStatus !== "Normal" ? (
-                          <span className="flex items-center justify-center w-3.5 h-3.5 shrink-0 text-[9px] font-bold text-white bg-red-500 rounded-full animate-pulse shadow-sm">
-                            1
-                          </span>
-                        ) : null,
-                    },
-                    {
-                      key: "payments",
-                      label: "Payments",
-                      shortLabel: "Payments",
-                      icon: CreditCard,
-                      onClick: () => setActiveStepTab(PAYMENTS_TAB),
-                      active: activeStepTab === PAYMENTS_TAB,
-                      show: true,
-                      badge: null as React.ReactNode,
-                    },
-                  ] as const)
-                    .filter((btn) => btn.show)
-                    .map((btn) => {
-                      const Icon = btn.icon;
-                      return (
-                        <button
-                          key={btn.key}
-                          type="button"
-                          onClick={btn.onClick}
-                          title={btn.label}
-                          className="min-w-0 h-10 inline-flex items-center justify-center gap-1 px-1.5 sm:px-2 rounded-lg text-[11px] font-semibold transition-all overflow-hidden"
-                          style={{
-                            background: btn.active ? "#0F172A" : "transparent",
-                            border: btn.active ? "none" : "1px solid #E2E8F0",
-                            color: btn.active ? "white" : "#475569",
-                            boxShadow: btn.active ? "0 1px 2px rgba(0,0,0,0.05)" : "none",
-                          }}
-                        >
-                          <Icon size={13} className="shrink-0" />
-                          <span className="truncate min-w-0">
-                            <span className="md:hidden">{btn.shortLabel}</span>
-                            <span className="hidden md:inline">{btn.label}</span>
-                          </span>
-                          {btn.badge}
-                        </button>
-                      );
-                    })}
-                </div>
-              )}
             </div>
 
             {/* Horizontal Timeline */}
@@ -1750,33 +1754,6 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           </div>
         </div>
 
-        {/* ══ PANEL 4: SLIDING DRAWER PANEL (full-screen on mobile/tablet) ══ */}
-        {activeRightPanel && (
-          <>
-            <div
-              className="lg:hidden fixed inset-0 z-[45] bg-slate-900/40 backdrop-blur-sm"
-              onClick={() => setActiveRightPanel(null)}
-              aria-hidden
-            />
-            <aside
-              className="fixed lg:relative inset-0 lg:inset-y-0 lg:right-0 lg:left-auto z-[50] lg:z-40 w-full lg:w-[380px] max-w-none"
-              style={{
-                flexShrink: 0,
-                borderLeft: "1px solid #E2E8F0",
-                background: "white",
-                display: "flex",
-                flexDirection: "column",
-                overflow: "hidden",
-                height: "100%",
-              }}
-            >
-              <OrderCommunicationCenter
-                orderId={order.orderId || order.id}
-                onClose={() => setActiveRightPanel(null)}
-              />
-            </aside>
-          </>
-        )}
       </div>
 
       {/* ── WORKFLOW CHOICE MODAL ── */}
@@ -1877,6 +1854,41 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
         />
       )}
       
+      {/* Timeline Drawer — same overlay pattern as CustomerDetailsDrawer */}
+      {activeRightPanel === "timeline" && (
+        <>
+          <div
+            className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm z-[999]"
+            onClick={() => setActiveRightPanel(null)}
+            aria-hidden
+            style={{ animation: "fadeIn 0.2s ease-out" }}
+          />
+          <div
+            className="fixed inset-0 lg:inset-y-0 lg:right-0 lg:left-auto w-full lg:max-w-[420px] bg-white shadow-2xl z-[1000] lg:border-l border-slate-200 flex flex-col overflow-hidden"
+            style={{ animation: "slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1)" }}
+          >
+            <OrderCommunicationCenter
+              orderId={order.orderId || order.id}
+              onClose={() => setActiveRightPanel(null)}
+            />
+          </div>
+          <style
+            dangerouslySetInnerHTML={{
+              __html: `
+                @keyframes slideInRight {
+                  from { transform: translateX(100%); }
+                  to { transform: translateX(0); }
+                }
+                @keyframes fadeIn {
+                  from { opacity: 0; }
+                  to { opacity: 1; }
+                }
+              `,
+            }}
+          />
+        </>
+      )}
+
       {/* Customer Details Drawer */}
       {client && (
         <CustomerDetailsDrawer

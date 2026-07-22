@@ -115,23 +115,87 @@ export function QuotationDocument({
     <div className={`quotation-document-root min-w-0 max-w-full ${className}`}>
       <style>{`
         @media print {
-          @page { margin: 0; }
-          body { margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-          /* Hide the customer portal layout when printing */
-          body * { visibility: hidden; }
-          .quotation-document-root, .quotation-document-root * { visibility: visible; }
+          @page {
+            size: A4 portrait;
+            margin: 10mm 8mm;
+          }
+          html, body {
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 210mm !important;
+            background: white !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          /* Hide everything except the quotation sheet */
+          body * { visibility: hidden !important; }
+          .quotation-document-root,
+          .quotation-document-root * { visibility: visible !important; }
           .quotation-document-root {
-            position: absolute; left: 0; top: 0; width: 100%;
-            box-sizing: border-box;
-            padding: 0 8mm; /* Explicit side margins since @page margin is 0 */
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            /* Lock to A4 content width so phone/tablet print matches laptop */
+            width: 194mm !important;
+            max-width: 194mm !important;
+            min-width: 194mm !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            box-sizing: border-box !important;
+            overflow: visible !important;
+            background: white !important;
           }
           .quotation-sheet {
             border: none !important;
             box-shadow: none !important;
+            overflow: visible !important;
+            width: 100% !important;
           }
           .quotation-no-print { display: none !important; }
           .quotation-mobile-only { display: none !important; }
-          .quotation-print-table { display: block !important; }
+          .quotation-print-table {
+            display: block !important;
+            overflow: visible !important;
+            width: 100% !important;
+          }
+          .quotation-print-table > table {
+            width: 100% !important;
+            min-width: 0 !important;
+          }
+          .quotation-logo-mobile { display: none !important; }
+          .quotation-logo-desktop { display: block !important; }
+
+          /* Force laptop/desktop layout regardless of device viewport */
+          .quotation-sheet-header {
+            display: flex !important;
+            flex-direction: row !important;
+            justify-content: space-between !important;
+            align-items: flex-start !important;
+            gap: 1.5rem !important;
+            padding: 2rem !important;
+          }
+          .quotation-sheet-title {
+            font-size: 1.875rem !important;
+            line-height: 2.25rem !important;
+            text-align: right !important;
+          }
+          .quotation-sheet-meta {
+            display: grid !important;
+            grid-template-columns: 1fr 1fr !important;
+            gap: 1rem !important;
+            padding: 1.25rem 2rem !important;
+          }
+          .quotation-sheet-meta-right {
+            text-align: right !important;
+          }
+          .quotation-sheet-section {
+            padding: 1.25rem 2rem !important;
+          }
+          .quotation-sheet-bank-grid {
+            display: grid !important;
+            grid-template-columns: 1fr 1fr !important;
+            column-gap: 2rem !important;
+          }
         }
       `}</style>
       {showPrintButton && (
@@ -149,22 +213,22 @@ export function QuotationDocument({
 
       <table className="w-full border-collapse min-w-0">
         <thead className="hidden print:table-header-group">
-          <tr><td><div className="h-[12mm]" /></td></tr>
+          <tr><td><div className="h-[8mm]" /></td></tr>
         </thead>
         <tbody>
           <tr>
             <td className="p-0 align-top min-w-0">
               <article className="quotation-sheet bg-white text-[#1a1a1a] border border-slate-200 shadow-sm overflow-hidden min-w-0">
                 {/* Header */}
-                <header className="flex flex-col sm:flex-row gap-4 sm:gap-6 justify-between p-4 sm:p-6 lg:p-8 border-b border-slate-200">
+                <header className="quotation-sheet-header flex flex-col sm:flex-row gap-4 sm:gap-6 justify-between p-4 sm:p-6 lg:p-8 border-b border-slate-200">
                   <div className="min-w-0 flex-1 overflow-hidden">
                     <div className="flex items-start gap-3 min-w-0">
                       <div className="flex flex-col min-w-0">
                         <div className="mb-2 max-w-full overflow-hidden">
-                          <div className="sm:hidden">
+                          <div className="quotation-logo-mobile sm:hidden">
                             <Logo width={150} height={32} align="left" />
                           </div>
-                          <div className="hidden sm:block">
+                          <div className="quotation-logo-desktop hidden sm:block">
                             <Logo width={220} height={40} align="left" />
                           </div>
                         </div>
@@ -192,8 +256,8 @@ export function QuotationDocument({
                     </div>
                   </div>
 
-                  <div className="sm:text-right shrink-0">
-                    <p className="text-xl sm:text-2xl lg:text-3xl font-black tracking-wide text-[#1e293b]">
+                  <div className="quotation-sheet-meta-right sm:text-right shrink-0">
+                    <p className="quotation-sheet-title text-xl sm:text-2xl lg:text-3xl font-black tracking-wide text-[#1e293b]">
                       QUOTATION
                     </p>
                     <p className="mt-1 text-sm font-mono font-bold text-slate-700 break-all">
@@ -208,7 +272,7 @@ export function QuotationDocument({
                 </header>
 
                 {/* Meta */}
-                <section className="grid grid-cols-1 sm:grid-cols-2 gap-4 px-4 sm:px-6 lg:px-8 py-4 sm:py-5 border-b border-slate-200">
+                <section className="quotation-sheet-meta grid grid-cols-1 sm:grid-cols-2 gap-4 px-4 sm:px-6 lg:px-8 py-4 sm:py-5 border-b border-slate-200">
                   <div className="min-w-0">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                       Bill To
@@ -220,7 +284,7 @@ export function QuotationDocument({
                       </p>
                     )}
                   </div>
-                  <div className="sm:text-right space-y-2">
+                  <div className="quotation-sheet-meta-right sm:text-right space-y-2">
                     <div>
                       <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                         Quote Date
@@ -532,11 +596,11 @@ export function QuotationDocument({
 
                 {/* Bank — sample uses "FULL NAME OF ACCOUNT" */}
                 {hasBankDetails(bank) && (
-                  <section className="px-4 sm:px-6 lg:px-8 py-4 sm:py-5 border-t border-slate-200">
+                  <section className="quotation-sheet-section px-4 sm:px-6 lg:px-8 py-4 sm:py-5 border-t border-slate-200">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">
                       Full Name of Account
                     </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1 text-xs text-slate-700">
+                    <div className="quotation-sheet-bank-grid grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1 text-xs text-slate-700">
                       {bank?.accountName && (
                         <p className="break-words">
                           <span className="text-slate-400">Account Name: </span>
@@ -579,7 +643,7 @@ export function QuotationDocument({
 
                 {/* Terms */}
                 {termsLines.length > 0 && (
-                  <section className="px-4 sm:px-6 lg:px-8 py-4 sm:py-5 border-t border-slate-200">
+                  <section className="quotation-sheet-section px-4 sm:px-6 lg:px-8 py-4 sm:py-5 border-t border-slate-200">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">
                       Terms &amp; Conditions
                     </p>
@@ -595,7 +659,7 @@ export function QuotationDocument({
           </tr>
         </tbody>
         <tfoot className="hidden print:table-footer-group">
-          <tr><td><div className="h-[12mm]" /></td></tr>
+          <tr><td><div className="h-[8mm]" /></td></tr>
         </tfoot>
       </table>
 

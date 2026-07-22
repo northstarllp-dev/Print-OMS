@@ -29,7 +29,7 @@ export function OrderCommunicationCenter({
   const [events, setEvents] = useState<TimelineEvent[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -89,8 +89,11 @@ export function OrderCommunicationCenter({
   }, [orderId, supabase]);
 
   useEffect(() => {
-    scrollRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [events.length]);
+    const el = listRef.current;
+    if (!el || loading) return;
+    // Scroll the list container only — avoid scrollIntoView, which fights the drawer slide.
+    el.scrollTop = el.scrollHeight;
+  }, [events.length, loading]);
 
   const filtered = events.filter((e) => {
     if (!searchQuery.trim()) return true;
@@ -146,7 +149,7 @@ export function OrderCommunicationCenter({
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50">
+      <div ref={listRef} className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50">
         {loading && (
           <p className="text-center text-xs text-slate-400 py-8 font-medium">Loading timeline…</p>
         )}
@@ -180,7 +183,6 @@ export function OrderCommunicationCenter({
             </div>
           );
         })}
-        <div ref={scrollRef} />
       </div>
     </div>
   );
