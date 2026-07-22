@@ -7,9 +7,14 @@ export function getTabForStage(
   if (stage.includes("Site Visit")) return "site_visit";
   if (stage.includes("Quotation")) return "quotation";
   if (stage.includes("Design")) return "design";
-  if (stage.includes("Production") || stage.includes("Ready For")) return "billing";
-  if (stage.includes("Installation") || stage.includes("Completed") || stage.includes("Closed")) {
-    return "chat";
+  if (
+    stage.includes("Production") ||
+    stage.includes("Ready For") ||
+    stage.includes("Installation") ||
+    stage.includes("Completed") ||
+    stage.includes("Closed")
+  ) {
+    return "billing";
   }
   return "site_visit";
 }
@@ -20,7 +25,6 @@ const TAB_PIPELINE_QUOTE_FIRST = [
   "design",
   "payments",
   "billing",
-  "chat",
 ] as const;
 
 const TAB_PIPELINE_DESIGN_FIRST = [
@@ -29,7 +33,6 @@ const TAB_PIPELINE_DESIGN_FIRST = [
   "quotation",
   "payments",
   "billing",
-  "chat",
 ] as const;
 
 export function getTabPipelineIndex(

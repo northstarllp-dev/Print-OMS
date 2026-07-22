@@ -3,10 +3,12 @@
 import React, { useState, useRef, useEffect } from "react";
 import { FileText, ZoomIn, ZoomOut, UploadCloud, Upload, X, Trash, RefreshCw, Download, Maximize, RotateCw, Shield, AlertTriangle, CheckCircle } from "lucide-react";
 import { Order, DesignRecord, DesignVersion } from "@/types";
-import { createClient } from "@/utils/supabase/client";
+import { uploadFileViaStaffApi } from "@/utils/supabase/uploadStorageFile";
+import type { StorageUploadPurpose } from "@/utils/supabase/serverStorageUpload";
 import { updateDesignDetailsAction } from "@/features/designs/actions/designActions";
 import { deleteStorageFilesAction } from "@/features/orders/actions/storageActions";
 import { getServerActionErrorMessage } from "@/lib/serverActionError";
+import { OverlayPortal } from "@/components/ui/OverlayPortal";
 import type { StagePermission } from "@/features/orders/workspace/shared/types";
 
 interface DesignModuleProps {
@@ -104,16 +106,11 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
   const handleResetZoom = () => setZoomLevel(100);
 
   const uploadFile = async (file: File | Blob, originalFileName?: string, folder: string = "designs") => {
-    const supabase = createClient();
     const fileName = file instanceof File ? file.name : (originalFileName || "image.png");
-    const ext = fileName.split(".").pop() || "jpg";
-    const path = `${order.id}/${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-    const { error } = await supabase.storage
-      .from("site-visit-photos")
-      .upload(path, file, { upsert: false, contentType: file.type });
-    if (error) throw error;
-    const { data } = supabase.storage.from("site-visit-photos").getPublicUrl(path);
-    return data.publicUrl;
+    const purpose: StorageUploadPurpose =
+      folder === "production" ? "production_asset" : "design_proof";
+    const { url } = await uploadFileViaStaffApi(file, order.id, purpose, fileName);
+    return url;
   };
 
   const handleDesignerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -346,22 +343,29 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
             <p className="text-xs text-amber-700 mt-1">
               Design work is locked while awaiting admin approval. Editing will resume when an admin requests changes or approves the stage.
             </p>
-            {stageAdminNotes && (
-              <p className="text-xs text-amber-800 mt-2 font-medium bg-white/60 border border-amber-200 rounded-lg p-2">
-                Admin feedback: {stageAdminNotes}
-              </p>
-            )}
+          </div>
+        </div>
+      )}
+
+      {!isPendingReview && stageAdminNotes && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
+          <AlertTriangle size={18} className="text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <h4 className="text-sm font-bold text-amber-900">Admin requested changes</h4>
+            <p className="text-xs text-amber-800 mt-2 font-medium bg-white/60 border border-amber-200 rounded-lg p-2 whitespace-pre-wrap">
+              {stageAdminNotes}
+            </p>
           </div>
         </div>
       )}
 
       {isFrozen && currentUserRole === "Admin" && setAdminOverrideUnlocked && (
-        <div className={`p-4 rounded-xl border flex items-center justify-between transition-colors ${adminOverrideUnlocked ? "bg-amber-50 border-amber-200" : "bg-slate-50 border-slate-200"}`}>
-          <div className="flex items-center gap-3">
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${adminOverrideUnlocked ? "bg-amber-100 text-amber-600" : "bg-slate-200 text-slate-500"}`}>
+        <div className={`p-4 rounded-xl border flex flex-col md:flex-row md:items-center gap-3 md:justify-between transition-colors ${adminOverrideUnlocked ? "bg-amber-50 border-amber-200" : "bg-slate-50 border-slate-200"}`}>
+          <div className="flex items-start md:items-center gap-3 min-w-0">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${adminOverrideUnlocked ? "bg-amber-100 text-amber-600" : "bg-slate-200 text-slate-500"}`}>
               <Shield size={16} />
             </div>
-            <div>
+            <div className="min-w-0">
               <h4 className={`text-sm font-bold ${adminOverrideUnlocked ? "text-amber-900" : "text-slate-700"}`}>Admin God Mode</h4>
               <p className={`text-xs ${adminOverrideUnlocked ? "text-amber-700" : "text-slate-500"}`}>
                 {adminOverrideUnlocked
@@ -372,7 +376,7 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
           </div>
           <button
             onClick={() => setAdminOverrideUnlocked(!adminOverrideUnlocked)}
-            className={`px-4 py-2 rounded-lg text-xs font-bold transition-colors ${
+            className={`px-4 py-2.5 rounded-lg text-xs font-bold transition-colors w-full md:w-auto shrink-0 ${
               adminOverrideUnlocked
                 ? "bg-amber-600 hover:bg-amber-700 text-white shadow-xs"
                 : "bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 shadow-3xs"
@@ -570,13 +574,13 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
             {/* Final Production Files Upload (Per Item) */}
             {activeItem && (activeItem.versions[activeItem.versions.length - 1]?.status === "Approved") && (
               <div className="mt-8 border-t border-slate-200 pt-8 space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-lg font-bold text-slate-800">Final Production Files for {activeItem.name}</h3>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
+                  <div className="min-w-0">
+                    <h3 className="text-base md:text-lg font-bold text-slate-800">Final Production Files for {activeItem.name}</h3>
                     <p className="text-xs text-slate-500">Upload final production files (.cdr, .dxf, .plt, .pdf, .svg, .png, .jpg) for fabrication.</p>
                   </div>
                   {isEmployee && !isReadOnly && (
-                    <label className="cursor-pointer bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all shadow-sm">
+                    <label className="cursor-pointer bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-sm w-full sm:w-auto shrink-0">
                       {uploading ? <RefreshCw size={14} className="animate-spin" /> : <Upload size={14} />}
                       {uploading ? "Uploading..." : "Upload File"}
                       <input type="file" multiple onChange={handleProductionFileUpload} accept=".cdr,.dxf,.plt,.pdf,.svg,.png,.jpg,.jpeg" className="hidden" disabled={uploading} />
@@ -585,7 +589,7 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
                 </div>
 
                 {(activeItem.productionFiles && activeItem.productionFiles.length > 0) ? (
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mt-4">
                     {activeItem.productionFiles.map((file: any) => (
                       <div key={file.id} className="border border-slate-200 rounded-xl p-4 flex flex-col items-center justify-center bg-white relative group shadow-sm">
                         <FileText className="text-blue-500 mb-2" size={32} />
@@ -598,7 +602,7 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
                         {isEmployee && !isReadOnly && (
                           <button 
                             onClick={() => handleDeleteProductionFile(file.id)}
-                            className="absolute -top-2 -right-2 bg-white text-red-500 border border-slate-200 rounded-full p-1 opacity-0 group-hover:opacity-100 shadow-sm hover:bg-red-50 hover:border-red-200 transition-all"
+                            className="absolute -top-2 -right-2 bg-white text-red-500 border border-slate-200 rounded-full p-2 md:p-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 shadow-sm hover:bg-red-50 hover:border-red-200 transition-all"
                             title="Delete File"
                           >
                             <X size={14} />
@@ -660,62 +664,63 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
       {/* Workflow Action Buttons (Global) */}
       {/* Upload Preview & Rotate Modal */}
       {previewUrl && pendingUploadFile && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="prt-card prt-animate-in max-w-2xl w-full flex flex-col overflow-hidden">
-            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-              <h3 className="font-bold text-slate-800">Preview & Rotate Image</h3>
+        <OverlayPortal>
+        <div className="fixed inset-0 z-[100000] flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm p-0 md:p-4">
+          <div className="prt-card prt-animate-in max-w-2xl w-full flex flex-col overflow-hidden max-h-[92dvh] md:max-h-[90vh] rounded-t-2xl md:rounded-2xl">
+            <div className="p-3 md:p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0 gap-2">
+              <h3 className="font-bold text-slate-800 text-sm md:text-base">Preview & Rotate Image</h3>
               <button onClick={() => {
                 setPendingUploadFile(null);
                 setPreviewUrl(null);
-              }} className="text-slate-400 hover:text-slate-600">
+              }} className="text-slate-400 hover:text-slate-600 p-1 shrink-0" aria-label="Close">
                 <X size={20} />
               </button>
             </div>
             
-            <div className="p-6 bg-slate-900 flex flex-col items-center justify-center min-h-[400px]">
-              <div className="flex items-center justify-center w-full min-h-[300px]">
+            <div className="p-4 md:p-6 bg-slate-900 flex flex-col items-center justify-center min-h-[220px] md:min-h-[400px] overflow-auto flex-1">
+              <div className="flex items-center justify-center w-full min-h-[160px] md:min-h-[300px]">
                 <img 
                   src={previewUrl} 
-                  className="object-contain transition-transform duration-300"
+                  className="object-contain transition-transform duration-300 max-h-[40vh] md:max-h-none"
                   style={{ 
                     transform: `rotate(${rotationAngle}deg)`,
-                    maxHeight: (rotationAngle / 90) % 2 !== 0 ? '100%' : '300px',
-                    maxWidth: (rotationAngle / 90) % 2 !== 0 ? '300px' : '100%'
+                    maxHeight: (rotationAngle / 90) % 2 !== 0 ? '100%' : undefined,
+                    maxWidth: (rotationAngle / 90) % 2 !== 0 ? '240px' : '100%'
                   }}
                   alt="Upload Preview" 
                 />
               </div>
-              <div className="mt-6 flex space-x-4">
+              <div className="mt-4 md:mt-6 flex flex-wrap justify-center gap-2 md:gap-4">
                 <button 
                   onClick={() => setRotationAngle(a => a - 90)}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg flex items-center text-sm font-medium transition-colors"
+                  className="px-3 md:px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg flex items-center text-sm font-medium transition-colors"
                 >
                   <RotateCw size={16} className="mr-2 -scale-x-100" /> Rotate Left
                 </button>
                 <button 
                   onClick={() => setRotationAngle(a => a + 90)}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg flex items-center text-sm font-medium transition-colors"
+                  className="px-3 md:px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg flex items-center text-sm font-medium transition-colors"
                 >
                   <RotateCw size={16} className="mr-2" /> Rotate Right
                 </button>
               </div>
             </div>
 
-            <div className="p-4 border-t border-slate-100 flex justify-end gap-3 bg-slate-50">
+            <div className="p-3 md:p-4 border-t border-slate-100 flex flex-col-reverse md:flex-row justify-end gap-2 md:gap-3 bg-slate-50 shrink-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
               <button 
                 onClick={() => {
                   setPendingUploadFile(null);
                   setPreviewUrl(null);
                 }}
                 disabled={uploading}
-                className="prt-btn prt-btn-secondary"
+                className="prt-btn prt-btn-secondary w-full md:w-auto"
               >
                 Cancel
               </button>
               <button 
                 onClick={handleConfirmUpload}
                 disabled={uploading}
-                className="prt-btn prt-btn-primary flex items-center gap-2"
+                className="prt-btn prt-btn-primary flex items-center justify-center gap-2 w-full md:w-auto"
               >
                 {uploading ? (
                   <>
@@ -732,6 +737,7 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
             </div>
           </div>
         </div>
+        </OverlayPortal>
       )}
 
     </div>

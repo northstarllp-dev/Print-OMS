@@ -8,12 +8,15 @@ import {
   Loader2,
   IndianRupee,
   AlertTriangle,
+  Trash2,
 } from "lucide-react";
+import { OverlayPortal } from "@/components/ui/OverlayPortal";
 import type { Payment } from "@/types";
 import {
   getPaymentsByOrder,
   getPaymentBalanceSummary,
   createPayment,
+  deletePayment,
   type PaymentBalanceSummary,
 } from "@/features/payments/actions/paymentActions";
 
@@ -41,6 +44,22 @@ export function InstallationPaymentApprovalModal({
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [addingPayment, setAddingPayment] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleDeletePayment = async (paymentId: string) => {
+    if (!confirm("Are you sure you want to delete this payment?")) return;
+    setDeletingId(paymentId);
+    setError(null);
+    try {
+      await deletePayment(paymentId);
+      await load();
+      setPaymentConfirmed(false);
+    } catch (e: any) {
+      setError(e.message || "Failed to delete payment");
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -102,18 +121,19 @@ export function InstallationPaymentApprovalModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden border border-slate-200">
-        <div className="px-6 py-4 border-b border-slate-100 flex items-start justify-between gap-4 bg-slate-50">
-          <div>
+    <OverlayPortal>
+    <div className="fixed inset-0 z-[100000] flex items-end md:items-center justify-center p-0 md:p-4 bg-black/50 backdrop-blur-sm">
+      <div className="bg-white rounded-t-2xl md:rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92dvh] md:max-h-[90vh] flex flex-col overflow-hidden border border-slate-200">
+        <div className="px-4 md:px-6 py-3.5 md:py-4 border-b border-slate-100 flex items-start justify-between gap-3 bg-slate-50 shrink-0">
+          <div className="min-w-0">
             <div className="flex items-center gap-2 mb-1">
-              <CreditCard size={18} className="text-blue-600" />
-              <h2 className="text-base font-black text-slate-900">
+              <CreditCard size={18} className="text-blue-600 shrink-0" />
+              <h2 className="text-sm md:text-base font-black text-slate-900 leading-snug">
                 Review Payments & Complete Order
               </h2>
             </div>
             {orderLabel && (
-              <p className="text-xs text-slate-500 font-semibold">{orderLabel}</p>
+              <p className="text-xs text-slate-500 font-semibold truncate">{orderLabel}</p>
             )}
             <p className="text-xs text-slate-500 mt-1 leading-relaxed">
               Installation is complete. Confirm payment status before marking this order as completed.
@@ -123,20 +143,21 @@ export function InstallationPaymentApprovalModal({
             type="button"
             onClick={onClose}
             disabled={confirming}
-            className="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-50"
+            className="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-50 shrink-0"
+            aria-label="Close"
           >
             <X size={18} />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6 space-y-5">
+        <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-5">
           {loading ? (
             <div className="flex items-center justify-center py-16 text-xs font-bold text-slate-400 gap-2">
               <Loader2 size={16} className="animate-spin" /> Loading payments…
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
                   <div className="text-[10px] font-black uppercase text-slate-500">Total ex-GST</div>
                   <div className="text-lg font-bold text-slate-800 mt-0.5">
@@ -161,7 +182,7 @@ export function InstallationPaymentApprovalModal({
                     ₹{(balance?.receivedTotal ?? 0).toLocaleString("en-IN")}
                   </div>
                 </div>
-                <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 col-span-2 sm:col-span-2">
+                <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 col-span-2 md:col-span-2">
                   <div className="text-[10px] font-black uppercase text-amber-600">Outstanding</div>
                   <div className="text-lg font-bold text-amber-800 mt-0.5">
                     ₹{outstanding.toLocaleString("en-IN")}
@@ -214,9 +235,23 @@ export function InstallationPaymentApprovalModal({
                               )}
                             </div>
                           </div>
-                          {received && (
-                            <CheckCircle2 size={18} className="text-emerald-500 shrink-0" />
-                          )}
+                          <div className="flex items-center gap-2 shrink-0">
+                            {deletingId === p.id ? (
+                              <Loader2 size={16} className="animate-spin text-slate-400" />
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleDeletePayment(p.id)}
+                                className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors focus:outline-none"
+                                title="Delete payment"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            )}
+                            {received && (
+                              <CheckCircle2 size={18} className="text-emerald-500" />
+                            )}
+                          </div>
                         </div>
                       );
                     })}
@@ -271,12 +306,12 @@ export function InstallationPaymentApprovalModal({
           </div>
         </div>
 
-        <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex items-center justify-end gap-3">
+        <div className="px-4 md:px-6 py-3.5 md:py-4 border-t border-slate-100 bg-slate-50 flex flex-col-reverse md:flex-row items-stretch md:items-center justify-end gap-2 md:gap-3 pb-[max(0.875rem,env(safe-area-inset-bottom))]">
           <button
             type="button"
             onClick={onClose}
             disabled={confirming}
-            className="px-4 py-2 text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50"
+            className="px-4 py-2.5 text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50"
           >
             Cancel
           </button>
@@ -284,7 +319,7 @@ export function InstallationPaymentApprovalModal({
             type="button"
             onClick={handleConfirm}
             disabled={loading || confirming || !paymentConfirmed}
-            className="inline-flex items-center gap-2 px-5 py-2 text-xs font-bold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {confirming ? (
               <><Loader2 size={14} className="animate-spin" /> Completing…</>
@@ -295,5 +330,6 @@ export function InstallationPaymentApprovalModal({
         </div>
       </div>
     </div>
+    </OverlayPortal>
   );
 }

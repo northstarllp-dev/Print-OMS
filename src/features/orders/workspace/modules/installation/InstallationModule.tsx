@@ -1,10 +1,12 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { ArrowLeft, Sparkles, Check, Loader2, CheckCircle, Save, UploadCloud, Calendar, Clock, Shield, FileText, Image as ImageIcon } from "lucide-react";
+import { ArrowLeft, Sparkles, Check, Loader2, CheckCircle, Save, UploadCloud, Calendar, Clock, Shield, FileText, Image as ImageIcon, Eye, Download, Trash, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { InstallationScheduleModule } from "@/features/installations/components/InstallationScheduleModule";
 import { deleteStorageFilesAction } from "@/features/orders/actions/storageActions";
-import { createClient } from "@/utils/supabase/client";
+import { uploadFileViaStaffApi } from "@/utils/supabase/uploadStorageFile";
+import { resolveSiteVisitInstallationAddress, buildGoogleMapsSearchUrl } from "@/features/orders/actions/siteVisitMapper";
+import { OverlayPortal } from "@/components/ui/OverlayPortal";
 import type { StageModuleProps } from "../../shared/types";
 
 export interface InstallationModuleData {
@@ -16,6 +18,7 @@ export interface InstallationModuleData {
 export interface InstallationModuleCallbacks {
   updateInstallationDetails: (orderId: string, details: any) => Promise<any>;
   onBack: () => void;
+  onInstallationScheduled?: (payload: { scheduledDate: string; scheduledTime: string }) => void;
 }
 
 type InstallationModuleProps = StageModuleProps<
@@ -42,9 +45,16 @@ export function InstallationModule({
   const {
     updateInstallationDetails,
     onBack,
+    onInstallationScheduled,
   } = callbacks;
   
-  const isInstallationStage = ["Installation Scheduled", "Installation In Progress", "Installation Pending", "Installation"].includes(order.stage);
+  const isInstallationStage = [
+    "Ready For Installation",
+    "Installation Scheduled",
+    "Installation In Progress",
+    "Installation Pending",
+    "Installation",
+  ].includes(order.stage);
   const baseFrozen = !isInstallationStage;
   const canEdit = (permission?.canEdit ?? true) && (!baseFrozen || adminOverrideUnlocked);
 
@@ -60,7 +70,14 @@ export function InstallationModule({
   
   const installationDetails = installation || {};
   const gmapLink = svDetails.gmap_link || svDetails.gmapLink;
-  const siteAddress = svDetails.site_address || svDetails.siteAddress || client?.shippingAddress || "Installation Location";
+  const installationSiteAddress =
+    resolveSiteVisitInstallationAddress(svDetails, client?.shippingAddress) ||
+    "Installation Location";
+  const siteAddress = installationSiteAddress;
+  const siteMapsLink =
+    gmapLink ||
+    buildGoogleMapsSearchUrl(svDetails.gpsLocation) ||
+    buildGoogleMapsSearchUrl(installationSiteAddress !== "Installation Location" ? installationSiteAddress : null);
 
   const defaultChecklist = [
     { id: "prep", label: "Site preparation completed", checked: false },
@@ -76,6 +93,13 @@ export function InstallationModule({
   const [afterPhotos, setAfterPhotos] = useState<string[]>(
     installation?.photos || installation?.afterPhotos || []
   );
+  const [viewerPhotos, setViewerPhotos] = useState<string[]>([]);
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+
+  const openPhotoViewer = (index: number) => {
+    setViewerPhotos(afterPhotos);
+    setViewerIndex(index);
+  };
 
   // Keep local worksheet fields in sync when realtime/parent installation props change.
   useEffect(() => {
@@ -99,15 +123,8 @@ export function InstallationModule({
   };
 
   const uploadInstallationPhoto = async (file: File) => {
-    const supabase = createClient();
-    const ext = file.name.split(".").pop() || "jpg";
-    const path = `${order.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-    const { error } = await supabase.storage
-      .from("installation-photos")
-      .upload(path, file, { upsert: false, contentType: file.type });
-    if (error) throw error;
-    const { data } = supabase.storage.from("installation-photos").getPublicUrl(path);
-    return data.publicUrl;
+    const { url } = await uploadFileViaStaffApi(file, order.id, "installation_photo");
+    return url;
   };
 
   const handlePhotoFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -167,15 +184,16 @@ export function InstallationModule({
   const canAct = canEdit && !isCompleted;
 
   return (
-    <div className={embedded ? "space-y-6" : "p-8 bg-slate-50/50 min-h-screen"}>
+    <>
+    <div className={`min-w-0 max-w-full overflow-x-hidden ${embedded ? "space-y-6" : "p-4 sm:p-8 bg-slate-50/50 min-h-screen"}`}>
       {/* ── ADMIN OVERRIDE BANNER ── */}
       {baseFrozen && currentUserRole === "Admin" && setAdminOverrideUnlocked && (
-        <div className={`mb-6 p-4 rounded-xl border flex items-center justify-between transition-colors ${adminOverrideUnlocked ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}>
-          <div className="flex items-center gap-3">
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${adminOverrideUnlocked ? 'bg-amber-100 text-amber-600' : 'bg-slate-200 text-slate-500'}`}>
+        <div className={`mb-6 p-4 rounded-xl border flex flex-col md:flex-row md:items-center gap-3 md:justify-between transition-colors ${adminOverrideUnlocked ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}>
+          <div className="flex items-start md:items-center gap-3 min-w-0">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${adminOverrideUnlocked ? 'bg-amber-100 text-amber-600' : 'bg-slate-200 text-slate-500'}`}>
               <Shield size={16} />
             </div>
-            <div>
+            <div className="min-w-0">
               <h4 className={`text-sm font-bold ${adminOverrideUnlocked ? 'text-amber-900' : 'text-slate-700'}`}>Admin God Mode</h4>
               <p className={`text-xs ${adminOverrideUnlocked ? 'text-amber-700' : 'text-slate-500'}`}>
                 {adminOverrideUnlocked 
@@ -186,7 +204,7 @@ export function InstallationModule({
           </div>
           <button
             onClick={() => setAdminOverrideUnlocked(!adminOverrideUnlocked)}
-            className={`px-4 py-2 rounded-lg text-xs font-bold transition-colors ${
+            className={`px-4 py-2.5 rounded-lg text-xs font-bold transition-colors w-full md:w-auto shrink-0 ${
               adminOverrideUnlocked 
                 ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-xs' 
                 : 'bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 shadow-3xs'
@@ -292,22 +310,23 @@ export function InstallationModule({
             initialScheduledDate={installationDetails.scheduledDate}
             initialScheduledTime={installationDetails.scheduledTime}
             isCompleted={!canAct}
-            locationLink={gmapLink}
+            locationLink={siteMapsLink || undefined}
             locationText={siteAddress}
+            onScheduled={onInstallationScheduled}
           />
           
           {/* CHECKLIST */}
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm">
-            <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <CheckCircle size={18} className="text-green-600" />
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-6 shadow-sm min-w-0 max-w-full overflow-hidden">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-4 pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2 min-w-0">
+                <CheckCircle size={18} className="text-green-600 shrink-0" />
                 <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider">
                   Installation Checklist
                 </h2>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               {checklist.map((step: any) => (
                 <div 
                   key={step.id}
@@ -332,7 +351,7 @@ export function InstallationModule({
               ))}
             </div>
 
-            <div className="mt-8 bg-slate-50/50 rounded-xl p-4 border border-slate-100">
+            <div className="mt-6 sm:mt-8 bg-slate-50/50 rounded-xl p-3 sm:p-4 border border-slate-100 min-w-0">
               <div className="flex items-center gap-2 mb-3">
                 <FileText size={16} className="text-slate-500" />
                 <label className="block text-xs font-bold text-slate-700">Installation Notes / Remarks</label>
@@ -349,11 +368,11 @@ export function InstallationModule({
                 className="w-full min-h-[100px] bg-white text-slate-800 text-sm p-4 border border-slate-200 rounded-xl focus:outline-none focus:border-green-500 focus:ring-4 focus:ring-green-500/10 transition-all resize-y shadow-sm"
               />
               {!isCompleted && (
-                <div className="mt-3 flex justify-end">
+                <div className="mt-3 flex justify-stretch sm:justify-end">
                   <button 
                     onClick={handleSaveNotes}
                     disabled={saving || !canEdit}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-white text-slate-700 hover:bg-slate-50 border border-slate-200 shadow-sm rounded-lg text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-white text-slate-700 hover:bg-slate-50 border border-slate-200 shadow-sm rounded-lg text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Save size={14} /> Save Notes
                   </button>
@@ -371,20 +390,40 @@ export function InstallationModule({
                 {afterPhotos.length > 0 && (
                   <div className="flex flex-wrap gap-4">
                     {afterPhotos.map((photo, index) => (
-                      <div key={index} className="group relative w-24 h-24 sm:w-32 sm:h-32 bg-slate-100 rounded-xl overflow-hidden border border-slate-200 shadow-sm">
+                      <div key={photo} className="group relative w-24 h-24 sm:w-32 sm:h-32 bg-slate-100 rounded-xl overflow-hidden border border-slate-200 shadow-sm">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={photo} alt="Installation Photo" className="w-full h-full object-cover" />
-                        {!isCompleted && (
-                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <img src={photo} alt={`Installation photo ${index + 1}`} className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-slate-900/70 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); openPhotoViewer(index); }}
+                            className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/40 flex items-center justify-center text-white transition-colors"
+                            title="View"
+                            aria-label="View photo"
+                          >
+                            <Eye size={15} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); window.open(`${photo}?download=`, "_blank"); }}
+                            className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/40 flex items-center justify-center text-white transition-colors"
+                            title="Download"
+                            aria-label="Download photo"
+                          >
+                            <Download size={15} />
+                          </button>
+                          {!isCompleted && canEdit && (
                             <button
-                              onClick={() => removeInstallationPhoto(photo)}
-                              disabled={!canEdit}
-                              className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-lg text-xs font-bold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105 transition-transform"
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); void removeInstallationPhoto(photo); }}
+                              className="w-8 h-8 rounded-full bg-red-500/80 hover:bg-red-500 flex items-center justify-center text-white transition-colors"
+                              title="Remove"
+                              aria-label="Remove photo"
                             >
-                              Remove
+                              <Trash size={15} />
                             </button>
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -431,7 +470,7 @@ export function InstallationModule({
 
           {/* DESIGN REFERENCE */}
           {designImage && (
-            <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm">
+            <div className="bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-6 shadow-sm min-w-0 max-w-full overflow-hidden">
               <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
                 <Sparkles size={18} className="text-purple-600" />
                 <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider">
@@ -489,10 +528,21 @@ export function InstallationModule({
                     </div>
                   )}
 
-                  {client.shippingAddress && (
+                  {installationSiteAddress && (
                     <div className="pt-2 border-t border-slate-100 mt-2">
                       <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Installation / Shipping Address</div>
-                      <div className="font-medium text-slate-600 leading-relaxed p-2 bg-slate-50 rounded-lg border border-slate-100">{client.shippingAddress}</div>
+                      {siteMapsLink ? (
+                        <a
+                          href={siteMapsLink}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-medium text-blue-600 leading-relaxed p-2 bg-slate-50 rounded-lg border border-slate-100 hover:underline block"
+                        >
+                          {installationSiteAddress}
+                        </a>
+                      ) : (
+                        <div className="font-medium text-slate-600 leading-relaxed p-2 bg-slate-50 rounded-lg border border-slate-100">{installationSiteAddress}</div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -503,5 +553,74 @@ export function InstallationModule({
 
       </div>
     </div>
+
+    {viewerIndex !== null && viewerPhotos.length > 0 && (
+      <OverlayPortal>
+        <div
+          className="fixed inset-0 z-[99999] bg-black/90 flex items-center justify-center backdrop-blur-sm"
+          onClick={() => setViewerIndex(null)}
+          role="presentation"
+        >
+          <button
+            type="button"
+            className="absolute top-6 right-6 text-white/70 hover:text-white bg-black/50 hover:bg-black/80 rounded-full p-2 transition-all"
+            onClick={() => setViewerIndex(null)}
+            aria-label="Close photo viewer"
+          >
+            <X size={24} />
+          </button>
+
+          <div className="relative max-w-4xl max-h-[85vh] w-full h-full flex items-center justify-center p-4">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={viewerPhotos[viewerIndex]}
+              className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+              alt={`Installation photo ${viewerIndex + 1}`}
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+
+          {viewerIndex > 0 && (
+            <button
+              type="button"
+              className="absolute left-4 sm:left-6 top-1/2 -translate-y-1/2 text-white/70 hover:text-white bg-black/50 hover:bg-black/80 rounded-full p-3 transition-all"
+              onClick={(e) => { e.stopPropagation(); setViewerIndex(viewerIndex - 1); }}
+              aria-label="Previous photo"
+            >
+              <ChevronLeft size={28} />
+            </button>
+          )}
+
+          {viewerIndex < viewerPhotos.length - 1 && (
+            <button
+              type="button"
+              className="absolute right-4 sm:right-6 top-1/2 -translate-y-1/2 text-white/70 hover:text-white bg-black/50 hover:bg-black/80 rounded-full p-3 transition-all"
+              onClick={(e) => { e.stopPropagation(); setViewerIndex(viewerIndex + 1); }}
+              aria-label="Next photo"
+            >
+              <ChevronRight size={28} />
+            </button>
+          )}
+
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-3">
+            <div className="bg-black/60 text-white text-sm font-medium px-4 py-1.5 rounded-full backdrop-blur-md">
+              {viewerIndex + 1} / {viewerPhotos.length}
+            </div>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                window.open(`${viewerPhotos[viewerIndex]}?download=`, "_blank");
+              }}
+              className="inline-flex items-center gap-1.5 bg-black/60 hover:bg-black/80 text-white text-sm font-semibold px-4 py-1.5 rounded-full backdrop-blur-md transition-colors"
+            >
+              <Download size={14} />
+              Download
+            </button>
+          </div>
+        </div>
+      </OverlayPortal>
+    )}
+    </>
   );
 }

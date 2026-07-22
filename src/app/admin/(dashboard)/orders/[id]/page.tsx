@@ -8,8 +8,15 @@ import { getProducts } from "@/features/products/actions/productActions";
 import { getQuotationByOrderId, getSiteVisitMeasurementsForOrder } from "@/features/quotations/actions/quotationActions";
 import { OrderDetailPageClient } from "./OrderDetailPageClient";
 
-export default async function OrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function OrderDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ tab?: string }>;
+}) {
   const { id } = await params;
+  const { tab } = await searchParams;
   const profile = await getCurrentUser();
 
   const order = await getOrderById(id);
@@ -118,6 +125,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
       initialQuotation={quotationData}
       siteVisitItems={siteVisitItemsData || []}
       companyId={profile?.company_id ?? null}
+      openPaymentsTab={tab === "payments"}
     />
   );
 }

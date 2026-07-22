@@ -1,11 +1,19 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ArrowLeft, CheckSquare, FileText,
   AlertOctagon, Check, Image as ImageIcon, Sparkles, Loader2, Save, Timer, Shield
 } from "lucide-react";
 import type { StageModuleProps } from "../../shared/types";
+import { getAppSettings } from "@/features/settings/actions/settingsActions";
+import {
+  buildProductionChecklistUpdate,
+  DEFAULT_PRODUCTION_CHECKLIST_ITEMS,
+  resolveChecklistProgress,
+  type ProductionChecklistItem,
+} from "@/features/settings/productionChecklist";
+import { resolveSiteVisitInstallationAddress } from "@/features/orders/actions/siteVisitMapper";
 
 interface LocationMeasurement {
   id: string;
@@ -90,21 +98,36 @@ export function ProductionModule({
   const { updateProductionDetails, onBack } = callbacks;
   const [order, setOrder] = useState(initialOrder);
 
-  const isProductionStage = ["Production In Progress", "Production Pending", "Production", "Ready For Installation"].includes(order.stage);
+  const isProductionStage = ["Production In Progress", "Production Pending", "Production"].includes(order.stage);
   const baseFrozen = !isProductionStage;
   const canEdit = (permission?.canEdit ?? true) && (!baseFrozen || adminOverrideUnlocked);
   const canEditDeadline = canEdit;
 
   const [saving, setSaving] = useState(false);
   const [alert, setAlert] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [checklistItems, setChecklistItems] = useState<ProductionChecklistItem[]>(
+    DEFAULT_PRODUCTION_CHECKLIST_ITEMS
+  );
+
+  useEffect(() => {
+    getAppSettings()
+      .then((settings) => {
+        if (settings?.productionChecklistItems?.length) {
+          setChecklistItems(settings.productionChecklistItems);
+        }
+      })
+      .catch(console.error);
+  }, []);
 
   const pd = order.productionDetails || {
-    procurementOfMaterials: false,
-    acpAndAcrylicCutting: false,
-    lightingAndWiring: false,
-    qualityCheck: false,
+    stage1: false,
+    stage2: false,
+    stage3: false,
+    stage4: false,
+    checklist: {},
     deadline: null
   };
+  const checklistProgress = resolveChecklistProgress(pd, checklistItems);
 
   const [editingDeadline, setEditingDeadline] = useState(false);
   const [deadlineValue, setDeadlineValue] = useState(
@@ -134,7 +157,10 @@ export function ProductionModule({
   };
 
   const client = customers.find(c => c.id === order.customerId);
-
+  const installationSiteAddress = resolveSiteVisitInstallationAddress(
+    order.siteVisitDetails,
+    client?.shippingAddress
+  );
 
   const svDetails = order.siteVisitDetails || {};
   const locations: LocationMeasurement[] = svDetails.locations || [];
@@ -142,14 +168,18 @@ export function ProductionModule({
   const dd = order.designDetails || order.design || { proofUrl: "", status: "Draft" };
   const mockImage = order.imageMockup || dd.proofUrl;
 
-  const handleCheckboxChange = async (key: "procurementOfMaterials" | "acpAndAcrylicCutting" | "lightingAndWiring" | "qualityCheck") => {
+  const handleCheckboxChange = async (key: string) => {
     if (!canEdit) return;
     setSaving(true);
     setAlert(null);
 
+    const nextProgress = {
+      ...checklistProgress,
+      [key]: !checklistProgress[key],
+    };
     const updatedPd = {
       ...pd,
-      [key]: !pd[key]
+      ...buildProductionChecklistUpdate(nextProgress, checklistItems),
     };
 
     // Optimistically update local state
@@ -159,7 +189,10 @@ export function ProductionModule({
     }));
 
     try {
-      await updateProductionDetails(order.id, updatedPd);
+      await updateProductionDetails(
+        order.id,
+        buildProductionChecklistUpdate(nextProgress, checklistItems)
+      );
       setAlert({ message: "Fabrication milestone updated successfully.", type: "success" });
     } catch (err: any) {
       console.error(err);
@@ -196,12 +229,12 @@ export function ProductionModule({
 
       {/* ── ADMIN OVERRIDE BANNER ── */}
       {baseFrozen && currentUserRole === "Admin" && setAdminOverrideUnlocked && (
-        <div className={`mb-6 p-4 rounded-xl border flex items-center justify-between transition-colors ${adminOverrideUnlocked ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}>
-          <div className="flex items-center gap-3">
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${adminOverrideUnlocked ? 'bg-amber-100 text-amber-600' : 'bg-slate-200 text-slate-500'}`}>
+        <div className={`mb-6 p-4 rounded-xl border flex flex-col md:flex-row md:items-center gap-3 md:justify-between transition-colors ${adminOverrideUnlocked ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}>
+          <div className="flex items-start md:items-center gap-3 min-w-0">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${adminOverrideUnlocked ? 'bg-amber-100 text-amber-600' : 'bg-slate-200 text-slate-500'}`}>
               <Shield size={16} />
             </div>
-            <div>
+            <div className="min-w-0">
               <h4 className={`text-sm font-bold ${adminOverrideUnlocked ? 'text-amber-900' : 'text-slate-700'}`}>Admin God Mode</h4>
               <p className={`text-xs ${adminOverrideUnlocked ? 'text-amber-700' : 'text-slate-500'}`}>
                 {adminOverrideUnlocked 
@@ -212,7 +245,7 @@ export function ProductionModule({
           </div>
           <button
             onClick={() => setAdminOverrideUnlocked(!adminOverrideUnlocked)}
-            className={`px-4 py-2 rounded-lg text-xs font-bold transition-colors ${
+            className={`px-4 py-2.5 rounded-lg text-xs font-bold transition-colors w-full md:w-auto shrink-0 ${
               adminOverrideUnlocked 
                 ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-xs' 
                 : 'bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 shadow-3xs'
@@ -377,7 +410,7 @@ export function ProductionModule({
             <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider mb-4 border-b border-slate-100 pb-3 flex items-center gap-2">
               <FileText size={18} className="text-blue-600" /> Basic Information
             </h2>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-6 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 md:gap-6 text-xs">
               <div>
                 <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Order No</div>
                 <div className="font-bold text-slate-800">{order.orderCode}</div>
@@ -426,10 +459,10 @@ export function ProductionModule({
                     <div className="font-semibold text-slate-700">{maskEmail(client.email)}</div>
                   </div>
                 )}
-                {client.shippingAddress && (
+                {installationSiteAddress && (
                   <div className="flex-1 min-w-[200px]">
                     <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Installation Site Address</div>
-                    <div className="font-medium text-slate-600 leading-relaxed">{client.shippingAddress}</div>
+                    <div className="font-medium text-slate-600 leading-relaxed">{installationSiteAddress}</div>
                   </div>
                 )}
                 {(order.notes || quotation?.notes) && (
@@ -444,11 +477,13 @@ export function ProductionModule({
         </>
       )}
 
-      {/* View-Only Site Visit Banner */}
-      <div className="mb-6 bg-indigo-50/80 border border-indigo-100 text-indigo-700 p-4 rounded-xl text-xs font-semibold flex items-center gap-3 shadow-sm">
-        <Sparkles size={16} className="text-indigo-600 flex-shrink-0" />
-        You now have view-only access to the Site Visit stage. Click the 'Site Visit' tab in the timeline above to view full location photos and measurement details!
-      </div>
+      {/* View-Only Site Visit Banner — staff portals only (admins already have full Site Visit access) */}
+      {currentUserRole !== "Admin" && (
+        <div className="mb-6 bg-indigo-50/80 border border-indigo-100 text-indigo-700 p-4 rounded-xl text-xs font-semibold flex items-center gap-3 shadow-sm">
+          <Sparkles size={16} className="text-indigo-600 flex-shrink-0" />
+          You now have view-only access to the Site Visit stage. Click the 'Site Visit' tab in the timeline above to view full location photos and measurement details!
+        </div>
+      )}
 
       {/* Two Column Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
@@ -544,7 +579,7 @@ export function ProductionModule({
         <div className="space-y-8">
 
           {/* WORKSHOP PRODUCTION QUEUE CHECKLIST */}
-          <div className="prt-card p-6 sticky top-6">
+          <div className="prt-card p-4 md:p-6 lg:sticky lg:top-6">
             <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
               <CheckSquare size={18} className="text-blue-600" />
               <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider">
@@ -557,17 +592,12 @@ export function ProductionModule({
             </p>
 
             <div className="space-y-3.5">
-              {[
-                { key: "procurementOfMaterials", label: "1. Procurement of Materials", desc: "Sourcing and procuring all required raw materials" },
-                { key: "acpAndAcrylicCutting", label: "2. ACP & Acrylic Cutting", desc: "Precision cutting of ACP and acrylic sheets" },
-                { key: "lightingAndWiring", label: "3. Lighting & Wiring", desc: "Installing LED modules and electrical wiring" },
-                { key: "qualityCheck", label: "4. Quality Check", desc: "Final inspection and quality assurance" },
-              ].map(step => {
-                const isChecked = !!pd[step.key as keyof typeof pd];
+              {checklistItems.map((step, index) => {
+                const isChecked = !!checklistProgress[step.id];
                 return (
                   <div
-                    key={step.key}
-                    onClick={() => canEdit && !saving && handleCheckboxChange(step.key as any)}
+                    key={step.id}
+                    onClick={() => canEdit && !saving && handleCheckboxChange(step.id)}
                     className={`p-4 border rounded-xl flex items-start gap-3 select-none transition-all duration-200 ${
                       canEdit ? "cursor-pointer" : "cursor-not-allowed opacity-70"
                     } ${
@@ -586,8 +616,12 @@ export function ProductionModule({
                       </div>
                     </div>
                     <div>
-                      <div className="text-xs font-bold leading-none mb-1">{step.label}</div>
-                      <div className="text-[10px] text-slate-500 font-semibold">{step.desc}</div>
+                      <div className="text-xs font-bold leading-none mb-1">
+                        {index + 1}. {step.label}
+                      </div>
+                      {step.description ? (
+                        <div className="text-[10px] text-slate-500 font-semibold">{step.description}</div>
+                      ) : null}
                     </div>
                   </div>
                 );

@@ -108,17 +108,17 @@ export const PaymentsModule: React.FC<PaymentsModuleProps> = ({
 
   return (
     <div className="space-y-5">
-      <div className="flex items-start justify-between gap-4">
-        <div>
+      <div className="flex flex-col md:flex-row md:items-start gap-3 md:justify-between">
+        <div className="min-w-0 flex-1">
           <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
-            <CreditCard size={16} className="text-blue-600" />
+            <CreditCard size={16} className="text-blue-600 shrink-0" />
             Payment Tracking
           </h2>
           <p className="text-xs text-amber-600 mt-2 font-medium bg-amber-50 p-2 rounded-lg border border-amber-200/60 leading-relaxed">
             Note: Payment gateway integration is in progress. Until then, use this as a payment received tool only.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           {canEdit && (
             <button
               type="button"
@@ -133,7 +133,7 @@ export const PaymentsModule: React.FC<PaymentsModuleProps> = ({
                   return !v;
                 });
               }}
-              className="px-3 py-1.5 text-[11px] font-bold rounded-lg bg-blue-600 text-white hover:bg-blue-700"
+              className="flex-1 md:flex-none px-3 py-2 text-[11px] font-bold rounded-lg bg-blue-600 text-white hover:bg-blue-700"
             >
               {showAdd ? "Cancel" : "Add Payment"}
             </button>
@@ -141,7 +141,7 @@ export const PaymentsModule: React.FC<PaymentsModuleProps> = ({
           <button
             type="button"
             onClick={() => load()}
-            className="p-2 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50"
+            className="p-2.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50"
             title="Refresh"
           >
             <RefreshCw size={14} className={loading ? "animate-spin" : ""} />

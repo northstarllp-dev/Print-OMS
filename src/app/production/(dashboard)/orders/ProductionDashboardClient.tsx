@@ -92,16 +92,16 @@ export function ProductionDashboardClient({
   });
 
   return (
-    <div className="p-4 md:p-8 bg-slate-50/50 min-h-screen">
+    <div className="p-3 sm:p-4 md:p-8 bg-slate-50/50 min-h-screen">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-black text-slate-900 tracking-tight mb-2">
+      <div className="mb-6 md:mb-8">
+        <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-slate-900 tracking-tight mb-2">
           Fabrication Queue
         </h1>
         <p className="text-sm text-slate-500 font-medium">
           Monitor and update active workshop signage orders post-design approval.
         </p>
-        <div className="mt-4">
+        <div className="mt-4 overflow-x-auto -mx-1 px-1">
           <QueueViewToggle
             value={queueView}
             onChange={setQueueView}
@@ -113,70 +113,134 @@ export function ProductionDashboardClient({
       </div>
 
       {/* Stats row */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-        {/* Active Jobs Card */}
-        <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all duration-200">
-          <div className="flex justify-between items-start mb-4">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+      <div className="grid grid-cols-2 gap-3 md:gap-6 mb-6 md:mb-8">
+        <div className="bg-white border border-slate-200/80 rounded-2xl p-4 md:p-6 shadow-sm">
+          <div className="flex justify-between items-start mb-3 md:mb-4">
+            <span className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-wider">
               Current
             </span>
-            <div className="w-8 height-8 bg-blue-50 rounded-lg flex items-center justify-center">
-              <ClipboardList size={16} className="text-blue-600" />
+            <div className="w-7 h-7 md:w-8 md:h-8 bg-blue-50 rounded-lg flex items-center justify-center">
+              <ClipboardList size={14} className="text-blue-600" />
             </div>
           </div>
-          <div className="text-3xl font-black text-slate-800 mb-1">{activeJobs}</div>
-          <p className="text-xs text-slate-500 font-semibold">Orders currently in fabrication</p>
+          <div className="text-2xl md:text-3xl font-black text-slate-800 mb-1">{activeJobs}</div>
+          <p className="text-[11px] md:text-xs text-slate-500 font-semibold">In fabrication</p>
         </div>
 
-        {/* Completed Jobs Card */}
-        <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all duration-200">
-          <div className="flex justify-between items-start mb-4">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+        <div className="bg-white border border-slate-200/80 rounded-2xl p-4 md:p-6 shadow-sm">
+          <div className="flex justify-between items-start mb-3 md:mb-4">
+            <span className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-wider">
               Completed
             </span>
-            <div className="w-8 height-8 bg-emerald-50 rounded-lg flex items-center justify-center">
-              <CheckCircle size={16} className="text-emerald-600" />
+            <div className="w-7 h-7 md:w-8 md:h-8 bg-emerald-50 rounded-lg flex items-center justify-center">
+              <CheckCircle size={14} className="text-emerald-600" />
             </div>
           </div>
-          <div className="text-3xl font-black text-slate-800 mb-1">{completedJobs}</div>
-          <p className="text-xs text-slate-500 font-semibold">Orders past the fabrication phase</p>
+          <div className="text-2xl md:text-3xl font-black text-slate-800 mb-1">{completedJobs}</div>
+          <p className="text-[11px] md:text-xs text-slate-500 font-semibold">Past this phase</p>
         </div>
       </div>
 
       {/* Table Container */}
       <div className="bg-white border border-slate-200/80 rounded-2xl shadow-sm overflow-hidden">
-        {/* Search & Filter Bar */}
-        <div className="p-5 border-b border-slate-200/80 flex flex-col md:flex-row gap-4 items-center justify-between">
-          <div className="w-full md:w-96 relative">
+        <div className="p-4 md:p-5 border-b border-slate-200/80 flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
+          <div className="w-full md:flex-1 md:max-w-md relative">
             <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
             <input
               type="text"
               placeholder="Search by project, customer, or code..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full bg-slate-50 text-slate-800 text-sm pl-10 pr-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-blue-500 focus:bg-white transition-all"
+              className="w-full bg-slate-50 text-slate-800 text-sm pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:border-blue-500 focus:bg-white transition-all"
             />
           </div>
-          
-          <div className="flex gap-2 self-stretch md:self-auto">
-            <select
-              value={stageFilter}
-              onChange={e => setStageFilter(e.target.value)}
-              className="bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm font-semibold text-slate-600 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/10"
-            >
-              <option value="ALL">All Stages</option>
-              <option value="Design Approved">Design Approved</option>
-              <option value="Production">Production</option>
-              <option value="Ready For Installation">Ready For Installation</option>
-              <option value="Installation Scheduled">Installation Scheduled</option>
-              <option value="Completed">Completed</option>
-              <option value="Closed">Closed</option>
-            </select>
-          </div>
+
+          <select
+            value={stageFilter}
+            onChange={e => setStageFilter(e.target.value)}
+            className="w-full md:w-auto bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-600 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/10"
+          >
+            <option value="ALL">All Stages</option>
+            <option value="Design Approved">Design Approved</option>
+            <option value="Production">Production</option>
+            <option value="Ready For Installation">Ready For Installation</option>
+            <option value="Installation Scheduled">Installation Scheduled</option>
+            <option value="Completed">Completed</option>
+            <option value="Closed">Closed</option>
+          </select>
         </div>
 
-        {/* Table list */}
-        <div className="overflow-x-auto">
+        {/* Mobile cards */}
+        <div className="lg:hidden divide-y divide-slate-100">
+          {filteredOrders.length > 0 ? (
+            filteredOrders.map((order) => {
+              const badgeStyle = getStageBadgeStyle(order.stage);
+              return (
+                <button
+                  key={order.id}
+                  type="button"
+                  onClick={() => router.push(resolveOrderHref(order))}
+                  className="w-full text-left p-4 hover:bg-slate-50/80 transition-colors"
+                >
+                  <div className="flex items-start justify-between gap-3 mb-2">
+                    <div className="min-w-0">
+                      <div className="text-sm font-black text-slate-900 truncate">{order.orderCode}</div>
+                      <div className="text-sm font-bold text-slate-800 mt-0.5 truncate">
+                        {order.businessName || order.clientName}
+                      </div>
+                      {order.businessName && order.clientName && (
+                        <div className="text-xs text-slate-500 font-medium truncate">{order.clientName}</div>
+                      )}
+                    </div>
+                    <span
+                      className={`shrink-0 inline-flex items-center px-2.5 py-1 text-[10px] font-bold rounded-full border ${badgeStyle.bg} ${badgeStyle.text} ${badgeStyle.border}`}
+                    >
+                      {order.stage}
+                    </span>
+                  </div>
+
+                  <div className="mt-2 rounded-xl bg-slate-50 border border-slate-100 px-3 py-2 flex justify-between gap-2">
+                    <div>
+                      <div className="text-[10px] font-bold text-slate-400 uppercase">Started</div>
+                      <div className="text-xs font-semibold text-slate-600">
+                        {new Date(order.dateCreated).toLocaleDateString("en-IN", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        })}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[10px] font-bold text-slate-400 uppercase">Deadline</div>
+                      <div className="text-xs font-bold text-rose-500">
+                        {order.productionDeadline
+                          ? new Date(order.productionDeadline).toLocaleDateString("en-IN", {
+                              day: "numeric",
+                              month: "short",
+                              year: "numeric",
+                            })
+                          : "Not set"}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex items-center justify-end">
+                    <span className="inline-flex items-center gap-1 text-[11px] font-extrabold text-blue-600 uppercase tracking-wider">
+                      Fabricate <ArrowRight size={12} />
+                    </span>
+                  </div>
+                </button>
+              );
+            })
+          ) : (
+            <div className="py-12 text-center text-sm font-semibold text-slate-400">
+              No production-ready fabrication orders found.
+            </div>
+          )}
+        </div>
+
+        {/* Desktop table */}
+        <div className="hidden lg:block overflow-x-auto">
           <table className="w-full border-collapse">
             <thead>
               <tr className="bg-slate-50/70 border-b border-slate-200/80">
@@ -199,31 +263,20 @@ export function ProductionDashboardClient({
                       className="border-b border-slate-100 hover:bg-slate-50/30 transition-all duration-150 cursor-pointer"
                       onClick={() => router.push(resolveOrderHref(order))}
                     >
-                      {/* Code */}
                       <td className="py-4 px-6 text-sm font-bold text-slate-800">
                         {order.orderCode}
                       </td>
-
-                      {/* Client Name */}
                       <td className="py-4 px-6 text-sm font-extrabold text-slate-900">
                         {order.clientName}
                       </td>
-
-                      {/* Business Name */}
                       <td className="py-4 px-6 text-sm font-medium text-slate-600">
                         {order.businessName}
                       </td>
-
-                      {/* Current Stage */}
                       <td className="py-4 px-6">
                         <span className={`inline-flex items-center px-3 py-1 text-xs font-bold rounded-full border ${badgeStyle.bg} ${badgeStyle.text} ${badgeStyle.border}`}>
                           {order.stage}
                         </span>
                       </td>
-
-
-
-                      {/* Date Created */}
                       <td className="py-4 px-6 text-sm text-slate-500 font-medium">
                         {new Date(order.dateCreated).toLocaleDateString("en-IN", {
                           day: "numeric",
@@ -231,8 +284,6 @@ export function ProductionDashboardClient({
                           year: "numeric"
                         })}
                       </td>
-
-                      {/* Deadline Date */}
                       <td className="py-4 px-6 text-sm font-bold text-rose-500">
                         {order.productionDeadline
                           ? new Date(order.productionDeadline).toLocaleDateString("en-IN", {
@@ -242,8 +293,6 @@ export function ProductionDashboardClient({
                             })
                           : "Not Set"}
                       </td>
-
-                      {/* Action */}
                       <td className="py-4 px-6 text-right">
                         <Link
                           href={resolveOrderHref(order)}
@@ -258,7 +307,7 @@ export function ProductionDashboardClient({
                 })
               ) : (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-sm font-semibold text-slate-400">
+                  <td colSpan={7} className="py-12 text-center text-sm font-semibold text-slate-400">
                     No production-ready fabrication orders found.
                   </td>
                 </tr>

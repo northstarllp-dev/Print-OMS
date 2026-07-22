@@ -20,6 +20,8 @@ export default async function OrdersPage() {
     businessName: o.business_name || "",
     customerId: o.customer_id,
     stage: o.stage,
+    stageStatus: o.stage_status || "Normal",
+    health: o.health || "Active",
     productType: o.product_type,
     requirements: o.requirements,
     assignedEmployees: o.assigned_employees || [],

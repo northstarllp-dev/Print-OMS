@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useTransition, useRef } from "react";
 import {
   Search, Plus, X, Pencil, Trash2, Package, ToggleLeft, ToggleRight,
-  Upload, Image as ImageIcon, Loader2, IndianRupee, ChevronDown, Tag, Ruler, Hash, RefreshCw
+  Upload, Image as ImageIcon, Loader2, IndianRupee, ChevronDown, Tag, Ruler, Hash, RefreshCw, Filter
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import {
@@ -618,6 +618,7 @@ export function ProductsView({
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState<"All" | "Active" | "Inactive">("All");
   const [finalFilter, setFinalFilter] = useState<"All" | "Final" | "Regular">("All");
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [showManageCategories, setShowManageCategories] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -674,37 +675,40 @@ export function ProductsView({
 
   const activeCount = products.filter(p => p.is_active).length;
 
+  const resetFilters = () => {
+    setSearch("");
+    setCategoryFilter("All");
+    setStatusFilter("All");
+    setFinalFilter("All");
+  };
+
+  const activeFilterCount = [
+    categoryFilter !== "All",
+    statusFilter !== "All",
+    finalFilter !== "All",
+  ].filter(Boolean).length;
+
   return (
-    <div style={{ padding: "28px 28px 40px", minHeight: "100%" }}>
+    <div className="p-3 sm:p-4 md:p-8 min-h-full">
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 24 }}>
-        <div>
-          <h1 style={{ fontSize: 26, fontWeight: 900, color: "#0f172a", margin: 0, letterSpacing: "-0.02em" }}>Product Master</h1>
-          <p style={{ fontSize: 13, color: "#64748b", margin: "4px 0 0", fontWeight: 500 }}>
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-5 md:mb-6">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl md:text-[26px] font-black text-slate-900 m-0 tracking-tight">Product Master</h1>
+          <p className="text-xs sm:text-[13px] text-slate-500 mt-1 m-0 font-medium">
             Catalogue of signage materials & components for quotation building.
-            <span style={{ marginLeft: 8, fontWeight: 700, color: "#1e40af" }}>{activeCount} active</span>
+            <span className="ml-2 font-bold text-[#1e40af]">{activeCount} active</span>
           </p>
         </div>
-        <div style={{ display: "flex", gap: 10 }}>
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-2.5 w-full sm:w-auto">
           <button
             onClick={() => setShowManageCategories(true)}
-            style={{
-              display: "flex", alignItems: "center", gap: 8,
-              padding: "10px 20px", background: "white", color: "#1e40af",
-              border: "1px solid #1e40af", borderRadius: 10, fontSize: 13, fontWeight: 800,
-              cursor: "pointer", boxShadow: "0 2px 8px rgba(30,64,175,0.05)", transition: "all 0.15s",
-            }}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white text-[#1e40af] border border-[#1e40af] rounded-[10px] text-[13px] font-extrabold"
           >
             <Tag size={16} /> Manage Categories
           </button>
           <button
             onClick={handleOpenAdd}
-            style={{
-              display: "flex", alignItems: "center", gap: 8,
-              padding: "10px 20px", background: "#1e40af", color: "white",
-              border: "none", borderRadius: 10, fontSize: 13, fontWeight: 800,
-              cursor: "pointer", boxShadow: "0 2px 8px rgba(30,64,175,0.3)", transition: "all 0.15s",
-            }}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-[#1e40af] text-white rounded-[10px] text-[13px] font-extrabold"
           >
             <Plus size={16} /> Add Product
           </button>
@@ -712,7 +716,7 @@ export function ProductsView({
       </div>
 
       {/* Stats */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14, marginBottom: 22 }}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 mb-5 md:mb-[22px]">
         {[
           { label: "Total Products", value: products.length, color: "#1e40af", bg: "#eff6ff" },
           { label: "Active", value: activeCount, color: "#16a34a", bg: "#f0fdf4" },
@@ -733,62 +737,181 @@ export function ProductsView({
       )}
 
       {/* Search + Filters */}
-      <div style={{ display: "flex", gap: 12, marginBottom: 22, alignItems: "center", flexWrap: "wrap" }}>
-        <div style={{ position: "relative", flex: 1, minWidth: 200 }}>
-          <Search size={14} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8", pointerEvents: "none" }} />
-          <input
-            type="text" placeholder="Search products..."
-            value={search} onChange={e => setSearch(e.target.value)}
-            style={{ ...inputStyle, paddingLeft: 36, height: 40 }}
-          />
+      <div className="mb-5 md:mb-[22px]">
+        {/* Mobile / tablet: search + Filters + Reset */}
+        <div className="lg:hidden flex items-center gap-2">
+          <div className="relative flex-1 min-w-0">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Search products..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              style={{ ...inputStyle, paddingLeft: 36, height: 40, borderRadius: 9999, background: "#f8fafc" }}
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setMobileFiltersOpen(true)}
+            className={`relative shrink-0 inline-flex items-center gap-1.5 h-10 px-3.5 rounded-full border text-[12px] font-bold transition-colors ${
+              activeFilterCount > 0
+                ? "bg-slate-900 text-white border-slate-900"
+                : "bg-white text-slate-700 border-slate-200"
+            }`}
+          >
+            <Filter size={14} />
+            Filters
+            {activeFilterCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-[var(--color-primary)] text-white text-[10px] font-extrabold flex items-center justify-center border-2 border-white">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+          <button
+            type="button"
+            title="Reset filters"
+            onClick={resetFilters}
+            className="shrink-0 w-10 h-10 inline-flex items-center justify-center rounded-full bg-red-50 border border-red-200 text-red-600"
+          >
+            <RefreshCw size={14} />
+          </button>
         </div>
-        <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} style={{ ...inputStyle, width: "auto", height: 40, paddingRight: 28 }}>
-          {uniqueCategories.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as any)} style={{ ...inputStyle, width: "auto", height: 40 }}>
-          <option value="All">All Status</option>
-          <option value="Active">Active</option>
-          <option value="Inactive">Inactive</option>
-        </select>
-        <select value={finalFilter} onChange={e => setFinalFilter(e.target.value as any)} style={{ ...inputStyle, width: "auto", height: 40 }}>
-          <option value="All">All Types</option>
-          <option value="Final">Final Products</option>
-          <option value="Regular">Regular Products</option>
-        </select>
-        
-        {/* Reset Button */}
-        <button
-          title="Reset Filters"
-          onClick={() => {
-            setSearch("");
-            setCategoryFilter("All");
-            setStatusFilter("All");
-            setFinalFilter("All");
-          }}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: "0 14px",
-            background: "#fef2f2",
-            border: "1px solid #fecaca",
-            borderRadius: "8px",
-            cursor: "pointer",
-            color: "#dc2626",
-            outline: "none",
-            height: "40px",
-            transition: "all 0.2s",
-            fontWeight: "600",
-            fontSize: "13px",
-            gap: "6px",
-            flexShrink: 0
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = "#fee2e2"; e.currentTarget.style.borderColor = "#fca5a5"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = "#fef2f2"; e.currentTarget.style.borderColor = "#fecaca"; }}
-        >
-          <RefreshCw size={14} />
-          Reset
-        </button>
+
+        {mobileFiltersOpen && (
+          <div className="lg:hidden fixed inset-0 z-[80]">
+            <button
+              type="button"
+              aria-label="Close filters"
+              className="absolute inset-0 bg-slate-900/40"
+              onClick={() => setMobileFiltersOpen(false)}
+            />
+            <div className="absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-2xl bg-white shadow-xl">
+              <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-white rounded-t-2xl">
+                <h3 className="text-sm font-extrabold text-slate-900">Filters</h3>
+                <button
+                  type="button"
+                  onClick={() => setMobileFiltersOpen(false)}
+                  className="w-8 h-8 inline-flex items-center justify-center rounded-full bg-slate-100 text-slate-500"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              <div className="p-4 space-y-4">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Category</label>
+                  <select
+                    value={categoryFilter}
+                    onChange={e => setCategoryFilter(e.target.value)}
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[13px] font-medium text-slate-700"
+                  >
+                    {uniqueCategories.map(c => <option key={c} value={c}>{c === "All" ? "All Categories" : c}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Status</label>
+                  <select
+                    value={statusFilter}
+                    onChange={e => setStatusFilter(e.target.value as any)}
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[13px] font-medium text-slate-700"
+                  >
+                    <option value="All">All Status</option>
+                    <option value="Active">Active</option>
+                    <option value="Inactive">Inactive</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Type</label>
+                  <select
+                    value={finalFilter}
+                    onChange={e => setFinalFilter(e.target.value as any)}
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[13px] font-medium text-slate-700"
+                  >
+                    <option value="All">All Types</option>
+                    <option value="Final">Final Products</option>
+                    <option value="Regular">Regular Products</option>
+                  </select>
+                </div>
+              </div>
+              <div className="sticky bottom-0 flex gap-2 px-4 py-3 border-t border-slate-100 bg-white pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+                <button
+                  type="button"
+                  onClick={resetFilters}
+                  className="flex-1 h-10 inline-flex items-center justify-center gap-1.5 rounded-xl bg-red-50 border border-red-200 text-red-600 text-[13px] font-bold"
+                >
+                  <RefreshCw size={14} /> Reset
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMobileFiltersOpen(false)}
+                  className="flex-1 h-10 inline-flex items-center justify-center rounded-xl bg-slate-900 text-white text-[13px] font-bold"
+                >
+                  Apply
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Desktop: inline filters */}
+        <div className="hidden lg:flex flex-row gap-3 items-center flex-wrap">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            <input
+              type="text" placeholder="Search products..."
+              value={search} onChange={e => setSearch(e.target.value)}
+              style={{ ...inputStyle, paddingLeft: 36, height: 40 }}
+            />
+          </div>
+          <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} style={{ ...inputStyle, width: "auto", height: 40, paddingRight: 28 }}>
+            {uniqueCategories.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as any)} style={{ ...inputStyle, width: "auto", height: 40 }}>
+            <option value="All">All Status</option>
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+          </select>
+          <select value={finalFilter} onChange={e => setFinalFilter(e.target.value as any)} style={{ ...inputStyle, width: "auto", height: 40 }}>
+            <option value="All">All Types</option>
+            <option value="Final">Final Products</option>
+            <option value="Regular">Regular Products</option>
+          </select>
+          <button
+            title="Reset Filters"
+            onClick={resetFilters}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "0 14px",
+              background: "#fef2f2",
+              border: "1px solid #fecaca",
+              borderRadius: "8px",
+              cursor: "pointer",
+              color: "#dc2626",
+              outline: "none",
+              height: "40px",
+              transition: "all 0.2s",
+              fontWeight: "600",
+              fontSize: "13px",
+              gap: "6px",
+              flexShrink: 0
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "#fee2e2"; e.currentTarget.style.borderColor = "#fca5a5"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "#fef2f2"; e.currentTarget.style.borderColor = "#fecaca"; }}
+          >
+            <RefreshCw size={14} />
+            Reset
+          </button>
+        </div>
       </div>
 
       {/* Grid */}
@@ -801,7 +924,7 @@ export function ProductsView({
           </button>
         </div>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 16 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 260px), 1fr))", gap: 16 }}>
           {filtered.map(p => (
             <ProductCard
               key={p.id}

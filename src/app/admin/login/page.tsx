@@ -5,6 +5,7 @@ import { Eye, EyeOff } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { adminSignIn } from "@/features/auth/actions/authActions";
 import { Logo } from "@/components/ui/Logo";
+import { PrintomsLoading } from "@/components/ui/PrintomsLoading";
 
 export default function AdminLogin() {
   const router = useRouter();
@@ -43,7 +44,9 @@ export default function AdminLogin() {
       justifyContent: "center",
       fontFamily: "var(--font-sans)",
       padding: 24,
+      position: "relative",
     }}>
+      {loading && <PrintomsLoading fullScreen />}
       {/* Card */}
       <div style={{
         width: "100%",
@@ -140,7 +143,7 @@ export default function AdminLogin() {
 
       <div style={{ position: "absolute", bottom: 24, textAlign: "center", width: "100%", fontSize: 13, color: "#64748B", pointerEvents: "none" }}>
         <a
-          href="https://www.thepolarislabs.com/"
+          href="https://printoms.thepolarislabs.com/"
           target="_blank"
           rel="noopener noreferrer"
           style={{

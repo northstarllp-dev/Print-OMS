@@ -18,6 +18,7 @@ import {
   MapPin,
   TrendingUp,
   AlertCircle,
+  Calendar,
 } from "lucide-react";
 import { AddEnquiryModal, EnquiryFormData } from "@/features/enquiries/components/AddEnquiryModal";
 import { createEnquiry } from "@/features/enquiries/actions/enquiryActions";
@@ -35,7 +36,7 @@ const STAGE_LABEL: Record<string, { label: string; dot: string }> = {
   "Design In Progress":    { label: "Design",      dot: "#EC4899" },
   "Design Approved":       { label: "Design",      dot: "#EC4899" },
   "Production":            { label: "In Production", dot: "#3B82F6" },
-  "Ready For Installation":{ label: "Ready",       dot: "#3B82F6" },
+  "Ready For Installation":{ label: "Ready to Install", dot: "#0EA5E9" },
   "Installation Scheduled":{ label: "Installation", dot: "#0EA5E9" },
   "Completed":             { label: "Closed",      dot: "#22C55E" },
   "Closed":                { label: "Closed",      dot: "#22C55E" },
@@ -73,10 +74,19 @@ const PIPELINE_STAGE_GROUPS: Record<string, string[]> = {
   "Site Visit Pending": ["Site Visit Pending", "Site Visit Scheduled", "Site Visit Completed"],
   "Quotation Sent": ["Quotation In Progress", "Quotation Sent", "Quotation Negotiation", "Quotation Approved"],
   "Design Approved": ["Design In Progress", "Design Approved"],
-  "Production": ["Production", "Ready For Installation"],
-  "Installation Scheduled": ["Installation Scheduled"],
+  "Production": ["Production"],
+  "Installation Scheduled": ["Ready For Installation", "Installation Scheduled"],
   "Completed": ["Completed", "Closed"],
 };
+
+/** Orders locked for admin gatekeeping (see specs/admin-dashboard.md). */
+function needsAdminApproval(stageStatus?: string | null) {
+  return !!stageStatus && stageStatus !== "Normal" && stageStatus.startsWith("Pending Admin Approval");
+}
+
+function formatApprovalLabel(stageStatus: string) {
+  return stageStatus.replace(/^Pending Admin Approval:\s*/i, "").trim() || stageStatus;
+}
 
 /* ─── Component ─────────────────────────────────────────────────── */
 interface AdminDashboardClientProps {
@@ -135,7 +145,7 @@ export function AdminDashboardClient({
   const activeOrders = orders.filter((o) => o.stage !== "Completed" && o.stage !== "Closed").length;
   const newEnquiries = enquiries.filter((e) => e.status !== "Converted").length;
   
-  const pendingApprovals = orders.filter((o) => o.stageStatus && o.stageStatus !== "Normal").length;
+  const pendingApprovals = orders.filter((o) => needsAdminApproval(o.stageStatus)).length;
   const lostOrders = orders.filter((o) => o.health === "Lost").length;
 
   let revenue = 0;
@@ -266,7 +276,7 @@ export function AdminDashboardClient({
     if (selectedKpi === "completed")  return { type: "orders" as const, data: orders.filter(o => o.stage === "Completed" || o.stage === "Closed") };
     if (selectedKpi === "active")     return { type: "orders" as const, data: orders.filter(o => o.stage !== "Completed" && o.stage !== "Closed") };
     if (selectedKpi === "enquiries")  return { type: "enquiries" as const, data: enquiries.filter(e => e.status !== "Converted") };
-    if (selectedKpi === "approvals")  return { type: "orders" as const, data: orders.filter(o => o.stageStatus && o.stageStatus !== "Normal") };
+    if (selectedKpi === "approvals")  return { type: "orders" as const, data: orders.filter(o => needsAdminApproval(o.stageStatus)) };
     if (selectedKpi === "revenue")    return { type: "orders" as const, data: orders.filter(o => {
       const quotes = Array.isArray(o.quotations) ? o.quotations : (o.quotations ? [o.quotations] : []);
       return quotes.some((q: any) => q.status === "Approved");
@@ -306,80 +316,116 @@ export function AdminDashboardClient({
   }));
 
   return (
-    <div style={{ padding: "32px", background: "#F8FAFC", minHeight: "100vh" }}>
+    <div className="p-3 sm:p-5 md:p-8 bg-slate-50 min-h-0 pb-6">
 
       {/* ── Header ── */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "28px" }}>
-        <div>
-          <h1 style={{ fontSize: "24px", fontWeight: "800", color: "#0F172A", margin: 0 }}>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-5 md:mb-7">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 m-0">
             Dashboard
           </h1>
-          <p style={{ fontSize: "13px", color: "#64748B", margin: "4px 0 0" }}>
+          <p className="text-xs sm:text-[13px] text-slate-500 mt-1 mb-0">
             Overview of your business performance
           </p>
         </div>
-        <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "6px", background: "white", padding: "4px 8px", borderRadius: "8px", border: "1px solid #E2E8F0" }}>
+        <div className="flex items-center gap-2 w-full sm:w-auto min-w-0">
+          {/* Date range — compact, clearly labeled */}
+          <div
+            className="flex items-center gap-1 sm:gap-1.5 bg-white px-2 py-1.5 rounded-lg border border-slate-200 min-w-0 flex-1 sm:flex-initial"
+            title="Filter by date range"
+          >
+            <Calendar size={14} className="text-slate-400 shrink-0" aria-hidden />
+            <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide text-slate-400 shrink-0">
+              From
+            </span>
+            <label className="sr-only" htmlFor="dash-start-date">Start date</label>
             <input
+              id="dash-start-date"
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              style={{ border: "none", outline: "none", fontSize: "13px", color: "#475569", background: "transparent" }}
+              aria-label="Start date"
+              className="w-[6.75rem] sm:w-[9.5rem] max-w-full border-none outline-none text-[11px] sm:text-[13px] text-slate-600 bg-transparent"
             />
-            <span style={{ fontSize: "13px", color: "#94A3B8" }}>to</span>
+            <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide text-slate-400 shrink-0">
+              To
+            </span>
+            <label className="sr-only" htmlFor="dash-end-date">End date</label>
             <input
+              id="dash-end-date"
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              style={{ border: "none", outline: "none", fontSize: "13px", color: "#475569", background: "transparent" }}
+              aria-label="End date"
+              className="w-[6.75rem] sm:w-[9.5rem] max-w-full border-none outline-none text-[11px] sm:text-[13px] text-slate-600 bg-transparent"
             />
             {(startDate || endDate) && (
               <button
+                type="button"
                 onClick={() => { setStartDate(""); setEndDate(""); }}
-                style={{
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  background: "transparent", border: "none", cursor: "pointer",
-                  color: "#94A3B8", padding: "0 2px"
-                }}
-                title="Clear Dates"
+                className="flex items-center justify-center bg-transparent border-none cursor-pointer text-slate-400 p-0.5 shrink-0"
+                title="Clear dates"
               >
                 <XCircle size={14} />
               </button>
             )}
           </div>
-          <button
-            onClick={() => setIsTicketModalOpen(true)}
-            style={{
-              display: "flex", alignItems: "center", gap: "6px",
-              padding: "9px 16px", borderRadius: "8px",
-              border: "none", background: "var(--color-primary)",
-              fontSize: "13px", fontWeight: "700", color: "white",
-              cursor: "pointer", transition: "all 0.15s",
-            }}
-            onMouseEnter={e => e.currentTarget.style.background = "var(--color-primary-container)"}
-            onMouseLeave={e => e.currentTarget.style.background = "var(--color-primary)"}
-          >
-            <Plus size={14} /> Add Service Ticket
-          </button>
-          <button
-            onClick={() => setIsAddModalOpen(true)}
-            style={{
-              display: "flex", alignItems: "center", gap: "6px",
-              padding: "9px 16px", borderRadius: "8px",
-              border: "none", background: "var(--color-primary)",
-              fontSize: "13px", fontWeight: "700", color: "white",
-              cursor: "pointer", transition: "all 0.15s",
-            }}
-            onMouseEnter={e => e.currentTarget.style.background = "var(--color-primary-container)"}
-            onMouseLeave={e => e.currentTarget.style.background = "var(--color-primary)"}
-          >
-            <Plus size={14} /> Add Enquiry
-          </button>
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => setIsTicketModalOpen(true)}
+              className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3.5 py-2 sm:py-2.5 rounded-lg border-none bg-[var(--color-primary)] text-[11px] sm:text-[13px] font-bold text-white cursor-pointer whitespace-nowrap"
+            >
+              <Plus size={14} /> Ticket
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsAddModalOpen(true)}
+              className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3.5 py-2 sm:py-2.5 rounded-lg border-none bg-[var(--color-primary)] text-[11px] sm:text-[13px] font-bold text-white cursor-pointer whitespace-nowrap"
+            >
+              <Plus size={14} /> Enquiry
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* ── Stat Cards (2 rows of 4) ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px", marginBottom: "28px" }}>
+      {/* Mobile: compact filter chips instead of large KPI cards */}
+      <div className="lg:hidden flex gap-2 overflow-x-auto pb-3 -mx-1 px-1 mb-1">
+        {STATS.filter((s) => s.filterKey).map((stat) => {
+          const isActive = selectedKpi === stat.filterKey;
+          return (
+            <button
+              key={stat.filterKey}
+              type="button"
+              onClick={() => {
+                setSelectedKpi(isActive ? null : (stat.filterKey as string));
+                setSelectedPipelineStage(null);
+              }}
+              className="shrink-0 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-bold border"
+              style={{
+                background: isActive ? stat.iconBg : "white",
+                borderColor: isActive ? stat.iconColor : "#E2E8F0",
+                color: isActive ? stat.iconColor : "#64748B",
+              }}
+            >
+              <span>{stat.label}</span>
+              <span
+                className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-extrabold"
+                style={{
+                  background: isActive ? stat.iconColor : "#F1F5F9",
+                  color: isActive ? "white" : "#475569",
+                }}
+              >
+                {stat.value}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Desktop/tablet: Stat Cards */}
+      <div className="hidden lg:grid grid-cols-2 xl:grid-cols-4 gap-4 mb-7">
         {STATS.map((stat, i) => {
           const Icon = stat.icon;
           const isActive = stat.filterKey ? selectedKpi === stat.filterKey : false;
@@ -432,7 +478,7 @@ export function AdminDashboardClient({
       </div>
 
       {/* ── Bottom two columns: Recent Orders + Pending Tickets ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: "20px", marginBottom: "24px" }}>
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_340px] gap-4 md:gap-5 mb-6">
 
         {/* Recent Orders / Enquiries Table */}
         <div style={{ background: "white", border: "1px solid #E2E8F0", borderRadius: "12px", overflow: "hidden" }}>
@@ -570,24 +616,18 @@ export function AdminDashboardClient({
               filteredRows.data.length === 0 ? (
                 <div style={{ padding: "40px", textAlign: "center", color: "#94A3B8", fontSize: "13px" }}>No orders found.</div>
               ) : (
-                filteredRows.data.map((order: any, i: number) => {
+                filteredRows.data.map((order: any) => {
                   const stageInfo = STAGE_LABEL[order.stage] || { label: order.stage, dot: "#94A3B8" };
+                  const awaitingApproval = needsAdminApproval(order.stageStatus);
                   return (
                     <div
                       key={order.id}
-                      style={{
-                        display: "flex", alignItems: "center",
-                        padding: "14px 24px",
-                        borderBottom: i < filteredRows.data.length - 1 ? "1px solid #F1F5F9" : "none",
-                        gap: "12px", cursor: "pointer", transition: "background 0.15s",
-                      }}
-                      onClick={() => router.push(`/admin/orders/${order.orderId || order.id}`)}
-                      onMouseEnter={e => (e.currentTarget.style.background = "#F8FAFC")}
-                      onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+                      className="flex items-center gap-2 sm:gap-3 px-3 sm:px-6 py-3.5 border-b border-slate-100 last:border-b-0 cursor-pointer hover:bg-slate-50 transition-colors"
+                      onClick={() => router.push(`/admin/orders/${order.id}`)}
                     >
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                          <span style={{ fontSize: "13px", fontWeight: "700", color: "#0F172A" }}>{order.orderCode}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-[13px] font-bold text-slate-900">{order.orderCode}</span>
                           <span style={{
                             fontSize: "9px", fontWeight: "800", textTransform: "uppercase",
                             padding: "2px 6px", borderRadius: "4px",
@@ -595,13 +635,28 @@ export function AdminDashboardClient({
                             color: order.health === "Active" ? "#16A34A" : "#DC2626",
                             border: `1px solid ${order.health === "Active" ? "#BBF7D0" : "#FECACA"}`,
                           }}>{order.health || "Active"}</span>
+                          {awaitingApproval && (
+                            <span style={{
+                              fontSize: "9px", fontWeight: "800", textTransform: "uppercase",
+                              padding: "2px 6px", borderRadius: "4px",
+                              background: "#FFFBEB",
+                              color: "#D97706",
+                              border: "1px solid #FDE68A",
+                            }}>
+                              Needs: {formatApprovalLabel(order.stageStatus)}
+                            </span>
+                          )}
                         </div>
-                        <p style={{ margin: "4px 0 0", fontSize: "12px", color: "#64748B", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        <p className="m-0 mt-1 text-xs text-slate-500 truncate">
                           {(order.businessName || order.customerName || "No Business")} • {(order.clientName || "No Client")}
                         </p>
+                        <div className="sm:hidden mt-1.5 flex items-center gap-1.5">
+                          <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: awaitingApproval ? "#D97706" : stageInfo.dot, flexShrink: 0 }} />
+                          <span className="text-[11px] text-slate-600 font-semibold">{stageInfo.label}</span>
+                        </div>
                       </div>
                       {order.assignedAdmins && order.assignedAdmins.length > 0 && (
-                        <div style={{ display: "flex", alignItems: "center", gap: "4px", flexShrink: 0 }}>
+                        <div className="hidden sm:flex items-center gap-1 shrink-0">
                           {order.assignedAdmins.map((adminId: string) => {
                             const adminObj = admins?.find(a => a.id === adminId);
                             const adminName = adminObj ? adminObj.name : "Admin";
@@ -618,11 +673,11 @@ export function AdminDashboardClient({
                           })}
                         </div>
                       )}
-                      <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                      <div className="hidden sm:flex items-center gap-1.5 shrink-0">
                         <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: stageInfo.dot, flexShrink: 0 }} />
-                        <span style={{ fontSize: "12px", color: "#475569", fontWeight: "600", whiteSpace: "nowrap" }}>{stageInfo.label}</span>
+                        <span className="text-xs text-slate-600 font-semibold whitespace-nowrap">{stageInfo.label}</span>
                       </div>
-                      <div style={{ position: "relative" }}>
+                      <div className="relative shrink-0">
                         <button
                           onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === order.id ? null : order.id); }}
                           style={{ padding: "4px", background: "none", border: "none", cursor: "pointer", color: "#94A3B8", borderRadius: "4px" }}
@@ -634,7 +689,7 @@ export function AdminDashboardClient({
                             <div style={{ position: "fixed", inset: 0, zIndex: 49 }} onClick={() => setOpenMenuId(null)} />
                             <div style={{ position: "absolute", right: 0, top: "calc(100% + 4px)", background: "white", border: "1px solid #E2E8F0", borderRadius: "8px", boxShadow: "0 4px 12px rgba(0,0,0,0.08)", zIndex: 50, minWidth: 140, overflow: "hidden" }}>
                               <button
-                                onClick={() => { setOpenMenuId(null); router.push(`/admin/orders/${order.orderId || order.id}`); }}
+                                onClick={() => { setOpenMenuId(null); router.push(`/admin/orders/${order.id}`); }}
                                 style={{ width: "100%", padding: "9px 14px", display: "flex", alignItems: "center", gap: "8px", background: "none", border: "none", fontSize: "12px", fontWeight: "600", color: "#0F172A", cursor: "pointer", textAlign: "left" }}
                                 onMouseEnter={e => e.currentTarget.style.background = "#F8FAFC"}
                                 onMouseLeave={e => e.currentTarget.style.background = "none"}
@@ -712,9 +767,9 @@ export function AdminDashboardClient({
       </div>
 
       {/* ── Order Pipeline ── */}
-      <div style={{ background: "white", border: "1px solid #E2E8F0", borderRadius: "12px", padding: "20px 24px" }}>
-        <h2 style={{ margin: "0 0 20px", fontSize: "14px", fontWeight: "700", color: "#0F172A" }}>Order Pipeline</h2>
-        <div style={{ display: "grid", gridTemplateColumns: `repeat(${PIPELINE_STAGES.length}, 1fr)`, gap: "8px" }}>
+      <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 md:p-6">
+        <h2 className="m-0 mb-4 text-sm font-bold text-slate-900">Order Pipeline</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-1.5 sm:gap-2">
           {pipelineCounts.map((item, i) => {
             const isSelected = selectedPipelineStage === item.stage;
             return (
@@ -724,14 +779,10 @@ export function AdminDashboardClient({
                   setSelectedPipelineStage(isSelected ? null : item.stage);
                   setSelectedKpi(null);
                 }}
+                className="text-center cursor-pointer rounded-[10px] transition-all duration-150 min-w-0 px-1 py-2.5 sm:px-1.5 sm:py-3 lg:px-1 lg:py-2.5"
                 style={{
-                  textAlign: "center",
-                  padding: "12px 8px",
-                  cursor: "pointer",
-                  borderRadius: "10px",
                   background: isSelected ? "rgba(30, 64, 175, 0.05)" : "transparent",
                   border: isSelected ? "1.5px solid var(--color-primary)" : "1.5px solid transparent",
-                  transition: "all 0.18s cubic-bezier(0.4, 0, 0.2, 1)",
                   transform: isSelected ? "scale(1.02)" : "scale(1)",
                   boxShadow: isSelected ? "0 4px 10px rgba(30, 64, 175, 0.05)" : "none",
                 }}
@@ -746,18 +797,17 @@ export function AdminDashboardClient({
                   }
                 }}
               >
-                <div style={{ fontSize: "28px", fontWeight: "800", color: isSelected ? "var(--color-primary)" : "#0F172A", marginBottom: "4px", transition: "color 0.15s" }}>
+                <div
+                  className="font-extrabold mb-1 transition-colors text-[22px] sm:text-[26px] lg:text-[22px] xl:text-[26px]"
+                  style={{ color: isSelected ? "var(--color-primary)" : "#0F172A" }}
+                >
                   {item.count}
                 </div>
                 <div
+                  className="w-full rounded-full mb-1.5 sm:mb-2 overflow-hidden transition-[height]"
                   style={{
-                    width: "100%",
                     height: isSelected ? "6px" : "4px",
-                    borderRadius: "99px",
                     background: PIPELINE_COLORS[i] + "30",
-                    marginBottom: "8px",
-                    overflow: "hidden",
-                    transition: "height 0.15s",
                   }}
                 >
                   <div
@@ -770,7 +820,13 @@ export function AdminDashboardClient({
                     }}
                   />
                 </div>
-                <div style={{ fontSize: "11px", fontWeight: isSelected ? "800" : "600", color: isSelected ? "var(--color-primary)" : "#64748B", transition: "color 0.15s" }}>
+                <div
+                  className="font-semibold leading-tight px-0.5 transition-colors text-[10px] sm:text-[11px] lg:text-[10px] xl:text-[11px]"
+                  style={{
+                    fontWeight: isSelected ? 800 : 600,
+                    color: isSelected ? "var(--color-primary)" : "#64748B",
+                  }}
+                >
                   {item.label}
                 </div>
               </div>

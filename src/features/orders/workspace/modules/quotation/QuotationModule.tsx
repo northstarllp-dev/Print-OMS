@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useTransition } from "react";
+import React, { useState, useEffect, useRef, useTransition, useCallback } from "react";
 import { createPortal } from "react-dom";
+import { OverlayPortal } from "@/components/ui/OverlayPortal";
 import {
   Plus, Trash2, Search, Check, ChevronDown, Info, X,
   ClipboardList, IndianRupee, Loader2, AlertCircle, Package, Save, Sparkles, Shield,
-  Eye
+  Eye, ArrowLeft
 } from "lucide-react";
 import {
   upsertQuotation,
@@ -194,17 +195,44 @@ function ProductSearch({
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState(value);
-  const ref = useRef<HTMLDivElement>(null);
+  const [dropdownRect, setDropdownRect] = useState<DOMRect | null>(null);
+  const [isMounted, setIsMounted] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   useEffect(() => {
     setQuery(value);
   }, [value]);
 
+  const updateDropdownRect = useCallback(() => {
+    if (inputRef.current) {
+      setDropdownRect(inputRef.current.getBoundingClientRect());
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    updateDropdownRect();
+    const onReposition = () => updateDropdownRect();
+    window.addEventListener("scroll", onReposition, true);
+    window.addEventListener("resize", onReposition);
+    return () => {
+      window.removeEventListener("scroll", onReposition, true);
+      window.removeEventListener("resize", onReposition);
+    };
+  }, [open, updateDropdownRect]);
+
   useEffect(() => {
     function handler(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
+      const target = e.target as Node;
+      if (rootRef.current?.contains(target)) return;
+      if (dropdownRef.current?.contains(target)) return;
+      setOpen(false);
     }
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -220,56 +248,23 @@ function ProductSearch({
     )
     : [];
 
-  return (
-    <div ref={ref} style={{ position: "relative", width: "100%" }}>
-      <div style={{ position: "relative" }}>
-        <Search
-          size={11}
-          style={{
-            position: "absolute",
-            left: 8,
-            top: "50%",
-            transform: "translateY(-50%)",
-            color: "#94a3b8",
-            pointerEvents: "none",
-          }}
-        />
-        <input
-          type="text"
-          value={query}
-          disabled={disabled}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            onChange(e.target.value);
-            setOpen(true);
-          }}
-          onFocus={() => {
-            setQuery(value);
-            setOpen(true);
-          }}
-          placeholder="Item description or search..."
-          className="w-full border border-slate-200 rounded-lg text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
-          style={{ padding: "6px 8px 6px 24px", fontFamily: "inherit" }}
-        />
-      </div>
+  const visibleResults = filtered.slice(0, 6);
+  const hasMore = filtered.length > visibleResults.length;
 
-      {open && filtered.length > 0 && (
+  const dropdown =
+    isMounted && open && visibleResults.length > 0 && dropdownRect
+      ? createPortal(
         <div
+          ref={dropdownRef}
+          className="fixed z-[10000] bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden"
           style={{
-            position: "absolute",
-            top: "calc(100% + 4px)",
-            left: 0,
-            right: 0,
-            background: "white",
-            border: "1px solid #e2e8f0",
-            borderRadius: 8,
-            boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
-            zIndex: 9999,
-            maxHeight: 200,
-            overflowY: "auto",
+            top: dropdownRect.bottom + 4,
+            left: dropdownRect.left,
+            width: dropdownRect.width,
+            maxWidth: "calc(100vw - 16px)",
           }}
         >
-          {filtered.map((p) => {
+          {visibleResults.map((p) => {
             const resolved = resolveInitialPricing(p);
             return (
               <button
@@ -281,45 +276,63 @@ function ProductSearch({
                   setQuery(p.name);
                   setOpen(false);
                 }}
-                style={{
-                  width: "100%",
-                  textAlign: "left",
-                  padding: "8px 12px",
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  borderBottom: "1px solid #f1f5f9",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: 8,
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "#f8fafc";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "none";
-                }}
+                className="flex w-full items-center justify-between gap-2 border-b border-slate-100 px-3 py-2.5 text-left last:border-b-0 hover:bg-slate-50"
               >
-                <div>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: "#0f172a" }}>{p.name}</span>
+                <div className="min-w-0">
+                  <span className="text-[11px] font-bold text-slate-900">{p.name}</span>
                   {p.category && (
-                    <span style={{ fontSize: 9, color: "#94a3b8", marginLeft: 6 }}>{p.category}</span>
+                    <span className="ml-1.5 text-[9px] text-slate-400">{p.category}</span>
                   )}
                 </div>
-                <div style={{ textAlign: "right", flexShrink: 0 }}>
-                  <div style={{ fontSize: 10, fontWeight: 800, color: "#0f172a", fontFamily: "monospace" }}>
+                <div className="shrink-0 text-right">
+                  <div className="text-[10px] font-extrabold text-slate-900 font-mono">
                     ₹{resolved.price.toLocaleString("en-IN")}
                   </div>
-                  <div style={{ fontSize: 9, color: "#64748b" }}>
+                  <div className="text-[9px] text-slate-500">
                     per {resolved.pricingType === "per_sqft" ? "sqft" : "unit"}
                   </div>
                 </div>
               </button>
             );
           })}
-        </div>
-      )}
+          {hasMore && (
+            <div className="px-3 py-2 text-[10px] font-semibold text-slate-400 bg-slate-50 border-t border-slate-100">
+              Type more to narrow {filtered.length - visibleResults.length} more…
+            </div>
+          )}
+        </div>,
+        document.body
+      )
+      : null;
+
+  return (
+    <div ref={rootRef} className="relative w-full min-w-0">
+      <div className="relative">
+        <Search
+          size={14}
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+        />
+        <input
+          ref={inputRef}
+          type="text"
+          value={query}
+          disabled={disabled}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            onChange(e.target.value);
+            setOpen(true);
+            updateDropdownRect();
+          }}
+          onFocus={() => {
+            setQuery(value);
+            setOpen(true);
+            updateDropdownRect();
+          }}
+          placeholder="Search product or type description…"
+          className="w-full min-h-[40px] border border-slate-200 rounded-xl text-[13px] text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 bg-white pl-9 pr-3 py-2.5 font-medium placeholder:text-slate-400 placeholder:font-normal disabled:bg-slate-50 disabled:text-slate-500"
+        />
+      </div>
+      {dropdown}
     </div>
   );
 }
@@ -626,7 +639,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
     "Quotation Approved",
   ].includes(orderStage);
   
-  const baseFrozen = !isQuotationStage || status === "Approved";
+  const baseFrozen = !isQuotationStage;
   const isLocked = baseFrozen && !adminOverrideUnlocked;
 
 
@@ -745,18 +758,18 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
     }
   };
 
-  const inputCls = "border border-slate-200 rounded-lg text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500";
+  const inputCls = "border border-slate-200 rounded-xl text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 min-h-[40px]";
 
   return (
     <div className="space-y-6" style={{ fontFamily: "inherit" }}>
       {/* ── ADMIN OVERRIDE BANNER ── */}
       {baseFrozen && currentUserRole === "Admin" && setAdminOverrideUnlocked && (
-        <div className={`p-4 rounded-xl border flex items-center justify-between transition-colors ${adminOverrideUnlocked ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}>
-          <div className="flex items-center gap-3">
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${adminOverrideUnlocked ? 'bg-amber-100 text-amber-600' : 'bg-slate-200 text-slate-500'}`}>
+        <div className={`p-4 rounded-xl border flex flex-col md:flex-row md:items-center gap-3 md:justify-between transition-colors ${adminOverrideUnlocked ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}>
+          <div className="flex items-start md:items-center gap-3 min-w-0">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${adminOverrideUnlocked ? 'bg-amber-100 text-amber-600' : 'bg-slate-200 text-slate-500'}`}>
               <Shield size={16} />
             </div>
-            <div>
+            <div className="min-w-0">
               <h4 className={`text-sm font-bold ${adminOverrideUnlocked ? 'text-amber-900' : 'text-slate-700'}`}>Admin God Mode</h4>
               <p className={`text-xs ${adminOverrideUnlocked ? 'text-amber-700' : 'text-slate-500'}`}>
                 {adminOverrideUnlocked 
@@ -767,7 +780,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
           </div>
           <button
             onClick={() => setAdminOverrideUnlocked(!adminOverrideUnlocked)}
-            className={`px-4 py-2 rounded-lg text-xs font-bold transition-colors ${
+            className={`px-4 py-2.5 rounded-lg text-xs font-bold transition-colors w-full md:w-auto shrink-0 ${
               adminOverrideUnlocked 
                 ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-xs' 
                 : 'bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 shadow-3xs'
@@ -779,10 +792,10 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
       )}
 
       {/* Header Row */}
-      <div className="flex items-center justify-between bg-slate-50 p-4 border border-slate-200 rounded-2xl">
-        <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col md:flex-row md:items-center gap-3 md:justify-between bg-slate-50 p-3 md:p-4 border border-slate-200 rounded-2xl">
+        <div className="flex flex-col gap-1.5 min-w-0">
           <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
-            <ClipboardList size={16} className="text-blue-600" />
+            <ClipboardList size={16} className="text-blue-600 shrink-0" />
             Quotation Builder
           </h3>
           <div className="flex items-center gap-1.5">
@@ -796,11 +809,11 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
             />
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 md:gap-3 flex-wrap">
           <button
             type="button"
             onClick={() => setShowDocumentPreview(true)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-bold text-slate-700 hover:bg-slate-50 shadow-sm"
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold text-slate-700 hover:bg-slate-50 shadow-sm w-full sm:w-auto"
           >
             <Eye size={13} />
             Preview / Print
@@ -858,22 +871,22 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
           return (
             <div key={section.siteVisitItemId} className="border border-slate-200 rounded-2xl bg-white shadow-sm overflow-visible">
               {/* Section Header */}
-              <div className="bg-[#f8fafc] px-5 py-3.5 border-b border-slate-100 flex items-center justify-between rounded-t-2xl">
-                <div className="flex flex-col gap-0.5">
+              <div className="bg-[#f8fafc] px-4 md:px-5 py-3.5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center gap-2 sm:justify-between rounded-t-2xl">
+                <div className="flex flex-col gap-0.5 min-w-0">
                   <span className="text-xs font-black text-[#0f172a] uppercase tracking-wider">{section.itemLabel}</span>
                   {(() => {
                     const measurementLabel = formatSiteMeasurementLabel(svItem);
                     return measurementLabel ? (
-                      <span className="text-[10px] text-slate-450 font-bold uppercase tracking-wider">
+                      <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
                         {measurementLabel}
                       </span>
                     ) : null;
                   })()}
                 </div>
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-slate-400 font-black uppercase">Total (incl. GST):</span>
-                    <span className="text-sm font-black text-[#1e40af] font-mono">
+                <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-[10px] text-slate-400 font-black uppercase shrink-0">Total (incl. GST):</span>
+                    <span className="text-sm font-black text-[#1e40af] font-mono truncate">
                       ₹{itemTotal.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                   </div>
@@ -881,20 +894,25 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                     <button
                       type="button"
                       onClick={() => removeSection(section.siteVisitItemId)}
-                      className="text-slate-400 hover:text-rose-500 transition-colors p-1"
+                      className="text-slate-400 hover:text-rose-500 transition-colors p-2"
                       title="Remove section"
                     >
-                      <Trash2 size={13} />
+                      <Trash2 size={14} />
                     </button>
                   )}
                 </div>
               </div>
 
-              {/* Line Items Table Header */}
+              {/* Line Items Table — wide horizontal scroll on phone/tablet */}
               <div
-                className="grid gap-2 px-4 py-2.5 text-[10px] font-black text-[#64748b] uppercase tracking-wider bg-slate-50 border-b border-slate-100"
+                className="overflow-x-auto overscroll-x-contain -mx-px scrollbar-none"
+                style={{ WebkitOverflowScrolling: "touch" }}
+              >
+              <div className="min-w-[980px] md:min-w-[1040px]">
+              <div
+                className="grid gap-3 px-4 py-2.5 text-[10px] font-black text-[#64748b] uppercase tracking-wider bg-slate-50 border-b border-slate-100"
                 style={{
-                  gridTemplateColumns: "1fr 72px 105px 110px 95px 40px 90px 28px",
+                  gridTemplateColumns: "minmax(300px, 2.5fr) 80px 120px 120px 100px 56px 100px 36px",
                 }}
               >
                 <div>Item Description</div>
@@ -916,9 +934,9 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                   return (
                     <div key={line.id} className="flex flex-col hover:bg-slate-50 transition-colors">
                       <div
-                        className="grid gap-2 px-4 py-3.5 items-center overflow-visible"
+                        className="grid gap-3 px-4 py-3 items-center overflow-visible"
                         style={{
-                          gridTemplateColumns: "1fr 72px 105px 110px 95px 40px 90px 28px",
+                          gridTemplateColumns: "minmax(300px, 2.5fr) 80px 120px 120px 100px 56px 100px 36px",
                           position: "relative",
                           zIndex: activeRowId === line.id ? 50 : 1,
                         }}
@@ -930,7 +948,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                         }}
                       >
                         {/* Product Search / Description */}
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px", width: "100%" }}>
+                        <div className="flex items-center gap-2 w-full min-w-0">
                           <ProductSearch
                             value={line.description}
                             products={products}
@@ -950,20 +968,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                                 const prod = products.find((p) => p.id === line.productId);
                                 if (prod) setSelectedProductInfo(prod);
                               }}
-                              style={{
-                                padding: "4px",
-                                color: "#2563eb",
-                                background: "none",
-                                border: "none",
-                                cursor: "pointer",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                borderRadius: "4px",
-                                flexShrink: 0
-                              }}
-                              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#eff6ff"}
-                              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
+                              className="shrink-0 p-2 text-blue-600 rounded-lg hover:bg-blue-50"
                               title="Product Details"
                             >
                               <Info size={14} style={{ strokeWidth: 2.5 }} />
@@ -1128,6 +1133,8 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                   );
                 })}
               </div>
+              </div>
+              </div>
 
               {/* Add Line inside section */}
               {!isLocked && (
@@ -1176,9 +1183,9 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
               value={terms}
               disabled={isLocked}
               onChange={(e) => { markDirty(); setTerms(e.target.value); }}
-              rows={3}
+              rows={10}
               placeholder="Terms and conditions - late fees, payment methods, delivery schedule"
-              className={`${inputCls} w-full px-3.5 py-2.5 resize-none bg-white font-medium`}
+              className={`${inputCls} w-full min-h-[280px] px-3.5 py-2.5 resize-y bg-white font-medium`}
             />
           </div>
         </div>
@@ -1380,12 +1387,12 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
         const actionButtons = (
           <>
             {!isLocked ? (
-              <div className="flex items-center gap-2">
+              <div className="flex flex-row flex-wrap items-stretch sm:items-center gap-2 w-full">
                 <button
                   type="button"
                   onClick={handleSave}
                   disabled={isPending}
-                  className="py-2 px-4 bg-slate-100 border border-slate-200 text-slate-700 hover:bg-slate-200 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm"
+                  className="py-2.5 px-4 bg-slate-100 border border-slate-200 text-slate-700 hover:bg-slate-200 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm flex-1 sm:flex-none min-w-0"
                 >
                   {isPending ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
                   Save Draft
@@ -1396,7 +1403,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                     type="button"
                     onClick={() => setShowSendConfirm(true)}
                     disabled={isPending || sendingToCustomer || sections.length === 0}
-                    className="py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex-1 sm:flex-none min-w-0"
                   >
                     {sendingToCustomer ? (
                       <Loader2 size={14} className="animate-spin" />
@@ -1412,16 +1419,30 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                     type="button"
                     onClick={() => setAdvanceConfirmType("override")}
                     disabled={isPending}
-                    className="py-2 px-5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50"
+                    className="py-2.5 px-4 md:px-5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 flex-1 sm:flex-none min-w-0"
                   >
-                    <Sparkles size={13} />
-                    Approve without Customer & Advance
+                    <Sparkles size={13} className="shrink-0" />
+                    <span className="text-center leading-tight">
+                      <span className="md:hidden">Approve &amp; Advance</span>
+                      <span className="hidden md:inline">Approve without Customer &amp; Advance</span>
+                    </span>
+                  </button>
+                )}
+
+                {canMoveToNextStage && (
+                  <button
+                    type="button"
+                    onClick={() => setAdvanceConfirmType("advance")}
+                    className="py-2.5 px-4 md:px-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm flex-1 sm:flex-none min-w-0"
+                  >
+                    <Sparkles size={13} className="shrink-0" />
+                    {advanceButtonLabel}
                   </button>
                 )}
               </div>
             ) : (
-              <div className="flex items-center gap-2">
-                <div className="py-2 px-4 bg-slate-100 border border-slate-200 text-slate-500 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 shadow-sm">
+              <div className="flex flex-row flex-wrap items-stretch sm:items-center gap-2 w-full">
+                <div className="py-2.5 px-4 bg-slate-100 border border-slate-200 text-slate-500 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 shadow-sm flex-1 sm:flex-none min-w-0">
                   <Check size={14} /> Submitted & Locked
                 </div>
                 {canAdminApproveWithoutCustomer && (
@@ -1429,19 +1450,22 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                     type="button"
                     onClick={() => setAdvanceConfirmType("override")}
                     disabled={isPending}
-                    className="py-2 px-5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50"
+                    className="py-2.5 px-4 md:px-5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 flex-1 sm:flex-none min-w-0"
                   >
-                    <Sparkles size={13} />
-                    Approve without Customer & Advance
+                    <Sparkles size={13} className="shrink-0" />
+                    <span className="text-center leading-tight">
+                      <span className="md:hidden">Approve &amp; Advance</span>
+                      <span className="hidden md:inline">Approve without Customer &amp; Advance</span>
+                    </span>
                   </button>
                 )}
                 {canMoveToNextStage && (
                   <button
                     type="button"
                     onClick={() => setAdvanceConfirmType("advance")}
-                    className="py-2 px-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm"
+                    className="py-2.5 px-4 md:px-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm flex-1 sm:flex-none min-w-0"
                   >
-                    <Sparkles size={13} />
+                    <Sparkles size={13} className="shrink-0" />
                     {advanceButtonLabel}
                   </button>
                 )}
@@ -1452,7 +1476,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
 
         if (portalTarget) {
           return createPortal(
-            <div className="flex gap-2.5 items-center justify-end w-full">
+            <div className="flex flex-col sm:flex-row flex-wrap gap-2.5 items-stretch sm:items-center justify-end w-full">
               {actionButtons}
             </div>,
             portalTarget
@@ -1470,25 +1494,36 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
       )}
 
       {showDocumentPreview && typeof document !== "undefined" && createPortal(
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center overflow-hidden bg-black/50 p-4 sm:p-6 print:static print:inset-auto print:block print:bg-transparent print:p-0 print:overflow-visible">
-          <div className="relative flex w-full max-w-4xl max-h-full flex-col rounded-2xl bg-slate-100 shadow-2xl print:static print:max-w-none print:max-h-none print:shadow-none print:bg-transparent print:rounded-none">
-            <div className="shrink-0 flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 rounded-t-2xl quotation-no-print">
-              <div>
-                <h3 className="text-sm font-black text-slate-900">Customer quotation preview</h3>
-                <p className="text-[11px] text-slate-500">
+        <div className="fixed inset-0 z-[99999] flex items-stretch md:items-center justify-center overflow-hidden bg-black/50 p-0 md:p-4 lg:p-6 print:static print:inset-auto print:block print:bg-transparent print:p-0 print:overflow-visible">
+          <div className="relative flex w-full h-full md:h-auto md:max-h-[92dvh] max-w-4xl flex-col rounded-none md:rounded-2xl bg-slate-100 shadow-2xl print:static print:max-w-none print:max-h-none print:shadow-none print:bg-transparent print:rounded-none print:h-auto">
+            <div className="shrink-0 flex items-start justify-between gap-2 sm:gap-3 border-b border-slate-200 bg-white px-3 sm:px-4 py-3 md:rounded-t-2xl quotation-no-print">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 mb-1 md:mb-0">
+                  <button
+                    type="button"
+                    onClick={() => setShowDocumentPreview(false)}
+                    className="md:hidden inline-flex items-center gap-1.5 shrink-0 rounded-lg px-2.5 py-1.5 bg-slate-100 text-slate-700 text-xs font-bold hover:bg-slate-200 transition-colors"
+                    aria-label="Back"
+                  >
+                    <ArrowLeft size={14} />
+                    Back
+                  </button>
+                  <h3 className="text-sm font-black text-slate-900 truncate">Customer quotation preview</h3>
+                </div>
+                <p className="text-[11px] text-slate-500 leading-snug hidden sm:block md:mt-0.5">
                   Same layout as the portal. Use Print / Save as PDF on the document.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setShowDocumentPreview(false)}
-                className="rounded-lg border border-slate-200 bg-white p-2 text-slate-500 hover:bg-slate-50"
+                className="rounded-lg border border-slate-200 bg-white p-2 text-slate-500 hover:bg-slate-50 shrink-0"
                 aria-label="Close preview"
               >
                 <X size={16} />
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6 print:overflow-visible print:p-0">
+            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-2 sm:p-3 md:p-6 print:overflow-visible print:p-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
               <QuotationDocument
                 quotationId={quotationId}
                 quoteDate={quoteCreatedAt || new Date().toISOString()}
@@ -1570,213 +1605,123 @@ function ProductInfoModal({ product, onClose }: { product: Product; onClose: () 
   const [activeImgIdx, setActiveImgIdx] = useState(0);
   const images = product.images && product.images.length > 0 ? product.images : [];
 
-  return (
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
     <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        backgroundColor: "rgba(0, 0, 0, 0.6)",
-        backdropFilter: "blur(4px)",
-        zIndex: 99999,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "16px",
-      }}
+      className="fixed inset-0 z-[100000] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4"
+      onClick={onClose}
+      role="presentation"
     >
       <div
-        style={{
-          backgroundColor: "white",
-          borderRadius: "24px",
-          maxWidth: "500px",
-          width: "100%",
-          overflow: "hidden",
-          boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
-          border: "1px solid #f1f5f9",
-          display: "flex",
-          flexDirection: "column",
-          maxHeight: "90vh",
-        }}
+        className="relative flex w-full sm:max-w-[500px] max-h-[min(92dvh,100%)] flex-col overflow-hidden rounded-t-2xl sm:rounded-2xl bg-white shadow-2xl border border-slate-100"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="product-info-title"
       >
         {/* Header */}
-        <div
-          style={{
-            padding: "16px 24px",
-            borderBottom: "1px solid #f1f5f9",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            backgroundColor: "#f8fafc",
-          }}
-        >
-          <div>
-            <h4 style={{ margin: 0, fontSize: "14px", fontWeight: 900, color: "#1e293b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+        <div className="shrink-0 flex items-start justify-between gap-3 border-b border-slate-100 bg-slate-50 px-4 py-3 sm:px-6 sm:py-4">
+          <div className="min-w-0 flex-1 pr-2">
+            <h4
+              id="product-info-title"
+              className="m-0 text-sm font-black text-slate-800 uppercase tracking-wide truncate"
+            >
               {product.name}
             </h4>
-            <span style={{ fontSize: "10px", color: "#94a3b8", fontWeight: 700, textTransform: "uppercase", marginTop: "2px", display: "block" }}>
+            <span className="mt-0.5 block text-[10px] font-bold uppercase text-slate-400 truncate">
               {product.product_id} • {product.category || "General"}
             </span>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            style={{
-              padding: "6px",
-              backgroundColor: "transparent",
-              border: "none",
-              cursor: "pointer",
-              borderRadius: "9999px",
-              color: "#94a3b8",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              transition: "all 0.2s",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#e2e8f0"; e.currentTarget.style.color = "#475569"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; e.currentTarget.style.color = "#94a3b8"; }}
+            className="shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-full text-slate-400 hover:bg-slate-200 hover:text-slate-600 transition-colors"
+            aria-label="Close"
           >
             <X size={16} />
           </button>
         </div>
 
-        {/* Scrollable Content */}
-        <div style={{ padding: "24px", overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: "20px" }}>
-          {/* Images Section */}
+        {/* Scrollable content */}
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5 flex flex-col gap-5">
           {images.length > 0 ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-              <div
-                style={{
-                  aspectRatio: "16/9",
-                  backgroundColor: "#f8fafc",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: "16px",
-                  overflow: "hidden",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  position: "relative",
-                }}
-              >
+            <div className="flex flex-col gap-2">
+              <div className="aspect-video bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden flex items-center justify-center">
                 <img
                   src={images[activeImgIdx]}
                   alt={product.name}
-                  style={{ maxHeight: "100%", maxWidth: "100%", objectFit: "contain" }}
-                  onError={(e) => { e.currentTarget.src = "https://images.unsplash.com/photo-1542744094-3a31f103e35f?w=400&auto=format&fit=crop"; }}
+                  className="max-h-full max-w-full object-contain"
+                  onError={(e) => {
+                    e.currentTarget.src =
+                      "https://images.unsplash.com/photo-1542744094-3a31f103e35f?w=400&auto=format&fit=crop";
+                  }}
                 />
               </div>
               {images.length > 1 && (
-                <div style={{ display: "flex", gap: "8px", overflowX: "auto", paddingBottom: "4px" }}>
+                <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1">
                   {images.map((img: string, idx: number) => (
                     <button
                       key={idx}
+                      type="button"
                       onClick={() => setActiveImgIdx(idx)}
-                      style={{
-                        width: "56px",
-                        height: "56px",
-                        borderRadius: "8px",
-                        overflow: "hidden",
-                        border: activeImgIdx === idx ? "2px solid #2563eb" : "2px solid #cbd5e1",
-                        padding: 0,
-                        backgroundColor: "transparent",
-                        cursor: "pointer",
-                        flexShrink: 0,
-                        transition: "all 0.2s",
-                      }}
+                      className={`shrink-0 w-14 h-14 rounded-lg overflow-hidden border-2 transition-colors ${
+                        activeImgIdx === idx ? "border-blue-600" : "border-slate-300"
+                      }`}
                     >
-                      <img src={img} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      <img src={img} alt="" className="w-full h-full object-cover" />
                     </button>
                   ))}
                 </div>
               )}
             </div>
           ) : (
-            <div
-              style={{
-                aspectRatio: "16/9",
-                backgroundColor: "#f8fafc",
-                border: "1px solid #e2e8f0",
-                borderRadius: "16px",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "#cbd5e1",
-                gap: "4px",
-              }}
-            >
-              <Package size={32} style={{ strokeWidth: 1.5 }} />
-              <span style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase" }}>No images uploaded</span>
+            <div className="aspect-video bg-slate-50 border border-slate-200 rounded-2xl flex flex-col items-center justify-center text-slate-300 gap-1">
+              <Package size={32} strokeWidth={1.5} />
+              <span className="text-[10px] font-bold uppercase">No images uploaded</span>
             </div>
           )}
 
-          {/* Pricing Info */}
-          <div
-            style={{
-              backgroundColor: "rgba(219, 234, 254, 0.3)",
-              border: "1px solid #dbeafe",
-              borderRadius: "16px",
-              padding: "16px",
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: "16px",
-            }}
-          >
+          <div className="grid grid-cols-2 gap-4 rounded-2xl border border-blue-100 bg-blue-50/30 p-4">
             <div>
-              <span style={{ fontSize: "9px", color: "#94a3b8", fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.05em", display: "block" }}>Pricing Type</span>
-              <span style={{ fontSize: "12px", fontWeight: 800, color: "#334155", textTransform: "capitalize", display: "block", marginTop: "2px" }}>
+              <span className="block text-[9px] font-black uppercase tracking-wider text-slate-400">Pricing Type</span>
+              <span className="mt-0.5 block text-xs font-extrabold text-slate-700 capitalize">
                 {product.pricing_type?.replace("_", " ")}
               </span>
             </div>
             <div>
-              <span style={{ fontSize: "9px", color: "#94a3b8", fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.05em", display: "block" }}>Standard Rate</span>
-              <span style={{ fontSize: "12px", fontWeight: 900, color: "#1d4ed8", fontFamily: "monospace", display: "block", marginTop: "2px" }}>
+              <span className="block text-[9px] font-black uppercase tracking-wider text-slate-400">Standard Rate</span>
+              <span className="mt-0.5 block text-xs font-black text-blue-700 font-mono">
                 ₹{(product.price_per_unit || product.price_per_sqft || 0).toLocaleString("en-IN")}
-                <span style={{ fontSize: "10px", color: "#94a3b8", fontWeight: 500, fontFamily: "sans-serif" }}>
+                <span className="text-[10px] font-medium text-slate-400 font-sans">
                   /{product.pricing_type === "per_sqft" ? "sqft" : "unit"}
                 </span>
               </span>
             </div>
           </div>
 
-          {/* Additional details */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-            <span style={{ fontSize: "9px", color: "#94a3b8", fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.05em" }}>Product Description</span>
-            <p style={{ margin: 0, fontSize: "12px", color: "#475569", lineHeight: 1.6, fontWeight: 500 }}>
-              High-quality {product.name} suitable for premium indoor and outdoor signage applications. Manufactured with durable materials to ensure long-lasting visibility and brand representation.
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">Product Description</span>
+            <p className="m-0 text-xs text-slate-600 leading-relaxed font-medium">
+              High-quality {product.name} suitable for premium indoor and outdoor signage applications.
+              Manufactured with durable materials to ensure long-lasting visibility and brand representation.
             </p>
           </div>
         </div>
 
         {/* Footer */}
-        <div
-          style={{
-            padding: "12px 24px",
-            borderTop: "1px solid #f1f5f9",
-            backgroundColor: "#f8fafc",
-            display: "flex",
-            justifyContent: "end",
-          }}
-        >
+        <div className="shrink-0 border-t border-slate-100 bg-slate-50 px-4 py-3 sm:px-6 flex justify-end pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <button
+            type="button"
             onClick={onClose}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#1e293b",
-              color: "white",
-              border: "none",
-              borderRadius: "12px",
-              fontSize: "12px",
-              fontWeight: 700,
-              cursor: "pointer",
-              transition: "background-color 0.2s",
-            }}
-            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#0f172a"}
-            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "#1e293b"}
+            className="w-full sm:w-auto px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-colors"
           >
             Close
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -1825,23 +1770,16 @@ function QuotationConfirmModal({
   const confirmLabel = status === "Rejected" ? "Resend to Customer" : "Send to Customer";
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        backgroundColor: "rgba(0, 0, 0, 0.5)",
-        backdropFilter: "blur(2px)",
-        zIndex: 99999,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "16px",
-      }}
-    >
+    <OverlayPortal>
+      <div
+        className="fixed inset-0 z-[100000] flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm p-0 md:p-4"
+        onClick={onClose}
+        role="presentation"
+      >
       <div
         style={{
           backgroundColor: "white",
-          borderRadius: "16px",
+          borderRadius: "16px 16px 0 0",
           maxWidth: "400px",
           width: "100%",
           overflow: "hidden",
@@ -1849,36 +1787,41 @@ function QuotationConfirmModal({
           border: "1px solid #f1f5f9",
           display: "flex",
           flexDirection: "column",
+          maxHeight: "92dvh",
         }}
+        className="md:!rounded-2xl md:!max-h-[90vh]"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
       >
         {/* Header */}
-        <div style={{ padding: "16px 20px", borderBottom: "1px solid #f1f5f9", backgroundColor: "#f8fafc", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div>
+        <div style={{ padding: "14px 16px", borderBottom: "1px solid #f1f5f9", backgroundColor: "#f8fafc", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", flexShrink: 0 }}>
+          <div style={{ minWidth: 0 }}>
             <h4 style={{ margin: 0, fontSize: "14px", fontWeight: 800, color: "#0f172a", textTransform: "uppercase" }}>
               Confirm Quotation
             </h4>
-            <span style={{ fontSize: "10px", color: "#64748b", fontWeight: 600 }}>
+            <span style={{ fontSize: "10px", color: "#64748b", fontWeight: 600, display: "block", marginTop: "2px" }}>
               {getSendConfirmSubtitle(status)}
             </span>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 shrink-0 p-1" aria-label="Close">
             <X size={16} />
           </button>
         </div>
 
         {/* Content */}
-        <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "12px" }}>
+        <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "12px", overflowY: "auto", flex: 1, minHeight: 0 }}>
           {/* Section Summaries Breakdown */}
           {sectionSummaries && sectionSummaries.length > 0 && (
             <div style={{ maxHeight: "160px", overflowY: "auto", borderBottom: "1px dashed #cbd5e1", paddingBottom: "12px", marginBottom: "4px", display: "flex", flexDirection: "column", gap: "10px" }}>
               {sectionSummaries.map((sec) => (
                 <div key={sec.id} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                    <div style={{ display: "flex", flexDirection: "column" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px" }}>
+                    <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
                       <span style={{ fontSize: "12px", color: "#334155", fontWeight: 700 }}>{sec.name}</span>
                       <span style={{ fontSize: "10px", color: "#94a3b8", fontWeight: 600 }}>{sec.linesCount} line item{sec.linesCount !== 1 ? 's' : ''}</span>
                     </div>
-                    <span style={{ fontSize: "12px", color: "#0f172a", fontWeight: 700 }}>
+                    <span style={{ fontSize: "12px", color: "#0f172a", fontWeight: 700, flexShrink: 0 }}>
                       ₹{sec.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                     </span>
                   </div>
@@ -1886,11 +1829,11 @@ function QuotationConfirmModal({
                   {sec.lines && sec.lines.length > 0 && (
                     <div style={{ paddingLeft: "8px", borderLeft: "2px solid #e2e8f0", display: "flex", flexDirection: "column", gap: "4px" }}>
                       {sec.lines.map(line => (
-                        <div key={line.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <span style={{ fontSize: "11px", color: "#64748b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "220px" }}>
+                        <div key={line.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
+                          <span style={{ fontSize: "11px", color: "#64748b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: 1 }}>
                             {line.description}
                           </span>
-                          <span style={{ fontSize: "11px", color: "#475569", fontWeight: 600 }}>
+                          <span style={{ fontSize: "11px", color: "#475569", fontWeight: 600, flexShrink: 0 }}>
                             ₹{line.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                           </span>
                         </div>
@@ -1927,17 +1870,30 @@ function QuotationConfirmModal({
             </div>
           )}
           <div style={{ borderTop: "1px dashed #cbd5e1", margin: "4px 0" }} />
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
             <span style={{ fontSize: "14px", color: "#0f172a", fontWeight: 900 }}>Grand Total</span>
-            <span style={{ fontSize: "16px", color: "#2563eb", fontWeight: 900 }}>₹{grandTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+            <span style={{ fontSize: "16px", color: "#2563eb", fontWeight: 900, wordBreak: "break-all", textAlign: "right" }}>₹{grandTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
           </div>
         </div>
 
         {/* Footer */}
-        <div style={{ padding: "16px 20px", borderTop: "1px solid #f1f5f9", backgroundColor: "#f8fafc", display: "flex", justifyContent: "flex-end", gap: "8px" }}>
+        <div
+          style={{
+            padding: "12px 16px",
+            paddingBottom: "max(12px, env(safe-area-inset-bottom))",
+            borderTop: "1px solid #f1f5f9",
+            backgroundColor: "#f8fafc",
+            display: "flex",
+            flexDirection: "column-reverse",
+            gap: "8px",
+            flexShrink: 0,
+          }}
+          className="md:!flex-row md:!justify-end"
+        >
           <button
             onClick={onClose}
-            style={{ padding: "8px 16px", backgroundColor: "white", color: "#475569", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}
+            style={{ padding: "10px 16px", backgroundColor: "white", color: "#475569", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "12px", fontWeight: 700, cursor: "pointer", width: "100%" }}
+            className="md:!w-auto"
             onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#f1f5f9"}
             onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "white"}
           >
@@ -1945,7 +1901,8 @@ function QuotationConfirmModal({
           </button>
           <button
             onClick={onConfirm}
-            style={{ padding: "8px 16px", backgroundColor: "#22c55e", color: "white", border: "none", borderRadius: "8px", fontSize: "12px", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}
+            style={{ padding: "10px 16px", backgroundColor: "#22c55e", color: "white", border: "none", borderRadius: "8px", fontSize: "12px", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "4px", width: "100%" }}
+            className="md:!w-auto"
             onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#16a34a"}
             onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "#22c55e"}
           >
@@ -1954,6 +1911,7 @@ function QuotationConfirmModal({
         </div>
       </div>
     </div>
+    </OverlayPortal>
   );
 }
 
@@ -1990,23 +1948,16 @@ function WorkflowAdvanceConfirmModal({
         : `Move to ${nextStageLabel}`;
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        backgroundColor: "rgba(0, 0, 0, 0.5)",
-        backdropFilter: "blur(2px)",
-        zIndex: 99999,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "16px",
-      }}
-    >
+    <OverlayPortal>
+      <div
+        className="fixed inset-0 z-[100000] flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm p-0 md:p-4"
+        onClick={onClose}
+        role="presentation"
+      >
       <div
         style={{
           backgroundColor: "white",
-          borderRadius: "14px",
+          borderRadius: "14px 14px 0 0",
           maxWidth: "420px",
           width: "100%",
           overflow: "hidden",
@@ -2014,29 +1965,48 @@ function WorkflowAdvanceConfirmModal({
           border: "1px solid #f1f5f9",
           display: "flex",
           flexDirection: "column",
+          maxHeight: "92dvh",
         }}
+        className="md:!rounded-[14px]"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
       >
-        <div style={{ padding: "16px 20px", borderBottom: "1px solid #f1f5f9", backgroundColor: "#f8fafc" }}>
+        <div style={{ padding: "16px", borderBottom: "1px solid #f1f5f9", backgroundColor: "#f8fafc" }}>
           <h4 style={{ margin: 0, fontSize: "14px", fontWeight: 800, color: "#0f172a", textTransform: "uppercase" }}>
             {title}
           </h4>
           <p style={{ margin: "8px 0 0", fontSize: "12px", color: "#64748b", lineHeight: 1.5 }}>{description}</p>
         </div>
-        <div style={{ padding: "16px 20px", borderTop: "1px solid #f1f5f9", backgroundColor: "#f8fafc", display: "flex", justifyContent: "flex-end", gap: "8px" }}>
+        <div
+          style={{
+            padding: "12px 16px",
+            paddingBottom: "max(12px, env(safe-area-inset-bottom))",
+            borderTop: "1px solid #f1f5f9",
+            backgroundColor: "#f8fafc",
+            display: "flex",
+            flexDirection: "column-reverse",
+            gap: "8px",
+          }}
+          className="md:!flex-row md:!justify-end"
+        >
           <button
             onClick={onClose}
-            style={{ padding: "8px 16px", backgroundColor: "white", color: "#475569", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}
+            style={{ padding: "10px 16px", backgroundColor: "white", color: "#475569", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "12px", fontWeight: 700, cursor: "pointer", width: "100%" }}
+            className="md:!w-auto"
           >
             Cancel
           </button>
           <button
             onClick={onConfirm}
-            style={{ padding: "8px 16px", backgroundColor: mode === "override" ? "#d97706" : "#16a34a", color: "white", border: "none", borderRadius: "8px", fontSize: "12px", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}
+            style={{ padding: "10px 16px", backgroundColor: mode === "override" ? "#d97706" : "#16a34a", color: "white", border: "none", borderRadius: "8px", fontSize: "12px", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "4px", width: "100%" }}
+            className="md:!w-auto"
           >
             <Check size={14} /> {confirmLabel}
           </button>
         </div>
       </div>
     </div>
+    </OverlayPortal>
   );
 }

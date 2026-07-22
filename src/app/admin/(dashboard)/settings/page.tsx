@@ -1,17 +1,16 @@
-
-import { SettingsViewNew } from "@/features/settings/components/SettingsViewNew";
 import { getAppSettings, getCompanyDetails } from "@/features/settings/actions/settingsActions";
+import { SettingsPageClient } from "./SettingsPageClient";
 
 export default async function SettingsPage() {
   const [appSettings, companyDetails] = await Promise.all([
     getAppSettings(),
-    getCompanyDetails()
+    getCompanyDetails(),
   ]);
-  
+
   return (
-    <SettingsViewNew 
-      initialAppSettings={appSettings} 
-      companyDetails={companyDetails} 
+    <SettingsPageClient
+      initialAppSettings={appSettings}
+      companyDetails={companyDetails}
     />
   );
 }

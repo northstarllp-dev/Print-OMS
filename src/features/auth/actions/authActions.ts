@@ -63,7 +63,7 @@ export async function adminSignIn(email: string, pass: string) {
   // Fetch role
   const { data: profile, error: profileError } = await supabase
     .from("users")
-    .select("role, companies!inner(slug)")
+    .select("role, status, companies!inner(slug)")
     .eq("email", email.toLowerCase())
     .single();
 
@@ -75,6 +75,11 @@ export async function adminSignIn(email: string, pass: string) {
   if ((profile as any).companies?.slug !== loadClientConfig().id) {
     await supabase.auth.signOut();
     return { error: "Unauthorized access. This account belongs to a different client workspace." };
+  }
+
+  if (String(profile.status || "Active") === "Inactive") {
+    await supabase.auth.signOut();
+    return { error: "This account has been frozen. Contact your administrator." };
   }
 
   if (profile.role !== "admin") {
@@ -100,7 +105,7 @@ export async function staffSignIn(email: string, pass: string) {
   // Fetch role
   const { data: profile, error: profileError } = await supabase
     .from("users")
-    .select("role, companies!inner(slug)")
+    .select("role, status, companies!inner(slug)")
     .eq("email", email.toLowerCase())
     .single();
 
@@ -112,6 +117,11 @@ export async function staffSignIn(email: string, pass: string) {
   if ((profile as any).companies?.slug !== loadClientConfig().id) {
     await supabase.auth.signOut();
     return { error: "Unauthorized access. This account belongs to a different client workspace." };
+  }
+
+  if (String(profile.status || "Active") === "Inactive") {
+    await supabase.auth.signOut();
+    return { error: "This account has been frozen. Contact your administrator." };
   }
 
   if (profile.role !== "staff") {
@@ -140,7 +150,7 @@ export async function productionFloorSignIn(email: string, pass: string) {
 
   const { data: profile, error: profileError } = await supabase
     .from("users")
-    .select("role, staff_role, company_id, companies!inner(slug)")
+    .select("role, staff_role, company_id, status, companies!inner(slug)")
     .eq("email", email.toLowerCase())
     .single();
 
@@ -152,6 +162,11 @@ export async function productionFloorSignIn(email: string, pass: string) {
   if ((profile as any).companies?.slug !== loadClientConfig().id) {
     await supabase.auth.signOut();
     return { error: "Unauthorized access. This account belongs to a different client workspace." };
+  }
+
+  if (String(profile.status || "Active") === "Inactive") {
+    await supabase.auth.signOut();
+    return { error: "This account has been frozen. Contact your administrator." };
   }
 
   if (profile.role !== "staff" && profile.role !== "admin") {
@@ -194,7 +209,7 @@ export async function installationFloorSignIn(email: string, pass: string) {
 
   const { data: profile, error: profileError } = await supabase
     .from("users")
-    .select("role, staff_role, company_id, companies!inner(slug)")
+    .select("role, staff_role, company_id, status, companies!inner(slug)")
     .eq("email", email.toLowerCase())
     .single();
 
@@ -206,6 +221,11 @@ export async function installationFloorSignIn(email: string, pass: string) {
   if ((profile as any).companies?.slug !== loadClientConfig().id) {
     await supabase.auth.signOut();
     return { error: "Unauthorized access. This account belongs to a different client workspace." };
+  }
+
+  if (String(profile.status || "Active") === "Inactive") {
+    await supabase.auth.signOut();
+    return { error: "This account has been frozen. Contact your administrator." };
   }
 
   if (profile.role !== "staff" && profile.role !== "admin") {

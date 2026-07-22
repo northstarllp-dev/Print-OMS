@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { X, User, Phone, MessageCircle, Mail, MapPin, Building2, Calendar, FileText, Loader2, ArrowRight } from "lucide-react";
+import { X, User, Phone, MessageCircle, Mail, MapPin, Building2, Calendar, FileText, Loader2, ArrowRight, ArrowLeft } from "lucide-react";
 import { Customer, Enquiry } from "@/types";
 import { getEnquiryByOrderId } from "@/features/enquiries/actions/enquiryActions";
 
@@ -49,34 +49,46 @@ export const CustomerDetailsDrawer: React.FC<CustomerDetailsDrawerProps> = ({
         style={{ animation: "fadeIn 0.2s ease-out" }}
       />
       
-      {/* Drawer */}
+      {/* Drawer — full screen on mobile/tablet, side panel on desktop */}
       <div 
-        className="fixed inset-y-0 right-0 w-[420px] bg-[#F8FAFC] shadow-2xl z-[1000] border-l border-slate-200 flex flex-col"
+        className="fixed inset-0 lg:inset-y-0 lg:right-0 lg:left-auto w-full lg:max-w-[420px] bg-[#F8FAFC] shadow-2xl z-[1000] lg:border-l border-slate-200 flex flex-col"
         style={{ animation: "slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1)" }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-5 bg-white border-b border-slate-200 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center border border-blue-100">
-              <User size={20} className="text-blue-600" />
+        <div className="flex items-center justify-between px-3 sm:px-4 md:px-6 py-3 sm:py-4 md:py-5 bg-white border-b border-slate-200 shrink-0 gap-2 sm:gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <button
+              type="button"
+              onClick={onClose}
+              className="lg:hidden inline-flex items-center gap-1.5 shrink-0 rounded-lg px-2.5 py-1.5 bg-slate-100 text-slate-700 text-xs font-bold hover:bg-slate-200 transition-colors"
+              aria-label="Back"
+            >
+              <ArrowLeft size={14} />
+              Back
+            </button>
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-blue-50 flex items-center justify-center border border-blue-100 shrink-0">
+              <User size={18} className="text-blue-600 sm:hidden" />
+              <User size={20} className="text-blue-600 hidden sm:block" />
             </div>
-            <div>
-              <h2 className="text-base font-bold text-slate-800 leading-tight">{customer.name}</h2>
-              <div className="text-xs font-semibold text-slate-500 mt-0.5 font-mono">
+            <div className="min-w-0">
+              <h2 className="text-sm sm:text-base font-bold text-slate-800 leading-tight truncate">{customer.name}</h2>
+              <div className="text-xs font-semibold text-slate-500 mt-0.5 font-mono truncate">
                 {customer.customerCode || customer.customerId || "No ID"}
               </div>
             </div>
           </div>
           <button 
+            type="button"
             onClick={onClose}
-            className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            className="w-9 h-9 shrink-0 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            aria-label="Close"
           >
             <X size={18} />
           </button>
         </div>
 
         {/* Content - Scrollable */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
           
           {/* Contact Section (Bento Style) */}
           <section>
@@ -199,10 +211,10 @@ export const CustomerDetailsDrawer: React.FC<CustomerDetailsDrawerProps> = ({
         </div>
         
         {/* Footer */}
-        <div className="p-4 border-t border-slate-200 bg-white shrink-0 flex justify-end">
+        <div className="p-4 border-t border-slate-200 bg-white shrink-0 flex justify-stretch md:justify-end pb-[max(1rem,env(safe-area-inset-bottom))]">
           <button 
             onClick={onClose}
-            className="px-4 py-2 bg-slate-900 text-white text-xs font-bold rounded-lg hover:bg-slate-800 transition-colors"
+            className="w-full md:w-auto px-4 py-2.5 bg-slate-900 text-white text-xs font-bold rounded-lg hover:bg-slate-800 transition-colors"
           >
             Close Details
           </button>

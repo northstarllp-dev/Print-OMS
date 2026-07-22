@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { OverlayPortal } from "@/components/ui/OverlayPortal";
 import {
   X,
   Lock,
@@ -23,6 +24,8 @@ interface SiteVisitReviewModalProps {
   orderName: string;
   onConfirm: () => Promise<void>;
   onClose: () => void;
+  /** staff_push = summary then request admin approval (no lock). admin_lock = freeze before workflow. */
+  mode?: "staff_push" | "admin_lock";
 }
 
 function InfoChip({
@@ -92,7 +95,7 @@ function LocationReviewCard({ loc, index }: { loc: SignLocation; index: number }
       {/* Header */}
       <button
         onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center justify-between px-5 py-3.5 bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer"
+        className="w-full flex items-center justify-between px-4 md:px-5 py-3.5 bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer"
       >
         <div className="flex items-center gap-2.5">
           <div className="w-6 h-6 rounded-full bg-[var(--color-secondary)] text-white flex items-center justify-center text-[11px] font-black shrink-0">
@@ -110,7 +113,7 @@ function LocationReviewCard({ loc, index }: { loc: SignLocation; index: number }
       </button>
 
       {open && (
-        <div className="p-5 space-y-5">
+        <div className="p-4 md:p-5 space-y-5">
           {/* Measurements */}
           {hasMeasurements && (
             <div>
@@ -238,8 +241,10 @@ export const SiteVisitReviewModal: React.FC<SiteVisitReviewModalProps> = ({
   orderName,
   onConfirm,
   onClose,
+  mode = "admin_lock",
 }) => {
   const [confirming, setConfirming] = useState(false);
+  const isStaffPush = mode === "staff_push";
 
   const handleConfirm = async () => {
     setConfirming(true);
@@ -255,42 +260,48 @@ export const SiteVisitReviewModal: React.FC<SiteVisitReviewModalProps> = ({
   const locations = siteVisit.locations || [];
 
   return (
+    <OverlayPortal>
     <div
-      className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm"
+      className="fixed inset-0 z-[100000] flex items-end md:items-center justify-center p-0 md:p-4 bg-slate-900/60 backdrop-blur-sm"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh] overflow-hidden border border-slate-200">
+      <div className="bg-white rounded-t-2xl md:rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[92dvh] md:max-h-[90vh] overflow-hidden border border-slate-200">
         {/* ── Sticky Header ── */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-white shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center shrink-0">
-              <Lock size={17} className="text-white" />
+        <div className="flex items-start md:items-center justify-between gap-3 px-4 md:px-6 py-3.5 md:py-4 border-b border-slate-100 bg-white shrink-0">
+          <div className="flex items-start md:items-center gap-3 min-w-0">
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${isStaffPush ? "bg-emerald-600" : "bg-indigo-600"}`}>
+              {isStaffPush ? (
+                <CheckCircle2 size={17} className="text-white" />
+              ) : (
+                <Lock size={17} className="text-white" />
+              )}
             </div>
-            <div>
-              <h2 className="text-base font-black text-slate-900">
-                Review & Confirm Site Visit
+            <div className="min-w-0">
+              <h2 className="text-sm md:text-base font-black text-slate-900 leading-snug">
+                {isStaffPush ? "Confirm Site Visit Summary" : "Review & Confirm Site Visit"}
               </h2>
-              <p className="text-xs text-slate-500 font-medium">{orderName}</p>
+              <p className="text-xs text-slate-500 font-medium truncate">{orderName}</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
+            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors cursor-pointer shrink-0"
+            aria-label="Close"
           >
             <X size={18} />
           </button>
         </div>
 
         {/* ── Scrollable Body ── */}
-        <div className="overflow-y-auto flex-1 px-6 py-5 space-y-6">
+        <div className="overflow-y-auto flex-1 px-4 md:px-6 py-4 md:py-5 space-y-5 md:space-y-6">
           {/* Visit Info */}
           <div>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">
               Scheduled Visit Info
             </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <InfoChip
                 icon={<Calendar size={15} />}
                 label="Date"
@@ -434,16 +445,18 @@ export const SiteVisitReviewModal: React.FC<SiteVisitReviewModalProps> = ({
         </div>
 
         {/* ── Sticky Footer ── */}
-        <div className="shrink-0 border-t border-slate-100 bg-white px-6 py-4">
+        <div className="shrink-0 border-t border-slate-100 bg-white px-4 md:px-6 py-3.5 md:py-4 pb-[max(0.875rem,env(safe-area-inset-bottom))]">
           {/* Warning strip */}
-          <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 mb-4">
-            <AlertTriangle size={14} className="text-amber-600 shrink-0" />
-            <p className="text-xs text-amber-800 font-semibold">
-              Once confirmed, this data cannot be edited. The site visit will be locked and sent for admin review.
+          <div className={`flex items-start gap-2 rounded-xl px-3 md:px-4 py-2.5 mb-3 md:mb-4 border ${isStaffPush ? "bg-sky-50 border-sky-200" : "bg-amber-50 border-amber-200"}`}>
+            <AlertTriangle size={14} className={`shrink-0 mt-0.5 ${isStaffPush ? "text-sky-600" : "text-amber-600"}`} />
+            <p className={`text-xs font-semibold leading-snug ${isStaffPush ? "text-sky-800" : "text-amber-800"}`}>
+              {isStaffPush
+                ? "Review the summary below, then request admin approval. Site visit data will not be locked yet."
+                : "Once confirmed, this data cannot be edited. The site visit will be locked before you choose the next workflow."}
             </p>
           </div>
 
-          <div className="flex items-center justify-end gap-3">
+          <div className="flex flex-col-reverse md:flex-row items-stretch md:items-center justify-end gap-2 md:gap-3">
             <button
               onClick={onClose}
               disabled={confirming}
@@ -454,20 +467,22 @@ export const SiteVisitReviewModal: React.FC<SiteVisitReviewModalProps> = ({
             <button
               onClick={handleConfirm}
               disabled={confirming}
-              className="flex items-center gap-2 px-6 py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors cursor-pointer disabled:opacity-60 shadow-sm shadow-emerald-200"
+              className="flex items-center justify-center gap-2 px-4 md:px-6 py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors cursor-pointer disabled:opacity-60 shadow-sm shadow-emerald-200"
             >
               {confirming ? (
                 <>
-                  <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                  <svg className="animate-spin w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                   </svg>
-                  Locking...
+                  {isStaffPush ? "Submitting..." : "Locking..."}
                 </>
               ) : (
                 <>
-                  <CheckCircle2 size={16} />
-                  Confirm & Lock Site Visit
+                  <CheckCircle2 size={16} className="shrink-0" />
+                  <span className="text-center leading-tight">
+                    {isStaffPush ? "Confirm & Request Admin Approval" : "Confirm & Lock Site Visit"}
+                  </span>
                 </>
               )}
             </button>
@@ -475,5 +490,6 @@ export const SiteVisitReviewModal: React.FC<SiteVisitReviewModalProps> = ({
         </div>
       </div>
     </div>
+    </OverlayPortal>
   );
 };

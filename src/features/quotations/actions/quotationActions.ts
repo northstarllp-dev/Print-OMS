@@ -472,7 +472,7 @@ export async function customerRequestRevision(
 
   await admin.from("order_activity").insert({
     order_id: friendly,
-    activity_type: "customer",
+    activity_type: "timeline",
     actor_name: customerName,
     actor_role: "Customer",
     content: `Quotation Declined. Feedback: ${trimmed}`,

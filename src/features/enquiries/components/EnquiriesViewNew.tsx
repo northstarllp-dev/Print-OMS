@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import Link from "next/link";
+import { createPortal } from "react-dom";
 import { Search, Filter, Plus, AlertCircle, CheckCircle, Clock, Phone, Copy, MessageSquare, Mail, X, Check, ArrowRight, Calendar, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
 import { AddEnquiryModal, EnquiryFormData } from "./AddEnquiryModal";
 import { ConvertEnquiryModal } from "./ConvertEnquiryModal";
@@ -8,6 +10,7 @@ import { AssignTeamModal } from "./AssignTeamModal";
 import { createEnquiry, updateEnquiry, convertEnquiryToOrderAction } from "@/features/enquiries/actions/enquiryActions";
 import { createOrder } from "@/features/orders/actions/orderActions";
 import { createCustomer } from "@/features/customers/actions/customerActions";
+import { withBasePath } from "@/lib/appBasePath";
 
 const getStatusColor = (status: string) => {
   const colors: Record<string, { bg: string; text: string; label: string }> = {
@@ -95,6 +98,7 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [addedByFilter, setAddedByFilter] = useState("All");
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   const availableAddedBy = useMemo(() => {
     const creatorsSet = new Set<string>();
@@ -230,48 +234,121 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
     },
   ];
 
+  const filteredEnquiries = useMemo(() => {
+    return enquiries.filter((e) => {
+      const matchesSearch =
+        (e.businessName || "").toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+        (e.leadName || "").toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+        (e.phone || "").includes(debouncedSearchTerm);
+      const matchesSource = sourceFilter === "All" || e.source === sourceFilter;
+      const matchesAddedBy = addedByFilter === "All" || (e.addedBy || "Admin") === addedByFilter;
+
+      if (selectedKpi === "pending" && e.status !== "Pending") return false;
+      if (selectedKpi === "converted" && e.status !== "Converted") return false;
+
+      let matchesDate = true;
+      if (e.dateReceived) {
+        try {
+          const enqDate = new Date(e.dateReceived);
+          const enqDateStr = enqDate.toISOString().split("T")[0];
+          if (dateFilterType === "range") {
+            if (startDate && enqDateStr < startDate) matchesDate = false;
+            if (endDate && enqDateStr > endDate) matchesDate = false;
+          }
+        } catch {
+          matchesDate = false;
+        }
+      } else if (dateFilterType !== "all") {
+        matchesDate = false;
+      }
+
+      return matchesSearch && matchesSource && matchesAddedBy && matchesDate;
+    });
+  }, [enquiries, debouncedSearchTerm, sourceFilter, addedByFilter, selectedKpi, dateFilterType, startDate, endDate]);
+
+  const resetFilters = () => {
+    setDateFilterType("range");
+    setStartDate("");
+    setEndDate("");
+    setAddedByFilter("All");
+    setSourceFilter("All");
+    setSearchTerm("");
+    setSelectedKpi(null);
+  };
+
+  const activeFilterCount = [
+    sourceFilter !== "All",
+    addedByFilter !== "All",
+    Boolean(startDate || endDate),
+    Boolean(selectedKpi),
+  ].filter(Boolean).length;
+
+  const openConvert = (enq: any) => {
+    setSelectedEnquiry({
+      id: enq.id,
+      businessName: enq.businessName || enq.leadName,
+      leadName: enq.leadName,
+      notes: enq.notes,
+    });
+    setConvertModalOpen(true);
+  };
+
   return (
-    <div style={{ padding: "32px", background: "#f8fafc", minHeight: "100vh" }}>
+    <div className="p-3 sm:p-4 md:p-8 bg-slate-50 min-h-0 pb-6">
       {/* Header Section */}
-      <div style={{ marginBottom: "32px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "24px" }}>
-          <div>
-            <h1 style={{ fontSize: "28px", fontWeight: "800", color: "#0f172a", margin: "0 0 8px" }}>
+      <div className="mb-5 md:mb-8">
+        <div className="flex flex-wrap items-start justify-between gap-3 mb-4 md:mb-6">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-xl sm:text-2xl md:text-[28px] font-extrabold text-slate-900 m-0 mb-1 md:mb-2">
               Enquiries Management
             </h1>
-            <p style={{ fontSize: "14px", color: "#64748b", margin: 0 }}>
+            <p className="text-xs sm:text-sm text-slate-500 m-0">
               Track and manage incoming customer enquiries and leads
             </p>
           </div>
           <button
-            style={{
-              padding: "10px 16px",
-              background: "var(--color-primary)",
-              border: "none",
-              borderRadius: "8px",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              fontSize: "13px",
-              fontWeight: "600",
-              color: "white",
-              transition: "all 0.2s",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = "var(--color-primary-container)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = "var(--color-primary)";
-            }}
+            type="button"
+            className="inline-flex items-center justify-center gap-1.5 sm:gap-2 shrink-0 px-2.5 sm:px-4 py-2 sm:py-2.5 text-[11px] sm:text-[13px] font-semibold text-white bg-[var(--color-primary)] rounded-lg"
             onClick={() => setIsAddModalOpen(true)}
           >
             <Plus size={16} /> New Enquiry
           </button>
         </div>
 
-        {/* Stats Cards */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "16px" }}>
+        {/* Mobile KPI chips */}
+        <div className="lg:hidden flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
+          {stats.map((stat: any) => {
+            const isActive = stat.filterKey && selectedKpi === stat.filterKey;
+            return (
+              <button
+                key={stat.label}
+                type="button"
+                onClick={() => stat.filterKey && setSelectedKpi(isActive ? null : stat.filterKey)}
+                className="shrink-0 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-bold border transition-colors"
+                style={{
+                  background: isActive ? `${stat.color}14` : "white",
+                  borderColor: isActive ? stat.color : "#e2e8f0",
+                  color: isActive ? stat.color : "#64748b",
+                  cursor: stat.filterKey ? "pointer" : "default",
+                }}
+              >
+                <span>{stat.label}</span>
+                <span
+                  className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-extrabold"
+                  style={{
+                    background: isActive ? stat.color : "#f1f5f9",
+                    color: isActive ? "white" : "#475569",
+                  }}
+                >
+                  {stat.value}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Desktop Stats Cards */}
+        <div className="hidden lg:grid grid-cols-2 xl:grid-cols-4 gap-4">
           {stats.map((stat: any, idx) => {
             const Icon = stat.icon;
             const isActive = stat.filterKey && selectedKpi === stat.filterKey;
@@ -320,65 +397,178 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
       </div>
 
       {/* Table Section */}
-      <div style={{ background: "white", borderRadius: "12px", border: "1px solid #e2e8f0", overflow: "visible" }}>
-        {/* Search & Filter Bar */}
-        <div style={{ padding: "16px 20px", borderBottom: "1px solid #e2e8f0", display: "flex", flexDirection: "column", gap: "12px" }}>
-          <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
-            {/* Search */}
-            <div style={{ flex: 1, minWidth: "200px", position: "relative" }}>
-              <Search size={15} style={{ position: "absolute", left: "11px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8", pointerEvents: "none" }} />
+      <div className="bg-white rounded-xl border border-slate-200 overflow-visible">
+        {/* Search & Filter Bar — Orders-style */}
+        <div className="p-3 sm:p-4 border-b border-slate-200">
+          {/* Mobile / tablet: search + Filters chip + icon reset */}
+          <div className="lg:hidden flex items-center gap-2">
+            <div className="relative flex-1 min-w-0">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
               <input
                 type="text"
-                placeholder="Search by lead name or phone…"
+                placeholder="Search enquiries…"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                style={{ width: "100%", padding: "9px 32px 9px 34px", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "13px", fontFamily: "inherit", transition: "all 0.2s", outline: "none", boxSizing: "border-box" }}
-                onFocus={(e) => { e.currentTarget.style.borderColor = "var(--color-primary)"; e.currentTarget.style.boxShadow = "0 0 0 3px rgba(30,64,175,0.1)"; }}
-                onBlur={(e) => { e.currentTarget.style.borderColor = "#e2e8f0"; e.currentTarget.style.boxShadow = "none"; }}
+                className="w-full pl-[34px] pr-8 py-2.5 border border-slate-200 rounded-full text-[13px] outline-none focus:border-[var(--color-primary)] bg-slate-50"
               />
               {searchTerm && (
-                <button onClick={() => setSearchTerm("")} style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#94a3b8", padding: 0, display: "flex" }}>
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => setMobileFiltersOpen(true)}
+              className={`relative shrink-0 inline-flex items-center gap-1.5 h-10 px-3.5 rounded-full border text-[12px] font-bold transition-colors ${
+                activeFilterCount > 0
+                  ? "bg-slate-900 text-white border-slate-900"
+                  : "bg-white text-slate-700 border-slate-200"
+              }`}
+            >
+              <Filter size={14} />
+              Filters
+              {activeFilterCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-[var(--color-primary)] text-white text-[10px] font-extrabold flex items-center justify-center border-2 border-white">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              title="Reset filters"
+              onClick={resetFilters}
+              className="shrink-0 w-10 h-10 inline-flex items-center justify-center rounded-full bg-red-50 border border-red-200 text-red-600"
+            >
+              <RefreshCw size={14} />
+            </button>
+          </div>
+
+          {mobileFiltersOpen &&
+            createPortal(
+            <div className="lg:hidden fixed inset-0 z-[200]">
+              <button
+                type="button"
+                aria-label="Close filters"
+                className="absolute inset-0 bg-slate-900/40"
+                onClick={() => setMobileFiltersOpen(false)}
+              />
+              <div className="absolute inset-x-0 bottom-0 flex max-h-[85vh] max-h-[85dvh] flex-col overscroll-contain rounded-t-2xl bg-white shadow-xl">
+                <div className="flex shrink-0 items-center justify-between px-4 py-3 border-b border-slate-100 rounded-t-2xl">
+                  <h3 className="text-sm font-extrabold text-slate-900">Filters</h3>
+                  <button
+                    type="button"
+                    onClick={() => setMobileFiltersOpen(false)}
+                    className="w-8 h-8 inline-flex items-center justify-center rounded-full bg-slate-100 text-slate-500"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 space-y-4">
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Source</label>
+                    <select
+                      value={sourceFilter}
+                      onChange={(e) => setSourceFilter(e.target.value)}
+                      className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[13px] font-medium text-slate-700"
+                    >
+                      <option value="All">All Sources</option>
+                      <option value="Meta Ads">Meta Ads</option>
+                      <option value="Referrals">Referrals</option>
+                      <option value="Walk-ins">Walk-ins</option>
+                      <option value="Google Enquiry (Ph Call)">Google Enquiry (Ph Call)</option>
+                      <option value="Website">Website</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Added by</label>
+                    <select
+                      value={addedByFilter}
+                      onChange={(e) => setAddedByFilter(e.target.value)}
+                      className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[13px] font-medium text-slate-700"
+                    >
+                      <option value="All">All Added By</option>
+                      {availableAddedBy.map((creator) => (
+                        <option key={creator} value={creator}>{creator}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Date range</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="date"
+                        value={startDate}
+                        onChange={(e) => {
+                          setDateFilterType("range");
+                          setStartDate(e.target.value);
+                        }}
+                        className="flex-1 min-w-0 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[13px] text-slate-700"
+                      />
+                      <span className="text-[12px] text-slate-400 font-medium">to</span>
+                      <input
+                        type="date"
+                        value={endDate}
+                        onChange={(e) => {
+                          setDateFilterType("range");
+                          setEndDate(e.target.value);
+                        }}
+                        className="flex-1 min-w-0 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[13px] text-slate-700"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="flex shrink-0 gap-2 px-4 py-3 border-t border-slate-100 bg-white pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+                  <button
+                    type="button"
+                    onClick={resetFilters}
+                    className="flex-1 py-3 rounded-xl border border-slate-200 text-[13px] font-bold text-slate-600 bg-white"
+                  >
+                    Clear all
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMobileFiltersOpen(false)}
+                    className="flex-[1.4] py-3 rounded-xl bg-slate-900 text-white text-[13px] font-bold"
+                  >
+                    Show results
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )}
+
+          {/* Desktop: inline filters */}
+          <div className="hidden lg:flex flex-row flex-wrap gap-3 items-center">
+            <div className="flex-1 relative min-w-[12rem]">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Search enquiries…"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-[34px] pr-8 py-2.5 border border-slate-200 rounded-lg text-[13px] outline-none focus:border-[var(--color-primary)] focus:ring-[3px] focus:ring-[rgba(30,64,175,0.1)]"
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
                   <X size={14} />
                 </button>
               )}
             </div>
 
-            {/* Custom Date inputs */}
-            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                style={{ padding: "8px 12px", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "13px", color: "#475569", outline: "none" }}
-              />
-              <span style={{ fontSize: "12px", color: "#64748b" }}>to</span>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                style={{ padding: "8px 12px", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "13px", color: "#475569", outline: "none" }}
-              />
-            </div>
-
-            {/* Added By filter */}
-            <select
-              value={addedByFilter}
-              onChange={(e) => setAddedByFilter(e.target.value)}
-              style={{ padding: "9px 12px", background: "white", border: "1px solid #e2e8f0", borderRadius: "8px", cursor: "pointer", fontSize: "13px", fontWeight: "500", color: "#475569", outline: "none" }}
-            >
-              <option value="All">All Added By</option>
-              {availableAddedBy.map((creator) => (
-                <option key={creator} value={creator}>
-                  {creator}
-                </option>
-              ))}
-            </select>
-
-            {/* Source filter */}
             <select
               value={sourceFilter}
               onChange={(e) => setSourceFilter(e.target.value)}
-              style={{ padding: "9px 12px", background: "white", border: "1px solid #e2e8f0", borderRadius: "8px", cursor: "pointer", fontSize: "13px", fontWeight: "500", color: "#475569", outline: "none" }}
+              className="px-3 py-2.5 bg-white border border-slate-200 rounded-lg text-[13px] font-medium text-slate-600"
             >
               <option value="All">All Sources</option>
               <option value="Meta Ads">Meta Ads</option>
@@ -388,38 +578,58 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
               <option value="Website">Website</option>
             </select>
 
-            {/* Reset Button */}
+            <select
+              value={addedByFilter}
+              onChange={(e) => setAddedByFilter(e.target.value)}
+              className="px-3 py-2.5 bg-white border border-slate-200 rounded-lg text-[13px] font-medium text-slate-600"
+            >
+              <option value="All">All Added By</option>
+              {availableAddedBy.map((creator) => (
+                <option key={creator} value={creator}>{creator}</option>
+              ))}
+            </select>
+
+            <div className="flex flex-wrap items-center gap-1.5">
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => {
+                  setDateFilterType("range");
+                  setStartDate(e.target.value);
+                }}
+                className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-[13px] text-slate-600"
+              />
+              <span className="text-[13px] text-slate-500 font-medium">to</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => {
+                  setDateFilterType("range");
+                  setEndDate(e.target.value);
+                }}
+                className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-[13px] text-slate-600"
+              />
+              {(startDate || endDate) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStartDate("");
+                    setEndDate("");
+                    setDateFilterType("all");
+                  }}
+                  className="flex items-center justify-center bg-white border border-slate-200 rounded-lg cursor-pointer text-slate-400 p-2.5"
+                  title="Clear Dates"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+
             <button
+              type="button"
               title="Reset Filters"
-              onClick={() => {
-                setDateFilterType("range");
-                setStartDate("");
-                setEndDate("");
-                setAddedByFilter("All");
-                setSourceFilter("All");
-                setSearchTerm("");
-                setSelectedKpi(null);
-              }}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: "0 14px",
-                background: "#fef2f2",
-                border: "1px solid #fecaca",
-                borderRadius: "8px",
-                cursor: "pointer",
-                color: "#dc2626",
-                outline: "none",
-                height: "38px",
-                transition: "all 0.2s",
-                fontWeight: "600",
-                fontSize: "13px",
-                gap: "6px",
-                flexShrink: 0
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = "#fee2e2"; e.currentTarget.style.borderColor = "#fca5a5"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = "#fef2f2"; e.currentTarget.style.borderColor = "#fecaca"; }}
+              onClick={resetFilters}
+              className="inline-flex items-center justify-center gap-1.5 h-[38px] px-3.5 bg-red-50 border border-red-200 rounded-lg text-red-600 text-[13px] font-semibold shrink-0 hover:bg-red-100"
             >
               <RefreshCw size={14} />
               Reset
@@ -427,9 +637,83 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
           </div>
         </div>
 
-        {/* Table with Scrollbar */}
-        <div style={{ overflow: "visible" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        {/* Mobile inbox cards */}
+        <div className="lg:hidden p-3 space-y-2.5 min-h-[200px] bg-slate-50/80">
+          {filteredEnquiries.length === 0 ? (
+            <div className="py-12 px-4 text-center text-sm text-slate-500 font-medium bg-white rounded-xl border border-slate-200">
+              No enquiries found matching your search.
+            </div>
+          ) : (
+            filteredEnquiries.map((enq) => {
+              const statusColor = getStatusColor(enq.status);
+              const dateStr = enq.dateReceived
+                ? new Date(enq.dateReceived).toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" })
+                : "—";
+              return (
+                <div
+                  key={enq.id}
+                  className="w-full text-left rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden"
+                >
+                  <div className="flex">
+                    <div className="w-1 shrink-0 self-stretch" style={{ background: statusColor.text }} aria-hidden />
+                    <div className="flex-1 min-w-0 p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <span className="text-[13px] font-extrabold text-slate-900">
+                              {enq.enquireId || enq.id.substring(0, 8)}
+                            </span>
+                            <span
+                              className="inline-block px-2 py-0.5 rounded-md text-[10px] font-bold"
+                              style={{ background: statusColor.bg, color: statusColor.text }}
+                            >
+                              {statusColor.label}
+                            </span>
+                          </div>
+                          <div className="text-[13px] font-semibold text-slate-800 truncate mt-1">
+                            {enq.businessName || enq.leadName}
+                          </div>
+                          {enq.businessName && enq.leadName ? (
+                            <div className="text-[11px] text-slate-500 truncate">{enq.leadName}</div>
+                          ) : null}
+                        </div>
+                      </div>
+                      <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500">
+                        <span className="font-medium">{dateStr}</span>
+                        <span>{enq.phone}</span>
+                        {enq.source ? <span>· {enq.source}</span> : null}
+                      </div>
+                      <div className="mt-2.5 flex flex-wrap gap-2">
+                        {enq.status !== "Converted" ? (
+                          <button
+                            type="button"
+                            onClick={() => openConvert(enq)}
+                            className="px-3 py-1.5 rounded-md text-[12px] font-semibold text-white bg-[var(--color-primary)] whitespace-nowrap"
+                          >
+                            Convert to Order
+                          </button>
+                        ) : enq.orderId ? (
+                          <Link
+                            href={`/admin/orders/${enq.orderId}`}
+                            className="px-3 py-1.5 rounded-md text-[12px] font-semibold text-slate-600 bg-slate-100 border border-slate-200 whitespace-nowrap"
+                          >
+                            View Order
+                          </Link>
+                        ) : (
+                          <span className="text-[12px] font-bold text-emerald-600 whitespace-nowrap">Converted</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Desktop table */}
+        <div className="hidden lg:block overflow-x-auto">
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "900px" }}>
             <thead style={{ position: "sticky", top: 0, background: "#f8fafc", zIndex: 10 }}>
               <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
                 <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>ENQUIRY ID</th>
@@ -444,35 +728,7 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
               </tr>
             </thead>
             <tbody>
-              {enquiries.filter(e => {
-                const matchesSearch = (e.businessName || "").toLowerCase().includes(debouncedSearchTerm.toLowerCase()) || (e.leadName || "").toLowerCase().includes(debouncedSearchTerm.toLowerCase()) || e.phone.includes(debouncedSearchTerm);
-                const matchesSource = sourceFilter === "All" || e.source === sourceFilter;
-                const matchesAddedBy = addedByFilter === "All" || (e.addedBy || "Admin") === addedByFilter;
-
-                // KPI filter
-                if (selectedKpi === "pending" && e.status !== "Pending") return false;
-                if (selectedKpi === "converted" && e.status !== "Converted") return false;
-
-                let matchesDate = true;
-                if (e.dateReceived) {
-                  try {
-                    const enqDate = new Date(e.dateReceived);
-                    const enqDateStr = enqDate.toISOString().split('T')[0];
-                    
-                    if (dateFilterType === "range") {
-                      if (startDate && enqDateStr < startDate) matchesDate = false;
-                      if (endDate && enqDateStr > endDate) matchesDate = false;
-                    }
-                  } catch {
-                    matchesDate = false;
-                  }
-                } else if (dateFilterType !== "all") {
-                  matchesDate = false;
-                }
-
-                return matchesSearch && matchesSource && matchesAddedBy && matchesDate;
-              }).map((enq) => {
-                const statusColor = getStatusColor(enq.status);
+              {filteredEnquiries.map((enq) => {
                 return (
                   <tr key={enq.id} style={{ borderBottom: "1px solid #e2e8f0", transition: "background 0.2s" }} onMouseEnter={(e) => { e.currentTarget.style.background = "#f8fafc"; }} onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
                     <td style={{ padding: "16px 20px", fontSize: "13px", color: "#0f172a", fontWeight: "700" }}>{enq.enquireId || enq.id.substring(0, 8)}</td>
@@ -491,37 +747,7 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
                     </td>
                     <td style={{ padding: "16px 20px", fontSize: "13px", color: "#0f172a" }}>
                       {enq.orderId ? (
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                          <span style={{ fontWeight: "700", color: "#0f172a" }}>{enq.orderId}</span>
-                          <a
-                            href={`/admin/orders/${enq.orderId}`}
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: "4px",
-                              padding: "4px 8px",
-                              background: "#f1f5f9",
-                              border: "1px solid #cbd5e1",
-                              borderRadius: "6px",
-                              fontSize: "11px",
-                              fontWeight: "600",
-                              color: "#475569",
-                              textDecoration: "none",
-                              cursor: "pointer",
-                              transition: "all 0.15s"
-                            }}
-                            onMouseEnter={e => {
-                              e.currentTarget.style.background = "#e2e8f0";
-                              e.currentTarget.style.color = "#0f172a";
-                            }}
-                            onMouseLeave={e => {
-                              e.currentTarget.style.background = "#f1f5f9";
-                              e.currentTarget.style.color = "#475569";
-                            }}
-                          >
-                            View Order
-                          </a>
-                        </div>
+                        <span style={{ fontWeight: "700", color: "#0f172a" }}>{enq.orderId}</span>
                       ) : (
                         <span style={{ color: "#cbd5e1" }}>-</span>
                       )}
@@ -530,27 +756,51 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
                       <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", alignItems: "center" }}>
                         {enq.status !== "Converted" ? (
                           <button 
-                            onClick={() => {
-                              setSelectedEnquiry({ id: enq.id, businessName: enq.businessName || enq.leadName, leadName: enq.leadName, notes: enq.notes });
-                              setConvertModalOpen(true);
-                            }}
-                            style={{ padding: "6px 12px", background: "var(--color-primary)", border: "none", borderRadius: "6px", fontSize: "12px", fontWeight: "600", color: "white", cursor: "pointer", transition: "all 0.2s" }}
+                            onClick={() => openConvert(enq)}
+                            style={{ padding: "6px 12px", background: "var(--color-primary)", border: "none", borderRadius: "6px", fontSize: "12px", fontWeight: "600", color: "white", cursor: "pointer", transition: "all 0.2s", whiteSpace: "nowrap" }}
                             onMouseEnter={(e) => e.currentTarget.style.background = "var(--color-primary-container)"}
                             onMouseLeave={(e) => e.currentTarget.style.background = "var(--color-primary)"}
                           >
                             Convert to Order
                           </button>
+                        ) : enq.orderId ? (
+                          <Link
+                            href={`/admin/orders/${enq.orderId}`}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              padding: "6px 12px",
+                              background: "#f1f5f9",
+                              border: "1px solid #cbd5e1",
+                              borderRadius: "6px",
+                              fontSize: "12px",
+                              fontWeight: "600",
+                              color: "#475569",
+                              textDecoration: "none",
+                              cursor: "pointer",
+                              whiteSpace: "nowrap",
+                              transition: "all 0.15s",
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = "#e2e8f0";
+                              e.currentTarget.style.color = "#0f172a";
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = "#f1f5f9";
+                              e.currentTarget.style.color = "#475569";
+                            }}
+                          >
+                            View Order
+                          </Link>
                         ) : (
-                          <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-                            <span style={{ fontSize: "12px", fontWeight: "700", color: "#16a34a" }}>Converted</span>
-                          </div>
+                          <span style={{ fontSize: "12px", fontWeight: "700", color: "#16a34a", whiteSpace: "nowrap" }}>Converted</span>
                         )}
                       </div>
                     </td>
                   </tr>
                 );
               })}
-              {enquiries.length === 0 && (
+              {filteredEnquiries.length === 0 && (
                 <tr>
                   <td colSpan={9} style={{ padding: "40px 20px", textAlign: "center", color: "#64748b" }}>
                     No enquiries found matching your search.
@@ -665,7 +915,7 @@ export function WelcomeMessageModal({ isOpen, onClose, customerInfo }: WelcomeMe
       if (customerInfo.orderId) {
         params.append("order_id", customerInfo.orderId);
       }
-      fetch(`/printoms/api/portal-token?${params.toString()}`)
+      fetch(withBasePath(`/api/portal-token?${params.toString()}`))
         .then((res) => res.json())
         .then((data) => {
           if (data.url) {

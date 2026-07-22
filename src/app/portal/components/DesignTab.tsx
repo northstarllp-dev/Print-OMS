@@ -13,6 +13,7 @@ import {
   Maximize,
   Download,
   AlertTriangle,
+  X,
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { DesignRecord } from "@/types";
@@ -22,6 +23,9 @@ import {
 } from "@/features/designs/actions/designActions";
 import { areAllDesignItemsApproved } from "@/features/designs/utils/designApproval";
 import { toCustomerVisibleDesign } from "@/features/designs/utils/customerVisibleDesign";
+import { uploadFileViaPortalApi } from "@/utils/supabase/uploadStorageFile";
+import { getServerActionErrorMessage } from "@/lib/serverActionError";
+import { OverlayPortal } from "@/components/ui/OverlayPortal";
 
 interface Customer {
   id: string;
@@ -51,9 +55,18 @@ export interface DesignTabProps {
   order: Order;
   customer: Customer;
   siteVisitItems?: Array<{ id: string; name: string }>;
+  portalToken?: string;
 }
 
-export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabProps) {
+function friendlyPortalError(error: unknown): string {
+  const message = getServerActionErrorMessage(error);
+  if (message === "Unauthorized" || message.toLowerCase().includes("unauthorized")) {
+    return "Your session has expired. Please refresh the page and try again.";
+  }
+  return message;
+}
+
+export function DesignTab({ order, customer, siteVisitItems = [], portalToken }: DesignTabProps) {
   const isLocked =
     Boolean(order.stageStatus && order.stageStatus !== "Normal") &&
     (order.stage === "Design In Progress" || order.stage === "Design Approved");
@@ -113,10 +126,10 @@ export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabPro
       return item;
     });
 
-    await updateDesignDetailsAction(order.id, { items: updatedItems }, dd.updated_at);
+    await updateDesignDetailsAction(order.id, { items: updatedItems }, dd.updated_at, portalToken);
 
     if (updateStage) {
-      await transitionDesignOrderStageAction(order.id, updateStage);
+      await transitionDesignOrderStageAction(order.id, updateStage, portalToken);
     }
   };
 
@@ -128,16 +141,17 @@ export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabPro
       const newResources = [];
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        const ext = file.name.split(".").pop() || "jpg";
-        const path = `${order.id}/resources/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-        const { error } = await supabase.storage.from("site-visit-photos").upload(path, file, { contentType: file.type });
-        if (error) throw error;
-        const { data } = supabase.storage.from("site-visit-photos").getPublicUrl(path);
-        
+        const { url, name } = await uploadFileViaPortalApi(
+          file,
+          order.id,
+          "design_resource",
+          portalToken
+        );
+
         newResources.push({
           id: (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36),
-          url: data.publicUrl,
-          name: file.name,
+          url,
+          name,
           type: "file" as const,
           uploadedBy: "Customer" as const,
           createdAt: new Date().toISOString()
@@ -146,10 +160,10 @@ export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabPro
       
       await updateDesignDetailsAction(order.id, {
         resources: [...(dd.resources || []), ...newResources]
-      }, dd.updated_at);
-    } catch (err: any) {
+      }, dd.updated_at, portalToken);
+    } catch (err: unknown) {
       console.error("Upload error:", err);
-      alert("Upload failed: " + (err.message || JSON.stringify(err)));
+      alert("Upload failed: " + friendlyPortalError(err));
     } finally {
       setUploading(false);
       e.target.value = "";
@@ -160,7 +174,7 @@ export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabPro
     if (!confirm("Are you sure you want to delete this file?")) return;
     try {
       const updatedResources = (dd.resources || []).filter((r: any) => r.id !== resourceId);
-      await updateDesignDetailsAction(order.id, { resources: updatedResources }, dd.updated_at);
+      await updateDesignDetailsAction(order.id, { resources: updatedResources }, dd.updated_at, portalToken);
 
       const pathPart = resourceUrl.split("/public/site-visit-photos/")[1];
       if (pathPart) {
@@ -336,7 +350,7 @@ export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabPro
           <label className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-xs font-bold cursor-pointer hover:bg-gray-100 flex items-center gap-2">
             {uploading ? <Loader2 size={14} className="animate-spin" /> : <UploadCloud size={14} />}
             {uploading ? "Uploading..." : "Upload File"}
-            <input type="file" multiple onChange={handleResourceUpload} accept=".png,.pdf,.jpg,.jpeg,.cdr,.ai,.psd,.svg" className="hidden" disabled={uploading} />
+            <input type="file" multiple onChange={handleResourceUpload} accept="image/*,.pdf,.png,.jpg,.jpeg,.heic,.heif,.cdr,.ai,.psd,.svg" className="hidden" disabled={uploading} />
           </label>
         </div>
         )}
@@ -578,42 +592,79 @@ export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabPro
           </div>
         )}
       </div>
-      {/* Approve Confirmation Modal */}
+      {/* Approve Confirmation Modal — portaled so it isn't clipped by overflow/transform parents */}
       {showApproveModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="bg-emerald-50 p-6 flex flex-col items-center border-b border-emerald-100 text-center">
-              <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mb-4 border border-emerald-200 text-emerald-600 shadow-sm">
-                <CheckCircle size={32} />
-              </div>
-              <h2 className="text-xl font-bold text-emerald-900">Confirm Design Approval</h2>
-            </div>
-            
-            <div className="p-6">
-              <p className="text-slate-600 text-center mb-6 leading-relaxed">
-                Are you sure you want to approve this design? Once approved, it will be marked as final for production and no further changes can be made.
-              </p>
-              
-              <div className="flex gap-3">
+        <OverlayPortal>
+          <div
+            className="fixed inset-0 z-[99999] flex items-end sm:items-center justify-center p-0 sm:p-4"
+            role="presentation"
+          >
+            <button
+              type="button"
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => setShowApproveModal(false)}
+              aria-label="Close approval dialog"
+            />
+            <div
+              className="relative z-10 w-full max-w-md max-h-[min(92dvh,100%)] sm:max-h-[90vh] bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="design-approve-title"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="bg-emerald-50 px-4 sm:px-6 py-4 sm:py-5 flex items-start gap-3 border-b border-emerald-100 shrink-0">
+                <div className="w-12 h-12 sm:w-14 sm:h-14 bg-emerald-100 rounded-full flex items-center justify-center border border-emerald-200 text-emerald-600 shadow-sm shrink-0">
+                  <CheckCircle size={28} className="sm:hidden" />
+                  <CheckCircle size={32} className="hidden sm:block" />
+                </div>
+                <div className="flex-1 min-w-0 pt-1">
+                  <h2 id="design-approve-title" className="text-lg sm:text-xl font-bold text-emerald-900 leading-tight">
+                    Confirm Design Approval
+                  </h2>
+                  <p className="text-xs sm:text-sm text-emerald-800/80 mt-1">
+                    This action cannot be undone.
+                  </p>
+                </div>
                 <button
+                  type="button"
                   onClick={() => setShowApproveModal(false)}
-                  className="flex-1 py-3 px-4 border-2 border-slate-200 text-slate-700 rounded-xl font-bold hover:bg-slate-50 transition-colors"
+                  className="p-2 -mr-1 text-emerald-700/70 hover:text-emerald-900 hover:bg-emerald-100/80 rounded-full transition-colors shrink-0"
+                  aria-label="Close"
                 >
-                  Cancel
+                  <X size={20} />
                 </button>
-                <button
-                  onClick={() => {
-                    setShowApproveModal(false);
-                    handleApproveDesign();
-                  }}
-                  className="flex-1 py-3 px-4 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 shadow-sm transition-colors flex items-center justify-center gap-2"
-                >
-                  <CheckCircle size={18} /> Confirm Approval
-                </button>
+              </div>
+
+              <div className="p-4 sm:p-6 overflow-y-auto overscroll-contain">
+                <p className="text-sm sm:text-base text-slate-600 leading-relaxed">
+                  Are you sure you want to approve this design? Once approved, it will be marked as final for production and no further changes can be made.
+                </p>
+
+                <div className="mt-5 sm:mt-6 flex flex-col-reverse sm:flex-row gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowApproveModal(false)}
+                    className="w-full sm:flex-1 py-3 px-4 border-2 border-slate-200 text-slate-700 rounded-xl font-bold hover:bg-slate-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowApproveModal(false);
+                      handleApproveDesign();
+                    }}
+                    className="w-full sm:flex-1 py-3 px-4 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 shadow-sm transition-colors flex items-center justify-center gap-2"
+                  >
+                    <CheckCircle size={18} />
+                    <span className="sm:hidden">Confirm</span>
+                    <span className="hidden sm:inline">Confirm Approval</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        </OverlayPortal>
       )}
     </div>
   );

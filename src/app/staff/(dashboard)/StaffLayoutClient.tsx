@@ -5,10 +5,12 @@ import {
   Bell, CheckCircle, AlertCircle, Info, LogOut,
   History, RotateCcw, Lock, Loader2, Key,
   ShoppingBag, MapPin, Palette, Settings, Wrench,
-  ChevronLeft, ChevronRight, Search, Hammer, Truck, Menu,
+  ChevronLeft, ChevronRight, Search, Hammer, Truck, Menu, X,
+  CalendarDays,
   type LucideIcon,
 } from "lucide-react";
 import { Logo } from "@/components/ui/Logo";
+import { PullToRefresh } from "@/components/ui/PullToRefresh";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { signOut, updateUserPassword } from "@/features/auth/actions/authActions";
 import {
@@ -37,6 +39,7 @@ const NAV_ICON_MAP: Record<StaffNavIcon, LucideIcon> = {
   production: Hammer,
   installation: Truck,
   support: Wrench,
+  calendar: CalendarDays,
   settings: Settings,
 };
 
@@ -59,7 +62,7 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
   const [collapsed, setCollapsed] = useState(true);
   const [isHovered, setIsHovered] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const isExpanded = !collapsed || isHovered;
+  const isExpanded = !collapsed || isHovered || isMobileMenuOpen;
 
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
@@ -187,19 +190,19 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
   const sidebarW = isExpanded ? "240px" : "64px";
 
   return (
-    <div style={{ display: "flex", height: "100vh", maxHeight: "100vh", overflow: "hidden", background: "var(--color-background)" }}>
+    <div style={{ display: "flex", height: "100dvh", maxHeight: "100dvh", overflow: "hidden", background: "var(--color-background)" }}>
 
       {/* ── DARK SIDEBAR ── */}
       <aside
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
-        className={`fixed inset-y-0 left-0 z-[60] transform ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"} md:sticky md:top-0 md:translate-x-0 transition-transform duration-300 md:transition-none flex flex-col flex-shrink-0 overflow-y-auto overflow-x-hidden`}
+        className={`fixed inset-y-0 left-0 z-[60] transform ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"} lg:sticky lg:top-0 lg:translate-x-0 transition-transform duration-300 lg:transition-none flex flex-col flex-shrink-0 overflow-hidden`}
         style={{
           width: isMobileMenuOpen ? "240px" : sidebarW,
-          minHeight: "100vh",
+          minHeight: "100dvh",
           background: "var(--sidebar-bg)",
           transition: "width 0.25s cubic-bezier(0.4,0,0.2,1)",
-          height: "100vh",
+          height: "100dvh",
         }}
       >
         {/* Logo */}
@@ -208,8 +211,9 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
             padding: isExpanded ? "24px 20px" : "24px 12px",
             display: "flex",
             alignItems: "center",
-            justifyContent: "center",
+            justifyContent: "space-between",
             flexShrink: 0,
+            gap: 8,
             transition: "padding 0.25s cubic-bezier(0.4,0,0.2,1)",
           }}
         >
@@ -230,7 +234,7 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
         </div>
 
         {/* Nav Items */}
-        <nav style={{ flex: 1, padding: "8px 0", overflowY: "auto" }}>
+        <nav className="scrollbar-none" style={{ flex: 1, minHeight: 0, padding: "8px 0", overflowY: "auto", overflowX: "hidden" }}>
           {navItems.map((item) => {
             const isActive = isActivePath(item);
             const Icon = NAV_ICON_MAP[item.icon];
@@ -239,6 +243,7 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
               <button
                 key={item.href}
                 onClick={() => {
+                  setIsMobileMenuOpen(false);
                   router.push(item.href);
                 }}
                 title={!isExpanded ? item.label : undefined}
@@ -306,8 +311,9 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
           })}
         </nav>
 
-        {/* Collapse Button */}
+        {/* Collapse — desktop only */}
         <div
+          className="hidden lg:block"
           style={{
             padding: "12px",
             flexShrink: 0,
@@ -352,10 +358,37 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
             </span>
           </button>
         </div>
+
+        {/* Logout + Close — mobile drawer only */}
+        {isMobileMenuOpen && (
+          <div className="lg:hidden p-3 shrink-0 border-t border-white/10 space-y-2">
+            <button
+              type="button"
+              onClick={() => {
+                setIsMobileMenuOpen(false);
+                void handleLogout();
+              }}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm font-semibold text-red-300 bg-red-500/10 border border-red-400/25"
+              aria-label="Logout"
+            >
+              <LogOut size={16} />
+              Logout
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm font-semibold text-slate-200 bg-white/5 border border-white/15"
+              aria-label="Close menu"
+            >
+              <X size={16} />
+              Close
+            </button>
+          </div>
+        )}
       </aside>
 
       {/* ── MAIN WORKSPACE ── */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0, overflow: "hidden" }}>
 
         {/* Top Bar — hidden on worksheet pages */}
         {!isWorksheetPage && (
@@ -364,7 +397,7 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
           >
             {/* Mobile Menu Toggle */}
             <button
-              className="md:hidden flex items-center justify-center p-2 rounded-md text-slate-500 hover:bg-slate-100"
+              className="lg:hidden flex items-center justify-center p-2 rounded-md text-slate-500 hover:bg-slate-100"
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
             >
               <Menu size={20} />
@@ -385,7 +418,7 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
                 {isHistoryOpen && (
                   <>
                     <div style={{ position: "fixed", inset: 0, zIndex: 49 }} onClick={() => setIsHistoryOpen(false)} />
-                    <div className="prt-animate-in" style={{ position: "absolute", right: 0, top: "calc(100% + 8px)", width: 340, background: "white", border: "1px solid #E2E8F0", borderRadius: "12px", boxShadow: "0 8px 24px rgba(0,0,0,0.12)", zIndex: 50, overflow: "hidden" }}>
+                    <div className="prt-animate-in" style={{ position: "absolute", right: 0, top: "calc(100% + 8px)", width: "min(340px, calc(100vw - 24px))", background: "white", border: "1px solid #E2E8F0", borderRadius: "12px", boxShadow: "0 8px 24px rgba(0,0,0,0.12)", zIndex: 50, overflow: "hidden" }}>
                       <div style={{ padding: "10px 16px", background: "#F8FAFC", borderBottom: "1px solid #E2E8F0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                         <span style={{ fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.08em" }}>Operation History</span>
                         <span style={{ fontSize: 10, color: "#94A3B8" }}>Rollback enabled</span>
@@ -431,7 +464,7 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
                 {isNotifOpen && (
                   <>
                     <div style={{ position: "fixed", inset: 0, zIndex: 49 }} onClick={() => setIsNotifOpen(false)} />
-                    <div className="prt-animate-in" style={{ position: "absolute", right: 0, top: "calc(100% + 8px)", width: 300, background: "white", border: "1px solid #E2E8F0", borderRadius: "12px", boxShadow: "0 8px 24px rgba(0,0,0,0.12)", zIndex: 50, overflow: "hidden" }}>
+                    <div className="prt-animate-in" style={{ position: "absolute", right: 0, top: "calc(100% + 8px)", width: "min(300px, calc(100vw - 24px))", background: "white", border: "1px solid #E2E8F0", borderRadius: "12px", boxShadow: "0 8px 24px rgba(0,0,0,0.12)", zIndex: 50, overflow: "hidden" }}>
                       <div style={{ padding: "10px 16px", background: "#F8FAFC", borderBottom: "1px solid #E2E8F0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                         <span style={{ fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.08em" }}>Notifications</span>
                         <div style={{ display: "flex", gap: 10 }}>
@@ -522,31 +555,41 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
         )}
 
         {/* Main Content */}
-        <main style={{ flex: 1, display: "flex", flexDirection: "column", background: "var(--color-background)", minHeight: 0, overflowY: isWorksheetPage ? "hidden" : "auto" }}>
-          <div
+        <main style={{ flex: 1, display: "flex", flexDirection: "column", background: "var(--color-background)", minHeight: 0, overflow: "hidden" }}>
+          <PullToRefresh
+            disabled={isWorksheetPage}
+            className="flex-1 min-h-0"
             style={
               isWorksheetPage
-                ? { width: "100%", display: "flex", flexDirection: "column", flex: 1, minHeight: 0, height: "100%" }
-                : { width: "100%", maxWidth: 1400, margin: "0 auto" }
+                ? { display: "flex", flexDirection: "column", overflow: "hidden", height: "100%" }
+                : { overflowY: "auto" }
             }
           >
-            {children}
-          </div>
+            <div
+              style={
+                isWorksheetPage
+                  ? { width: "100%", display: "flex", flexDirection: "column", flex: 1, minHeight: 0, height: "100%" }
+                  : { width: "100%", maxWidth: 1400, margin: "0 auto" }
+              }
+            >
+              {children}
+            </div>
+          </PullToRefresh>
         </main>
         {!isWorksheetPage && (
           <div style={{
             textAlign: "center",
-            padding: "12px 0",
+            padding: "8px 0 calc(8px + env(safe-area-inset-bottom, 0px))",
             borderTop: "1px solid #E2E8F0",
             color: "#94A3B8",
             fontSize: "13px",
             fontWeight: "600",
             width: "100%",
             background: "var(--color-background)",
-            zIndex: 10,
+            flexShrink: 0, position: "relative",
           }}>
             <a
-              href="https://www.thepolarislabs.com/"
+              href="https://printoms.thepolarislabs.com/"
               target="_blank"
               rel="noopener noreferrer"
               style={{
@@ -567,7 +610,7 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
               <img
                 src="/printoms/clients/light%20withoutbg.png"
                 alt="Polaris"
-                style={{ height: "40px", marginLeft: "-2px", marginTop: "-12px", marginBottom: "-10px" }}
+                className="h-8 lg:h-9 w-auto ml-0.5"
               />
             </a>
           </div>
@@ -577,7 +620,7 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
       {/* Mobile Overlay */}
       {isMobileMenuOpen && (
         <div 
-          className="fixed inset-0 bg-slate-900/50 z-50 md:hidden"
+          className="fixed inset-0 bg-slate-900/50 z-50 lg:hidden"
           onClick={() => setIsMobileMenuOpen(false)}
         />
       )}
@@ -661,7 +704,7 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
         @media (min-width: 769px) {
           .show-mobile { display: none !important; }
         }
-        html, body { overflow: hidden !important; margin: 0; padding: 0; width: 100%; height: 100%; }
+        html, body { overflow: hidden !important; margin: 0; padding: 0; width: 100%; height: 100%; height: 100dvh; }
       `}</style>
     </div>
   );

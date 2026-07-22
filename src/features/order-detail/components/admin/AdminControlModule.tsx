@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Order, Customer, Employee, SiteVisitDetails, PipelineStage } from "@/types";
 import { Users, Settings, Briefcase, FileText, CheckCircle2, XCircle, AlertTriangle, Shield, ShieldOff } from "lucide-react";
+import { OverlayPortal } from "@/components/ui/OverlayPortal";
 import { fetchEmployeeStats, assignTeamToOrder } from "@/features/orders/actions/orderActions";
 import { revokePortalAccessAction } from "@/features/portal/actions/portalAdminActions";
 
@@ -170,11 +171,11 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
                 </p>
               </div>
               
-                <div className="flex gap-2 shrink-0">
+                <div className="flex flex-col sm:flex-row flex-wrap gap-2 shrink-0 w-full sm:w-auto">
                   {onAdminReject && (
                     <button
                       onClick={() => setShowRejectModal(true)}
-                      className="px-4 py-2 bg-white border border-amber-300 text-amber-800 rounded-lg text-xs font-bold hover:bg-amber-100 transition-colors flex items-center gap-1.5"
+                      className="px-4 py-2.5 bg-white border border-amber-300 text-amber-800 rounded-lg text-xs font-bold hover:bg-amber-100 transition-colors flex items-center justify-center gap-1.5 w-full sm:w-auto"
                     >
                       <XCircle size={16} />
                       Request Changes
@@ -183,15 +184,16 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
                   {order.stage.startsWith("Site Visit") && onApproveWithWorkflowChoice ? (
                     <button
                       onClick={onApproveWithWorkflowChoice}
-                      className="px-4 py-2 bg-emerald-500 text-white rounded-lg text-xs font-bold hover:bg-emerald-600 transition-colors flex items-center gap-1.5"
+                      className="px-4 py-2.5 bg-emerald-500 text-white rounded-lg text-xs font-bold hover:bg-emerald-600 transition-colors flex items-center justify-center gap-1.5 w-full sm:w-auto"
                     >
                       <CheckCircle2 size={16} />
-                      Choose Workflow & Approve
+                      <span className="sm:hidden">Approve Workflow</span>
+                      <span className="hidden sm:inline">Choose Workflow &amp; Approve</span>
                     </button>
                   ) : (
                     <button 
                       onClick={onAdminApprove} 
-                      className="px-4 py-2 bg-emerald-500 text-white rounded-lg text-xs font-bold hover:bg-emerald-600 transition-colors flex items-center gap-1.5"
+                      className="px-4 py-2.5 bg-emerald-500 text-white rounded-lg text-xs font-bold hover:bg-emerald-600 transition-colors flex items-center justify-center gap-1.5 w-full sm:w-auto"
                     >
                       <CheckCircle2 size={16} />
                       {isJobDonePending ? "Review Payments & Complete" : "Approve Stage"}
@@ -203,7 +205,10 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
             <div className="py-6 flex flex-col items-center justify-center text-center">
               <CheckCircle2 size={32} className="text-emerald-400 mb-2" />
               <h4 className="text-sm font-bold text-slate-700">No Pending Approvals</h4>
-              <p className="text-xs text-slate-500 mt-1">The order is currently in the <span className="font-bold">{order.stage}</span> stage.</p>
+              <p className="text-xs text-slate-500 mt-1 max-w-sm leading-relaxed">
+                The order is in the <span className="font-bold">{order.stage}</span> stage with no staff push waiting.
+                To move forward yourself, use <span className="font-bold">Approve &amp; Advance</span> on the current stage tab.
+              </p>
             </div>
           )}
         </div>
@@ -218,8 +223,8 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
           </div>
         </div>
         <div className="p-5">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex-1">
+          <div className="flex flex-col md:flex-row md:items-start gap-3 md:justify-between">
+            <div className="flex-1 min-w-0">
               <h4 className="text-sm font-bold text-slate-800">Customer Magic Link</h4>
               <p className="text-xs text-slate-500 mt-1 leading-relaxed">
                 The customer accesses the portal via a secure magic link sent via WhatsApp or Email. Revoking invalidates all active links for this customer/order. Use this if the link is compromised or the customer relationship ends.
@@ -233,7 +238,7 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
             <button
               onClick={handleRevokePortalAccess}
               disabled={revoking}
-              className="shrink-0 flex items-center gap-2 px-4 py-2 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs font-bold hover:bg-red-100 transition-colors disabled:opacity-50"
+              className="w-full md:w-auto shrink-0 flex items-center justify-center gap-2 px-4 py-2.5 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs font-bold hover:bg-red-100 transition-colors disabled:opacity-50"
             >
               <ShieldOff size={14} />
               {revoking ? "Revoking..." : "Revoke Portal Access"}
@@ -312,13 +317,14 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
     </div>
 
     {showRejectModal && (
-      <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-4">
-        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-100 bg-slate-50">
+      <OverlayPortal>
+      <div className="fixed inset-0 z-[100000] flex items-end md:items-center justify-center bg-black/50 backdrop-blur-sm p-0 md:p-4">
+        <div className="bg-white rounded-t-2xl md:rounded-2xl shadow-2xl max-w-md w-full overflow-hidden max-h-[92dvh] flex flex-col">
+          <div className="px-4 md:px-5 py-4 border-b border-slate-100 bg-slate-50 shrink-0">
             <h3 className="text-sm font-extrabold text-slate-800 uppercase tracking-wider">Request Changes</h3>
             <p className="text-xs text-slate-500 mt-1">Send the order back to staff with mandatory feedback.</p>
           </div>
-          <div className="p-5 space-y-4">
+          <div className="p-4 md:p-5 space-y-4 overflow-y-auto">
             <textarea
               value={rejectNotes}
               onChange={(e) => setRejectNotes(e.target.value)}
@@ -327,21 +333,21 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
               className="w-full p-3 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/40"
               autoFocus
             />
-            <div className="flex justify-end gap-2">
+            <div className="flex flex-col-reverse md:flex-row justify-end gap-2 pb-[max(0,env(safe-area-inset-bottom))]">
               <button
                 onClick={() => {
                   setShowRejectModal(false);
                   setRejectNotes("");
                 }}
                 disabled={rejecting}
-                className="px-4 py-2 text-slate-600 text-xs font-bold hover:bg-slate-100 rounded-lg"
+                className="px-4 py-2.5 text-slate-600 text-xs font-bold hover:bg-slate-100 rounded-lg"
               >
                 Cancel
               </button>
               <button
                 onClick={handleRejectSubmit}
                 disabled={rejecting || !rejectNotes.trim()}
-                className="px-4 py-2 bg-amber-600 text-white text-xs font-bold rounded-lg hover:bg-amber-700 disabled:opacity-50"
+                className="px-4 py-2.5 bg-amber-600 text-white text-xs font-bold rounded-lg hover:bg-amber-700 disabled:opacity-50"
               >
                 {rejecting ? "Sending..." : "Send Back to Staff"}
               </button>
@@ -349,6 +355,7 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
           </div>
         </div>
       </div>
+      </OverlayPortal>
     )}
     </>
   );

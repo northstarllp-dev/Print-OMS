@@ -205,49 +205,6 @@ body {
   line-height: 1.5;
 }
 
-/* LoadingLines branded loader keyframes */
-@keyframes transformAnim {
-  0% {
-    transform: translate(-55%);
-  }
-  100% {
-    transform: translate(55%);
-  }
-}
-
-@keyframes opacityAnim {
-  0%,
-  100% {
-    opacity: 0;
-  }
-  15% {
-    opacity: 1;
-  }
-  65% {
-    opacity: 0;
-  }
-}
-
-@keyframes logoAnim {
-  0% {
-    opacity: 0.35;
-    transform: scale(0.98);
-  }
-  12% {
-    opacity: 1;
-    transform: scale(1.04);
-    filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.7));
-  }
-  35% {
-    opacity: 0.55;
-    transform: scale(1);
-  }
-  100% {
-    opacity: 0.35;
-    transform: scale(0.98);
-  }
-}
-
 /* UTILITY CLASSES for custom UI elements */
 .prt-page {
   padding: 24px;
@@ -423,6 +380,23 @@ body {
 .custom-scrollbar::-webkit-scrollbar { width: 6px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .custom-scrollbar::-webkit-scrollbar-thumb { background: var(--color-outline-variant); border-radius: 10px; }
+
+/* Hide scrollbar, keep scroll */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+@keyframes prt-refresh-spin {
+  to {
+    transform: rotate(270deg);
+  }
+}
 
 /* FORM INPUT */
 .prt-input {

@@ -1,11 +1,11 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { createClient } from "@/utils/supabase/client";
 import { 
   X, 
   Plus, 
   Camera, 
+  Image as ImageIcon,
   MapPin, 
   Calendar, 
   Clock, 
@@ -38,6 +38,8 @@ import { ScheduleVisitModal } from "./ScheduleVisitModal";
 import { updateSiteVisitDetailsAction } from "@/features/orders/actions/orderActions";
 import { deleteStorageFilesAction } from "@/features/orders/actions/storageActions";
 import { scheduleSiteVisitAction } from "@/features/orders/actions/orderActions";
+import { uploadFileViaStaffApi } from "@/utils/supabase/uploadStorageFile";
+import { OverlayPortal } from "@/components/ui/OverlayPortal";
 import { GoogleMap, useJsApiLoader, Marker } from "@react-google-maps/api";
 
 const libraries: ("places")[] = ["places"];
@@ -170,9 +172,6 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
   const isFrozen = (baseFrozen && !adminOverrideUnlocked) || !canEdit;
   
   const [isConfirmSkipOpen, setIsConfirmSkipOpen] = useState(false);
-  const [isChatOpen, setIsChatOpen] = useState(false);
-  const [chatMessage, setChatMessage] = useState("");
-  const [unreadCount, setUnreadCount] = useState(0);
 
   // State for manual scheduling
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
@@ -187,30 +186,24 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
   };
 
   const uploadSitePhoto = async (file: File) => {
-    const supabase = createClient();
-    const ext = file.name.split(".").pop() || "jpg";
-    const path = `${order.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-    const { error } = await supabase.storage
-      .from("site-visit-photos")
-      .upload(path, file, { upsert: false, contentType: file.type });
-    if (error) throw error;
-    const { data } = supabase.storage.from("site-visit-photos").getPublicUrl(path);
-    return data.publicUrl;
+    const { url } = await uploadFileViaStaffApi(file, order.id, "site_visit_photo");
+    return url;
   };
 
   const handlePhotoFiles = async (files: FileList | null) => {
     if (!files || files.length === 0 || !selectedLocationId) return;
     setUploadingPhotos(true);
     try {
-      const uploadPromises = Array.from(files).map(file => uploadSitePhoto(file));
+      const uploadPromises = Array.from(files).map((file) => uploadSitePhoto(file));
       const urls = await Promise.all(uploadPromises);
-      
-      const activeLoc = (siteVisit.locations || []).find(l => l.id === selectedLocationId);
+
+      const activeLoc = (siteVisit.locations || []).find((l) => l.id === selectedLocationId);
       const newUrls = [...(activeLoc?.photos || []), ...urls];
-      
+
       updateSignLocation(selectedLocationId, { photos: newUrls });
-    } catch (err: any) {
-      alert("Upload failed: " + (err?.message || "Unknown error"));
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      alert("Upload failed: " + message);
     } finally {
       setUploadingPhotos(false);
     }
@@ -353,12 +346,12 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
       
       {/* ── ADMIN OVERRIDE BANNER ── */}
       {baseFrozen && currentUserRole === "Admin" && setAdminOverrideUnlocked && (
-        <div className={`p-4 rounded-xl border flex items-center justify-between transition-colors ${adminOverrideUnlocked ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}>
-          <div className="flex items-center gap-3">
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${adminOverrideUnlocked ? 'bg-amber-100 text-amber-600' : 'bg-slate-200 text-slate-500'}`}>
+        <div className={`p-4 rounded-xl border flex flex-col md:flex-row md:items-center gap-3 md:justify-between transition-colors ${adminOverrideUnlocked ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}>
+          <div className="flex items-start md:items-center gap-3 min-w-0">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${adminOverrideUnlocked ? 'bg-amber-100 text-amber-600' : 'bg-slate-200 text-slate-500'}`}>
               <Shield size={16} />
             </div>
-            <div>
+            <div className="min-w-0">
               <h4 className={`text-sm font-bold ${adminOverrideUnlocked ? 'text-amber-900' : 'text-slate-700'}`}>Admin God Mode</h4>
               <p className={`text-xs ${adminOverrideUnlocked ? 'text-amber-700' : 'text-slate-500'}`}>
                 {adminOverrideUnlocked 
@@ -369,7 +362,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
           </div>
           <button
             onClick={() => setAdminOverrideUnlocked(!adminOverrideUnlocked)}
-            className={`px-4 py-2 rounded-lg text-xs font-bold transition-colors ${
+            className={`px-4 py-2.5 rounded-lg text-xs font-bold transition-colors w-full md:w-auto shrink-0 ${
               adminOverrideUnlocked 
                 ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-xs' 
                 : 'bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 shadow-3xs'
@@ -570,16 +563,17 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
       />
 
       {isConfirmSkipOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-sm shadow-xl p-6">
+        <OverlayPortal>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100000] flex items-end md:items-center justify-center p-0 md:p-4">
+          <div className="bg-white rounded-t-2xl md:rounded-2xl w-full max-w-sm shadow-xl p-5 md:p-6 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
             <h2 className="text-lg font-black text-slate-900 mb-2">Confirm Skip Site Visit</h2>
             <p className="text-sm text-slate-600 mb-6 leading-relaxed">
               Are you sure you want to skip the site visit? This will bypass the scheduling phase and move directly to adding measurements. This action cannot be undone.
             </p>
-            <div className="flex justify-end gap-3">
+            <div className="flex flex-col-reverse md:flex-row justify-end gap-2 md:gap-3">
               <button
                 onClick={() => setIsConfirmSkipOpen(false)}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm rounded-xl transition-colors"
+                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm rounded-xl transition-colors"
               >
                 Cancel
               </button>
@@ -591,30 +585,30 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
                     await onSkipSiteVisit();
                   }
                 }}
-                className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm rounded-xl transition-colors shadow-sm"
+                className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm rounded-xl transition-colors shadow-sm"
               >
                 Skip Site Visit
               </button>
             </div>
           </div>
         </div>
+        </OverlayPortal>
       )}
-      
-      {/* ── TOP TOGGLABLE BAR & READY CHECKBOX ── */}
+            {/* ── TOP TOGGLABLE BAR & READY CHECKBOX ── */}
       <div className="bg-gradient-to-r from-slate-50 to-slate-100/50 border border-slate-200/80 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all duration-300">
         
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200/60 pb-3 w-full">
           <div 
-            className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent w-full"
-            style={{ WebkitOverflowScrolling: "touch" }}
+            className="flex items-center gap-1 overflow-x-auto p-1 bg-slate-100 border border-slate-200/60 rounded-xl w-full max-w-full"
+            style={{ WebkitOverflowScrolling: "touch", scrollbarWidth: "none", msOverflowStyle: "none" }}
           >
             {(siteVisit.locations || []).map((loc, idx) => {
               const isSelected = loc.id === selectedLocationId;
               return (
-                <div key={loc.id} className={`flex items-center flex-shrink-0 border rounded-full pl-3 pr-1 py-1 transition-all ${isSelected ? "bg-[var(--color-secondary)]/10 border-[var(--color-secondary)]" : "bg-white border-slate-200 hover:bg-slate-50"}`}>
+                <div key={loc.id} className={`flex items-center flex-shrink-0 rounded-lg px-3 py-1.5 transition-all ${isSelected ? "bg-white shadow-[0_1px_3px_rgba(0,0,0,0.1)] ring-1 ring-slate-900/5" : "hover:bg-slate-200/50"}`}>
                   <button
                     onClick={() => setSelectedLocationId(loc.id)}
-                    className={`text-xs font-bold transition-all focus:outline-none ${isSelected ? "text-[var(--color-secondary)] font-extrabold" : "text-slate-500"}`}
+                    className={`text-[13px] font-semibold transition-all focus:outline-none ${isSelected ? "text-[var(--color-secondary)]" : "text-slate-500 hover:text-slate-700"}`}
                   >
                     {loc.name || `Item-${idx + 1}`}
                   </button>
@@ -626,7 +620,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
                         e.preventDefault();
                         removeSignLocation(loc.id);
                       }}
-                      className={`ml-2 w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold transition-colors focus:outline-none ${isSelected ? "text-[var(--color-secondary)] hover:text-red-650 hover:bg-red-50" : "text-slate-400 hover:text-red-550 hover:bg-red-50"}`}
+                      className={`ml-1.5 w-7 h-7 rounded-full flex items-center justify-center text-[12px] font-bold transition-colors focus:outline-none ${isSelected ? "text-slate-400 hover:text-red-600 hover:bg-red-50" : "text-slate-400 hover:text-red-600 hover:bg-slate-200"}`}
                       title="Remove item"
                     >
                       ×
@@ -640,9 +634,9 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
             {!isFrozen && (
               <button
                 onClick={addSignLocation}
-                className="flex items-center gap-1 px-3.5 py-1.5 bg-white border border-dashed border-[var(--color-secondary)] text-[var(--color-secondary)] hover:bg-[var(--color-secondary)]/5 rounded-full text-xs font-bold transition-all flex-shrink-0 focus:outline-none"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-semibold text-slate-500 hover:text-slate-700 hover:bg-slate-200/50 rounded-lg transition-all flex-shrink-0 focus:outline-none ml-1"
               >
-                <Plus size={12} /> New Item
+                <Plus size={14} strokeWidth={2.5} /> New Item
               </button>
             )}
           </div>
@@ -1249,30 +1243,30 @@ const SectionCard: React.FC<{
   extra?: React.ReactNode;
 }> = ({ title, icon, children, isCollapsed, onToggle, extra }) => (
   <div className="bg-white border border-slate-200/70 rounded-2xl shadow-xs overflow-hidden transition-all duration-200 hover:border-slate-300/80">
-    <div className="w-full px-5 py-4 flex items-center justify-between bg-slate-50/30 hover:bg-slate-50/70 border-b border-slate-100 transition-colors">
+    <div className="w-full px-3 sm:px-5 py-4 flex items-center justify-between bg-slate-50/30 hover:bg-slate-50/70 border-b border-slate-100 transition-colors">
       <button
         onClick={onToggle}
-        className="flex-1 text-left flex items-center justify-between focus:outline-none"
+        className="flex-1 text-left flex items-center justify-between focus:outline-none min-w-0 gap-2"
       >
-        <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-          {icon && <span className="text-base">{icon}</span>}
-          {title}
+        <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 min-w-0">
+          {icon && <span className="text-base shrink-0">{icon}</span>}
+          <span className="truncate">{title}</span>
         </h3>
         {!extra && (
-          isCollapsed ? <ChevronDown size={18} className="text-slate-400 transition-transform duration-200" /> : <ChevronUp size={18} className="text-slate-400 transition-transform duration-200" />
+          isCollapsed ? <ChevronDown size={18} className="text-slate-400 transition-transform duration-200 shrink-0" /> : <ChevronUp size={18} className="text-slate-400 transition-transform duration-200 shrink-0" />
         )}
       </button>
       {extra && (
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 shrink-0">
           {extra}
-          <button onClick={onToggle} className="focus:outline-none">
+          <button onClick={onToggle} className="focus:outline-none p-1">
             {isCollapsed ? <ChevronDown size={18} className="text-slate-400" /> : <ChevronUp size={18} className="text-slate-400" />}
           </button>
         </div>
       )}
     </div>
     {!isCollapsed && (
-      <div className="px-5 pb-5">
+      <div className="px-3 sm:px-5 pb-5">
         {children}
       </div>
     )}
@@ -1290,22 +1284,57 @@ const SitePhotoUploader: React.FC<{
   onRemove: (url: string) => void;
   onView: (idx: number) => void;
 }> = ({ photos, uploading, disabled, onFiles, onRemove, onView }) => {
-  const galleryRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
+  const galleryRef = useRef<HTMLInputElement>(null);
+
+  const handlePick = (files: FileList | null) => {
+    void onFiles(files);
+  };
 
   return (
     <div className="pt-4 space-y-4">
       {/* Upload buttons */}
       {!disabled && (
-        <div className="flex gap-3">
-          <input ref={galleryRef} type="file" accept="image/*" multiple className="hidden" onChange={e => onFiles(e.target.files)} />
+        <div className="flex flex-wrap gap-3">
+          <input
+            ref={cameraRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => {
+              handlePick(e.target.files);
+              e.target.value = "";
+            }}
+          />
+          <input
+            ref={galleryRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              handlePick(e.target.files);
+              e.target.value = "";
+            }}
+          />
           <button
-            onClick={() => galleryRef.current?.click()}
+            type="button"
+            onClick={() => cameraRef.current?.click()}
             disabled={uploading}
             className="flex items-center gap-2 px-4 py-2.5 bg-[var(--color-secondary)] text-white rounded-xl text-xs font-bold hover:opacity-90 transition-opacity disabled:opacity-50"
           >
             <Camera size={14} />
-            Add Photos
+            Take Photo
+          </button>
+          <button
+            type="button"
+            onClick={() => galleryRef.current?.click()}
+            disabled={uploading}
+            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-bold hover:bg-slate-50 transition-colors disabled:opacity-50"
+          >
+            <ImageIcon size={14} />
+            Gallery
           </button>
 
           {uploading && (
@@ -1323,7 +1352,7 @@ const SitePhotoUploader: React.FC<{
           {photos.map((url, idx) => (
             <div key={url} className="relative group w-24 h-24 rounded-xl overflow-hidden border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
               <img src={url} alt={`Site photo ${idx + 1}`} className="w-full h-full object-cover" />
-              <div className="absolute inset-0 bg-slate-900/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+              <div className="absolute inset-0 bg-slate-900/70 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                 <button
                   onClick={(e) => { e.stopPropagation(); onView(idx); }}
                   className="w-7 h-7 rounded-full bg-white/20 hover:bg-white/40 flex items-center justify-center text-white transition-colors"
@@ -1354,11 +1383,11 @@ const SitePhotoUploader: React.FC<{
       ) : (
         <div
           className={`flex flex-col items-center justify-center py-10 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50/50 transition-colors ${disabled ? "" : "cursor-pointer hover:border-[var(--color-secondary)] hover:bg-slate-100/50"}`}
-          onClick={() => !disabled && galleryRef.current?.click()}
+          onClick={() => !disabled && cameraRef.current?.click()}
         >
           <Camera size={28} className="text-slate-300 mb-2" />
           <p className="text-xs font-bold text-slate-400">No photos yet</p>
-          {!disabled && <p className="text-[10px] text-slate-400 mt-0.5">Tap "Add Photos" to upload</p>}
+          {!disabled && <p className="text-[10px] text-slate-400 mt-0.5">Tap &quot;Take Photo&quot; or &quot;Gallery&quot;</p>}
         </div>
       )}
     </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import Image from "next/image";
+
 import { loadClientConfig, ClientConfig } from "@/config/loadClientConfig";
 
 interface LogoProps {
@@ -10,9 +10,11 @@ interface LogoProps {
   width?: number;
   height?: number;
   align?: "left" | "center" | "right";
+  /** When false, skip client.logoScale (use for loaders so size stays predictable). */
+  applyScale?: boolean;
 }
 
-export function Logo({ className = "", forceText = false, width = 200, height = 48, align = "center" }: LogoProps) {
+export function Logo({ className = "", forceText = false, width = 200, height = 48, align = "center", applyScale = true }: LogoProps) {
   const [client, setClient] = useState<ClientConfig | null>(null);
 
   useEffect(() => {
@@ -26,20 +28,33 @@ export function Logo({ className = "", forceText = false, width = 200, height = 
   }
 
   if (client.logoUrl && !forceText) {
-    const scale = client.logoScale || 1;
+    const scale = applyScale ? (client.logoScale || 1) : 1;
     const finalWidth = width * scale;
     const finalHeight = height * scale;
 
     return (
-      <div className={`flex items-center ${className}`} style={{ width: finalWidth, transition: "all 0.25s cubic-bezier(0.4,0,0.2,1)" }}>
-        <Image
-          src={client.logoUrl}
+      <div 
+        className={`flex items-center ${className}`} 
+        style={{ 
+          width: finalWidth, 
+          justifyContent: align === "center" ? "center" : align === "right" ? "flex-end" : "flex-start",
+          transition: "all 0.25s cubic-bezier(0.4,0,0.2,1)" 
+        }}
+      >
+        <img
+          src={`/printoms${client.logoUrl}`}
           alt={`${client.name} Logo`}
           width={finalWidth}
           height={finalHeight}
           className="object-contain"
-          style={{ maxHeight: finalHeight, maxWidth: "100%", objectPosition: align, transition: "all 0.25s cubic-bezier(0.4,0,0.2,1)" }}
-          priority
+          style={{
+            maxHeight: finalHeight,
+            maxWidth: "100%",
+            width: "auto",
+            height: "auto",
+            objectPosition: align,
+            transition: "all 0.25s cubic-bezier(0.4,0,0.2,1)",
+          }}
         />
       </div>
     );

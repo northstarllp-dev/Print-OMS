@@ -3,15 +3,19 @@
 import { createServerClient } from "@supabase/ssr";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
+import { revalidatePath } from "next/cache";
 import { DesignRecord } from "@/types";
 import { mapDesignFromDb } from "./designMapper";
 import { dispatchWhatsAppNotification } from "@/features/notifications/actions/dispatchNotification";
 import { getRequestBaseUrl } from "@/features/notifications/whatsapp/requestBaseUrl";
+import { getCurrentUser } from "@/features/auth/actions/authActions";
+import { createAdminClient } from "@/utils/supabase/admin";
+import { verifyPortalToken } from "@/utils/portal-tokens";
 import {
-  assertStageEditOrPortalOrder,
   assertStageEditPermission,
-  assertDesignStageUnlocked,
+  assertValidPortalSessionForOrder,
 } from "@/features/orders/workspace/shared/serverPermissions";
+import { resolveStagePermission } from "@/features/orders/workspace/shared/permissions";
 import {
   revalidateOrderDetailPaths,
 } from "@/features/orders/actions/revalidateOrderPaths";
@@ -42,6 +46,17 @@ async function getSupabase() {
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+function requireAdminClient() {
+  const admin = createAdminClient();
+  if (!admin) throw new Error("Server configuration error");
+  return admin;
+}
+
+function isDesignStageLocked(stage: string, stageStatus: string | null): boolean {
+  if (!stageStatus || stageStatus === "Normal") return false;
+  return stage === "Design In Progress" || stage === "Design Approved";
+}
+
 async function resolveOrderUuid(supabase: SupabaseClient, idOrOrderId: string): Promise<string> {
   if (uuidPattern.test(idOrOrderId)) return idOrOrderId;
   const { data, error } = await supabase
@@ -53,8 +68,100 @@ async function resolveOrderUuid(supabase: SupabaseClient, idOrOrderId: string): 
   return data.id;
 }
 
-async function revalidateDesignPaths(orderId: string) {
+async function assertPortalDesignAccess(
+  orderUuid: string,
+  portalToken?: string
+): Promise<void> {
+  try {
+    await assertValidPortalSessionForOrder(orderUuid, "approve_design");
+    return;
+  } catch {
+    // Fall through to raw token auth when the HttpOnly cookie is not ready yet.
+  }
+
+  if (portalToken) {
+    const payload = verifyPortalToken(portalToken);
+    if (!payload) throw new Error("Unauthorized");
+    if (!payload.scopes.includes("approve_design")) throw new Error("Unauthorized");
+
+    const admin = requireAdminClient();
+    const { data: order } = await admin
+      .from("orders")
+      .select("id, order_id, customer_id")
+      .eq("id", orderUuid)
+      .maybeSingle();
+    if (!order) throw new Error("Unauthorized");
+
+    if (payload.orderId && (payload.orderId === order.id || payload.orderId === order.order_id)) {
+      return;
+    }
+    if (payload.customerId) {
+      const { data: customer } = await admin
+        .from("customers")
+        .select("id")
+        .eq("customer_id", payload.customerId)
+        .maybeSingle();
+      if (customer && order.customer_id === customer.id) return;
+    }
+  }
+
+  throw new Error("Unauthorized");
+}
+
+async function assertDesignStageUnlockedForOrder(
+  supabase: SupabaseClient,
+  orderUuid: string
+): Promise<void> {
+  const profile = await getCurrentUser();
+  if (profile?.role?.toLowerCase() === "admin") return;
+
+  const { data: order, error } = await supabase
+    .from("orders")
+    .select("stage, stage_status")
+    .eq("id", orderUuid)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!order) throw new Error("Order not found");
+
+  if (isDesignStageLocked(order.stage, order.stage_status)) {
+    throw new Error(
+      "Design is locked pending admin approval. Please wait for admin review or requested changes."
+    );
+  }
+}
+
+async function getDesignMutationContext(
+  orderId: string,
+  portalToken?: string
+): Promise<{ supabase: SupabaseClient; orderUuid: string; fromPortal: boolean }> {
+  const profile = await getCurrentUser();
+  if (profile) {
+    const actor = {
+      role: profile.role,
+      staff_role: profile.staff_role ?? null,
+      company_id: profile.company_id ?? null,
+    };
+    const { canEdit } = resolveStagePermission("design", actor);
+    if (canEdit) {
+      const supabase = await getSupabase();
+      const orderUuid = await resolveOrderUuid(supabase, orderId);
+      await assertDesignStageUnlockedForOrder(supabase, orderUuid);
+      return { supabase, orderUuid, fromPortal: false };
+    }
+  }
+
+  const admin = requireAdminClient();
+  const orderUuid = await resolveOrderUuid(admin, orderId);
+  await assertPortalDesignAccess(orderUuid, portalToken);
+  await assertDesignStageUnlockedForOrder(admin, orderUuid);
+  return { supabase: admin, orderUuid, fromPortal: true };
+}
+
+async function revalidateDesignPaths(orderId: string, fromPortal = false) {
   revalidateOrderDetailPaths(orderId);
+  if (fromPortal) {
+    revalidatePath("/printoms/portal");
+  }
 }
 
 async function updateOrderStage(supabase: SupabaseClient, orderUuid: string, stage: string) {
@@ -100,12 +207,10 @@ export async function getDesignByOrderId(orderId: string): Promise<DesignRecord 
 export async function updateDesignDetailsAction(
   orderId: string,
   details: Partial<DesignRecord>,
-  expectedUpdatedAt?: string
+  expectedUpdatedAt?: string,
+  portalToken?: string
 ): Promise<DesignRecord> {
-  await assertStageEditOrPortalOrder("design", orderId);
-  await assertDesignStageUnlocked(orderId);
-  const supabase = await getSupabase();
-  const orderUuid = await resolveOrderUuid(supabase, orderId);
+  const { supabase, orderUuid, fromPortal } = await getDesignMutationContext(orderId, portalToken);
 
   const { data: current, error: fetchError } = await supabase
     .from("designs")
@@ -118,7 +223,7 @@ export async function updateDesignDetailsAction(
     order_id: orderUuid,
     resources: current?.resources || [],
     items: current?.items || [],
-    ...details
+    ...details,
   };
   payload.order_id = orderUuid;
 
@@ -154,13 +259,15 @@ export async function updateDesignDetailsAction(
   if (error) throw new Error(error.message);
   if (!data) throw new Error("Failed to update design.");
 
-  await revalidateDesignPaths(orderId);
+  await revalidateDesignPaths(orderId, fromPortal);
   return mapDesignFromDb(data);
 }
 
 export async function sendDesignToCustomerAction(orderId: string): Promise<DesignRecord> {
   await assertStageEditPermission("design");
-  await assertDesignStageUnlocked(orderId);
+  const supabase = await getSupabase();
+  const orderUuid = await resolveOrderUuid(supabase, orderId);
+  await assertDesignStageUnlockedForOrder(supabase, orderUuid);
   const design = await getDesignByOrderId(orderId);
   if (!design) throw new Error("Design not found");
 
@@ -179,8 +286,6 @@ export async function sendDesignToCustomerAction(orderId: string): Promise<Desig
 
   const result = await updateDesignDetailsAction(orderId, { items }, design.updated_at);
 
-  const supabase = await getSupabase();
-  const orderUuid = await resolveOrderUuid(supabase, orderId);
   const baseUrl = await getRequestBaseUrl();
   await dispatchWhatsAppNotification(supabase, {
     templateKey: hadChangesRequested
@@ -196,12 +301,10 @@ export async function sendDesignToCustomerAction(orderId: string): Promise<Desig
 
 export async function transitionDesignOrderStageAction(
   orderId: string,
-  stage: string
+  stage: string,
+  portalToken?: string
 ): Promise<void> {
-  await assertStageEditOrPortalOrder("design", orderId);
-  await assertDesignStageUnlocked(orderId);
-  const supabase = await getSupabase();
-  const orderUuid = await resolveOrderUuid(supabase, orderId);
+  const { supabase, orderUuid, fromPortal } = await getDesignMutationContext(orderId, portalToken);
   await updateOrderStage(supabase, orderUuid, stage);
-  await revalidateDesignPaths(orderId);
+  await revalidateDesignPaths(orderId, fromPortal);
 }

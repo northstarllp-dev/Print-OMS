@@ -5,6 +5,7 @@ import { getStaffHomePath } from "@/features/orders/workspace/shared/stageGrants
 import { Shield, Users, ArrowRight, BarChart3, ClipboardList, Heart } from "lucide-react";
 import Link from "next/link";
 import { Logo } from "@/components/ui/Logo";
+import { InstallPwaButton } from "@/components/pwa/InstallPwaButton";
 
 export default async function RootGateway() {
   const profile = await getCurrentUser();
@@ -117,10 +118,15 @@ export default async function RootGateway() {
 
       </div>
 
+      {/* PWA Install Button */}
+      <div style={{ marginTop: 32, display: "flex", justifyContent: "center" }}>
+        <InstallPwaButton />
+      </div>
+
       {/* Footer */}
       <div style={{ marginTop: 80, textAlign: "center", color: "var(--text-secondary)", fontSize: 13 }}>
         <a
-          href="https://www.thepolarislabs.com/"
+          href="https://printoms.thepolarislabs.com/"
           target="_blank"
           rel="noopener noreferrer"
           style={{

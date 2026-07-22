@@ -18,16 +18,23 @@ const defaultCenter = {
 };
 import {
   Printer, MapPin, FileText, CheckSquare, CheckCircle2,
-  MessageSquare, Send, ZoomIn, ZoomOut, Check, X, Info,
+  ZoomIn, ZoomOut, Check, X, Info,
   AlertCircle, Calendar,
   ChevronLeft, ChevronRight, Phone,
   Package, Wrench, Palette, BarChart3, CreditCard,
-  RefreshCw, AlertTriangle, Loader2, Maximize2, Minimize2, CheckCheck,
-  Download, CalendarDays, Hammer
+  RefreshCw, AlertTriangle, Loader2,
+  Download, CalendarDays, Hammer, Heart
 } from "lucide-react";
 import { Logo } from "@/components/ui/Logo";
+import { withBasePath } from "@/lib/appBasePath";
 import { createClient } from "@/utils/supabase/client";
 import { scheduleSiteVisitAction } from "@/features/orders/actions/orderActions";
+import { getAppSettings } from "@/features/settings/actions/settingsActions";
+import {
+  DEFAULT_PRODUCTION_CHECKLIST_ITEMS,
+  resolveChecklistProgress,
+  type ProductionChecklistItem,
+} from "@/features/settings/productionChecklist";
 import { formatSiteMeasurementLabel } from "@/features/orders/actions/siteVisitMapper";
 import {
   mergeOrderDetailPatch,
@@ -197,7 +204,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
     let mounted = true;
     (async () => {
       try {
-        const res = await fetch("/api/portal/session", {
+        const res = await fetch(withBasePath("/api/portal/session"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ token }),
@@ -403,6 +410,21 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
 
   const pd = activeOrder?.productionDetails || {};
   const inst = activeOrder?.installationDetails || {};
+  const [productionChecklistItems, setProductionChecklistItems] = useState<ProductionChecklistItem[]>(
+    DEFAULT_PRODUCTION_CHECKLIST_ITEMS
+  );
+
+  useEffect(() => {
+    getAppSettings()
+      .then((settings) => {
+        if (settings?.productionChecklistItems?.length) {
+          setProductionChecklistItems(settings.productionChecklistItems);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const productionChecklistProgress = resolveChecklistProgress(pd, productionChecklistItems);
 
   if (orders.length === 0) {
     return (
@@ -424,46 +446,47 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
         * { font-family: 'Inter', sans-serif; }
         .portal-stepper-line { transition: width 0.6s cubic-bezier(0.4,0,0.2,1); }
         .scope-item { transition: all 0.2s ease; }
-        .chat-scroll::-webkit-scrollbar { width: 4px; }
-        .chat-scroll::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 4px; }
+        .portal-scroll::-webkit-scrollbar { width: 4px; }
+        .portal-scroll::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 4px; }
         @keyframes slideUp { from { opacity:0; transform: translateY(8px); } to { opacity:1; transform: translateY(0); } }
         .animate-slide-up { animation: slideUp 0.3s ease forwards; }
       `}</style>
 
-      {/* ─── TOP HEADER ─── */}
+      {/* --- TOP HEADER --- */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-20">
-        <div className="max-w-7xl mx-auto px-6 py-3.5 flex items-center justify-between gap-4">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           {/* Left: Logo + Order Info */}
-          <div className="flex items-center gap-4">
-            <Logo height={50} />
-            <div className="w-px h-6 bg-slate-200" />
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-base font-black text-[#0b1c30] leading-none">
+          <div className="flex items-center gap-3 min-w-0">
+            <Logo height={40} className="shrink-0 sm:h-[50px]" />
+            <div className="w-px h-6 bg-slate-200 shrink-0 hidden sm:block" />
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-sm sm:text-base font-black text-[#0b1c30] leading-none truncate">
                   Order #{activeOrder?.orderCode || activeOrder?.id}
                 </h1>
                 <a
                   href="tel:+919876543210"
-                  className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 hover:bg-blue-100 border border-blue-100 hover:border-blue-200 text-[#1E40AF] rounded-lg text-[10px] font-bold transition-all shadow-sm"
-                  title="Call Manager (Sarah Jenkins)"
+                  className="inline-flex items-center gap-1 px-2 sm:px-2.5 py-1 bg-blue-50 hover:bg-blue-100 border border-blue-100 hover:border-blue-200 text-[#1E40AF] rounded-lg text-[10px] font-bold transition-all shadow-sm shrink-0"
+                  title="Call Manager"
                 >
                   <Phone size={11} className="stroke-[2.5]" />
-                  <span>Call Manager</span>
+                  <span className="hidden xs:inline sm:inline">Call</span>
                 </a>
               </div>
-              <p className="text-slate-500 mt-1">
-                Client: {activeOrder?.clientName || customer.name} | {activeOrder?.businessName || "Signage Project"}
+              <p className="text-slate-500 mt-1 text-[11px] sm:text-sm truncate">
+                {activeOrder?.clientName || customer.name}
+                <span className="hidden sm:inline"> | {activeOrder?.businessName || "Signage Project"}</span>
               </p>
             </div>
           </div>
 
           {/* Right: Action Buttons */}
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2.5 w-full sm:w-auto">
             {orders.length > 1 && (
               <select
                 value={activeOrderId}
                 onChange={e => setActiveOrderId(e.target.value)}
-                className="text-xs border border-slate-200 rounded-lg px-3 py-1.5 text-slate-600 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
+                className="w-full sm:w-auto text-xs border border-slate-200 rounded-lg px-3 py-2 text-slate-600 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
               >
                 {orders.map(o => (
                   <option key={o.id} value={o.id}>{o.orderCode || o.id} — {o.stage}</option>
@@ -474,15 +497,15 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
         </div>
       </header>
 
-      {/* ─── PROGRESS STEPPER ─── */}
+      {/* --- PROGRESS STEPPER --- */}
       <div className="bg-white border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-6 py-5">
-          <div className="flex items-start justify-between relative">
-            {/* Background line */}
-            <div className="absolute top-[18px] left-0 right-0 h-[2px] bg-slate-100 z-0" />
-            {/* Progress fill */}
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-5">
+          <div className="flex items-start gap-1 sm:justify-between relative overflow-x-auto pb-1 -mx-1 px-1">
+            {/* Background line — desktop only */}
+            <div className="hidden sm:block absolute top-[18px] left-0 right-0 h-[2px] bg-slate-100 z-0" />
+            {/* Progress fill — desktop only */}
             <div
-              className="absolute top-[18px] left-0 h-[2px] bg-emerald-500 z-0 portal-stepper-line"
+              className="hidden sm:block absolute top-[18px] left-0 h-[2px] bg-emerald-500 z-0 portal-stepper-line"
               style={{ width: `${(currentStep / Math.max(STEPS.filter(s => s.key !== "payments").length - 1, 1)) * 100}%` }}
             />
 
@@ -498,14 +521,14 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
               return (
                 <div
                   key={step.key}
-                  className={`flex flex-col items-center text-center relative z-10 flex-1 ${canOpen ? 'cursor-pointer hover:opacity-80' : ''}`}
+                  className={`flex flex-col items-center text-center relative z-10 shrink-0 sm:flex-1 min-w-[3.25rem] sm:min-w-0 ${canOpen ? 'cursor-pointer hover:opacity-80' : ''}`}
                   onClick={() => {
                     if (canOpen) {
                       setViewedStep(idx);
                     }
                   }}
                 >
-                  <div className={`w-9 h-9 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${isActive
+                  <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${isActive
                     ? "bg-[#1E40AF] border-[#1E40AF] text-white shadow-[0_0_0_4px_rgba(30,64,175,0.12)]"
                     : isCompleted
                       ? "bg-emerald-500 border-emerald-500 text-white"
@@ -515,7 +538,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                     }`}>
                     {isCompleted && !isActive ? <Check size={14} className="stroke-[3]" /> : <Icon size={14} />}
                   </div>
-                  <span className={`text-[11px] font-bold mt-2 block ${isActive ? "text-[#1E40AF]" : isCompleted ? "text-emerald-600" : isPaymentsTab ? "text-blue-500" : "text-slate-400"
+                  <span className={`text-[9px] sm:text-[11px] font-bold mt-1.5 sm:mt-2 block max-w-[4.5rem] sm:max-w-none leading-tight ${isActive ? "text-[#1E40AF]" : isCompleted ? "text-emerald-600" : isPaymentsTab ? "text-blue-500" : "text-slate-400"
                     }`}>
                     {step.label}
                   </span>
@@ -526,17 +549,17 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
         </div>
       </div>
 
-      {/* ─── MAIN CONTENT ─── */}
-      <div className="max-w-7xl mx-auto px-6 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-6">
+      {/* --- MAIN CONTENT --- */}
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6 pb-24">
+        <div className="grid grid-cols-1 gap-6">
 
-          {/* ── LEFT: Stage Content ── */}
+          {/* --- LEFT: Stage Content --- */}
           <div className="space-y-5">
 
             {/* Current Stage Panel */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
               {/* Stage label bar */}
-              <div className="px-6 pt-5 pb-3 border-b border-slate-100 flex items-center justify-between">
+              <div className="px-4 sm:px-6 pt-4 sm:pt-5 pb-3 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2">
                 <span className={`text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full ${viewedStep !== null && viewedStep !== currentStep ? 'bg-slate-100 border border-slate-200 text-slate-600' : 'bg-blue-50 border border-blue-100 text-[#1E40AF]'}`}>
                   {viewedStep !== null && viewedStep !== currentStep ? "PAST STAGE" : "CURRENT STAGE"}: {STEPS[activeStepToRender]?.label?.toUpperCase()}
                 </span>
@@ -550,8 +573,8 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                 )}
               </div>
 
-              <div className="p-6">
-                {/* ── ENQUIRIES STAGE ── */}
+              <div className="p-4 sm:p-6">
+                {/* ------ ENQUIRIES STAGE ------ */}
                 {STEPS[activeStepToRender]?.key === "enquiry" && (
                   <div className="space-y-6">
                     <div>
@@ -588,7 +611,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                   </div>
                 )}
 
-                {/* ── SITE VISIT STAGE ── */}
+                {/* ------ SITE VISIT STAGE ------ */}
                 {STEPS[activeStepToRender]?.key === "site_visit" && (
                   <>
                     {sv.customerAddress?.startsWith("Skipped") ? (
@@ -875,7 +898,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                           </div>
                         )}
 
-                        {/* ── Installation Requirements ── */}
+                        {/* ------ Installation Requirements ------ */}
                         {(sv.scaffoldingRequired || sv.craneRequired || sv.overnightInstallation !== undefined) && (
                           <div className="space-y-3">
                             <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-2">
@@ -897,7 +920,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                           </div>
                         )}
 
-                        {/* ── Fabrication Requirements ── */}
+                        {/* ------ Fabrication Requirements ------ */}
                         {(sv.extraAnglesRequired !== undefined || sv.extraAcpSheetRequired !== undefined || sv.oldBoardRemovalRequired !== undefined || sv.extraWireRequired !== undefined) && (
                           <div className="space-y-3">
                             <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-2">
@@ -923,7 +946,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                           </div>
                         )}
 
-                        {/* ── Design Inputs ── */}
+                        {/* ------ Design Inputs ------ */}
                         {(sv.designBriefAvailable || sv.fabricationRequired !== undefined || sv.civilWorkRequired !== undefined) && (
                           <div className="space-y-3">
                             <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-2">
@@ -954,7 +977,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                   </>
                 )}
 
-                {/* ── QUOTATION STAGE ── */}
+                {/* ------ QUOTATION STAGE ------ */}
                 {STEPS[activeStepToRender]?.key === "quotation" && (
                   <div className="space-y-6">
                     {/* Header */}
@@ -988,12 +1011,12 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                   </div>
                 )}
 
-                {/* ── DESIGN STAGE ── */}
+                {/* ------ DESIGN STAGE ------ */}
                 {STEPS[activeStepToRender]?.key === "design" && (
-                  <DesignTab order={activeOrder as any} customer={customer} siteVisitItems={activeOrder?.siteVisitItems || []} />
+                  <DesignTab order={activeOrder as any} customer={customer} siteVisitItems={activeOrder?.siteVisitItems || []} portalToken={token} />
                 )}
 
-                {/* ── PRODUCTION STAGE ── */}
+                {/* ------ PRODUCTION STAGE ------ */}
                 {STEPS[activeStepToRender]?.key === "production" && (
                   <div className="space-y-5">
                     <div>
@@ -1001,22 +1024,20 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                       <p className="text-sm text-slate-500">Real-time checklist of production milestones.</p>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {[
-                        { done: pd.procurementOfMaterials, label: "Procurement of Materials" },
-                        { done: pd.acpAndAcrylicCutting, label: "ACP & Acrylic Cutting" },
-                        { done: pd.lightingAndWiring, label: "Lighting & Wiring" },
-                        { done: pd.qualityCheck, label: "Quality Check" },
-                      ].map((item, i) => (
-                        <div key={i} className={`p-4 border rounded-xl flex items-center justify-between ${item.done ? "bg-emerald-50/50 border-emerald-200 text-emerald-800" : "bg-slate-50 border-slate-200 text-slate-500"}`}>
+                      {productionChecklistItems.map((item) => {
+                        const done = !!productionChecklistProgress[item.id];
+                        return (
+                        <div key={item.id} className={`p-4 border rounded-xl flex items-center justify-between ${done ? "bg-emerald-50/50 border-emerald-200 text-emerald-800" : "bg-slate-50 border-slate-200 text-slate-500"}`}>
                           <span className="text-xs font-semibold">{item.label}</span>
-                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${item.done ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-500"}`}>{item.done ? "Done" : "Pending"}</span>
+                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${done ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-500"}`}>{done ? "Done" : "Pending"}</span>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
 
-                {/* ── INSTALLATION STAGE ── */}
+                {/* ------ INSTALLATION STAGE ------ */}
                 {STEPS[activeStepToRender]?.key === "installation" && (
                   <div className="space-y-5">
                     <div>
@@ -1042,7 +1063,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                           <img src={inst.photoUrl} alt="Installation" className="w-full h-full object-cover" onError={e => { e.currentTarget.src = "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?w=400&auto=format&fit=crop"; }} />
                         </div>
                         <div className="space-y-3">
-                          <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-800">✓ Job Completed & Signed off by Client</div>
+                          <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-800">? Job Completed & Signed off by Client</div>
                           <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-xs">
                             <span className="text-slate-400 uppercase font-bold text-[10px] block mb-1">Signature</span>
                             <span className="font-serif italic text-slate-800 text-sm">{inst.customerSignature}</span>
@@ -1068,18 +1089,6 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
 
           </div>
 
-          {/* ── RIGHT SIDEBAR ── */}
-          <div className="space-y-5">
-            {/* Updates & Chat */}
-            {activeOrder && (
-              <CustomerChat
-                orderId={activeOrder.orderId || activeOrder.id}
-                customerId={customer.customerId || customer.id}
-                token={token}
-                customerName={customer.name}
-              />
-            )}
-          </div>
         </div>
 
         <div style={{
@@ -1087,17 +1096,18 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
           bottom: 0,
           left: 0,
           textAlign: "center",
-          padding: "12px 0",
+          padding: "8px 0 calc(8px + env(safe-area-inset-bottom, 0px))",
           borderTop: "1px solid #E2E8F0",
           color: "#94A3B8",
           fontSize: "13px",
           fontWeight: "600",
           width: "100%",
           background: "#f4f6fb",
-          zIndex: 40
+          zIndex: 40,
+          pointerEvents: "none",
         }}>
           <a
-          href="https://www.thepolarislabs.com/"
+          href="https://printoms.thepolarislabs.com/"
           target="_blank"
           rel="noopener noreferrer"
           style={{
@@ -1114,11 +1124,11 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
             pointerEvents: "auto",
           }}
         >
-          Made with <span style={{ color: "#EF4444", fontSize: "14px" }}>❤️</span> by
+          Made with <Heart size={14} fill="#EF4444" color="#EF4444" /> by
           <img
             src="/printoms/clients/light%20withoutbg.png"
             alt="Polaris"
-            style={{ height: "40px", marginLeft: "-2px", marginTop: "-12px", marginBottom: "-10px" }}
+            className="h-8 lg:h-9 w-auto ml-0.5"
           />
         </a>
         </div>
@@ -1126,15 +1136,6 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
 
 
 
-      {/* ─── MOBILE FLOATING CHAT BUTTON (hidden on lg+) ─── */}
-      {activeOrder && (
-        <MobileChatButton
-          orderId={activeOrder.orderId || activeOrder.id}
-          customerId={customer.customerId || customer.id}
-          token={token}
-          customerName={customer.name}
-        />
-      )}
       {selectedProductInfo && (
         <ProductInfoModal
           product={selectedProductInfo}
@@ -1142,7 +1143,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
         />
       )}
 
-      {/* ── PHOTO VIEWER MODAL ── */}
+      {/* ------ PHOTO VIEWER MODAL ------ */}
       {viewerIndex !== null && viewerPhotos.length > 0 && (
         <div
           className="fixed inset-0 z-[99999] bg-black/90 flex items-center justify-center backdrop-blur-sm"
@@ -1209,434 +1210,9 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
   );
 }
 
-// ─────────────────────────────────────────────────
-// Shared Chat Types
-// ─────────────────────────────────────────────────
-interface ChatProps {
-  orderId: string;
-  customerId: string;
-  token: string;
-  customerName: string;
-}
-
-interface ChatMsg {
-  id: string;
-  order_id: string;
-  activity_type: string;
-  actor_name: string;
-  actor_role: string;
-  content: string;
-  created_at: string;
-  is_read: boolean;
-}
-
-// ─────────────────────────────────────────────────
-// useOrderMessages — shared hook with Supabase Realtime
-// ─────────────────────────────────────────────────
-function useOrderMessages(
-  orderId: string,
-  customerId: string,
-  token: string,
-  customerName: string
-) {
-  const [messages, setMessages] = useState<ChatMsg[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [sending, setSending] = useState(false);
-  const prevCountRef = useRef(0);
-
-  // Initial fetch
-  const fetchMessages = useCallback(async () => {
-    try {
-      const res = await fetch(
-        `/api/portal/messages?order_id=${encodeURIComponent(orderId)}&customer_id=${encodeURIComponent(customerId)}&token=${encodeURIComponent(token)}`
-      );
-      if (res.ok) {
-        const { messages: msgs } = await res.json();
-        setMessages(msgs || []);
-      }
-    } catch (e) {
-      console.error("Chat fetch error:", e);
-    } finally {
-      setLoading(false);
-    }
-  }, [orderId, customerId, token]);
-
-  // Subscribe to Supabase Realtime for instant updates
-  useEffect(() => {
-    fetchMessages();
-    const supabase = createClient();
-    // Use unique channel name per mount to avoid Supabase channel cache collision (Strict Mode)
-    const channelName = `portal-chat-${orderId}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "order_activity",
-          filter: `order_id=eq.${orderId}`,
-        },
-        (payload) => {
-          const newMsg = payload.new as ChatMsg;
-          if (newMsg.activity_type !== "customer") return; // Only show customer-tab messages in portal
-          setMessages((prev) => {
-            // Prevent duplicates
-            if (prev.some((m) => m.id === newMsg.id || (m.id.startsWith("opt-") && m.content === newMsg.content))) {
-              // Replace optimistic message with real one
-              if (newMsg.actor_role === "Customer") {
-                return prev.map((m) => (m.id.startsWith("opt-") && m.content === newMsg.content ? newMsg : m));
-              }
-              return prev;
-            }
-            return [...prev, newMsg];
-          });
-        }
-      )
-      .subscribe();
-
-    return () => {
-      // Unsubscribe and remove to prevent "already subscribed" errors on re-mount
-      channel.unsubscribe();
-      supabase.removeChannel(channel);
-    };
-  }, [orderId, fetchMessages]);
-
-  // Mark messages as read when count grows (for mobile badge)
-  const unreadCount = useMemo(() => {
-    let count = 0;
-    messages.forEach((m) => {
-      if (m.actor_role !== "Customer" && m.actor_role !== "System" && !m.is_read) {
-        count++;
-      }
-    });
-    return count;
-  }, [messages]);
-
-  const sendMessage = useCallback(
-    async (text: string, optimisticId: string): Promise<boolean> => {
-      const trimmed = text.trim();
-      if (!trimmed || sending) return false;
-      setSending(true);
-      try {
-        const res = await fetch("/api/portal/messages", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            order_id: orderId,
-            customer_id: customerId,
-            token,
-            content: trimmed,
-            sender_name: customerName,
-          }),
-        });
-        if (!res.ok) throw new Error("Send failed");
-        return true;
-      } catch (e) {
-        console.error("Send error:", e);
-        return false;
-      } finally {
-        setSending(false);
-      }
-    },
-    [orderId, customerId, token, customerName]
-  );
-
-  // Optimistic send with rollback
-  const sendWithOptimistic = useCallback(
-    async (input: string, setInput: (val: string) => void) => {
-      const trimmed = input.trim();
-      if (!trimmed) return;
-      setInput("");
-      const optimisticId = `opt-${Date.now()}`;
-      const optimistic: ChatMsg = {
-        id: optimisticId,
-        order_id: orderId,
-        activity_type: "customer",
-        actor_name: customerName,
-        actor_role: "Customer",
-        content: trimmed,
-        created_at: new Date().toISOString(),
-        is_read: false,
-      };
-      // Add optimistic message
-      setMessages((prev) => [...prev, optimistic]);
-      // Try to send
-      const success = await sendMessage(trimmed, optimisticId);
-      if (!success) {
-        // Rollback: remove the optimistic message
-        setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
-      }
-    },
-    [orderId, customerName, sendMessage]
-  );
-
-  return { messages, loading, sending, unreadCount, sendWithOptimistic };
-}
-
-// ─────────────────────────────────────────────────
-// CustomerChat — sidebar version (desktop)
-// ─────────────────────────────────────────────────
-function CustomerChat({ orderId, customerId, token, customerName }: ChatProps) {
-  const [input, setInput] = useState("");
-  const [expanded, setExpanded] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const { messages, loading, sending, sendWithOptimistic } = useOrderMessages(
-    orderId,
-    customerId,
-    token,
-    customerName
-  );
-
-  useEffect(() => {
-    scrollRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  async function handleSend(e: React.FormEvent) {
-    e.preventDefault();
-    if (!input.trim()) return;
-    await sendWithOptimistic(input, setInput);
-  }
-
-  const chatBody = (
-    <>
-      {/* Header */}
-      <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between flex-shrink-0 bg-white">
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.15)]" />
-          <h3 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest">Updates & Chat</h3>
-        </div>
-        <button
-          onClick={() => setExpanded(e => !e)}
-          className="p-1.5 text-slate-400 hover:text-[#1E40AF] hover:bg-blue-50 rounded-lg transition-all"
-          title={expanded ? "Minimize" : "Expand to fullscreen"}
-        >
-          {expanded ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
-        </button>
-      </div>
-
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#FCFCFD]">
-        {loading && (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 size={18} className="animate-spin text-slate-300" />
-          </div>
-        )}
-        {!loading && messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-12 text-slate-400 gap-2">
-            <MessageSquare size={24} className="stroke-1 opacity-50" />
-            <p className="text-xs font-medium text-center">No messages yet.<br />Send a message to start chatting with the Printoms team.</p>
-          </div>
-        )}
-        {messages.map((msg) => {
-          const isMe = msg.actor_role === "Customer";
-          const initials = msg.actor_name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2);
-          const time = new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-          if (msg.actor_role === "System") {
-            return (
-              <div key={msg.id} className="flex justify-center">
-                <span className="text-[10px] text-slate-400 bg-slate-100 border border-slate-200 px-3 py-1 rounded-full font-medium">{msg.content}</span>
-              </div>
-            );
-          }
-          return (
-            <div key={msg.id} className={`flex items-end gap-2 ${isMe ? "flex-row-reverse" : ""}`}>
-              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-black shrink-0 ${isMe ? "bg-[#1E40AF] text-white" : "bg-slate-200 text-slate-600"
-                }`}>{initials}</div>
-              <div className={`flex flex-col max-w-[78%] ${isMe ? "items-end" : "items-start"}`}>
-                <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wide mb-0.5 px-1">{msg.actor_name}</span>
-                <div className={`px-3 py-2 rounded-2xl text-xs leading-relaxed break-words shadow-sm ${isMe
-                  ? "bg-[#1E40AF] text-white rounded-br-sm"
-                  : "bg-white text-slate-800 border border-slate-200 rounded-bl-sm"
-                  }`}>{msg.content}</div>
-                <span className="text-[9px] text-slate-400 mt-1 px-1 font-mono">{time}{isMe && <CheckCheck size={9} className="inline ml-1 text-slate-300" />}</span>
-              </div>
-            </div>
-          );
-        })}
-        <div ref={scrollRef} />
-      </div>
-
-      {/* Input */}
-      <form onSubmit={handleSend} className="p-3 border-t border-slate-200 bg-white flex items-center gap-2 flex-shrink-0">
-        <input
-          type="text"
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          placeholder="Type a message..."
-          className="flex-1 px-3 py-2.5 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-          disabled={sending}
-        />
-        <button
-          type="submit"
-          disabled={!input.trim() || sending}
-          className="p-2.5 bg-[#1E40AF] text-white rounded-xl hover:bg-blue-700 transition-all disabled:opacity-40 flex items-center justify-center"
-        >
-          {sending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
-        </button>
-      </form>
-    </>
-  );
-
-  return (
-    <>
-      {/* Desktop sidebar card (hidden on mobile) */}
-      <div className="hidden lg:flex bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex-col" style={{ height: "600px" }}>
-        {chatBody}
-      </div>
-
-      {/* Expanded popup modal */}
-      {expanded && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-          <div className="w-full max-w-xl h-[85vh] bg-white rounded-2xl border border-slate-200 shadow-2xl overflow-hidden flex flex-col">
-            {chatBody}
-          </div>
-        </div>
-      )}
-    </>
-  );
-}
-
-// ─────────────────────────────────────────────────
-// MobileChatButton — floating button for mobile
-// ─────────────────────────────────────────────────
-function MobileChatButton({ orderId, customerId, token, customerName }: ChatProps) {
-  const [open, setOpen] = useState(false);
-  const [input, setInput] = useState("");
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const { messages, loading, sending, unreadCount, sendWithOptimistic } = useOrderMessages(
-    orderId,
-    customerId,
-    token,
-    customerName
-  );
-
-  // Scroll to bottom when chat opens
-  useEffect(() => {
-    if (open) {
-      scrollRef.current?.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [open]);
-
-  // Scroll to bottom when new messages arrive while chat is open
-  useEffect(() => {
-    if (open) {
-      scrollRef.current?.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [messages, open]);
-
-  async function handleSend(e: React.FormEvent) {
-    e.preventDefault();
-    if (!input.trim()) return;
-    await sendWithOptimistic(input, setInput);
-  }
-
-  return (
-    <div className="lg:hidden">
-      {/* Floating Button */}
-      {!open && (
-        <button
-          onClick={() => setOpen(true)}
-          className="fixed bottom-6 right-6 z-50 w-14 h-14 bg-[#1E40AF] text-white rounded-full shadow-xl hover:bg-blue-700 transition-all hover:scale-105 flex items-center justify-center"
-        >
-          <MessageSquare size={22} />
-          {unreadCount > 0 && (
-            <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center border-2 border-white">
-              {unreadCount > 9 ? "9+" : unreadCount}
-            </span>
-          )}
-        </button>
-      )}
-
-      {/* Mobile Chat Panel */}
-      {open && (
-        <div className="fixed inset-0 z-[60] flex flex-col justify-end bg-slate-900/50 backdrop-blur-sm transition-all" onClick={() => setOpen(false)}>
-          <div className="w-full h-[85vh] bg-white rounded-t-2xl flex flex-col overflow-hidden shadow-[0_-10px_40px_rgba(0,0,0,0.1)]" onClick={e => e.stopPropagation()}>
-            {/* Header */}
-            <div className="px-4 py-3 bg-[#0b1c30] text-white flex items-center justify-between flex-shrink-0">
-              <div className="flex items-center gap-2">
-                <MessageSquare size={16} className="text-blue-300" />
-                <span className="text-sm font-black">Chat with Printoms</span>
-                <span className="text-[9px] bg-emerald-500 text-white px-1.5 py-0.5 rounded-full font-bold">LIVE</span>
-              </div>
-              <button
-                onClick={() => setOpen(false)}
-                className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-white/10 transition-all"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#FCFCFD]">
-              {loading && (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 size={18} className="animate-spin text-slate-300" />
-                </div>
-              )}
-              {!loading && messages.length === 0 && (
-                <div className="flex flex-col items-center justify-center h-full py-20 text-slate-400 gap-3">
-                  <MessageSquare size={32} className="stroke-1 opacity-40" />
-                  <p className="text-sm font-medium text-center">No messages yet.<br />Send us a message!</p>
-                </div>
-              )}
-              {messages.map((msg) => {
-                const isMe = msg.actor_role === "Customer";
-                const initials = msg.actor_name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2);
-                const time = new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-                if (msg.actor_role === "System") {
-                  return (
-                    <div key={msg.id} className="flex justify-center">
-                      <span className="text-[10px] text-slate-400 bg-slate-100 border border-slate-200 px-3 py-1 rounded-full font-medium">{msg.content}</span>
-                    </div>
-                  );
-                }
-                return (
-                  <div key={msg.id} className={`flex items-end gap-2 ${isMe ? "flex-row-reverse" : ""}`}>
-                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 ${isMe ? "bg-[#1E40AF] text-white" : "bg-slate-200 text-slate-600"
-                      }`}>{initials}</div>
-                    <div className={`flex flex-col max-w-[75%] ${isMe ? "items-end" : "items-start"}`}>
-                      <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wide mb-0.5 px-1">{msg.actor_name}</span>
-                      <div className={`px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed break-words ${isMe
-                        ? "bg-[#1E40AF] text-white rounded-br-sm"
-                        : "bg-white text-slate-800 border border-slate-200 rounded-bl-sm shadow-sm"
-                        }`}>{msg.content}</div>
-                      <span className="text-[9px] text-slate-400 mt-1 px-1 font-mono">{time}</span>
-                    </div>
-                  </div>
-                );
-              })}
-              <div ref={scrollRef} />
-            </div>
-
-            {/* Input */}
-            <form onSubmit={handleSend} className="p-4 border-t border-slate-200 bg-white flex items-center gap-3 flex-shrink-0 pb-safe">
-              <input
-                type="text"
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                placeholder="Type a message..."
-                className="flex-1 px-4 py-3 border border-slate-200 rounded-2xl text-sm bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                disabled={sending}
-              />
-              <button
-                type="submit"
-                disabled={!input.trim() || sending}
-                className="w-11 h-11 bg-[#1E40AF] text-white rounded-full hover:bg-blue-700 transition-all disabled:opacity-40 flex items-center justify-center flex-shrink-0"
-              >
-                {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 // Product Info Popup Modal Component
-// ─────────────────────────────────────────────────────────────────────────────
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 function ProductInfoModal({ product, onClose }: { product: any; onClose: () => void }) {
   const [activeImgIdx, setActiveImgIdx] = useState(0);
   const images = product.images && product.images.length > 0 ? product.images : [];
@@ -1800,7 +1376,7 @@ function ProductInfoModal({ product, onClose }: { product: any; onClose: () => v
             <div>
               <span style={{ fontSize: "9px", color: "#94a3b8", fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.05em", display: "block" }}>Standard Rate</span>
               <span style={{ fontSize: "12px", fontWeight: 900, color: "#1d4ed8", fontFamily: "monospace", display: "block", marginTop: "2px" }}>
-                ₹{(product.price_per_unit || product.price_per_sqft || 0).toLocaleString("en-IN")}
+                ?{(product.price_per_unit || product.price_per_sqft || 0).toLocaleString("en-IN")}
                 <span style={{ fontSize: "10px", color: "#94a3b8", fontWeight: 500, fontFamily: "sans-serif" }}>
                   /{product.pricing_type === "per_sqft" ? "sqft" : "unit"}
                 </span>

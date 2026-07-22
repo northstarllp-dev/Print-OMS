@@ -1,7 +1,8 @@
 "use client";
 
 import React from "react";
-import { Eye, Plus, SendHorizontal, Wrench, RefreshCw } from "lucide-react";
+import { createPortal } from "react-dom";
+import { Eye, Plus, SendHorizontal, Wrench, RefreshCw, Search, Filter, X } from "lucide-react";
 import {
   getTicketById,
   sendToServiceManagerAction,
@@ -42,6 +43,8 @@ export function ServiceTicketsView({
   const [selectedTicket, setSelectedTicket] = React.useState<ServiceTicketRecord | null>(null);
   const [isCreateOpen, setIsCreateOpen] = React.useState(false);
   const [search, setSearch] = React.useState("");
+  const [statusFilter, setStatusFilter] = React.useState("ALL");
+  const [mobileFiltersOpen, setMobileFiltersOpen] = React.useState(false);
 
   async function refreshTicket(ticketId: string) {
     const fresh = await getTicketById(ticketId);
@@ -57,103 +60,270 @@ export function ServiceTicketsView({
 
   const filteredTickets = tickets.filter((ticket) => {
     const text = search.toLowerCase();
-    if (!text) return true;
-    return (
+    const matchesSearch =
+      !text ||
       ticket.ticket_id.toLowerCase().includes(text) ||
       (ticket.customer_name || "").toLowerCase().includes(text) ||
       (ticket.customer_business_name || "").toLowerCase().includes(text) ||
       ticket.phone.toLowerCase().includes(text) ||
-      ticket.description.toLowerCase().includes(text)
-    );
+      ticket.description.toLowerCase().includes(text);
+    const matchesStatus = statusFilter === "ALL" || ticket.status === statusFilter;
+    return matchesSearch && matchesStatus;
   });
 
+  const resetFilters = () => {
+    setSearch("");
+    setStatusFilter("ALL");
+  };
+
+  const activeFilterCount = [statusFilter !== "ALL"].filter(Boolean).length;
+
   return (
-    <div style={{ padding: "32px", background: "#f8fafc", minHeight: "100vh" }}>
+    <div className="p-3 sm:p-4 md:p-8 bg-slate-50 min-h-0 pb-6">
       {/* ─── Header ─── */}
-      <div style={{ marginBottom: "24px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px", flexWrap: "wrap" }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: "28px", fontWeight: 800, color: "#0f172a" }}>
+      <div className="mb-5 md:mb-6 flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-xl sm:text-2xl md:text-[28px] font-extrabold text-slate-900 m-0">
             Service Tickets
           </h1>
-          <p style={{ margin: "8px 0 0", color: "#64748b", fontSize: "14px" }}>
+          <p className="mt-1 sm:mt-2 text-xs sm:text-sm text-slate-500 m-0">
             Queue of customer support tickets linked to existing orders.
           </p>
         </div>
-        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+        <div className="flex flex-wrap gap-2 items-center shrink-0">
           {isAdmin && <CopyLinkButton companyId={companyId} />}
           {isAdmin && (
             <button
+              type="button"
               onClick={() => setIsCreateOpen(true)}
-              style={{
-                padding: "10px 14px",
-                background: "var(--color-primary)",
-                color: "#fff",
-                border: "none",
-                borderRadius: "8px",
-                fontSize: "13px",
-                fontWeight: 700,
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "8px",
-                cursor: "pointer",
-              }}
+              className="inline-flex items-center gap-2 px-3 sm:px-3.5 py-2 sm:py-2.5 bg-[var(--color-primary)] text-white rounded-lg text-[12px] sm:text-[13px] font-bold"
             >
               <Plus size={16} />
-              Add Service Ticket
+              <span className="hidden sm:inline">Add Service Ticket</span>
+              <span className="sm:hidden">Add</span>
             </button>
           )}
         </div>
       </div>
 
       {/* ─── Table Card ─── */}
-      <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: "12px", overflow: "hidden" }}>
-        {/* Search */}
-        <div style={{ padding: "16px 20px", borderBottom: "1px solid #e2e8f0", display: "flex", gap: "12px", alignItems: "center" }}>
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by ticket, customer, phone, description..."
-            style={{
-              width: "100%",
-              maxWidth: "380px",
-              border: "1px solid #cbd5e1",
-              borderRadius: "8px",
-              padding: "10px 12px",
-              fontSize: "13px",
-              outline: "none",
-            }}
-          />
-          <button
-            title="Reset Filters"
-            onClick={() => setSearch("")}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: "0 14px",
-              background: "#fef2f2",
-              border: "1px solid #fecaca",
-              borderRadius: "8px",
-              cursor: "pointer",
-              color: "#dc2626",
-              outline: "none",
-              height: "39px",
-              transition: "all 0.2s",
-              fontWeight: "600",
-              fontSize: "13px",
-              gap: "6px",
-              flexShrink: 0
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "#fee2e2"; e.currentTarget.style.borderColor = "#fca5a5"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "#fef2f2"; e.currentTarget.style.borderColor = "#fecaca"; }}
-          >
-            <RefreshCw size={14} />
-            Reset
-          </button>
+      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+        {/* Search & Filter Bar — Orders-style */}
+        <div className="p-3 sm:p-4 border-b border-slate-200">
+          <div className="lg:hidden flex items-center gap-2">
+            <div className="relative flex-1 min-w-0">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Search tickets…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full pl-[34px] pr-8 py-2.5 border border-slate-200 rounded-full text-[13px] outline-none focus:border-[var(--color-primary)] bg-slate-50"
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => setMobileFiltersOpen(true)}
+              className={`relative shrink-0 inline-flex items-center gap-1.5 h-10 px-3.5 rounded-full border text-[12px] font-bold transition-colors ${
+                activeFilterCount > 0
+                  ? "bg-slate-900 text-white border-slate-900"
+                  : "bg-white text-slate-700 border-slate-200"
+              }`}
+            >
+              <Filter size={14} />
+              Filters
+              {activeFilterCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-[var(--color-primary)] text-white text-[10px] font-extrabold flex items-center justify-center border-2 border-white">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              title="Reset filters"
+              onClick={resetFilters}
+              className="shrink-0 w-10 h-10 inline-flex items-center justify-center rounded-full bg-red-50 border border-red-200 text-red-600"
+            >
+              <RefreshCw size={14} />
+            </button>
+          </div>
+
+          {mobileFiltersOpen &&
+            createPortal(
+            <div className="lg:hidden fixed inset-0 z-[200]">
+              <button
+                type="button"
+                aria-label="Close filters"
+                className="absolute inset-0 bg-slate-900/40"
+                onClick={() => setMobileFiltersOpen(false)}
+              />
+              <div className="absolute inset-x-0 bottom-0 flex max-h-[85vh] max-h-[85dvh] flex-col overscroll-contain rounded-t-2xl bg-white shadow-xl">
+                <div className="flex shrink-0 items-center justify-between px-4 py-3 border-b border-slate-100 rounded-t-2xl">
+                  <h3 className="text-sm font-extrabold text-slate-900">Filters</h3>
+                  <button
+                    type="button"
+                    onClick={() => setMobileFiltersOpen(false)}
+                    className="w-8 h-8 inline-flex items-center justify-center rounded-full bg-slate-100 text-slate-500"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 space-y-4">
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Status</label>
+                    <select
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value)}
+                      className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[13px] font-medium text-slate-700"
+                    >
+                      <option value="ALL">All Statuses</option>
+                      <option value="open">Open</option>
+                      <option value="with_service_manager">With Service Manager</option>
+                      <option value="closed">Closed</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="flex shrink-0 gap-2 px-4 py-3 border-t border-slate-100 bg-white pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+                  <button
+                    type="button"
+                    onClick={resetFilters}
+                    className="flex-1 py-3 rounded-xl border border-slate-200 text-[13px] font-bold text-slate-600 bg-white"
+                  >
+                    Clear all
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMobileFiltersOpen(false)}
+                    className="flex-[1.4] py-3 rounded-xl bg-slate-900 text-white text-[13px] font-bold"
+                  >
+                    Show results
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )}
+
+          <div className="hidden lg:flex flex-row flex-wrap gap-3 items-center">
+            <div className="flex-1 relative min-w-[12rem]">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Search tickets…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full pl-[34px] pr-8 py-2.5 border border-slate-200 rounded-lg text-[13px] outline-none focus:border-[var(--color-primary)] focus:ring-[3px] focus:ring-[rgba(30,64,175,0.1)]"
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="px-3 py-2.5 bg-white border border-slate-200 rounded-lg text-[13px] font-medium text-slate-600"
+            >
+              <option value="ALL">All Statuses</option>
+              <option value="open">Open</option>
+              <option value="with_service_manager">With Service Manager</option>
+              <option value="closed">Closed</option>
+            </select>
+
+            <button
+              type="button"
+              title="Reset Filters"
+              onClick={resetFilters}
+              className="inline-flex items-center justify-center gap-1.5 h-[38px] px-3.5 bg-red-50 border border-red-200 rounded-lg text-red-600 text-[13px] font-semibold shrink-0 hover:bg-red-100"
+            >
+              <RefreshCw size={14} />
+              Reset
+            </button>
+          </div>
         </div>
 
-        {/* Table */}
-        <div style={{ overflowX: "auto", minHeight: "200px" }}>
+        {/* Mobile cards */}
+        <div className="lg:hidden p-3 space-y-2.5 min-h-[200px] bg-slate-50/80">
+          {filteredTickets.length === 0 ? (
+            <div className="py-12 px-4 text-center text-sm text-slate-500 font-medium bg-white rounded-xl border border-slate-200">
+              <Wrench size={28} className="text-slate-300 mx-auto mb-2" />
+              No service tickets found.
+            </div>
+          ) : (
+            filteredTickets.map((ticket) => {
+              const statusStyle = getTicketStatusStyle(ticket.status);
+              return (
+                <div
+                  key={ticket.id}
+                  className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden"
+                >
+                  <div className="flex">
+                    <div className="w-1 shrink-0 self-stretch" style={{ background: statusStyle.text }} aria-hidden />
+                    <div className="flex-1 min-w-0 p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <span className="font-mono text-[13px] font-extrabold text-slate-900">
+                              {ticket.ticket_id}
+                            </span>
+                            <span
+                              className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold"
+                              style={{ background: statusStyle.bg, color: statusStyle.text }}
+                            >
+                              {statusStyle.label}
+                            </span>
+                          </div>
+                          <div className="text-[13px] font-semibold text-slate-800 truncate mt-1">
+                            {ticket.customer_name || ticket.customer_business_name || "—"}
+                          </div>
+                          {ticket.customer_name && ticket.customer_business_name ? (
+                            <div className="text-[11px] text-slate-500 truncate">{ticket.customer_business_name}</div>
+                          ) : null}
+                        </div>
+                      </div>
+                      <div className="mt-2 text-[11px] text-slate-500">
+                        {new Date(ticket.created_at).toLocaleDateString("en-US", {
+                          year: "numeric",
+                          month: "short",
+                          day: "numeric",
+                        })}
+                        {ticket.phone ? ` · ${ticket.phone}` : ""}
+                      </div>
+                      <div className="mt-2.5">
+                        <button
+                          type="button"
+                          onClick={() => void openTicket(ticket.id)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-[12px] font-bold text-slate-700"
+                        >
+                          <Eye size={13} />
+                          View
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Desktop Table */}
+        <div className="hidden lg:block overflow-x-auto min-h-[200px]">
           <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "860px" }}>
             <thead>
               <tr style={{ borderBottom: "1px solid #e2e8f0", background: "#f8fafc" }}>

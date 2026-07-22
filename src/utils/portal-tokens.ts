@@ -1,5 +1,6 @@
 import { createHmac, randomUUID, timingSafeEqual } from "crypto";
 import { createAdminClient } from "@/utils/supabase/admin";
+import { APP_BASE_PATH } from "@/lib/appBasePath";
 
 
 // ============================================================
@@ -133,16 +134,16 @@ export function generatePortalTokenSync(
 }
 
 export function buildPortalUrl(token: string, baseUrl?: string): string {
-  const envBaseUrl = process.env.NEXT_PUBLIC_SITE_URL;
+  const envBaseUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "");
   if (!baseUrl && !envBaseUrl) {
     console.warn(
       "[portal-tokens] NEXT_PUBLIC_SITE_URL is not set. Falling back to http://localhost:3000. " +
         "Set NEXT_PUBLIC_SITE_URL in .env.local (e.g., http://localhost:3001 for dev) to generate correct portal links."
     );
   }
-  const resolvedBase = baseUrl || envBaseUrl || "http://localhost:3000";
+  const resolvedBase = (baseUrl || envBaseUrl || "http://localhost:3000").replace(/\/$/, "");
   const params = new URLSearchParams({ token });
-  return `${resolvedBase}/printoms/portal?${params.toString()}`;
+  return `${resolvedBase}${APP_BASE_PATH}/portal?${params.toString()}`;
 }
 
 // ============================================================

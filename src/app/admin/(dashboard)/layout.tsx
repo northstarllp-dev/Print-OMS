@@ -36,11 +36,11 @@ export default async function AdminLayout({
   ).length;
 
   const productionCount = (ordersData || []).filter(
-    (o: any) => o.stage === "Production" || o.stage === "Ready For Installation"
+    (o: any) => o.stage === "Production"
   ).length;
 
   const installationCount = (ordersData || []).filter(
-    (o: any) => o.stage === "Installation Scheduled"
+    (o: any) => o.stage === "Ready For Installation" || o.stage === "Installation Scheduled"
   ).length;
 
   const mappedProfile = {

@@ -1,9 +1,12 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
+import { createPortal } from "react-dom";
 import { Search, Filter, MapPin, Mail, Phone, X, ShoppingBag, ExternalLink, Share2, Pencil, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { updateCustomer } from "@/features/customers/actions/customerActions";
+import { withBasePath } from "@/lib/appBasePath";
 
 const getStatusColor = (status: string | undefined) => {
   const colors: Record<string, { bg: string; text: string; label: string }> = {
@@ -34,6 +37,8 @@ export function CustomersViewNew({
 }) {
   const [customers, setCustomers] = useState(initialCustomers);
   const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [copiedCustomerId, setCopiedCustomerId] = useState<string | null>(null);
   const [copiedOrderId, setCopiedOrderId] = useState<string | null>(null);
@@ -88,7 +93,7 @@ export function CustomersViewNew({
   const handleCopyLink = async (customerId: string, e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent row selection when copying portal link
     try {
-      const res = await fetch(`/printoms/api/portal-token?customer_id=${customerId}`);
+      const res = await fetch(withBasePath(`/api/portal-token?customer_id=${customerId}`));
       const data = await res.json();
       if (data.url) {
         await navigator.clipboard.writeText(data.url);
@@ -104,7 +109,7 @@ export function CustomersViewNew({
   const handleCopyOrderLink = async (customerId: string, orderId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      const res = await fetch(`/printoms/api/portal-token?customer_id=${customerId}&order_id=${orderId}`);
+      const res = await fetch(withBasePath(`/api/portal-token?customer_id=${customerId}&order_id=${orderId}`));
       const data = await res.json();
       if (data.url) {
         await navigator.clipboard.writeText(data.url);
@@ -153,30 +158,55 @@ export function CustomersViewNew({
     },
   ];
 
-  const filteredCustomers = customers.filter(c => 
-    c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    c.phone.includes(searchTerm) || 
-    c.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    c.customerCode.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredCustomers = customers.filter((c) => {
+    const matchesSearch =
+      c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      c.phone.includes(searchTerm) ||
+      c.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      c.customerCode.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === "ALL" || (c.status || "Active") === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
+  const resetFilters = () => {
+    setSearchTerm("");
+    setStatusFilter("ALL");
+  };
+
+  const activeFilterCount = [statusFilter !== "ALL"].filter(Boolean).length;
 
   return (
-    <div style={{ padding: "32px", background: "#f8fafc", minHeight: "100vh" }}>
+    <div className="p-3 sm:p-4 md:p-8 bg-slate-50 min-h-0 pb-6">
       {/* Header Section */}
-      <div style={{ marginBottom: "32px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "24px" }}>
-          <div>
-            <h1 style={{ fontSize: "28px", fontWeight: "800", color: "#0f172a", margin: "0 0 8px" }}>
+      <div className="mb-5 md:mb-8">
+        <div className="flex flex-wrap items-start justify-between gap-3 mb-4 md:mb-6">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-xl sm:text-2xl md:text-[28px] font-extrabold text-slate-900 m-0 mb-1 md:mb-2">
               Customers Database
             </h1>
-            <p style={{ fontSize: "14px", color: "#64748b", margin: 0 }}>
+            <p className="text-xs sm:text-sm text-slate-500 m-0">
               Browse customer contact details, profile info, and linked project orders
             </p>
           </div>
         </div>
 
-        {/* Stats Cards */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "16px" }}>
+        {/* Mobile KPI chips */}
+        <div className="lg:hidden flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
+          {stats.map((stat) => (
+            <div
+              key={stat.label}
+              className="shrink-0 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-bold border border-slate-200 bg-white text-slate-500"
+            >
+              <span>{stat.label}</span>
+              <span className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-extrabold bg-slate-100 text-slate-600">
+                {stat.value}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {/* Desktop Stats Cards */}
+        <div className="hidden lg:grid grid-cols-2 xl:grid-cols-4 gap-4">
           {stats.map((stat, idx) => {
             const Icon = stat.icon;
             return (
@@ -211,71 +241,228 @@ export function CustomersViewNew({
       </div>
 
       {/* Main Grid View */}
-      <div style={{ display: "flex", gap: "24px", alignItems: "flex-start" }}>
+      <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 items-stretch lg:items-start">
         
         {/* Left Hand: Customers List Table */}
-        <div style={{ flex: selectedCustomerId ? "7" : "10", transition: "all 0.3s", background: "white", borderRadius: "12px", border: "1px solid #e2e8f0", overflow: "hidden" }}>
-          {/* Search & Filter Bar */}
-          <div style={{ padding: "20px", borderBottom: "1px solid #e2e8f0", display: "flex", gap: "12px", alignItems: "center" }}>
-            <div style={{ flex: 1, position: "relative" }}>
-              <Search size={16} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
-              <input
-                type="text"
-                placeholder="Search by customer ID, name, phone or email..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                style={{
-                  width: "100%",
-                  padding: "10px 12px 10px 36px",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: "8px",
-                  fontSize: "13px",
-                  fontFamily: "inherit",
-                  transition: "all 0.2s",
-                }}
-                onFocus={(e) => {
-                  e.currentTarget.style.borderColor = "#94a3b8";
-                  e.currentTarget.style.boxShadow = "0 0 0 3px rgba(148, 163, 184, 0.1)";
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.borderColor = "#e2e8f0";
-                  e.currentTarget.style.boxShadow = "none";
-                }}
-              />
+        <div className={`min-w-0 bg-white rounded-xl border border-slate-200 overflow-hidden transition-all ${selectedCustomerId ? "lg:flex-[7]" : "lg:flex-[10]"} ${selectedCustomer ? "hidden lg:block" : "w-full"}`}>
+          {/* Search & Filter Bar — Orders-style */}
+          <div className="p-3 sm:p-4 border-b border-slate-200">
+            <div className="lg:hidden flex items-center gap-2">
+              <div className="relative flex-1 min-w-0">
+                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Search customers…"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-[34px] pr-8 py-2.5 border border-slate-200 rounded-full text-[13px] outline-none focus:border-[var(--color-primary)] bg-slate-50"
+                />
+                {searchTerm && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchTerm("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setMobileFiltersOpen(true)}
+                className={`relative shrink-0 inline-flex items-center gap-1.5 h-10 px-3.5 rounded-full border text-[12px] font-bold transition-colors ${
+                  activeFilterCount > 0
+                    ? "bg-slate-900 text-white border-slate-900"
+                    : "bg-white text-slate-700 border-slate-200"
+                }`}
+              >
+                <Filter size={14} />
+                Filters
+                {activeFilterCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-[var(--color-primary)] text-white text-[10px] font-extrabold flex items-center justify-center border-2 border-white">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                title="Reset filters"
+                onClick={resetFilters}
+                className="shrink-0 w-10 h-10 inline-flex items-center justify-center rounded-full bg-red-50 border border-red-200 text-red-600"
+              >
+                <RefreshCw size={14} />
+              </button>
             </div>
-            
-            {/* Reset Button */}
-            <button
-              title="Reset Filters"
-              onClick={() => setSearchTerm("")}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: "0 14px",
-                background: "#fef2f2",
-                border: "1px solid #fecaca",
-                borderRadius: "8px",
-                cursor: "pointer",
-                color: "#dc2626",
-                outline: "none",
-                height: "39px",
-                transition: "all 0.2s",
-                fontWeight: "600",
-                fontSize: "13px",
-                gap: "6px",
-                flexShrink: 0
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = "#fee2e2"; e.currentTarget.style.borderColor = "#fca5a5"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = "#fef2f2"; e.currentTarget.style.borderColor = "#fecaca"; }}
-            >
-              <RefreshCw size={14} />
-              Reset
-            </button>
+
+            {mobileFiltersOpen &&
+              createPortal(
+              <div className="lg:hidden fixed inset-0 z-[200]">
+                <button
+                  type="button"
+                  aria-label="Close filters"
+                  className="absolute inset-0 bg-slate-900/40"
+                  onClick={() => setMobileFiltersOpen(false)}
+                />
+                <div className="absolute inset-x-0 bottom-0 flex max-h-[85vh] max-h-[85dvh] flex-col overscroll-contain rounded-t-2xl bg-white shadow-xl">
+                  <div className="flex shrink-0 items-center justify-between px-4 py-3 border-b border-slate-100 rounded-t-2xl">
+                    <h3 className="text-sm font-extrabold text-slate-900">Filters</h3>
+                    <button
+                      type="button"
+                      onClick={() => setMobileFiltersOpen(false)}
+                      className="w-8 h-8 inline-flex items-center justify-center rounded-full bg-slate-100 text-slate-500"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                  <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 space-y-4">
+                    <div>
+                      <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Status</label>
+                      <select
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value)}
+                        className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[13px] font-medium text-slate-700"
+                      >
+                        <option value="ALL">All Statuses</option>
+                        <option value="Active">Active</option>
+                        <option value="Pending">Pending</option>
+                        <option value="Inactive">Inactive</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 gap-2 px-4 py-3 border-t border-slate-100 bg-white pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+                    <button
+                      type="button"
+                      onClick={resetFilters}
+                      className="flex-1 py-3 rounded-xl border border-slate-200 text-[13px] font-bold text-slate-600 bg-white"
+                    >
+                      Clear all
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMobileFiltersOpen(false)}
+                      className="flex-[1.4] py-3 rounded-xl bg-slate-900 text-white text-[13px] font-bold"
+                    >
+                      Show results
+                    </button>
+                  </div>
+                </div>
+              </div>,
+              document.body
+            )}
+
+            <div className="hidden lg:flex flex-row flex-wrap gap-3 items-center">
+              <div className="flex-1 relative min-w-[12rem]">
+                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Search customers…"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-[34px] pr-8 py-2.5 border border-slate-200 rounded-lg text-[13px] outline-none focus:border-[var(--color-primary)] focus:ring-[3px] focus:ring-[rgba(30,64,175,0.1)]"
+                />
+                {searchTerm && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchTerm("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="px-3 py-2.5 bg-white border border-slate-200 rounded-lg text-[13px] font-medium text-slate-600"
+              >
+                <option value="ALL">All Statuses</option>
+                <option value="Active">Active</option>
+                <option value="Pending">Pending</option>
+                <option value="Inactive">Inactive</option>
+              </select>
+
+              <button
+                type="button"
+                title="Reset Filters"
+                onClick={resetFilters}
+                className="inline-flex items-center justify-center gap-1.5 h-[38px] px-3.5 bg-red-50 border border-red-200 rounded-lg text-red-600 text-[13px] font-semibold shrink-0 hover:bg-red-100"
+              >
+                <RefreshCw size={14} />
+                Reset
+              </button>
+            </div>
           </div>
 
-          {/* Table */}
-          <div style={{ overflowY: "auto", maxHeight: "650px", overflowX: "auto" }}>
+          {/* Mobile cards */}
+          <div className="lg:hidden p-3 space-y-2.5 min-h-[200px] bg-slate-50/80">
+            {filteredCustomers.length === 0 ? (
+              <div className="py-12 px-4 text-center text-sm text-slate-500 font-medium bg-white rounded-xl border border-slate-200">
+                No customers found.
+              </div>
+            ) : (
+              filteredCustomers.map((cust) => {
+                const statusColor = getStatusColor(cust.status);
+                const count = initialOrders.filter(o => o.customerId === cust.id).length;
+                return (
+                  <div
+                    key={cust.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setSelectedCustomerId(cust.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setSelectedCustomerId(cust.id);
+                      }
+                    }}
+                    className="w-full text-left rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden active:scale-[0.99] transition-transform cursor-pointer"
+                  >
+                    <div className="flex">
+                      <div className="w-1 shrink-0 self-stretch" style={{ background: statusColor.text }} aria-hidden />
+                      <div className="flex-1 min-w-0 p-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                              <span className="text-[12px] font-bold text-slate-500">{cust.customerCode || cust.id}</span>
+                              <span
+                                className="inline-block px-2 py-0.5 rounded-md text-[10px] font-bold"
+                                style={{ background: statusColor.bg, color: statusColor.text }}
+                              >
+                                {statusColor.label}
+                              </span>
+                            </div>
+                            <div className="text-[13px] font-semibold text-slate-800 truncate mt-1">{cust.name}</div>
+                            <div className="text-[11px] text-slate-500 mt-0.5">{cust.phone}</div>
+                          </div>
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-700 shrink-0">
+                            <ShoppingBag size={11} />
+                            {count}
+                          </span>
+                        </div>
+                        <div className="mt-2.5" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            onClick={(e) => handleCopyLink(cust.customerId || cust.id, e)}
+                            className="px-2.5 py-1.5 rounded-md text-[11px] font-semibold text-white"
+                            style={{
+                              background: copiedCustomerId === (cust.customerId || cust.id) ? "#dcfce7" : "var(--color-secondary)",
+                              color: copiedCustomerId === (cust.customerId || cust.id) ? "#16a34a" : "white",
+                            }}
+                          >
+                            {copiedCustomerId === (cust.customerId || cust.id) ? "Copied!" : "Copy Magic Link"}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Desktop Table */}
+          <div className="hidden lg:block overflow-y-auto max-h-[650px] overflow-x-auto">
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead style={{ position: "sticky", top: 0, background: "#f8fafc", zIndex: 10 }}>
                 <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
@@ -352,7 +539,7 @@ export function CustomersViewNew({
 
         {/* Right Hand: Selected Customer Detail Panel */}
         {selectedCustomer && (
-          <div className="w-full md:w-[420px] shrink-0 bg-white border border-slate-200 rounded-xl shadow-lg p-6 sticky top-6 animate-in fade-in slide-in-from-right-4 duration-300">
+          <div className="w-full lg:w-[420px] shrink-0 bg-white border border-slate-200 rounded-xl shadow-lg p-4 sm:p-6 lg:sticky lg:top-6 animate-in fade-in slide-in-from-right-4 duration-300 order-first lg:order-none">
             <div className="flex justify-between items-start border-b border-slate-100 pb-4 mb-4">
               <div>
                 <span className="text-xs font-bold text-slate-400 block uppercase tracking-wider">{selectedCustomer.customerCode || selectedCustomer.id}</span>
@@ -438,13 +625,14 @@ export function CustomersViewNew({
                           >
                             <Share2 size={12} />
                           </button>
-                          <a 
+                          <Link
                             href={`/admin/orders/${o.orderId || o.id}`}
                             className="p-1 rounded bg-white border border-slate-200 text-slate-500 hover:text-slate-700 hover:bg-slate-50 transition"
                             title="Open Worksheet"
+                            onClick={(e) => e.stopPropagation()}
                           >
                             <ExternalLink size={12} />
-                          </a>
+                          </Link>
                         </div>
                       </div>
 

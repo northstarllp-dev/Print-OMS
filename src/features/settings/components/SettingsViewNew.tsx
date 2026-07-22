@@ -1,22 +1,34 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import Link from "next/link";
-import { Save, Palette, MessageCircle, Calendar, Key, X, FileText, Package } from "lucide-react";
-import { useLoadScript, Autocomplete } from "@react-google-maps/api";
+import dynamic from "next/dynamic";
+import { Save, Palette, MessageCircle, Calendar, Key, X, FileText, Package, CheckSquare, Plus, Trash2, GripVertical } from "lucide-react";
 import {
   updateAppSettings,
   updateInvoiceProfile,
   updateCompanyDetails,
-  AppSettings,
-  CompanyDetails
 } from "@/features/settings/actions/settingsActions";
+import type { AppSettings, CompanyDetails } from "@/features/settings/settingsTypes";
 import { updateUserPassword } from "@/features/auth/actions/authActions";
 import {
   EMPTY_INVOICE_PROFILE,
   type InvoiceProfile,
   type InvoiceTaxSplit,
 } from "@/features/quotations/types/invoiceProfile";
+import {
+  createProductionChecklistItemId,
+  normalizeProductionChecklistItems,
+  type ProductionChecklistItem,
+} from "@/features/settings/productionChecklist";
+
+const SettingsAddressInput = dynamic(
+  () =>
+    import("@/features/settings/components/SettingsAddressInput").then(
+      (m) => m.SettingsAddressInput
+    ),
+  { ssr: false }
+);
 
 interface SettingsViewNewProps {
   initialAppSettings?: AppSettings;
@@ -26,6 +38,7 @@ interface SettingsViewNewProps {
 export function SettingsViewNew({ initialAppSettings, companyDetails }: SettingsViewNewProps) {
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [invoiceSaveStatus, setInvoiceSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [isDirty, setIsDirty] = useState(false);
   
   const defaultSettings = {
     companyName: companyDetails?.name || "Printoms",
@@ -41,39 +54,31 @@ export function SettingsViewNew({ initialAppSettings, companyDetails }: Settings
   const [settings, setSettings] = useState(defaultSettings);
   const [initialSettings, setInitialSettings] = useState(defaultSettings);
 
-  const hasUnsavedChanges = 
-    settings.companyName !== initialSettings.companyName ||
-    settings.address !== initialSettings.address ||
-    settings.siteVisitSchedulingEnabled !== initialSettings.siteVisitSchedulingEnabled ||
-    settings.installationSchedulingEnabled !== initialSettings.installationSchedulingEnabled ||
-    settings.enableFinalProduct !== initialSettings.enableFinalProduct;
-
-  const { isLoaded } = useLoadScript({
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
-    libraries: ["places"],
-  });
-
-  const [autocomplete, setAutocomplete] = useState<google.maps.places.Autocomplete | null>(null);
-
-  const onLoad = (autoC: google.maps.places.Autocomplete) => setAutocomplete(autoC);
-  const onPlaceChanged = () => {
-    if (autocomplete !== null) {
-      const place = autocomplete.getPlace();
-      if (place.formatted_address) {
-        setSettings(prev => ({ ...prev, address: place.formatted_address! }));
-      }
-    }
-  };
-
   const [invoiceProfile, setInvoiceProfile] = useState<InvoiceProfile>(
     initialAppSettings?.invoiceProfile ?? EMPTY_INVOICE_PROFILE
   );
+
+  const initialChecklist = useMemo(
+    () => normalizeProductionChecklistItems(initialAppSettings?.productionChecklistItems),
+    [initialAppSettings?.productionChecklistItems]
+  );
+  const [checklistItems, setChecklistItems] = useState<ProductionChecklistItem[]>(initialChecklist);
+  const [initialChecklistItems, setInitialChecklistItems] = useState<ProductionChecklistItem[]>(initialChecklist);
+
+  const hasUnsavedChanges = isDirty;
 
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordStatus, setPasswordStatus] = useState<"idle" | "saving" | "error" | "success">("idle");
   const [passwordErrorMsg, setPasswordErrorMsg] = useState("");
+
+  const markDirty = () => setIsDirty(true);
+
+  const handleChange = (key: string, value: any) => {
+    markDirty();
+    setSettings({ ...settings, [key]: value });
+  };
 
   const sections = [
     {
@@ -108,10 +113,6 @@ export function SettingsViewNew({ initialAppSettings, companyDetails }: Settings
       ],
     },
   ];
-
-  const handleChange = (key: string, value: any) => {
-    setSettings({ ...settings, [key]: value });
-  };
 
   const setInvoiceField = (key: keyof InvoiceProfile, value: string) => {
     setInvoiceProfile((prev) => ({ ...prev, [key]: value }));
@@ -188,15 +189,79 @@ export function SettingsViewNew({ initialAppSettings, companyDetails }: Settings
     }
   };
 
+  const updateChecklistItem = (
+    index: number,
+    patch: Partial<ProductionChecklistItem>
+  ) => {
+    markDirty();
+    setChecklistItems((prev) =>
+      prev.map((item, i) => (i === index ? { ...item, ...patch } : item))
+    );
+  };
+
+  const addChecklistItem = () => {
+    markDirty();
+    const label = `New step ${checklistItems.length + 1}`;
+    const id = createProductionChecklistItemId(
+      label,
+      checklistItems.map((item) => item.id)
+    );
+    setChecklistItems((prev) => [
+      ...prev,
+      { id, label, description: "" },
+    ]);
+  };
+
+  const removeChecklistItem = (index: number) => {
+    if (checklistItems.length <= 1) return;
+    markDirty();
+    setChecklistItems((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const moveChecklistItem = (index: number, direction: -1 | 1) => {
+    const next = index + direction;
+    if (next < 0 || next >= checklistItems.length) return;
+    markDirty();
+    setChecklistItems((prev) => {
+      const copy = [...prev];
+      const [item] = copy.splice(index, 1);
+      copy.splice(next, 0, item);
+      return copy;
+    });
+  };
+
+  const persistSettings = async () => {
+    setSaveStatus("saving");
+    try {
+      await Promise.all([
+        updateCompanyDetails(settings.companyName, settings.address),
+        updateAppSettings({
+          siteVisitSchedulingEnabled: settings.siteVisitSchedulingEnabled,
+          installationSchedulingEnabled: settings.installationSchedulingEnabled,
+          enableFinalProduct: settings.enableFinalProduct,
+          productionChecklistItems: checklistItems,
+        }),
+      ]);
+      setInitialSettings(settings);
+      setInitialChecklistItems(checklistItems);
+      setIsDirty(false);
+      setSaveStatus("saved");
+      setTimeout(() => setSaveStatus("idle"), 3000);
+    } catch (err) {
+      console.error(err);
+      setSaveStatus("idle");
+    }
+  };
+
   return (
-    <div style={{ padding: "32px", background: "#f8fafc", minHeight: "100vh", paddingBottom: "120px" }}>
+    <div className="p-3 sm:p-4 md:p-8 bg-slate-50 min-h-0 pb-[120px]">
       <div style={{ maxWidth: "900px", margin: "0 auto" }}>
         {/* Header */}
-        <div style={{ marginBottom: "32px" }}>
-          <h1 style={{ fontSize: "28px", fontWeight: "800", color: "#0f172a", margin: "0 0 8px" }}>
+        <div className="mb-5 md:mb-8">
+          <h1 className="text-xl sm:text-2xl md:text-[28px] font-extrabold text-slate-900 m-0 mb-1 md:mb-2">
             Settings
           </h1>
-          <p style={{ fontSize: "14px", color: "#64748b", margin: 0 }}>
+          <p className="text-xs sm:text-sm text-slate-500 m-0">
             Configure your account settings and preferences
           </p>
         </div>
@@ -311,31 +376,28 @@ export function SettingsViewNew({ initialAppSettings, companyDetails }: Settings
                         }}
                       />
                     </button>
-                  ) : field.key === "address" && isLoaded ? (
-                    <Autocomplete onLoad={onLoad} onPlaceChanged={onPlaceChanged}>
-                      <input
-                        type={field.type}
-                        value={settings[field.key as keyof typeof settings] as string}
-                        onChange={(e) => handleChange(field.key, e.target.value)}
-                        style={{
-                          width: "100%",
-                          padding: "10px 12px",
-                          border: "1px solid #e2e8f0",
-                          borderRadius: "8px",
-                          fontSize: "13px",
-                          fontFamily: "inherit",
-                          transition: "all 0.2s",
-                        }}
-                        onFocus={(e) => {
-                          e.currentTarget.style.borderColor = "#94a3b8";
-                          e.currentTarget.style.boxShadow = "0 0 0 3px rgba(148, 163, 184, 0.1)";
-                        }}
-                        onBlur={(e) => {
-                          e.currentTarget.style.borderColor = "#e2e8f0";
-                          e.currentTarget.style.boxShadow = "none";
-                        }}
-                      />
-                    </Autocomplete>
+                  ) : field.key === "address" ? (
+                    <SettingsAddressInput
+                      value={settings.address}
+                      onChange={(value) => handleChange("address", value)}
+                      style={{
+                        width: "100%",
+                        padding: "10px 12px",
+                        border: "1px solid #e2e8f0",
+                        borderRadius: "8px",
+                        fontSize: "13px",
+                        fontFamily: "inherit",
+                        transition: "all 0.2s",
+                      }}
+                      onFocus={(e) => {
+                        e.currentTarget.style.borderColor = "#94a3b8";
+                        e.currentTarget.style.boxShadow = "0 0 0 3px rgba(148, 163, 184, 0.1)";
+                      }}
+                      onBlur={(e) => {
+                        e.currentTarget.style.borderColor = "#e2e8f0";
+                        e.currentTarget.style.boxShadow = "none";
+                      }}
+                    />
                   ) : (
                     <input
                       type={field.type}
@@ -367,6 +429,120 @@ export function SettingsViewNew({ initialAppSettings, companyDetails }: Settings
           </div>
         ))}
 
+        {/* Workshop production checklist */}
+        <div
+          style={{
+            background: "white",
+            border: "1px solid #e2e8f0",
+            borderRadius: "12px",
+            padding: "24px",
+            marginBottom: "20px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", marginBottom: "20px", paddingBottom: "16px", borderBottom: "1px solid #e2e8f0" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <div style={{ width: "40px", height: "40px", background: "#eff6ff", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", color: "#2563eb" }}>
+                <CheckSquare size={20} />
+              </div>
+              <div>
+                <div style={{ fontSize: "16px", fontWeight: "700", color: "#0f172a" }}>
+                  Workshop Production Checklist
+                </div>
+                <div style={{ fontSize: "12px", color: "#64748b", marginTop: "2px" }}>
+                  Customize fabrication milestones shown on the Production stage
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={addChecklistItem}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: "8px 12px",
+                borderRadius: "8px",
+                border: "1px solid #bfdbfe",
+                background: "#eff6ff",
+                color: "#1d4ed8",
+                fontSize: "12px",
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              <Plus size={14} /> Add step
+            </button>
+          </div>
+
+          <div style={{ display: "grid", gap: "12px" }}>
+            {checklistItems.map((item, index) => (
+              <div
+                key={item.id}
+                style={{
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "10px",
+                  padding: "14px",
+                  background: "#f8fafc",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", marginBottom: "10px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "#64748b", fontSize: "12px", fontWeight: 700 }}>
+                    <GripVertical size={14} />
+                    Step {index + 1}
+                  </div>
+                  <div style={{ display: "flex", gap: "6px" }}>
+                    <button
+                      type="button"
+                      onClick={() => moveChecklistItem(index, -1)}
+                      disabled={index === 0}
+                      style={{ padding: "4px 8px", fontSize: "11px", fontWeight: 700, borderRadius: "6px", border: "1px solid #e2e8f0", background: "white", cursor: index === 0 ? "not-allowed" : "pointer", opacity: index === 0 ? 0.5 : 1 }}
+                    >
+                      Up
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => moveChecklistItem(index, 1)}
+                      disabled={index === checklistItems.length - 1}
+                      style={{ padding: "4px 8px", fontSize: "11px", fontWeight: 700, borderRadius: "6px", border: "1px solid #e2e8f0", background: "white", cursor: index === checklistItems.length - 1 ? "not-allowed" : "pointer", opacity: index === checklistItems.length - 1 ? 0.5 : 1 }}
+                    >
+                      Down
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeChecklistItem(index)}
+                      disabled={checklistItems.length <= 1}
+                      style={{ padding: "4px 8px", borderRadius: "6px", border: "1px solid #fecaca", background: "#fef2f2", color: "#dc2626", cursor: checklistItems.length <= 1 ? "not-allowed" : "pointer", opacity: checklistItems.length <= 1 ? 0.5 : 1 }}
+                      title="Remove step"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                </div>
+                <div style={{ display: "grid", gap: "10px" }}>
+                  <div>
+                    <label style={labelStyle}>Title</label>
+                    <input
+                      style={inputStyle}
+                      value={item.label}
+                      onChange={(e) => updateChecklistItem(index, { label: e.target.value })}
+                      placeholder="e.g. Quality Check"
+                    />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Description</label>
+                    <input
+                      style={inputStyle}
+                      value={item.description}
+                      onChange={(e) => updateChecklistItem(index, { description: e.target.value })}
+                      placeholder="Short helper text for the workshop team"
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* Invoice / Quotation letterhead */}
         <div
           style={{
@@ -391,7 +567,7 @@ export function SettingsViewNew({ initialAppSettings, companyDetails }: Settings
             </div>
           </div>
 
-          <div style={{ display: "grid", gap: "16px", gridTemplateColumns: "1fr 1fr" }}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label style={labelStyle}>Brand name</label>
               <input style={inputStyle} value={invoiceProfile.brandName || ""} onChange={(e) => setInvoiceField("brandName", e.target.value)} placeholder="THE BOARD COMPANY" />
@@ -450,7 +626,7 @@ export function SettingsViewNew({ initialAppSettings, companyDetails }: Settings
           <div style={{ marginTop: 24, marginBottom: 12, fontSize: 13, fontWeight: 700, color: "#0f172a" }}>
             Bank details
           </div>
-          <div style={{ display: "grid", gap: "16px", gridTemplateColumns: "1fr 1fr" }}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label style={labelStyle}>Account name</label>
               <input style={inputStyle} value={invoiceProfile.bank?.accountName || ""} onChange={(e) => setBankField("accountName", e.target.value)} />
@@ -568,25 +744,7 @@ export function SettingsViewNew({ initialAppSettings, companyDetails }: Settings
 
         {/* Save Button */}
         <button
-          onClick={async () => {
-            setSaveStatus("saving");
-            try {
-              await Promise.all([
-                updateCompanyDetails(settings.companyName, settings.address),
-                updateAppSettings({
-                  siteVisitSchedulingEnabled: settings.siteVisitSchedulingEnabled,
-                  installationSchedulingEnabled: settings.installationSchedulingEnabled,
-                  enableFinalProduct: settings.enableFinalProduct,
-                }),
-              ]);
-              setInitialSettings(settings);
-              setSaveStatus("saved");
-              setTimeout(() => setSaveStatus("idle"), 3000);
-            } catch (err) {
-              console.error(err);
-              setSaveStatus("idle");
-            }
-          }}
+          onClick={persistSettings}
           disabled={saveStatus === "saving" || !hasUnsavedChanges}
           style={{
             width: "100%",
@@ -637,25 +795,7 @@ export function SettingsViewNew({ initialAppSettings, companyDetails }: Settings
           You have unsaved changes. Not saved yet!
         </div>
         <button
-          onClick={async () => {
-            setSaveStatus("saving");
-            try {
-              await Promise.all([
-                updateCompanyDetails(settings.companyName, settings.address),
-                updateAppSettings({
-                  siteVisitSchedulingEnabled: settings.siteVisitSchedulingEnabled,
-                  installationSchedulingEnabled: settings.installationSchedulingEnabled,
-                  enableFinalProduct: settings.enableFinalProduct,
-                }),
-              ]);
-              setInitialSettings(settings);
-              setSaveStatus("saved");
-              setTimeout(() => setSaveStatus("idle"), 3000);
-            } catch (err) {
-              console.error(err);
-              setSaveStatus("idle");
-            }
-          }}
+          onClick={persistSettings}
           disabled={saveStatus === "saving"}
           style={{
             padding: "10px 24px",
