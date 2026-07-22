@@ -22,7 +22,8 @@ export const defaultConfig: PrintOMSClientConfig = {
   },
   logoUrl: "/clients/printoms/light withoutbg.png",
   logoScale: 1.8,
-  faviconUrl: null,
+  // PWA / browser install icons (generated from logoo.png)
+  faviconUrl: "/clients/printoms/favicon_io/favicon.ico",
   loadingText: "PRINTOMS",
   features: {
     enableAdminAssignment: false,

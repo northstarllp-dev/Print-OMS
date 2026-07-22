@@ -4,11 +4,13 @@ import { loadClientConfig } from "@/config/loadClientConfig";
 export async function GET() {
   const config = loadClientConfig();
 
-  // Derive the icon folder from the faviconUrl stored in client config.
-  // e.g. "/clients/printec/favicon_io/favicon.ico" → "/clients/printec/favicon_io"
+  // Prefer dedicated favicon_io set; fall back to a single logo PNG for install icons.
+  // Chrome requires at least 192 + 512 icons — empty icons blocks PWA install.
   const iconFolder = config.faviconUrl
     ? config.faviconUrl.replace(/\/[^/]+$/, "")
     : null;
+
+  const logoSrc = config.logoUrl ? `/printoms${config.logoUrl}` : null;
 
   const icons = iconFolder
     ? [
@@ -36,7 +38,13 @@ export async function GET() {
           type: "image/png",
         },
       ]
-    : [];
+    : logoSrc
+      ? [
+          { src: logoSrc, sizes: "192x192", type: "image/png", purpose: "any" },
+          { src: logoSrc, sizes: "512x512", type: "image/png", purpose: "any" },
+          { src: logoSrc, sizes: "512x512", type: "image/png", purpose: "maskable" },
+        ]
+      : [];
 
   const manifest = {
     name: config.name,

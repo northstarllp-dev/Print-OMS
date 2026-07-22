@@ -34,7 +34,9 @@ export async function generateMetadata(): Promise<Metadata> {
         : {}),
       ...(iconFolder
         ? { apple: `/printoms${iconFolder}/apple-touch-icon.png` }
-        : {}),
+        : config.logoUrl
+          ? { apple: `/printoms${config.logoUrl}` }
+          : {}),
     },
   };
 }
