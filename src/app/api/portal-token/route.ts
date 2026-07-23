@@ -56,29 +56,8 @@ export async function GET(request: NextRequest) {
   let resolvedCustomerId = customerId;
   let resolvedOrderId = orderId;
 
-  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-  if (customerId && UUID_REGEX.test(customerId)) {
-    const { data: custData } = await supabase
-      .from("customers")
-      .select("customer_id")
-      .eq("id", customerId)
-      .single();
-    if (custData?.customer_id) {
-      resolvedCustomerId = custData.customer_id;
-    }
-  }
-
-  if (orderId && UUID_REGEX.test(orderId)) {
-    const { data: ordData } = await supabase
-      .from("orders")
-      .select("order_id")
-      .eq("id", orderId)
-      .single();
-    if (ordData?.order_id) {
-      resolvedOrderId = ordData.order_id;
-    }
-  }
+  // We intentionally use UUIDs for resolvedCustomerId and resolvedOrderId if provided,
+  // to prevent ambiguous multi-tenant collisions on friendly IDs like 'A002'.
 
   // Generate a new HMAC-signed portal token and store it for revocation tracking
   try {
