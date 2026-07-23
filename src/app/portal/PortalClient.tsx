@@ -2,9 +2,18 @@
 
 import Image from "next/image";
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { GoogleMap, useJsApiLoader, Marker, Autocomplete } from "@react-google-maps/api";
-
-const libraries: ("places")[] = ["places"];
+import { GoogleMap, useJsApiLoader, Autocomplete } from "@react-google-maps/api";
+import { AdvancedMapMarker } from "@/components/maps/AdvancedMapMarker";
+import {
+  GOOGLE_MAPS_DEFAULT_OPTIONS,
+  GOOGLE_MAPS_LIBRARIES,
+  GOOGLE_MAPS_SCRIPT_ID,
+} from "@/components/maps/googleMapsConfig";
+import { isGoogleMapsUrl } from "@/components/maps/mapsUrl";
+import {
+  ensureResolvedSiteLocation,
+  resolveGoogleMapsLocation,
+} from "@/components/maps/resolveGoogleMapsLocation";
 
 const containerStyle = {
   width: "100%",
@@ -23,10 +32,12 @@ import {
   ChevronLeft, ChevronRight, Phone,
   Package, Wrench, Palette, BarChart3, CreditCard,
   RefreshCw, AlertTriangle, Loader2,
-  Download, CalendarDays, Hammer, Heart
+  Download, CalendarDays, Hammer
 } from "lucide-react";
 import { Logo } from "@/components/ui/Logo";
+import { PlatformMadeWithLove } from "@/components/ui/PlatformMadeWithLove";
 import { withBasePath } from "@/lib/appBasePath";
+import { loadClientConfig } from "@/config/loadClientConfig";
 import { createClient } from "@/utils/supabase/client";
 import { scheduleSiteVisitAction } from "@/features/orders/actions/orderActions";
 import { getAppSettings } from "@/features/settings/actions/settingsActions";
@@ -133,8 +144,9 @@ function getStepIndex(stage: string, workflowType: string = "quote_first"): numb
     if (s.includes("quotation")) return 2;
     if (s.includes("design")) return 3;
   }
-  if (s.includes("production") || s.includes("fabricat") || s.includes("ready")) return 4;
+  // Installation stages before "ready" — "Ready For Installation" contains both.
   if (s.includes("installation") || s.includes("completed") || s.includes("closed")) return 5;
+  if (s.includes("production") || s.includes("fabricat")) return 4;
   return 0;
 }
 
@@ -232,29 +244,58 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
 
   const [markerPosition, setMarkerPosition] = useState(defaultCenter);
   const [mapCenter, setMapCenter] = useState(defaultCenter);
+  const [map, setMap] = useState<google.maps.Map | null>(null);
   const geocoder = useRef<any>(null);
 
   const { isLoaded } = useJsApiLoader({
-    id: "google-map-script",
+    id: GOOGLE_MAPS_SCRIPT_ID,
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
-    libraries,
+    libraries: GOOGLE_MAPS_LIBRARIES,
   });
 
   const autocompleteRef = useRef<any>(null);
 
+  const applyLocation = useCallback((lat: number, lng: number, address?: string) => {
+    setMarkerPosition({ lat, lng });
+    setMapCenter({ lat, lng });
+    setGpsCoords(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+    if (address && !isGoogleMapsUrl(address)) setSiteAddress(address);
+  }, []);
+
   const onPlaceChanged = () => {
-    if (autocompleteRef.current !== null) {
-      const place = autocompleteRef.current.getPlace();
-      if (place.geometry && place.geometry.location) {
-        const lat = place.geometry.location.lat();
-        const lng = place.geometry.location.lng();
-        setMarkerPosition({ lat, lng });
-        setMapCenter({ lat, lng });
-        setGpsCoords(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
-        setSiteAddress(place.formatted_address || place.name || "");
-      }
+    try {
+      const place = autocompleteRef.current?.getPlace?.();
+      const location = place?.geometry?.location;
+      if (!location) return;
+      const lat = typeof location.lat === "function" ? location.lat() : location.lat;
+      const lng = typeof location.lng === "function" ? location.lng() : location.lng;
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+      applyLocation(lat, lng, place.formatted_address || place.name || undefined);
+    } catch (err) {
+      console.warn("[Portal] onPlaceChanged ignored incomplete place:", err);
     }
   };
+
+  const tryResolveMapsLink = useCallback(
+    async (value: string) => {
+      if (!isGoogleMapsUrl(value)) return;
+      setMapsSearching(true);
+      try {
+        const resolved = await resolveGoogleMapsLocation(value);
+        if (!resolved) {
+          alert("Could not open that Google Maps link. Paste a full Maps URL or search for the address.");
+          return;
+        }
+        applyLocation(resolved.lat, resolved.lng, resolved.address);
+      } catch (err) {
+        console.error("[Portal] Maps link resolve failed:", err);
+        alert("Could not open that Google Maps link. Please try again.");
+      } finally {
+        setMapsSearching(false);
+      }
+    },
+    [applyLocation]
+  );
 
   useEffect(() => {
     if (isLoaded && !geocoder.current) {
@@ -275,10 +316,9 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
     if (!e.latLng) return;
     const lat = e.latLng.lat();
     const lng = e.latLng.lng();
-    setMarkerPosition({ lat, lng });
-    setGpsCoords(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+    applyLocation(lat, lng);
     reverseGeocode(lat, lng);
-  }, []);
+  }, [applyLocation]);
 
   const handleCurrentLocation = () => {
     setMapsSearching(true);
@@ -287,9 +327,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
         (position) => {
           const lat = position.coords.latitude;
           const lng = position.coords.longitude;
-          setMarkerPosition({ lat, lng });
-          setMapCenter({ lat, lng });
-          setGpsCoords(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+          applyLocation(lat, lng);
           reverseGeocode(lat, lng);
           setMapsSearching(false);
         },
@@ -387,13 +425,29 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
     if (!activeOrder || !selectedDate || !selectedTime || !siteAddress) return;
     setSchedulingLoading(true);
     try {
-      const payload = { auditDate: selectedDate, auditTime: selectedTime, customerAddress: siteAddress, gpsLocation: gpsCoords, completed: false, reviewStatus: "Pending" };
-      const res = await scheduleSiteVisitAction(activeOrder.id, payload);
+      const location = await ensureResolvedSiteLocation({
+        customerAddress: siteAddress,
+        gpsLocation: gpsCoords,
+      });
+      setSiteAddress(location.customerAddress);
+      setGpsCoords(location.gpsLocation);
+      const payload = {
+        auditDate: selectedDate,
+        auditTime: selectedTime,
+        customerAddress: location.customerAddress,
+        gpsLocation: location.gpsLocation,
+        completed: false,
+        reviewStatus: "Pending" as const,
+      };
+      const res = await scheduleSiteVisitAction(activeOrder.id, payload, token);
       if (res.success && res.order) {
         setOrders(prev => prev.map(o => o.id === activeOrder.id ? { ...o, stage: res.order.stage, siteVisitDetails: res.order.siteVisitDetails } : o));
         setIsRescheduling(false);
       }
-    } catch (err) { console.error(err); }
+    } catch (err) {
+      console.error(err);
+      alert(err instanceof Error ? err.message : "Failed to confirm site visit. Please try again.");
+    }
     finally { setSchedulingLoading(false); }
   };
 
@@ -433,7 +487,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
           <AlertCircle size={48} className="text-slate-300 mx-auto mb-4" />
           <h1 className="text-xl font-bold text-[#0b1c30] mb-2">No Active Orders</h1>
           <p className="text-sm text-slate-500">We couldn't find any active orders for your account.</p>
-          <p className="text-xs text-slate-400 mt-6 font-bold">PRINTOMS Signage Solutions</p>
+          <p className="text-xs text-slate-400 mt-6 font-bold">{loadClientConfig().name} Signage Solutions</p>
         </div>
       </div>
     );
@@ -708,7 +762,18 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                                     required
                                     value={siteAddress}
                                     onChange={e => setSiteAddress(e.target.value)}
-                                    placeholder="Search for an address or type manually..."
+                                    onPaste={(e) => {
+                                      const pasted = e.clipboardData.getData("text");
+                                      if (isGoogleMapsUrl(pasted)) {
+                                        e.preventDefault();
+                                        setSiteAddress(pasted.trim());
+                                        void tryResolveMapsLink(pasted);
+                                      }
+                                    }}
+                                    onBlur={() => {
+                                      void tryResolveMapsLink(siteAddress);
+                                    }}
+                                    placeholder="Search address or paste a Google Maps link..."
                                     className="w-full p-3 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none bg-slate-50 focus:bg-white transition-all"
                                   />
                                 </Autocomplete>
@@ -732,9 +797,11 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                                       center={mapCenter}
                                       zoom={14}
                                       onClick={onMapClick}
-                                      options={{ streetViewControl: false, mapTypeControl: false, fullscreenControl: false }}
+                                      onLoad={setMap}
+                                      onUnmount={() => setMap(null)}
+                                      options={GOOGLE_MAPS_DEFAULT_OPTIONS}
                                     >
-                                      <Marker position={markerPosition} />
+                                      <AdvancedMapMarker map={map} position={markerPosition} />
                                     </GoogleMap>
                                   ) : (
                                     <div className="w-full h-full flex items-center justify-center text-xs text-slate-500">
@@ -765,9 +832,6 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                                 {schedulingLoading ? <Loader2 size={14} className="animate-spin" /> : null}
                                 Confirm Site Visit
                                 <Check size={14} />
-                              </button>
-                              <button type="button" className="px-4 py-2.5 border border-slate-200 text-slate-600 rounded-xl text-sm font-semibold hover:bg-slate-50 transition-colors">
-                                Request Callback
                               </button>
                             </div>
                           </form>
@@ -1106,31 +1170,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
           zIndex: 40,
           pointerEvents: "none",
         }}>
-          <a
-          href="https://printoms.thepolarislabs.com/"
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 6,
-            fontWeight: 600,
-            margin: 0,
-            color: "inherit",
-            textDecoration: "none",
-            cursor: "pointer",
-            transition: "opacity 0.15s ease",
-            pointerEvents: "auto",
-          }}
-        >
-          Made with <Heart size={14} fill="#EF4444" color="#EF4444" /> by
-          <img
-            src="/printoms/clients/light%20withoutbg.png"
-            alt="Polaris"
-            className="h-8 lg:h-9 w-auto ml-0.5"
-          />
-        </a>
+          <PlatformMadeWithLove variant="portal" />
         </div>
       </div>
 

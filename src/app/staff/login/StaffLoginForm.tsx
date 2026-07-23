@@ -5,6 +5,7 @@ import { Eye, EyeOff } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { staffSignIn } from "@/features/auth/actions/authActions";
 import { Logo } from "@/components/ui/Logo";
+import { PlatformMadeWithLove } from "@/components/ui/PlatformMadeWithLove";
 import { PrintomsLoading } from "@/components/ui/PrintomsLoading";
 
 interface StaffLoginFormProps {
@@ -96,7 +97,7 @@ export function StaffLoginForm({ employees }: StaffLoginFormProps) {
               value={email}
               onChange={e => setEmail(e.target.value)}
               className="prt-input"
-              placeholder="staff@thepolarislabs.com"
+              placeholder="staff@example.com"
             />
           </div>
 
@@ -150,31 +151,7 @@ export function StaffLoginForm({ employees }: StaffLoginFormProps) {
       </div>
       
       <div style={{ position: "absolute", bottom: 24, textAlign: "center", width: "100%", fontSize: 13, color: "#64748B", pointerEvents: "none" }}>
-        <a
-          href="https://printoms.thepolarislabs.com/"
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 6,
-            fontWeight: 600,
-            margin: 0,
-            color: "inherit",
-            textDecoration: "none",
-            cursor: "pointer",
-            transition: "opacity 0.15s ease",
-            pointerEvents: "auto",
-          }}
-        >
-          Made with <span style={{ color: "#EF4444", fontSize: "14px" }}>❤️</span> by
-          <img
-            src="/printoms/clients/light%20withoutbg.png"
-            alt="Polaris"
-            style={{ height: "50px", marginLeft: "-2px", marginTop: "-16px", marginBottom: "-12px" }}
-          />
-        </a>
+        <PlatformMadeWithLove />
       </div>
     </div>
   );

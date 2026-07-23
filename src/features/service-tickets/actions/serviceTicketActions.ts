@@ -198,7 +198,7 @@ export async function lookupOrdersByPhone(phone: string) {
     orders: (orders ?? []).map((o) => ({
       id: o.id,
       orderId: o.order_id,
-      label: `${o.order_id} - ${o.client_name || o.business_name || "Order"}`,
+      label: [o.order_id, o.business_name, o.client_name].filter(Boolean).join(" - ") || o.order_id || "Order",
       stage: o.stage,
       createdAt: o.date_created,
     })),

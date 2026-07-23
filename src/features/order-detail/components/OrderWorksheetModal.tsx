@@ -331,11 +331,14 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
       const [freshOrder, freshQuotation, activityRes] = await Promise.all([
         getOrderById(orderRef.current.id),
         getQuotationByOrderId(orderRef.current.id).catch(() => null),
-        createClient()
-          .from("order_activity")
-          .select("*")
-          .eq("order_id", orderRef.current.orderId || orderRef.current.id)
-          .eq("activity_type", "timeline"),
+        companyId
+          ? createClient()
+              .from("order_activity")
+              .select("*")
+              .eq("order_id", orderRef.current.orderId || orderRef.current.id)
+              .eq("company_id", companyId)
+              .eq("activity_type", "timeline")
+          : Promise.resolve({ data: null }),
       ]);
 
       if (freshOrder) {
@@ -359,7 +362,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
       const wait = Math.max(0, 650 - (Date.now() - started));
       window.setTimeout(() => setIsRefreshing(false), wait);
     }
-  }, [isRefreshing, router, triggerLocalAlert]);
+  }, [isRefreshing, router, triggerLocalAlert, companyId]);
 
   const entryStageRef = useRef(entryStage);
   entryStageRef.current = entryStage;
@@ -381,22 +384,24 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   }, [activeStepTab]);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || !companyId) return;
     const supabase = createClient();
     async function loadMessages() {
       const { data } = await supabase
         .from("order_activity")
         .select("*")
         .eq("order_id", order.orderId || order.id)
+        .eq("company_id", companyId)
         .eq("activity_type", "timeline");
       if (data) setMessages(data);
     }
     loadMessages();
-  }, [isOpen, order.id, order.orderId]);
+  }, [isOpen, order.id, order.orderId, companyId]);
 
   useOrderDetailSync({
     orderId: order.id,
     businessOrderId: order.orderId || order.id,
+    companyId: companyId ?? null,
     siteVisitId: order.siteVisitDetails?.id ?? null,
     enabled: isOpen,
     getOrderSnapshot: () => orderRef.current as unknown as Record<string, unknown>,
@@ -438,12 +443,26 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     onActivityChange: (payload) => {
       if (payload.eventType === "INSERT" && payload.new) {
         if (payload.new.activity_type && payload.new.activity_type !== "timeline") return;
+        if (
+          companyId &&
+          payload.new.company_id &&
+          payload.new.company_id !== companyId
+        ) {
+          return;
+        }
         setMessages((prev) => {
           if (prev.some((m) => m.id === payload.new!.id)) return prev;
           return [...prev, payload.new];
         });
       } else if (payload.eventType === "UPDATE" && payload.new) {
         if (payload.new.activity_type && payload.new.activity_type !== "timeline") return;
+        if (
+          companyId &&
+          payload.new.company_id &&
+          payload.new.company_id !== companyId
+        ) {
+          return;
+        }
         setMessages((prev) =>
           prev.map((m) => (m.id === payload.new!.id ? payload.new : m))
         );
@@ -628,11 +647,12 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
         setIsProcessing(false);
         return;
       }
-      // Installation completion always goes through payment review — admin can complete without a staff push.
+      // Completing installation always goes through payment review — including Admin Controls
+      // (not only when the Installation stage tab is active).
       if (
-        activeStepTab === 4 &&
         order.stage === "Installation Scheduled" &&
-        (order.stageStatus === "Pending Admin Approval: Job Done" || order.stageStatus === "Normal")
+        (order.stageStatus === "Pending Admin Approval: Job Done" ||
+          order.stageStatus === "Normal")
       ) {
         setIsInstallationPaymentModalOpen(true);
         setIsProcessing(false);
@@ -807,13 +827,19 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     try {
       const res = await fetch(withBasePath(`/api/portal-token?customer_id=${client.customerId || client.id}&order_id=${order.orderId || order.id}`));
       const data = await res.json();
-      if (data.url) {
-        await navigator.clipboard.writeText(data.url);
-        setCopiedLink(true);
-        setTimeout(() => setCopiedLink(false), 2000);
-        triggerLocalAlert("Magic portal link copied!", "success");
+      if (!res.ok || !data.url) {
+        throw new Error(data.error || "Failed to generate portal link");
       }
-    } catch (err) { triggerLocalAlert("Failed to copy portal link.", "error"); }
+      await navigator.clipboard.writeText(data.url);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
+      triggerLocalAlert("Magic portal link copied!", "success");
+    } catch (err) {
+      triggerLocalAlert(
+        err instanceof Error ? err.message : "Failed to copy portal link.",
+        "error"
+      );
+    }
   };
 
   const handleSaveDraft = async () => {
@@ -1972,6 +1998,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           >
             <OrderCommunicationCenter
               orderId={order.orderId || order.id}
+              companyId={companyId || ""}
               onClose={() => setActiveRightPanel(null)}
             />
           </div>

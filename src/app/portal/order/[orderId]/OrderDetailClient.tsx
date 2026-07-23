@@ -35,7 +35,7 @@ import {
 import type { OrderDetailPatch } from "@/features/orders/realtime/orderDetailPatch";
 import { QuotationTab } from "@/app/portal/components/QuotationTab";
 import { useQuotationActions } from "@/app/portal/hooks/useQuotationActions";
-import { GoogleMap, useJsApiLoader, Marker, Autocomplete } from "@react-google-maps/api";
+import { GoogleMap, useJsApiLoader, Autocomplete } from "@react-google-maps/api";
 import { DesignTab } from "@/app/portal/components/DesignTab";
 import { PaymentsTab } from "@/app/portal/components/PaymentsTab";
 import {
@@ -43,8 +43,17 @@ import {
   getTabForStage,
 } from "@/app/portal/utils/portalStageNavigation";
 import type { InvoiceProfile } from "@/features/quotations/types/invoiceProfile";
-
-const libraries: ("places")[] = ["places"];
+import { AdvancedMapMarker } from "@/components/maps/AdvancedMapMarker";
+import {
+  GOOGLE_MAPS_DEFAULT_OPTIONS,
+  GOOGLE_MAPS_LIBRARIES,
+  GOOGLE_MAPS_SCRIPT_ID,
+} from "@/components/maps/googleMapsConfig";
+import { isGoogleMapsUrl } from "@/components/maps/mapsUrl";
+import {
+  ensureResolvedSiteLocation,
+  resolveGoogleMapsLocation,
+} from "@/components/maps/resolveGoogleMapsLocation";
 
 const containerStyle = {
   width: "100%",
@@ -222,29 +231,58 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
 
   const [markerPosition, setMarkerPosition] = useState(defaultCenter);
   const [mapCenter, setMapCenter] = useState(defaultCenter);
+  const [map, setMap] = useState<google.maps.Map | null>(null);
   const geocoder = useRef<any>(null);
 
   const { isLoaded } = useJsApiLoader({
-    id: "google-map-script",
+    id: GOOGLE_MAPS_SCRIPT_ID,
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
-    libraries,
+    libraries: GOOGLE_MAPS_LIBRARIES,
   });
 
   const autocompleteRef = useRef<any>(null);
 
+  const applyLocation = useCallback((lat: number, lng: number, address?: string) => {
+    setMarkerPosition({ lat, lng });
+    setMapCenter({ lat, lng });
+    setGpsCoords(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+    if (address && !isGoogleMapsUrl(address)) setSiteAddress(address);
+  }, []);
+
   const onPlaceChanged = () => {
-    if (autocompleteRef.current !== null) {
-      const place = autocompleteRef.current.getPlace();
-      if (place.geometry && place.geometry.location) {
-        const lat = place.geometry.location.lat();
-        const lng = place.geometry.location.lng();
-        setMarkerPosition({ lat, lng });
-        setMapCenter({ lat, lng });
-        setGpsCoords(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
-        setSiteAddress(place.formatted_address || place.name || "");
-      }
+    try {
+      const place = autocompleteRef.current?.getPlace?.();
+      const location = place?.geometry?.location;
+      if (!location) return;
+      const lat = typeof location.lat === "function" ? location.lat() : location.lat;
+      const lng = typeof location.lng === "function" ? location.lng() : location.lng;
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+      applyLocation(lat, lng, place.formatted_address || place.name || undefined);
+    } catch (err) {
+      console.warn("[PortalOrder] onPlaceChanged ignored incomplete place:", err);
     }
   };
+
+  const tryResolveMapsLink = useCallback(
+    async (value: string) => {
+      if (!isGoogleMapsUrl(value)) return;
+      setMapsSearching(true);
+      try {
+        const resolved = await resolveGoogleMapsLocation(value);
+        if (!resolved) {
+          alert("Could not open that Google Maps link. Paste a full Maps URL or search for the address.");
+          return;
+        }
+        applyLocation(resolved.lat, resolved.lng, resolved.address);
+      } catch (err) {
+        console.error("[PortalOrder] Maps link resolve failed:", err);
+        alert("Could not open that Google Maps link. Please try again.");
+      } finally {
+        setMapsSearching(false);
+      }
+    },
+    [applyLocation]
+  );
 
   useEffect(() => {
     if (isLoaded && !geocoder.current) {
@@ -265,10 +303,9 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
     if (!e.latLng) return;
     const lat = e.latLng.lat();
     const lng = e.latLng.lng();
-    setMarkerPosition({ lat, lng });
-    setGpsCoords(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+    applyLocation(lat, lng);
     reverseGeocode(lat, lng);
-  }, []);
+  }, [applyLocation]);
 
   const handleCurrentLocation = () => {
     setMapsSearching(true);
@@ -277,9 +314,7 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
         (position) => {
           const lat = position.coords.latitude;
           const lng = position.coords.longitude;
-          setMarkerPosition({ lat, lng });
-          setMapCenter({ lat, lng });
-          setGpsCoords(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+          applyLocation(lat, lng);
           reverseGeocode(lat, lng);
           setMapsSearching(false);
         },
@@ -306,7 +341,7 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
     "Design In Progress": "Design",
     "Design Approved": "Design",
     "Production": "Production",
-    "Ready For Installation": "Production",
+    "Ready For Installation": "Installation",
     "Installation Scheduled": "Installation",
     "Completed": "Installation",
     "Closed": "Installation",
@@ -345,13 +380,29 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
     if (!order || !selectedDate || !selectedTime || !siteAddress) return;
     setSchedulingLoading(true);
     try {
-      const payload = { auditDate: selectedDate, auditTime: selectedTime, customerAddress: siteAddress, gpsLocation: gpsCoords, completed: false, reviewStatus: "Pending" };
-      const res = await scheduleSiteVisitAction(order.id, payload);
+      const location = await ensureResolvedSiteLocation({
+        customerAddress: siteAddress,
+        gpsLocation: gpsCoords,
+      });
+      setSiteAddress(location.customerAddress);
+      setGpsCoords(location.gpsLocation);
+      const payload = {
+        auditDate: selectedDate,
+        auditTime: selectedTime,
+        customerAddress: location.customerAddress,
+        gpsLocation: location.gpsLocation,
+        completed: false,
+        reviewStatus: "Pending" as const,
+      };
+      const res = await scheduleSiteVisitAction(order.id, payload, token);
       if (res.success && res.order) {
         setOrder(prev => ({ ...prev, stage: res.order.stage, siteVisitDetails: res.order.siteVisitDetails }));
         setIsRescheduling(false);
       }
-    } catch (err) { console.error(err); }
+    } catch (err) {
+      console.error(err);
+      alert(err instanceof Error ? err.message : "Failed to confirm site visit. Please try again.");
+    }
     finally { setSchedulingLoading(false); }
   };
 
@@ -575,7 +626,18 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
                           required
                           value={siteAddress}
                           onChange={e => setSiteAddress(e.target.value)}
-                          placeholder="Search for an address or type manually..."
+                          onPaste={(e) => {
+                            const pasted = e.clipboardData.getData("text");
+                            if (isGoogleMapsUrl(pasted)) {
+                              e.preventDefault();
+                              setSiteAddress(pasted.trim());
+                              void tryResolveMapsLink(pasted);
+                            }
+                          }}
+                          onBlur={() => {
+                            void tryResolveMapsLink(siteAddress);
+                          }}
+                          placeholder="Search address or paste a Google Maps link..."
                           className="w-full p-3 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none bg-gray-50 focus:bg-white transition-all"
                         />
                       </Autocomplete>
@@ -599,9 +661,11 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
                             center={mapCenter}
                             zoom={14}
                             onClick={onMapClick}
-                            options={{ streetViewControl: false, mapTypeControl: false, fullscreenControl: false }}
+                            onLoad={setMap}
+                            onUnmount={() => setMap(null)}
+                            options={GOOGLE_MAPS_DEFAULT_OPTIONS}
                           >
-                            <Marker position={markerPosition} />
+                            <AdvancedMapMarker map={map} position={markerPosition} />
                           </GoogleMap>
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-xs text-slate-500">
@@ -632,9 +696,6 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
                       {schedulingLoading ? <Loader2 size={14} className="animate-spin" /> : null}
                       Confirm Site Visit
                       <Check size={14} />
-                    </button>
-                    <button type="button" className="px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-sm font-semibold hover:bg-gray-50 transition-colors">
-                      Request Callback
                     </button>
                   </div>
                 </form>

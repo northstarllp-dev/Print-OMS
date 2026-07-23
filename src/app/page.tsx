@@ -2,9 +2,10 @@ import React from "react";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/features/auth/actions/authActions";
 import { getStaffHomePath } from "@/features/orders/workspace/shared/stageGrants";
-import { Shield, Users, ArrowRight, BarChart3, ClipboardList, Heart } from "lucide-react";
+import { Shield, Users, ArrowRight, BarChart3, ClipboardList } from "lucide-react";
 import Link from "next/link";
 import { Logo } from "@/components/ui/Logo";
+import { PlatformMadeWithLove } from "@/components/ui/PlatformMadeWithLove";
 import { InstallPwaButton } from "@/components/pwa/InstallPwaButton";
 
 export default async function RootGateway() {
@@ -125,30 +126,7 @@ export default async function RootGateway() {
 
       {/* Footer */}
       <div style={{ marginTop: 80, textAlign: "center", color: "var(--text-secondary)", fontSize: 13 }}>
-        <a
-          href="https://printoms.thepolarislabs.com/"
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 6,
-            fontWeight: 600,
-            margin: 0,
-            color: "inherit",
-            textDecoration: "none",
-            cursor: "pointer",
-            transition: "opacity 0.15s ease",
-          }}
-        >
-          Made with <Heart size={14} fill="#ef4444" color="#ef4444" /> by
-          <img
-            src="/printoms/clients/light%20withoutbg.png"
-            alt="Polaris"
-            style={{ height: "50px", marginLeft: "-2px", marginTop: "-16px", marginBottom: "-12px" }}
-          />
-        </a>
+        <PlatformMadeWithLove variant="gateway" />
       </div>
 
     </div>

@@ -10,6 +10,7 @@ import { getRequestBaseUrl } from "@/features/notifications/whatsapp/requestBase
 
 import { createAdminClient } from "@/utils/supabase/admin";
 import { revalidateStaffQueuePaths } from "@/features/orders/actions/orderActions";
+import { insertOrderActivity } from "@/features/orders/activity/logOrderActivity";
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -95,8 +96,9 @@ async function ensureCustomerForEnquiry(
     }
   }
 
+  const { getDeployCompanyId } = await import("@/config/loadClientConfig");
   const companyId =
-    (enq.company_id as string) || "11111111-1111-1111-1111-111111111111";
+    (enq.company_id as string) || getDeployCompanyId();
   const { data: created, error } = await db
     .from("customers")
     .insert({
@@ -126,19 +128,14 @@ export async function createEnquiry(formData: any) {
 
   const { data: { user } } = await supabase.auth.getUser();
   let addedBy = "System";
-  let companyId = "11111111-1111-1111-1111-111111111111"; // default fallback
+  const { resolveWriteCompanyId } = await import("@/lib/resolveWriteCompanyId");
+  const companyId = await resolveWriteCompanyId();
   if (user) {
     const { data: profile } = await supabase.from("users").select("name, company_id").eq("id", user.id).single();
     if (profile) {
       if (profile.name) addedBy = profile.name;
-      if (profile.company_id) companyId = profile.company_id;
     } else {
       addedBy = user.email || "Admin";
-    }
-  } else {
-    const { data: cos } = await supabase.from("companies").select("id").limit(1);
-    if (cos && cos.length > 0) {
-      companyId = cos[0].id;
     }
   }
   formData.added_by = addedBy;
@@ -271,14 +268,8 @@ export async function convertEnquiryToOrderAction(enquiryId: string, clientName:
   let isNewCustomer = false;
 
   // 2b. Retrieve logged-in user's company ID dynamically
-  const { data: { user: authUser } } = await supabase.auth.getUser();
-  let companyId = "11111111-1111-1111-1111-111111111111"; // default fallback
-  if (authUser) {
-    const { data: profile } = await supabase.from("users").select("company_id").eq("id", authUser.id).single();
-    if (profile && profile.company_id) {
-      companyId = profile.company_id;
-    }
-  }
+  const { resolveWriteCompanyId } = await import("@/lib/resolveWriteCompanyId");
+  const companyId = await resolveWriteCompanyId();
 
   if (existingCust && existingCust.length > 0) {
     customerId = existingCust[0].id;
@@ -340,10 +331,10 @@ export async function convertEnquiryToOrderAction(enquiryId: string, clientName:
   });
 
   // 4b. Log order creation to activity timeline
-  await supabase.from("order_activity").insert([
+  await insertOrderActivity(supabase, [
     {
       order_id: friendlyOrderId,
-      activity_type: "timeline",
+      company_id: companyId,
       actor_name: "System",
       actor_role: "System",
       content: `Order created from Enquiry ${enq.enquire_id || enquiryId}. Customer: ${customerName}.`,
@@ -351,7 +342,7 @@ export async function convertEnquiryToOrderAction(enquiryId: string, clientName:
     },
     {
       order_id: friendlyOrderId,
-      activity_type: "timeline",
+      company_id: companyId,
       actor_name: "System",
       actor_role: "System",
       content: `Secure portal link generated for client. Order ID: ${friendlyOrderId}.`,

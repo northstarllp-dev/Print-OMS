@@ -28,6 +28,15 @@ const getHealthBadgeColor = (health: string) => {
   return colors[health] || "bg-slate-100 text-slate-600 border-slate-200";
 };
 
+const isClosedOrderStage = (stage: string | undefined) =>
+  stage === "Completed" || stage === "Closed";
+
+/** Portal access ends once every linked order is completed/closed. */
+const isCustomerPortalExpired = (customerId: string, orders: any[]) => {
+  const linked = orders.filter((o) => o.customerId === customerId);
+  return linked.length > 0 && linked.every((o) => isClosedOrderStage(o.stage));
+};
+
 export function CustomersViewNew({ 
   initialCustomers, 
   initialOrders = [] 
@@ -95,14 +104,15 @@ export function CustomersViewNew({
     try {
       const res = await fetch(withBasePath(`/api/portal-token?customer_id=${customerId}`));
       const data = await res.json();
-      if (data.url) {
-        await navigator.clipboard.writeText(data.url);
-        setCopiedCustomerId(customerId);
-        setTimeout(() => setCopiedCustomerId(null), 2000);
+      if (!res.ok || !data.url) {
+        throw new Error(data.error || "Failed to generate portal link");
       }
+      await navigator.clipboard.writeText(data.url);
+      setCopiedCustomerId(customerId);
+      setTimeout(() => setCopiedCustomerId(null), 2000);
     } catch (err) {
       console.error("Error fetching portal token:", err);
-      alert("Failed to retrieve customer portal link");
+      alert(err instanceof Error ? err.message : "Failed to retrieve customer portal link");
     }
   };
 
@@ -111,14 +121,15 @@ export function CustomersViewNew({
     try {
       const res = await fetch(withBasePath(`/api/portal-token?customer_id=${customerId}&order_id=${orderId}`));
       const data = await res.json();
-      if (data.url) {
-        await navigator.clipboard.writeText(data.url);
-        setCopiedOrderId(orderId);
-        setTimeout(() => setCopiedOrderId(null), 2000);
+      if (!res.ok || !data.url) {
+        throw new Error(data.error || "Failed to generate portal link");
       }
+      await navigator.clipboard.writeText(data.url);
+      setCopiedOrderId(orderId);
+      setTimeout(() => setCopiedOrderId(null), 2000);
     } catch (err) {
       console.error("Error fetching portal token:", err);
-      alert("Failed to retrieve order portal link");
+      alert(err instanceof Error ? err.message : "Failed to retrieve order portal link");
     }
   };
 
@@ -441,17 +452,23 @@ export function CustomersViewNew({
                           </span>
                         </div>
                         <div className="mt-2.5" onClick={(e) => e.stopPropagation()}>
-                          <button
-                            type="button"
-                            onClick={(e) => handleCopyLink(cust.customerId || cust.id, e)}
-                            className="px-2.5 py-1.5 rounded-md text-[11px] font-semibold text-white"
-                            style={{
-                              background: copiedCustomerId === (cust.customerId || cust.id) ? "#dcfce7" : "var(--color-secondary)",
-                              color: copiedCustomerId === (cust.customerId || cust.id) ? "#16a34a" : "white",
-                            }}
-                          >
-                            {copiedCustomerId === (cust.customerId || cust.id) ? "Copied!" : "Copy Magic Link"}
-                          </button>
+                          {isCustomerPortalExpired(cust.id, initialOrders) ? (
+                            <span className="inline-block px-2.5 py-1.5 rounded-md text-[11px] font-semibold text-slate-500 bg-slate-100 border border-slate-200">
+                              Portal link is expired
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={(e) => handleCopyLink(cust.customerId || cust.id, e)}
+                              className="px-2.5 py-1.5 rounded-md text-[11px] font-semibold text-white"
+                              style={{
+                                background: copiedCustomerId === (cust.customerId || cust.id) ? "#dcfce7" : "var(--color-secondary)",
+                                color: copiedCustomerId === (cust.customerId || cust.id) ? "#16a34a" : "white",
+                              }}
+                            >
+                              {copiedCustomerId === (cust.customerId || cust.id) ? "Copied!" : "Copy Magic Link"}
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -505,22 +522,39 @@ export function CustomersViewNew({
                         <span style={{ display: "inline-block", padding: "4px 12px", background: statusColor.bg, color: statusColor.text, borderRadius: "6px", fontSize: "11px", fontWeight: "700" }}>{statusColor.label}</span>
                       </td>
                       <td style={{ padding: "16px 20px", textAlign: "center" }}>
-                        <button
-                          onClick={(e) => handleCopyLink(cust.customerId || cust.id, e)}
-                          style={{
-                            padding: "6px 12px",
-                            background: copiedCustomerId === (cust.customerId || cust.id) ? "#dcfce7" : "var(--color-secondary)",
-                            border: "none",
-                            borderRadius: "6px",
-                            fontSize: "11px",
-                            fontWeight: "600",
-                            color: copiedCustomerId === (cust.customerId || cust.id) ? "#16a34a" : "white",
-                            cursor: "pointer",
-                            transition: "all 0.2s"
-                          }}
-                        >
-                          {copiedCustomerId === (cust.customerId || cust.id) ? "Copied!" : "Copy Magic Link"}
-                        </button>
+                        {isCustomerPortalExpired(cust.id, initialOrders) ? (
+                          <span
+                            style={{
+                              display: "inline-block",
+                              padding: "6px 12px",
+                              background: "#f1f5f9",
+                              border: "1px solid #e2e8f0",
+                              borderRadius: "6px",
+                              fontSize: "11px",
+                              fontWeight: "600",
+                              color: "#64748b",
+                            }}
+                          >
+                            Portal link is expired
+                          </span>
+                        ) : (
+                          <button
+                            onClick={(e) => handleCopyLink(cust.customerId || cust.id, e)}
+                            style={{
+                              padding: "6px 12px",
+                              background: copiedCustomerId === (cust.customerId || cust.id) ? "#dcfce7" : "var(--color-secondary)",
+                              border: "none",
+                              borderRadius: "6px",
+                              fontSize: "11px",
+                              fontWeight: "600",
+                              color: copiedCustomerId === (cust.customerId || cust.id) ? "#16a34a" : "white",
+                              cursor: "pointer",
+                              transition: "all 0.2s"
+                            }}
+                          >
+                            {copiedCustomerId === (cust.customerId || cust.id) ? "Copied!" : "Copy Magic Link"}
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );
@@ -613,18 +647,27 @@ export function CustomersViewNew({
                           <span className="text-[10px] font-bold text-slate-400 block">{o.orderCode || o.id}</span>
                           <span className="text-xs font-bold text-slate-800 mt-0.5 block truncate max-w-[180px]">{o.businessName || o.clientName}</span>
                         </div>
-                        <div className="flex gap-1">
-                          <button
-                            onClick={(e) => handleCopyOrderLink(selectedCustomer.customerId || selectedCustomer.id, o.orderId || o.id, e)}
-                            className={`p-1 rounded border transition ${
-                              copiedOrderId === (o.orderId || o.id)
-                                ? "bg-emerald-50 border-emerald-250 text-[var(--color-success)]"
-                                : "bg-white border-slate-200 text-slate-500 hover:text-slate-700 hover:bg-slate-50"
-                            }`}
-                            title={copiedOrderId === (o.orderId || o.id) ? "Copied!" : "Copy Order Magic Link"}
-                          >
-                            <Share2 size={12} />
-                          </button>
+                        <div className="flex gap-1 items-center">
+                          {isClosedOrderStage(o.stage) ? (
+                            <span
+                              className="text-[10px] font-semibold text-slate-500 bg-slate-100 border border-slate-200 rounded px-1.5 py-0.5"
+                              title="Order completed — portal link expired"
+                            >
+                              Link expired
+                            </span>
+                          ) : (
+                            <button
+                              onClick={(e) => handleCopyOrderLink(selectedCustomer.customerId || selectedCustomer.id, o.orderId || o.id, e)}
+                              className={`p-1 rounded border transition ${
+                                copiedOrderId === (o.orderId || o.id)
+                                  ? "bg-emerald-50 border-emerald-250 text-[var(--color-success)]"
+                                  : "bg-white border-slate-200 text-slate-500 hover:text-slate-700 hover:bg-slate-50"
+                              }`}
+                              title={copiedOrderId === (o.orderId || o.id) ? "Copied!" : "Copy Order Magic Link"}
+                            >
+                              <Share2 size={12} />
+                            </button>
+                          )}
                           <Link
                             href={`/admin/orders/${o.orderId || o.id}`}
                             className="p-1 rounded bg-white border border-slate-200 text-slate-500 hover:text-slate-700 hover:bg-slate-50 transition"

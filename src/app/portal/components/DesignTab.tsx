@@ -26,6 +26,7 @@ import { toCustomerVisibleDesign } from "@/features/designs/utils/customerVisibl
 import { uploadFileViaPortalApi } from "@/utils/supabase/uploadStorageFile";
 import { getServerActionErrorMessage } from "@/lib/serverActionError";
 import { OverlayPortal } from "@/components/ui/OverlayPortal";
+import { insertOrderActivity } from "@/features/orders/activity/logOrderActivity";
 
 interface Customer {
   id: string;
@@ -44,6 +45,8 @@ interface Customer {
 interface Order {
   id: string;
   orderId?: string;
+  companyId?: string;
+  company_id?: string;
   stage?: string;
   stageStatus?: string;
   stageAdminNotes?: string;
@@ -64,6 +67,24 @@ function friendlyPortalError(error: unknown): string {
     return "Your session has expired. Please refresh the page and try again.";
   }
   return message;
+}
+
+async function resolveOrderCompanyId(
+  supabase: ReturnType<typeof createClient>,
+  order: Order
+): Promise<string> {
+  const fromProps = order.companyId ?? order.company_id;
+  if (fromProps) return fromProps;
+
+  const { data, error } = await supabase
+    .from("orders")
+    .select("company_id")
+    .eq("id", order.id)
+    .single();
+  if (error || !data?.company_id) {
+    throw new Error("Order company_id is required for activity log");
+  }
+  return data.company_id;
 }
 
 export function DesignTab({ order, customer, siteVisitItems = [], portalToken }: DesignTabProps) {
@@ -294,24 +315,26 @@ export function DesignTab({ order, customer, siteVisitItems = [], portalToken }:
     const nextStage = allApproved ? "Design Approved" : undefined;
     
     await handleUpdateItemVersions(updatedVersions, nextStage);
-    
-    await supabase.from("order_activity").insert({ 
-      order_id: order.orderId || order.id, 
-      activity_type: "timeline", 
-      actor_name: "System", 
-      actor_role: "System", 
-      content: `Client approved the design proof for ${activeItem?.name || 'an item'}.`, 
-      metadata: { action: "design_approved_by_customer", itemId: selectedItemId } 
+
+    const companyId = await resolveOrderCompanyId(supabase, order);
+
+    await insertOrderActivity(supabase, {
+      order_id: order.orderId || order.id,
+      company_id: companyId,
+      actor_name: "System",
+      actor_role: "System",
+      content: `Client approved the design proof for ${activeItem?.name || 'an item'}.`,
+      metadata: { action: "design_approved_by_customer", itemId: selectedItemId }
     });
 
     if (allApproved) {
-      await supabase.from("order_activity").insert({ 
-        order_id: order.orderId || order.id, 
-        activity_type: "timeline", 
-        actor_name: "System", 
-        actor_role: "System", 
-        content: "All design proofs approved by client.", 
-        metadata: { action: "all_designs_approved" } 
+      await insertOrderActivity(supabase, {
+        order_id: order.orderId || order.id,
+        company_id: companyId,
+        actor_name: "System",
+        actor_role: "System",
+        content: "All design proofs approved by client.",
+        metadata: { action: "all_designs_approved" }
       });
     }
   };

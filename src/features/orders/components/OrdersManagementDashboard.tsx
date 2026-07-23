@@ -18,8 +18,9 @@ import {
   CheckCircle,
   Calendar,
   ChevronLeft,
-  ChevronRight,
   RefreshCw,
+  MoreHorizontal,
+  Wrench,
 } from "lucide-react";
 import { updateOrder, assignTeamToOrder } from "@/features/orders/actions/orderActions";
 import { loadClientConfig } from "@/config/loadClientConfig";
@@ -31,6 +32,7 @@ import {
 } from "@/features/orders/workspace/shared/staffQueueStages";
 import { QueueViewToggle } from "./QueueViewToggle";
 import type { QueueView } from "@/features/orders/workspace/shared/staffQueueStages";
+import { CreateServiceTicketModal } from "@/features/service-tickets/components/CreateServiceTicketModal";
 
 const getStatusColor = (status: string) => {
   const colors: Record<string, { bg: string; text: string; label: string }> = {
@@ -112,6 +114,13 @@ export function OrdersManagementDashboard({
   const clientConfig = loadClientConfig();
   const parsedEntryStage = parseOrderStage(entryStage);
   const [queueView, setQueueView] = useState<QueueView>("current");
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [ticketPreset, setTicketPreset] = useState<{
+    phone?: string;
+    customerId?: string;
+    orderId?: string;
+    orderLabel?: string;
+  } | null>(null);
   
   // Custom Date Range Filter
   const [dateFilterType, setDateFilterType] = useState<"all" | "range">("range");
@@ -146,6 +155,28 @@ export function OrdersManagementDashboard({
     },
     [orderDetailBasePath, entryStage, currentUserRole]
   );
+
+  const openServiceTicketForOrder = useCallback(
+    (order: {
+      id: string;
+      orderId?: string;
+      orderCode?: string;
+      customerId?: string;
+      clientName?: string;
+      businessName?: string;
+    }) => {
+      const customer = initialCustomers.find((c) => c.id === order.customerId);
+      setOpenMenuId(null);
+      setTicketPreset({
+        phone: customer?.phone || "",
+        customerId: order.customerId || "",
+        orderId: order.id,
+        orderLabel: `${order.orderCode || order.orderId || order.id} - ${order.clientName || order.businessName || "Order"}`,
+      });
+    },
+    [initialCustomers]
+  );
+
   const employeeName = currentEmployeeName;
   const currentEmployeeObj = initialEmployees.find(e => e.name === employeeName || e.email === employeeName || e.id === employeeName);
   const currentEmployeeId = currentEmployeeObj?.id || employeeName;
@@ -773,11 +804,9 @@ export function OrdersManagementDashboard({
               const title = order.businessName || order.clientName || "Order";
 
               return (
-                <button
+                <div
                   key={order.id}
-                  type="button"
-                  onClick={() => router.push(resolveOrderHref(order))}
-                  className="w-full text-left rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden active:scale-[0.99] transition-transform"
+                  className="w-full text-left rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden"
                 >
                   <div className="flex">
                     <div
@@ -787,7 +816,11 @@ export function OrdersManagementDashboard({
                     />
                     <div className="flex-1 min-w-0 p-3">
                       <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
+                        <button
+                          type="button"
+                          onClick={() => router.push(resolveOrderHref(order))}
+                          className="min-w-0 text-left flex-1 active:opacity-80"
+                        >
                           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                             <span className="text-[13px] font-extrabold text-slate-900">
                               {order.orderCode || order.id}
@@ -805,53 +838,100 @@ export function OrdersManagementDashboard({
                           {order.businessName && order.clientName ? (
                             <div className="text-[11px] text-slate-500 truncate">{order.clientName}</div>
                           ) : null}
-                        </div>
-                        <ChevronRight size={18} className="shrink-0 text-slate-300 mt-0.5" />
-                      </div>
-
-                      <div className="mt-2 flex items-center justify-between gap-2 min-w-0">
-                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500 min-w-0">
-                          <span className="font-medium">{dateStr}</span>
-                          <span
-                            className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border ${getHealthBadgeColor(order.health || "Active")}`}
+                        </button>
+                        <div className="relative shrink-0">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenMenuId(openMenuId === order.id ? null : order.id);
+                            }}
+                            className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+                            aria-label="Order actions"
                           >
-                            {order.health || "Active"}
-                          </span>
-                        </div>
-                        <div className="flex items-center shrink-0">
-                          {order.assignedEmployees?.slice(0, 4).map((empId: string, i: number) => {
-                            const staff = employees.find(e => e.id === empId);
-                            const name = staff ? staff.name : "Un";
-                            return (
+                            <MoreHorizontal size={18} />
+                          </button>
+                          {openMenuId === order.id && (
+                            <>
                               <div
-                                key={i}
-                                title={name}
-                                className="w-6 h-6 rounded-full bg-[var(--color-primary)] text-white flex items-center justify-center text-[9px] font-bold border-2 border-white"
-                                style={{ marginLeft: i > 0 ? "-6px" : "0" }}
-                              >
-                                {name.substring(0, 2).toUpperCase()}
+                                className="fixed inset-0 z-40"
+                                onClick={() => setOpenMenuId(null)}
+                              />
+                              <div className="absolute right-0 top-full mt-1 z-50 min-w-[160px] rounded-lg border border-slate-200 bg-white shadow-lg overflow-hidden">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenMenuId(null);
+                                    router.push(resolveOrderHref(order));
+                                  }}
+                                  className="w-full px-3.5 py-2.5 flex items-center gap-2 text-left text-xs font-semibold text-slate-800 hover:bg-slate-50"
+                                >
+                                  <Eye size={13} /> View Order
+                                </button>
+                                {currentUserRole === "Admin" && (
+                                  <button
+                                    type="button"
+                                    onClick={() => openServiceTicketForOrder(order)}
+                                    className="w-full px-3.5 py-2.5 flex items-center gap-2 text-left text-xs font-semibold text-slate-800 hover:bg-slate-50"
+                                  >
+                                    <Wrench size={13} /> Add Service Ticket
+                                  </button>
+                                )}
                               </div>
-                            );
-                          })}
-                          {(!order.assignedEmployees || order.assignedEmployees.length === 0) && (
-                            <span className="text-[11px] text-slate-400 italic">Unassigned</span>
+                            </>
                           )}
                         </div>
                       </div>
 
-                      {(visitDate && visitTime) ? (
-                        <div className="mt-2 rounded-lg bg-slate-50 border border-slate-100 px-2.5 py-1.5">
-                          <div className="text-[11px] font-bold text-slate-800">{visitDate} • {visitTime}</div>
-                          {mapAddress ? (
-                            <div className="text-[10px] text-slate-500 mt-0.5 truncate" title={mapAddress}>
-                              {mapAddress}
-                            </div>
-                          ) : null}
+                      <button
+                        type="button"
+                        onClick={() => router.push(resolveOrderHref(order))}
+                        className="w-full text-left mt-2"
+                      >
+                        <div className="flex items-center justify-between gap-2 min-w-0">
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500 min-w-0">
+                            <span className="font-medium">{dateStr}</span>
+                            <span
+                              className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border ${getHealthBadgeColor(order.health || "Active")}`}
+                            >
+                              {order.health || "Active"}
+                            </span>
+                          </div>
+                          <div className="flex items-center shrink-0">
+                            {order.assignedEmployees?.slice(0, 4).map((empId: string, i: number) => {
+                              const staff = employees.find(e => e.id === empId);
+                              const name = staff ? staff.name : "Un";
+                              return (
+                                <div
+                                  key={i}
+                                  title={name}
+                                  className="w-6 h-6 rounded-full bg-[var(--color-primary)] text-white flex items-center justify-center text-[9px] font-bold border-2 border-white"
+                                  style={{ marginLeft: i > 0 ? "-6px" : "0" }}
+                                >
+                                  {name.substring(0, 2).toUpperCase()}
+                                </div>
+                              );
+                            })}
+                            {(!order.assignedEmployees || order.assignedEmployees.length === 0) && (
+                              <span className="text-[11px] text-slate-400 italic">Unassigned</span>
+                            )}
+                          </div>
                         </div>
-                      ) : null}
+
+                        {(visitDate && visitTime) ? (
+                          <div className="mt-2 rounded-lg bg-slate-50 border border-slate-100 px-2.5 py-1.5">
+                            <div className="text-[11px] font-bold text-slate-800">{visitDate} • {visitTime}</div>
+                            {mapAddress ? (
+                              <div className="text-[10px] text-slate-500 mt-0.5 truncate" title={mapAddress}>
+                                {mapAddress}
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </button>
                     </div>
                   </div>
-                </button>
+                </div>
               );
             })
           )}
@@ -1061,34 +1141,68 @@ export function OrdersManagementDashboard({
                       </div>
                     </td>
                     <td style={{ padding: "16px 20px", textAlign: "center" }}>
-                      <button
-                        onClick={() => {
-                          router.push(resolveOrderHref(order));
-                        }}
-                        style={{
-                          padding: "6px 12px",
-                          background: "var(--color-primary)",
-                          border: "none",
-                          borderRadius: "6px",
-                          color: "white",
-                          fontSize: "12px",
-                          fontWeight: "700",
-                          cursor: "pointer",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "6px",
-                          transition: "all 0.2s",
-                          whiteSpace: "nowrap",
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = "var(--color-primary-container)";
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = "var(--color-primary)";
-                        }}
-                      >
-                        <Eye size={14} /> View Order
-                      </button>
+                      <div className="relative inline-flex items-center gap-1.5">
+                        <button
+                          onClick={() => {
+                            router.push(resolveOrderHref(order));
+                          }}
+                          style={{
+                            padding: "6px 12px",
+                            background: "var(--color-primary)",
+                            border: "none",
+                            borderRadius: "6px",
+                            color: "white",
+                            fontSize: "12px",
+                            fontWeight: "700",
+                            cursor: "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            transition: "all 0.2s",
+                            whiteSpace: "nowrap",
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = "var(--color-primary-container)";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = "var(--color-primary)";
+                          }}
+                        >
+                          <Eye size={14} /> View Order
+                        </button>
+                        {currentUserRole === "Admin" && (
+                          <div className="relative">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenMenuId(openMenuId === order.id ? null : order.id);
+                              }}
+                              className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+                              aria-label="More actions"
+                            >
+                              <MoreHorizontal size={16} />
+                            </button>
+                            {openMenuId === order.id && (
+                              <>
+                                <div
+                                  className="fixed inset-0 z-40"
+                                  onClick={() => setOpenMenuId(null)}
+                                />
+                                <div className="absolute right-0 top-full mt-1 z-50 min-w-[170px] rounded-lg border border-slate-200 bg-white shadow-lg overflow-hidden">
+                                  <button
+                                    type="button"
+                                    onClick={() => openServiceTicketForOrder(order)}
+                                    className="w-full px-3.5 py-2.5 flex items-center gap-2 text-left text-xs font-semibold text-slate-800 hover:bg-slate-50"
+                                  >
+                                    <Wrench size={13} /> Add Service Ticket
+                                  </button>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -1193,6 +1307,16 @@ export function OrdersManagementDashboard({
       </div>
       
 
+      {ticketPreset && (
+        <CreateServiceTicketModal
+          preset={ticketPreset}
+          onClose={() => setTicketPreset(null)}
+          onCreated={() => {
+            setTicketPreset(null);
+            router.refresh();
+          }}
+        />
+      )}
     </div>
   );
 }

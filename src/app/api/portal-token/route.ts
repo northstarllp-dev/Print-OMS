@@ -49,9 +49,44 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const host = request.headers.get("host") || "localhost:3000";
-  const protocol = request.headers.get("x-forwarded-proto") || (host.includes("localhost") ? "http" : "https");
-  const requestBaseUrl = `${protocol}://${host}`;
+  // Staff may only mint portal links for customers in their (deploy) company
+  try {
+    const { assertCustomerTenantAccess } = await import(
+      "@/utils/portal/portalTenantAuth"
+    );
+    const { getCurrentUser } = await import(
+      "@/features/auth/actions/authActions"
+    );
+    const { loadClientConfig } = await import("@/config/loadClientConfig");
+    const profile = await getCurrentUser();
+    if (!profile) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const config = loadClientConfig();
+    if (profile.company_id && profile.company_id !== config.companyId) {
+      return NextResponse.json(
+        { error: "Unauthorized access. This account belongs to a different client workspace." },
+        { status: 403 }
+      );
+    }
+    await assertCustomerTenantAccess(customerId);
+    if (orderId) {
+      const { assertOrderTenantAccess } = await import(
+        "@/utils/portal/portalTenantAuth"
+      );
+      await assertOrderTenantAccess(orderId);
+    }
+  } catch (err: any) {
+    return NextResponse.json(
+      { error: err?.message || "Unauthorized" },
+      { status: 403 }
+    );
+  }
+
+  const { getRequestBaseUrl } = await import(
+    "@/features/notifications/whatsapp/requestBaseUrl"
+  );
+  const requestBaseUrl = await getRequestBaseUrl();
 
   let resolvedCustomerId = customerId;
   let resolvedOrderId = orderId;

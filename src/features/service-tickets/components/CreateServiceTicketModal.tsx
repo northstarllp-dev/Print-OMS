@@ -16,6 +16,13 @@ import { CopyLinkButton } from "./CopyLinkButton";
 interface CreateServiceTicketModalProps {
   onClose: () => void;
   onCreated: () => void;
+  /** Prefill from an existing order (e.g. orders list ⋮ menu). */
+  preset?: {
+    phone?: string;
+    customerId?: string;
+    orderId?: string;
+    orderLabel?: string;
+  };
 }
 
 type OrderOption = {
@@ -27,14 +34,26 @@ type OrderOption = {
 export function CreateServiceTicketModal({
   onClose,
   onCreated,
+  preset,
 }: CreateServiceTicketModalProps) {
   const clientConfig = loadClientConfig();
-  const [phone, setPhone] = React.useState("");
+  const digitsFromPreset = (preset?.phone || "").replace(/\D/g, "").replace(/^91/, "");
+  const [phone, setPhone] = React.useState(digitsFromPreset);
   const [description, setDescription] = React.useState("");
   const [resolutionNotes, setResolutionNotes] = React.useState("");
-  const [orders, setOrders] = React.useState<OrderOption[]>([]);
-  const [selectedOrderId, setSelectedOrderId] = React.useState("");
-  const [selectedCustomerId, setSelectedCustomerId] = React.useState("");
+  const [orders, setOrders] = React.useState<OrderOption[]>(() =>
+    preset?.orderId
+      ? [
+          {
+            id: preset.orderId,
+            orderId: preset.orderId,
+            label: preset.orderLabel || preset.orderId,
+          },
+        ]
+      : []
+  );
+  const [selectedOrderId, setSelectedOrderId] = React.useState(preset?.orderId || "");
+  const [selectedCustomerId, setSelectedCustomerId] = React.useState(preset?.customerId || "");
   const [photos, setPhotos] = React.useState<TicketPhoto[]>([]);
   const [lookupLoading, setLookupLoading] = React.useState(false);
   const [saveLoading, setSaveLoading] = React.useState(false);
@@ -178,7 +197,7 @@ export function CreateServiceTicketModal({
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <CopyLinkButton companyId={clientConfig?.id || "default"} />
+            <CopyLinkButton companyId={clientConfig.companyId} />
             <button
               type="button"
               onClick={onClose}

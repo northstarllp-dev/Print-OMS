@@ -86,14 +86,8 @@ export async function getActiveProducts(): Promise<Product[]> {
 
 export async function createProduct(formData: CreateProductPayload) {
   const supabase = await getSupabase();
-  const { data: { user } } = await supabase.auth.getUser();
-  let companyId = "11111111-1111-1111-1111-111111111111"; // default fallback
-  if (user) {
-    const { data: profile } = await supabase.from("users").select("company_id").eq("id", user.id).single();
-    if (profile && profile.company_id) {
-      companyId = profile.company_id;
-    }
-  }
+  const { resolveWriteCompanyId } = await import("@/lib/resolveWriteCompanyId");
+  const companyId = await resolveWriteCompanyId();
   const payload = {
     company_id: companyId,
     is_active: true,
@@ -215,14 +209,8 @@ export async function createProductCategory(name: string): Promise<ProductCatego
   if (!name || !name.trim()) throw new Error("Category name is required.");
   
   const supabase = await getSupabase();
-  const { data: { user } } = await supabase.auth.getUser();
-  let companyId = "11111111-1111-1111-1111-111111111111"; // default fallback
-  if (user) {
-    const { data: profile } = await supabase.from("users").select("company_id").eq("id", user.id).single();
-    if (profile && profile.company_id) {
-      companyId = profile.company_id;
-    }
-  }
+  const { resolveWriteCompanyId } = await import("@/lib/resolveWriteCompanyId");
+  const companyId = await resolveWriteCompanyId();
   const payload = {
     company_id: companyId,
     name: name.trim(),

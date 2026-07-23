@@ -12,7 +12,6 @@ import {
 } from "@/features/orders/actions/revalidateOrderPaths";
 import {
   assertStageEditPermission,
-  assertValidPortalSessionForOrder,
 } from "@/features/orders/workspace/shared/serverPermissions";
 import { computeQuotationTotals } from "@/features/quotations/utils/lineAmount";
 import {
@@ -22,6 +21,7 @@ import {
   sanitizeSignageOptions,
 } from "@/features/quotations/utils/quotationSecurity";
 import { createAdminClient } from "@/utils/supabase/admin";
+import { insertOrderActivity } from "@/features/orders/activity/logOrderActivity";
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -96,44 +96,14 @@ async function assertPortalOrderOwnership(
   orderUuid: string,
   portalToken?: string
 ): Promise<void> {
-  // Primary check: session cookie
-  try {
-    await assertValidPortalSessionForOrder(orderUuid, "approve_quote");
-    return; // cookie auth succeeded
-  } catch {
-    // Fall through to token-based auth below
-  }
-
-  // Fallback: verify raw portal token directly (handles missing/expired session cookies)
-  if (portalToken) {
-    const { verifyPortalToken } = await import("@/utils/portal-tokens");
-    const payload = verifyPortalToken(portalToken);
-    if (!payload) throw new Error("Unauthorized");
-    if (!payload.scopes.includes("approve_quote")) throw new Error("Unauthorized");
-
-    const admin = requireAdminClient();
-    const { data: order } = await admin
-      .from("orders")
-      .select("id, order_id, customer_id")
-      .eq("id", orderUuid)
-      .maybeSingle();
-    if (!order) throw new Error("Unauthorized");
-
-    // Verify token orderId or customerId matches
-    if (payload.orderId && (payload.orderId === order.id || payload.orderId === order.order_id)) {
-      return;
-    }
-    if (payload.customerId) {
-      const { data: customer } = await admin
-        .from("customers")
-        .select("id")
-        .eq("customer_id", payload.customerId)
-        .maybeSingle();
-      if (customer && order.customer_id === customer.id) return;
-    }
-  }
-
-  throw new Error("Unauthorized");
+  const { assertPortalTenantAccess } = await import(
+    "@/utils/portal/portalTenantAuth"
+  );
+  await assertPortalTenantAccess({
+    orderId: orderUuid,
+    portalToken,
+    requiredScope: "approve_quote",
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -324,14 +294,17 @@ export async function sendQuotationToCustomer(quotationId: string, adminName: st
 
   const { data: orderRow } = await supabase
     .from("orders")
-    .select("order_id")
+    .select("order_id, company_id")
     .eq("id", qt.order_id)
     .maybeSingle();
 
   await supabase.from("orders").update({ stage: "Quotation Sent" }).eq("id", qt.order_id);
-  await supabase.from("order_activity").insert({
-    order_id: orderRow?.order_id || qt.order_id,
-    activity_type: "timeline",
+  if (!orderRow?.company_id) {
+    throw new Error("company_id is required to log quotation activity");
+  }
+  await insertOrderActivity(supabase, {
+    order_id: orderRow.order_id || qt.order_id,
+    company_id: orderRow.company_id,
     actor_name: "System",
     actor_role: "System",
     content: `Quotation ${qt.quotation_id} approved by ${adminName} and sent to the customer.`,
@@ -356,7 +329,8 @@ export async function sendQuotationToCustomer(quotationId: string, adminName: st
 export async function adminMarkQuotationApprovedAction(orderId: string) {
   await assertStageEditPermission("quotation");
   const supabase = await getSupabase();
-  const { uuid, friendly } = await resolveOrderId(supabase, orderId);
+  const { uuid, friendly, companyId } = await resolveOrderId(supabase, orderId);
+  if (!companyId) throw new Error("company_id is required to log quotation activity");
 
   const { error: qErr } = await supabase
     .from("quotations")
@@ -370,9 +344,9 @@ export async function adminMarkQuotationApprovedAction(orderId: string) {
     .eq("id", uuid);
   if (oErr) throw new Error(oErr.message);
 
-  await supabase.from("order_activity").insert({
+  await insertOrderActivity(supabase, {
     order_id: friendly,
-    activity_type: "timeline",
+    company_id: companyId,
     actor_name: "System",
     actor_role: "System",
     content: "Admin marked the quotation as approved and ready to advance.",
@@ -389,7 +363,8 @@ export async function customerApproveQuotation(
   portalToken?: string
 ) {
   const supabase = await getSupabase();
-  const { uuid, friendly } = await resolveOrderId(supabase, orderId);
+  const { uuid, friendly, companyId } = await resolveOrderId(supabase, orderId);
+  if (!companyId) throw new Error("company_id is required to log quotation activity");
   await assertPortalOrderOwnership(uuid, portalToken);
 
   const admin = requireAdminClient();
@@ -416,9 +391,9 @@ export async function customerApproveQuotation(
     .eq("id", uuid);
   if (oErr) throw new Error(oErr.message);
 
-  await admin.from("order_activity").insert({
+  await insertOrderActivity(admin, {
     order_id: friendly,
-    activity_type: "timeline",
+    company_id: companyId,
     actor_name: "System",
     actor_role: "System",
     content: `${customerName} has approved the quotation. Order is ready for advance payment.`,
@@ -439,7 +414,8 @@ export async function customerRequestRevision(
   if (!trimmed) throw new Error("Feedback is required");
 
   const supabase = await getSupabase();
-  const { uuid, friendly } = await resolveOrderId(supabase, orderId);
+  const { uuid, friendly, companyId } = await resolveOrderId(supabase, orderId);
+  if (!companyId) throw new Error("company_id is required to log quotation activity");
   await assertPortalOrderOwnership(uuid, portalToken);
 
   const admin = requireAdminClient();
@@ -470,9 +446,9 @@ export async function customerRequestRevision(
     .eq("id", uuid);
   if (oErr) throw new Error(oErr.message);
 
-  await admin.from("order_activity").insert({
+  await insertOrderActivity(admin, {
     order_id: friendly,
-    activity_type: "timeline",
+    company_id: companyId,
     actor_name: customerName,
     actor_role: "Customer",
     content: `Quotation Declined. Feedback: ${trimmed}`,

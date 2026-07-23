@@ -10,6 +10,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Logo } from "@/components/ui/Logo";
+import { PlatformMadeWithLove } from "@/components/ui/PlatformMadeWithLove";
 import { PullToRefresh } from "@/components/ui/PullToRefresh";
 import { useRouter, usePathname } from "next/navigation";
 import { signOut, updateUserPassword } from "@/features/auth/actions/authActions";
@@ -495,31 +496,7 @@ export function ProductionLayoutClient({ children, profile }: ProductionLayoutCl
             background: "var(--color-background)",
             flexShrink: 0, position: "relative",
           }}>
-            <a
-              href="https://printoms.thepolarislabs.com/"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 6,
-                fontWeight: 600,
-                margin: 0,
-                color: "inherit",
-                textDecoration: "none",
-                cursor: "pointer",
-                transition: "opacity 0.15s ease",
-                pointerEvents: "auto",
-              }}
-            >
-              Made with <span style={{ color: "#EF4444", fontSize: "14px" }}>❤️</span> by
-              <img
-                src="/printoms/clients/light%20withoutbg.png"
-                alt="Polaris"
-                className="h-8 lg:h-9 w-auto ml-0.5"
-              />
-            </a>
+            <PlatformMadeWithLove />
           </div>
         )}
       </div>

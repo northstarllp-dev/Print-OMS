@@ -4,6 +4,7 @@ import React, { useEffect } from "react";
 import { Loader2, Upload, CheckCircle2, AlertCircle, Calendar, Tag, Activity, Phone, FileText, X } from "lucide-react";
 
 import { Logo } from "@/components/ui/Logo";
+import { withBasePath } from "@/lib/appBasePath";
 
 interface ServiceTicketPublicClientProps {
   companyId: string;
@@ -17,6 +18,17 @@ type LookupOrder = {
   productType?: string;
   dateCreated?: string;
 };
+
+function isTechnicalError(message: string): boolean {
+  const lower = message.toLowerCase();
+  return (
+    lower.includes("uuid") ||
+    lower.includes("syntax") ||
+    lower.includes("invalid input") ||
+    lower.includes("postgres") ||
+    lower.includes("pgrst")
+  );
+}
 
 export default function ServiceTicketPublicClient({
   companyId,
@@ -66,21 +78,32 @@ export default function ServiceTicketPublicClient({
     setLoadingLookup(true);
     setError(null);
     try {
-      const res = await fetch("/printoms/api/public/service-ticket/lookup", {
+      const res = await fetch(withBasePath("/api/public/service-ticket/lookup"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ companyId, phone: getFormattedPhone() }),
       });
-      const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error || "Lookup failed");
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(
+          typeof payload.error === "string" && !isTechnicalError(payload.error)
+            ? payload.error
+            : "Unable to look up orders. Please try again."
+        );
+      }
       setCustomerId(payload.customer?.id || "");
       setOrders(payload.orders || []);
       setOrderId("");
       if (!payload.customer || (payload.orders || []).length === 0) {
-        setError("No orders found for this mobile number.");
+        setError("No orders found with this number.");
       }
-    } catch (err: any) {
-      setError(err.message || "Lookup failed");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "";
+      setError(
+        msg && !isTechnicalError(msg)
+          ? msg
+          : "Unable to look up orders. Please try again."
+      );
     } finally {
       setLoadingLookup(false);
     }
@@ -103,7 +126,7 @@ export default function ServiceTicketPublicClient({
       formData.set("description", description);
       files.forEach((file) => formData.append("photos", file));
 
-      const res = await fetch("/printoms/api/public/service-ticket", {
+      const res = await fetch(withBasePath("/api/public/service-ticket"), {
         method: "POST",
         body: formData,
       });
@@ -116,8 +139,13 @@ export default function ServiceTicketPublicClient({
       setOrderId("");
       setOrders([]);
       setCustomerId("");
-    } catch (err: any) {
-      setError(err.message || "Unable to submit ticket");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "";
+      setError(
+        msg && !isTechnicalError(msg)
+          ? msg
+          : "Unable to submit ticket. Please try again."
+      );
     } finally {
       setSubmitting(false);
     }
@@ -181,11 +209,20 @@ export default function ServiceTicketPublicClient({
         ) : (
           <>
             {error && (
-              <div style={{ background: "#fef2f2", color: "var(--color-error)", border: "1px solid #fecaca", borderRadius: "var(--radius-lg)", padding: "16px", marginBottom: "24px", display: "flex", alignItems: "center", gap: "12px" }}>
+              <div style={{
+                background: error.toLowerCase().includes("no orders") ? "#fffbeb" : "#fef2f2",
+                color: error.toLowerCase().includes("no orders") ? "#b45309" : "var(--color-error)",
+                border: `1px solid ${error.toLowerCase().includes("no orders") ? "#fde68a" : "#fecaca"}`,
+                borderRadius: "var(--radius-lg)",
+                padding: "16px",
+                marginBottom: "24px",
+                display: "flex",
+                alignItems: "center",
+                gap: "12px",
+              }}>
                 <AlertCircle size={24} />
                 <div>
-                  <h3 className="text-title-sm" style={{ margin: "0 0 4px" }}>Something went wrong</h3>
-                  <p className="text-body-md" style={{ margin: 0 }}>{error}</p>
+                  <h3 className="text-title-sm" style={{ margin: 0 }}>{error}</h3>
                 </div>
               </div>
             )}

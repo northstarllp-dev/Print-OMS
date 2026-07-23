@@ -25,6 +25,9 @@ import {
   revalidateStaffOrderDetailPaths,
 } from "@/features/orders/actions/revalidateOrderPaths";
 import { areAllDesignItemsApproved } from "@/features/designs/utils/designApproval";
+import { createAdminClient } from "@/utils/supabase/admin";
+import { getCurrentUser } from "@/features/auth/actions/authActions";
+import { insertOrderActivity } from "@/features/orders/activity/logOrderActivity";
 
 export { revalidateOrderDetailPaths, revalidateStaffOrderDetailPaths };
 
@@ -191,14 +194,8 @@ export async function getOrderById(id: string) {
 export async function createOrder(formData: any) {
   const supabase = await getSupabase();
   
-  const { data: { user } } = await supabase.auth.getUser();
-  let companyId = "11111111-1111-1111-1111-111111111111"; // default fallback
-  if (user) {
-    const { data: profile } = await supabase.from("users").select("company_id").eq("id", user.id).single();
-    if (profile && profile.company_id) {
-      companyId = profile.company_id;
-    }
-  }
+  const { resolveWriteCompanyId } = await import("@/lib/resolveWriteCompanyId");
+  const companyId = await resolveWriteCompanyId();
 
   const orderWithDefaults = {
     company_id: companyId,
@@ -218,9 +215,9 @@ export async function createOrder(formData: any) {
     items: [],
   });
 
-  await supabase.from("order_activity").insert({
+  await insertOrderActivity(supabase, {
     order_id: createdOrder.order_id || createdOrder.id,
-    activity_type: "timeline",
+    company_id: createdOrder.company_id || companyId,
     actor_name: "System",
     actor_role: "System",
     content: `Order for Client "${createdOrder.client_name}" created manually by Admin.`,
@@ -290,7 +287,10 @@ export async function updateSiteVisitDetailsAction(orderId: string, details: any
 
   // 1. Get company ID and order_id
   const { data: order } = await supabase.from("orders").select("company_id, order_id").eq("id", orderUuid).single();
-  const companyId = order?.company_id || "11111111-1111-1111-1111-111111111111";
+  if (!order?.company_id) {
+    throw new Error("Order is missing company_id — cannot save site visit.");
+  }
+  const companyId = order.company_id;
 
   // 2. Map payload to DB schema
   const dbPayload = mapSiteVisitToDb(orderUuid, companyId, details);
@@ -476,6 +476,7 @@ export async function requestStageAdvancementAction(orderId: string) {
   if (fetchError) throw new Error(fetchError.message);
 
   const isDesignFirst = (current.workflow_type || "quote_first") === "design_first";
+  // Permission is for the stage being advanced FROM — not the destination stage.
   const stageToPermission: Record<string, "site_visit" | "quotation" | "design" | "production" | "installation"> = {
     "Site Visit Pending": "site_visit",
     "Site Visit Scheduled": "site_visit",
@@ -483,7 +484,7 @@ export async function requestStageAdvancementAction(orderId: string) {
     "Quotation In Progress": "quotation",
     "Quotation Sent": "quotation",
     "Quotation Negotiation": "quotation",
-    "Quotation Approved": isDesignFirst ? "quotation" : "design",
+    "Quotation Approved": "quotation",
     "Design In Progress": "design",
     "Design Approved": "design",
     "Production": "production",
@@ -539,7 +540,7 @@ export async function adminApproveStageAction(orderId: string) {
   const orderUuid = await resolveOrderUuid(supabase, orderId);
   const { data: o, error: fetchError } = await supabase
     .from("orders")
-    .select("stage, order_id, workflow_type, stage_status")
+    .select("stage, order_id, workflow_type, stage_status, company_id")
     .eq("id", orderUuid)
     .single();
   if (fetchError) throw new Error(fetchError.message);
@@ -607,6 +608,19 @@ export async function adminApproveStageAction(orderId: string) {
     await assertDesignReadyToLeaveInProgress(supabase, orderUuid);
   }
 
+  // Hard gate: never close/complete while quote balance is still outstanding.
+  if (nextStage === "Completed") {
+    const { getPaymentBalanceSummary } = await import(
+      "@/features/payments/actions/paymentActions"
+    );
+    const balance = await getPaymentBalanceSummary(orderUuid);
+    if (balance.outstanding > 0) {
+      throw new Error(
+        `Cannot complete order: ₹${balance.outstanding.toLocaleString("en-IN")} is still outstanding. Confirm all payments first.`
+      );
+    }
+  }
+
   const logMsg = isJobDonePending
     ? `Admin reviewed payments and marked the order Completed (from "${o.stage}").`
     : `Admin approved stage progression from "${o.stage}" to "${nextStage}".`;
@@ -617,9 +631,9 @@ export async function adminApproveStageAction(orderId: string) {
     stage_admin_notes: "",
   });
 
-  await supabase.from("order_activity").insert({
+  await insertOrderActivity(supabase, {
     order_id: o.order_id || orderId,
-    activity_type: "timeline",
+    company_id: o.company_id,
     actor_name: "System",
     actor_role: "System",
     content: logMsg,
@@ -644,7 +658,7 @@ export async function adminRejectStageAction(orderId: string, notes: string) {
   const orderUuid = await resolveOrderUuid(supabase, orderId);
   const { data: o, error: fetchError } = await supabase
     .from("orders")
-    .select("stage, order_id, stage_status")
+    .select("stage, order_id, stage_status, company_id")
     .eq("id", orderUuid)
     .single();
   if (fetchError) throw new Error(fetchError.message);
@@ -666,9 +680,9 @@ export async function adminRejectStageAction(orderId: string, notes: string) {
       .eq("order_id", orderUuid);
   }
 
-  await supabase.from("order_activity").insert({
+  await insertOrderActivity(supabase, {
     order_id: o.order_id || orderId,
-    activity_type: "timeline",
+    company_id: o.company_id,
     actor_name: "Admin",
     actor_role: "Admin",
     content: `Admin requested changes at "${o.stage}": ${trimmed}`,
@@ -691,7 +705,7 @@ export async function setWorkflowTypeAction(
   const orderUuid = await resolveOrderUuid(supabase, orderId);
   const { data: o, error: fetchError } = await supabase
     .from("orders")
-    .select("order_id, stage")
+    .select("order_id, stage, company_id")
     .eq("id", orderUuid)
     .single();
   if (fetchError) throw new Error(fetchError.message);
@@ -707,9 +721,9 @@ export async function setWorkflowTypeAction(
     stage_admin_notes: "",
   });
 
-  await supabase.from("order_activity").insert({
+  await insertOrderActivity(supabase, {
     order_id: o.order_id || orderId,
-    activity_type: "timeline",
+    company_id: o.company_id,
     actor_name: "System",
     actor_role: "System",
     content: `Workflow path set to "${workflowType === "design_first" ? "Design First" : "Quote First"}". Order advanced to ${firstStage}.`,
@@ -728,18 +742,31 @@ export async function updateOrderStageAction(id: string, stage: string) {
   const orderUuid = await resolveOrderUuid(supabase, id);
   const { data: o, error: fetchError } = await supabase
     .from("orders")
-    .select("stage, order_id")
+    .select("stage, order_id, company_id")
     .eq("id", orderUuid)
     .single();
   if (fetchError) throw new Error(fetchError.message);
+
+  // Hard gate: cannot manually close an order while balance is outstanding.
+  if (stage === "Completed" && stage !== o.stage) {
+    const { getPaymentBalanceSummary } = await import(
+      "@/features/payments/actions/paymentActions"
+    );
+    const balance = await getPaymentBalanceSummary(orderUuid);
+    if (balance.outstanding > 0) {
+      throw new Error(
+        `Cannot complete order: ₹${balance.outstanding.toLocaleString("en-IN")} is still outstanding. Confirm all payments first.`
+      );
+    }
+  }
 
   const isChanged = stage !== o.stage;
   const result = await updateOrder(orderUuid, { stage });
 
   if (isChanged) {
-    await supabase.from("order_activity").insert({
+    await insertOrderActivity(supabase, {
       order_id: o.order_id || id,
-      activity_type: "timeline",
+      company_id: o.company_id,
       actor_name: "System",
       actor_role: "System",
       content: `Order stage manually changed from "${o.stage}" to "${stage}".`,
@@ -755,15 +782,15 @@ export async function addChatMessageAction(orderId: string, sender: string, mess
   const supabase = await getSupabase();
   const { data: o, error: fetchError } = await supabase
     .from("orders")
-    .select("order_id")
+    .select("order_id, company_id")
     .eq("id", orderId)
     .single();
   if (fetchError) throw new Error(fetchError.message);
 
   // Timeline-only — internal/customer chat was removed.
-  await supabase.from("order_activity").insert({
+  await insertOrderActivity(supabase, {
     order_id: o.order_id || orderId,
-    activity_type: "timeline",
+    company_id: o.company_id,
     actor_name: sender,
     actor_role: sender === "System" ? "System" : sender === "Admin" ? "Admin" : "Employee",
     content: message
@@ -784,7 +811,7 @@ export async function revalidateOrderPathsAction(orderId?: string) {
   const orderUuid = await resolveOrderUuid(supabase, orderId);
   const { data } = await supabase
     .from("orders")
-    .select("order_id")
+    .select("order_id, company_id")
     .eq("id", orderUuid)
     .maybeSingle();
   revalidateOrderDetailPaths(data?.order_id || orderId);
@@ -846,7 +873,8 @@ export async function assignTeamToOrder(orderId: string, employeeIds: string[]) 
   // Resolve UUID in case a friendly order_id was passed
   const orderUuid = await resolveOrderUuid(supabase, orderId);
 
-  const { data: o } = await supabase.from("orders").select("order_id").eq("id", orderUuid).single();
+  const { data: o } = await supabase.from("orders").select("order_id, company_id").eq("id", orderUuid).single();
+  if (!o?.company_id) throw new Error("company_id is required to log team assignment");
 
   // Delete existing assignments for this order, then insert new ones
   await supabase.from("order_assignments").delete().eq("order_id", orderUuid);
@@ -857,11 +885,9 @@ export async function assignTeamToOrder(orderId: string, employeeIds: string[]) 
     if (insertError) throw new Error(insertError.message);
   }
 
-  const msg = `Team assigned: ${employeeIds.length} employee(s) allocated to this order.`;
-
-  await supabase.from("order_activity").insert({
-    order_id: o?.order_id || orderId,
-    activity_type: "timeline",
+  await insertOrderActivity(supabase, {
+    order_id: o.order_id || orderId,
+    company_id: o.company_id,
     actor_name: "System",
     actor_role: "System",
     content: `Team assigned: ${employeeIds.length} employee(s) allocated to this order.`,
@@ -882,7 +908,7 @@ export async function updateOrderHealthAction(orderId: string, health: string, l
   const supabase = await getSupabase();
   const { data: o, error: fetchError } = await supabase
     .from("orders")
-    .select("order_id")
+    .select("order_id, company_id")
     .eq("id", orderId)
     .single();
   if (fetchError) throw new Error(fetchError.message);
@@ -892,9 +918,9 @@ export async function updateOrderHealthAction(orderId: string, health: string, l
     lost_reason: lostReason || null,
   });
 
-  await supabase.from("order_activity").insert({
+  await insertOrderActivity(supabase, {
     order_id: o.order_id || orderId,
-    activity_type: "timeline",
+    company_id: o.company_id,
     actor_name: "System",
     actor_role: "System",
     content: `Order health status updated to "${health}"${lostReason ? ` with reason: "${lostReason}"` : ""}.`,
@@ -908,16 +934,16 @@ export async function reopenOrderAction(orderId: string) {
   const supabase = await getSupabase();
   const { data: o, error: fetchError } = await supabase
     .from("orders")
-    .select("order_id")
+    .select("order_id, company_id")
     .eq("id", orderId)
     .single();
   if (fetchError) throw new Error(fetchError.message);
 
   const result = await updateOrder(orderId, { health: "Active", lost_reason: null });
 
-  await supabase.from("order_activity").insert({
+  await insertOrderActivity(supabase, {
     order_id: o.order_id || orderId,
-    activity_type: "timeline",
+    company_id: o.company_id,
     actor_name: "System",
     actor_role: "System",
     content: `Order reopened. Health status set to "Active".`,
@@ -927,29 +953,113 @@ export async function reopenOrderAction(orderId: string) {
   return result;
 }
 
-export async function scheduleSiteVisitAction(orderId: string, scheduleData: any) {
-  const supabase = await getSupabase();
-  const orderUuid = await resolveOrderUuid(supabase, orderId);
-  
+function requireAdminClient() {
+  const admin = createAdminClient();
+  if (!admin) throw new Error("Server configuration error");
+  return admin;
+}
+
+/** Portal session cookie, or raw magic-link token (schedule_visit scope). */
+async function assertPortalCanScheduleVisit(
+  orderUuid: string,
+  portalToken?: string
+): Promise<void> {
+  const { assertPortalTenantAccess } = await import(
+    "@/utils/portal/portalTenantAuth"
+  );
+  await assertPortalTenantAccess({
+    orderId: orderUuid,
+    portalToken,
+    requiredScope: "schedule_visit",
+  });
+}
+
+/**
+ * Staff (cookie auth + RLS) or customer portal (token/session + service role).
+ * Portal customers have no Supabase Auth session — anon RLS cannot update site_visits.
+ */
+export async function scheduleSiteVisitAction(
+  orderId: string,
+  scheduleData: any,
+  portalToken?: string
+) {
+  const profile = await getCurrentUser();
+  const admin = requireAdminClient();
+
+  let supabase: Awaited<ReturnType<typeof getSupabase>>;
+  let orderUuid: string;
+
+  if (profile) {
+    await assertStageEditPermission("site_visit");
+    supabase = await getSupabase();
+    orderUuid = await resolveOrderUuid(supabase, orderId);
+  } else {
+    orderUuid = await resolveOrderUuid(admin, orderId);
+    await assertPortalCanScheduleVisit(orderUuid, portalToken);
+    supabase = admin;
+  }
+
   const { data: order, error: fetchError } = await supabase
     .from("orders")
     .select("company_id, order_id, customer_id, business_name")
     .eq("id", orderUuid)
     .single();
-    
+
   if (fetchError || !order) throw new Error(fetchError?.message || "Order not found");
+  if (!order.company_id) {
+    throw new Error("Order is missing company_id — cannot schedule site visit.");
+  }
 
-  const { data: existingSv } = await supabase.from("site_visits").select("*").eq("order_id", orderUuid).maybeSingle();
+  // Never persist a pasted Maps URL — store resolved address + coordinates only.
+  const { isGoogleMapsUrl, formatGpsCoords } = await import("@/components/maps/mapsUrl");
+  let sanitizedSchedule = { ...scheduleData };
+  if (
+    isGoogleMapsUrl(String(scheduleData.customerAddress || "")) ||
+    isGoogleMapsUrl(String(scheduleData.gpsLocation || ""))
+  ) {
+    const { resolveMapsUrlToLocation } = await import(
+      "@/components/maps/resolveMapsUrlServer"
+    );
+    const link = isGoogleMapsUrl(String(scheduleData.customerAddress || ""))
+      ? String(scheduleData.customerAddress)
+      : String(scheduleData.gpsLocation);
+    const resolved = await resolveMapsUrlToLocation(link);
+    if (!resolved) {
+      throw new Error(
+        "Could not resolve that Google Maps link to an address and coordinates."
+      );
+    }
+    sanitizedSchedule = {
+      ...scheduleData,
+      customerAddress: resolved.address,
+      gpsLocation: formatGpsCoords(resolved.lat, resolved.lng),
+    };
+  }
+
+  const { data: existingSv } = await supabase
+    .from("site_visits")
+    .select("*")
+    .eq("order_id", orderUuid)
+    .maybeSingle();
   const mappedExisting = mapSiteVisitFromDb(existingSv) || {};
-  const updatedSiteVisit = { ...mappedExisting, ...scheduleData, completed: false, reviewStatus: "Pending" as const };
-  const companyId = order.company_id || "11111111-1111-1111-1111-111111111111";
-  const dbPayload = mapSiteVisitToDb(orderUuid, companyId, updatedSiteVisit);
+  const updatedSiteVisit = {
+    ...mappedExisting,
+    ...sanitizedSchedule,
+    completed: false,
+    reviewStatus: "Pending" as const,
+  };
+  // Always use the order's tenant — never invent a default company id.
+  const dbPayload = mapSiteVisitToDb(orderUuid, order.company_id, updatedSiteVisit);
 
-  const { data: siteVisit, error: svError } = await supabase.from("site_visits").upsert(dbPayload, { onConflict: "order_id" }).select().single();
+  const { data: siteVisit, error: svError } = await supabase
+    .from("site_visits")
+    .upsert(dbPayload, { onConflict: "order_id" })
+    .select()
+    .single();
   if (svError) throw new Error(svError.message);
 
-  const date = scheduleData.auditDate || scheduleData.preferredDate;
-  const time = scheduleData.preferredTime || scheduleData.auditTime;
+  const date = sanitizedSchedule.auditDate || sanitizedSchedule.preferredDate;
+  const time = sanitizedSchedule.preferredTime || sanitizedSchedule.auditTime;
 
   const { data: updatedOrderRow, error: updateError } = await supabase
     .from("orders")
@@ -959,13 +1069,18 @@ export async function scheduleSiteVisitAction(orderId: string, scheduleData: any
     .single();
   if (updateError) throw new Error(updateError.message);
 
-  await supabase.from("order_activity").insert({
+  await insertOrderActivity(supabase, {
     order_id: order.order_id || orderId,
-    activity_type: "timeline",
+    company_id: order.company_id,
     actor_name: "System",
     actor_role: "System",
     content: `📅 Site visit scheduled for ${date} at ${time} by client.`,
-    metadata: { action: "site_visit_scheduled", date, time, address: scheduleData.customerAddress }
+    metadata: {
+      action: "site_visit_scheduled",
+      date,
+      time,
+      address: sanitizedSchedule.customerAddress,
+    },
   });
 
   const baseUrl = await getRequestBaseUrl();
@@ -981,7 +1096,7 @@ export async function scheduleSiteVisitAction(orderId: string, scheduleData: any
   await revalidateStaffQueuePaths();
   revalidatePath(`/admin/orders/${order.order_id || orderId}`);
   revalidatePath(`/staff/orders/${order.order_id || orderId}`);
-  
+
   return {
     success: true,
     order: {
@@ -1008,7 +1123,10 @@ export async function approveSiteVisitAction(orderId: string) {
 
   const { data: existingSv } = await supabase.from("site_visits").select("*").eq("order_id", orderUuid).maybeSingle();
   const mappedExisting = mapSiteVisitFromDb(existingSv) || {};
-  const companyId = order.company_id || "11111111-1111-1111-1111-111111111111";
+  if (!order.company_id) {
+    throw new Error("Order is missing company_id — cannot approve site visit.");
+  }
+  const companyId = order.company_id;
   const dbPayload = mapSiteVisitToDb(orderUuid, companyId, { ...mappedExisting, reviewStatus: "Staff Approved" as const });
 
   const { data: siteVisit, error: svError } = await supabase.from("site_visits").upsert(dbPayload, { onConflict: "order_id" }).select().single();
@@ -1022,9 +1140,9 @@ export async function approveSiteVisitAction(orderId: string) {
     .single();
   if (updateError) throw new Error(updateError.message);
 
-  await supabase.from("order_activity").insert({
+  await insertOrderActivity(supabase, {
     order_id: order.order_id || orderId,
-    activity_type: "timeline",
+    company_id: order.company_id,
     actor_name: "System",
     actor_role: "System",
     content: `Site visit time approved by assigned staff. Pending Admin Approval.`,
@@ -1058,7 +1176,7 @@ export async function freezeSiteVisitAction(orderId: string) {
   // 2. Fetch order for activity log
   const { data: order, error: fetchError } = await supabase
     .from("orders")
-    .select("order_id, stage")
+    .select("order_id, stage, company_id")
     .eq("id", orderUuid)
     .single();
   if (fetchError || !order) throw new Error(fetchError?.message || "Order not found");
@@ -1073,9 +1191,9 @@ export async function freezeSiteVisitAction(orderId: string) {
   if (orderError) throw new Error(orderError.message);
 
   // 4. Activity log
-  await supabase.from("order_activity").insert({
+  await insertOrderActivity(supabase, {
     order_id: order.order_id || orderId,
-    activity_type: "timeline",
+    company_id: order.company_id,
     actor_name: "System",
     actor_role: "System",
     content: "Site visit data confirmed and locked. Pending admin review.",

@@ -696,6 +696,14 @@ export function AdminDashboardClient({
                               >
                                 <Eye size={13} /> View Order
                               </button>
+                              <button
+                                onClick={() => { setOpenMenuId(null); setIsTicketModalOpen(true); }}
+                                style={{ width: "100%", padding: "9px 14px", display: "flex", alignItems: "center", gap: "8px", background: "none", border: "none", fontSize: "12px", fontWeight: "600", color: "#0F172A", cursor: "pointer", textAlign: "left" }}
+                                onMouseEnter={e => e.currentTarget.style.background = "#F8FAFC"}
+                                onMouseLeave={e => e.currentTarget.style.background = "none"}
+                              >
+                                <Wrench size={13} /> Add Service Ticket
+                              </button>
                             </div>
                           </>
                         )}
