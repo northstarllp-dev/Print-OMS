@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { useLoadScript, Autocomplete } from "@react-google-maps/api";
+import { useJsApiLoader, Autocomplete } from "@react-google-maps/api";
 
 const PLACES_LIBRARIES: ("places")[] = ["places"];
 
@@ -22,7 +22,8 @@ export function SettingsAddressInput({
   onBlur,
 }: SettingsAddressInputProps) {
   const mapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
-  const { isLoaded, loadError } = useLoadScript({
+  const { isLoaded, loadError } = useJsApiLoader({
+    id: "google-map-script",
     googleMapsApiKey: mapsApiKey || "no-key",
     libraries: PLACES_LIBRARIES,
   });

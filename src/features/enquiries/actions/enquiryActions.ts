@@ -368,7 +368,7 @@ export async function convertEnquiryToOrderAction(enquiryId: string, clientName:
 
   const baseUrl = await getRequestBaseUrl();
   const { url: portalLink } = await generateAndStorePortalToken(
-    supabase, friendlyCustomerId, friendlyOrderId,
+    supabase, customerId, friendlyOrderId,
     { expiresInDays: 30, createdBy: "enquiry_conversion", baseUrl }
   );
 

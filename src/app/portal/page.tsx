@@ -88,19 +88,76 @@ export default async function PortalPage({
     );
   }
 
-  const { data: customerData, error: customerError } = await admin
-    .from("customers")
-    .select("*")
-    .eq("customer_id", payload.customerId)
-    .single();
+  // Find customer safely, accommodating both UUID and friendly ID
+  let customerQuery = admin.from("customers").select("*");
+  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(payload.customerId);
+  
+  if (isUUID) {
+    customerQuery = customerQuery.eq("id", payload.customerId);
+  } else {
+    customerQuery = customerQuery.eq("customer_id", payload.customerId);
+  }
 
-  if (customerError || !customerData) {
+  const { data: customersMatch, error: customerError } = await customerQuery;
+
+  if (customerError || !customersMatch || customersMatch.length === 0) {
     return (
       <PortalError
         title="Customer Not Found"
         message={`Could not locate a customer profile for ID ${payload.customerId}.`}
       />
     );
+  }
+
+  let customerData = customersMatch[0];
+
+  // If there are multiple customers with the same friendly ID (due to multi-tenancy),
+  // try to disambiguate using the orderId from the payload if present.
+  if (customersMatch.length > 1) {
+    if (payload.orderId) {
+      let orderQuery = admin.from("orders").select("customer_id");
+      const isOrderUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(payload.orderId);
+      
+      if (isOrderUUID) {
+        orderQuery = orderQuery.eq("id", payload.orderId);
+      } else {
+        orderQuery = orderQuery.eq("order_id", payload.orderId);
+      }
+
+      const { data: ordersMatch } = await orderQuery;
+        
+      if (ordersMatch && ordersMatch.length > 0) {
+        const exactMatch = customersMatch.find(c => 
+          ordersMatch.some(o => o.customer_id === c.id)
+        );
+        if (exactMatch) {
+          customerData = exactMatch;
+        } else {
+          return (
+            <PortalError
+              title="Access Denied"
+              message="The requested order does not belong to this customer profile."
+            />
+          );
+        }
+      } else {
+        return (
+          <PortalError
+            title="Order Not Found"
+            message={`Could not locate the requested order ${payload.orderId}.`}
+          />
+        );
+      }
+    } else {
+      // Ambiguous customer ID without an order context. 
+      // We cannot safely determine which customer profile to show.
+      return (
+        <PortalError
+          title="Ambiguous Customer ID"
+          message={`Multiple profiles found for ID ${payload.customerId}. Please use an order-specific link.`}
+        />
+      );
+    }
   }
 
   const { data: ordersData, error: ordersError } = await admin
@@ -149,7 +206,7 @@ export default async function PortalPage({
   // If orderId is provided, perform an explicit IDOR verification check:
   // ensure the requested order_id belongs to the validated customer_id.
   if (payload.orderId) {
-    const hasOrder = ordersData.some((o) => o.order_id === payload.orderId);
+    const hasOrder = ordersData.some((o) => o.order_id === payload.orderId || o.id === payload.orderId);
     if (!hasOrder) {
       return (
         <PortalError

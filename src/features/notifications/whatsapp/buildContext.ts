@@ -165,11 +165,12 @@ export async function buildNotificationContext(
   if (!friendlyCustomerId && !testMode) return null;
 
   let portalToken = "";
-  if (friendlyCustomerId) {
+  const portalCustomerId = customer?.id || input.customerUuid || friendlyCustomerId;
+  if (portalCustomerId) {
     try {
       const { token } = await generateAndStorePortalToken(
         supabase,
-        friendlyCustomerId,
+        portalCustomerId as string,
         friendlyOrderId,
         {
           expiresInDays: 30,
