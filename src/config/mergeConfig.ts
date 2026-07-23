@@ -13,5 +13,13 @@ export function mergeConfig(override: Partial<PrintOMSClientConfig>): PrintOMSCl
       ...defaultConfig.features,
       ...(override.features || {}),
     },
+    stageGrantsByRole: {
+      ...(defaultConfig.stageGrantsByRole || {}),
+      ...(override.stageGrantsByRole || {}),
+    },
+    whatsappTemplateOverrides: {
+      ...(defaultConfig.whatsappTemplateOverrides || {}),
+      ...(override.whatsappTemplateOverrides || {}),
+    },
   };
 }

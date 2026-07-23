@@ -1,9 +1,18 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { X, MapPin } from "lucide-react";
-import { GoogleMap, useJsApiLoader, Marker, Autocomplete } from "@react-google-maps/api";
-
-const libraries: ("places")[] = ["places"];
+import { GoogleMap, useJsApiLoader, Autocomplete } from "@react-google-maps/api";
+import { AdvancedMapMarker } from "@/components/maps/AdvancedMapMarker";
+import {
+  GOOGLE_MAPS_DEFAULT_OPTIONS,
+  GOOGLE_MAPS_LIBRARIES,
+  GOOGLE_MAPS_SCRIPT_ID,
+} from "@/components/maps/googleMapsConfig";
+import { isGoogleMapsUrl } from "@/components/maps/mapsUrl";
+import {
+  ensureResolvedSiteLocation,
+  resolveGoogleMapsLocation,
+} from "@/components/maps/resolveGoogleMapsLocation";
 
 const containerStyle = {
   width: "100%",
@@ -34,30 +43,59 @@ export const ScheduleVisitModal: React.FC<ScheduleVisitModalProps> = ({ isOpen, 
   
   const [markerPosition, setMarkerPosition] = useState(defaultCenter);
   const [mapCenter, setMapCenter] = useState(defaultCenter);
+  const [map, setMap] = useState<google.maps.Map | null>(null);
 
   const { isLoaded } = useJsApiLoader({
-    id: "google-map-script",
+    id: GOOGLE_MAPS_SCRIPT_ID,
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
-    libraries,
+    libraries: GOOGLE_MAPS_LIBRARIES,
   });
 
   const autocompleteRef = useRef<any>(null);
 
+  const applyLocation = useCallback((lat: number, lng: number, address?: string) => {
+    setMarkerPosition({ lat, lng });
+    setMapCenter({ lat, lng });
+    setGpsCoords(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+    if (address && !isGoogleMapsUrl(address)) setSiteAddress(address);
+  }, []);
+
   const onPlaceChanged = () => {
-    if (autocompleteRef.current !== null) {
-      const place = autocompleteRef.current.getPlace();
-      if (place.geometry && place.geometry.location) {
-        const lat = place.geometry.location.lat();
-        const lng = place.geometry.location.lng();
-        setMarkerPosition({ lat, lng });
-        setMapCenter({ lat, lng });
-        setGpsCoords(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
-        setSiteAddress(place.formatted_address || place.name || "");
-      }
+    try {
+      const place = autocompleteRef.current?.getPlace?.();
+      const location = place?.geometry?.location;
+      if (!location) return;
+      const lat = typeof location.lat === "function" ? location.lat() : location.lat;
+      const lng = typeof location.lng === "function" ? location.lng() : location.lng;
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+      applyLocation(lat, lng, place.formatted_address || place.name || undefined);
+    } catch (err) {
+      console.warn("[ScheduleVisit] onPlaceChanged ignored incomplete place:", err);
     }
   };
 
   const geocoder = useRef<any>(null);
+
+  const tryResolveMapsLink = useCallback(
+    async (value: string) => {
+      if (!isGoogleMapsUrl(value)) return;
+      setMapsSearching(true);
+      try {
+        const resolved = await resolveGoogleMapsLocation(value);
+        if (!resolved) {
+          alert("Could not open that Google Maps link. Paste a full Maps URL or search for the address.");
+          return;
+        }
+        applyLocation(resolved.lat, resolved.lng, resolved.address);
+      } catch (err) {
+        console.error("[ScheduleVisit] Maps link resolve failed:", err);
+        alert("Could not open that Google Maps link. Please try again.");
+      } finally {
+        setMapsSearching(false);
+      }
+    },
+    [applyLocation]
+  );
 
   useEffect(() => {
     if (isLoaded && !geocoder.current) {
@@ -92,10 +130,9 @@ export const ScheduleVisitModal: React.FC<ScheduleVisitModalProps> = ({ isOpen, 
     if (!e.latLng) return;
     const lat = e.latLng.lat();
     const lng = e.latLng.lng();
-    setMarkerPosition({ lat, lng });
-    setGpsCoords(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+    applyLocation(lat, lng);
     reverseGeocode(lat, lng);
-  }, []);
+  }, [applyLocation]);
 
   const handleCurrentLocation = () => {
     setMapsSearching(true);
@@ -104,9 +141,7 @@ export const ScheduleVisitModal: React.FC<ScheduleVisitModalProps> = ({ isOpen, 
         (position) => {
           const lat = position.coords.latitude;
           const lng = position.coords.longitude;
-          setMarkerPosition({ lat, lng });
-          setMapCenter({ lat, lng });
-          setGpsCoords(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+          applyLocation(lat, lng);
           reverseGeocode(lat, lng);
           setMapsSearching(false);
         },
@@ -137,9 +172,25 @@ export const ScheduleVisitModal: React.FC<ScheduleVisitModalProps> = ({ isOpen, 
     e.preventDefault();
     if (!selectedDate || !selectedTime || !siteAddress) return;
     setSubmitting(true);
-    await onSchedule(selectedDate, selectedTime, siteAddress, gpsCoords);
-    setSubmitting(false);
-    onClose();
+    try {
+      const location = await ensureResolvedSiteLocation({
+        customerAddress: siteAddress,
+        gpsLocation: gpsCoords,
+      });
+      setSiteAddress(location.customerAddress);
+      setGpsCoords(location.gpsLocation);
+      await onSchedule(
+        selectedDate,
+        selectedTime,
+        location.customerAddress,
+        location.gpsLocation
+      );
+      onClose();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to schedule site visit.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return createPortal(
@@ -238,7 +289,18 @@ export const ScheduleVisitModal: React.FC<ScheduleVisitModalProps> = ({ isOpen, 
                     required
                     value={siteAddress}
                     onChange={e => setSiteAddress(e.target.value)}
-                    placeholder="Search for an address or type manually..."
+                    onPaste={(e) => {
+                      const pasted = e.clipboardData.getData("text");
+                      if (isGoogleMapsUrl(pasted)) {
+                        e.preventDefault();
+                        setSiteAddress(pasted.trim());
+                        void tryResolveMapsLink(pasted);
+                      }
+                    }}
+                    onBlur={() => {
+                      void tryResolveMapsLink(siteAddress);
+                    }}
+                    placeholder="Search address or paste a Google Maps link..."
                     className="w-full p-3 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none bg-slate-50 focus:bg-white transition-all"
                   />
                 </Autocomplete>
@@ -262,14 +324,14 @@ export const ScheduleVisitModal: React.FC<ScheduleVisitModalProps> = ({ isOpen, 
                       center={mapCenter}
                       zoom={14}
                       onClick={onMapClick}
+                      onLoad={setMap}
+                      onUnmount={() => setMap(null)}
                       options={{
-                        streetViewControl: false,
-                        mapTypeControl: false,
-                        fullscreenControl: false,
+                        ...GOOGLE_MAPS_DEFAULT_OPTIONS,
                         gestureHandling: "cooperative",
                       }}
                     >
-                      <Marker position={markerPosition} />
+                      <AdvancedMapMarker map={map} position={markerPosition} />
                     </GoogleMap>
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-xs text-slate-500">

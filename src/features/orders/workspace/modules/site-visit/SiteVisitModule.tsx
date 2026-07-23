@@ -40,9 +40,13 @@ import { deleteStorageFilesAction } from "@/features/orders/actions/storageActio
 import { scheduleSiteVisitAction } from "@/features/orders/actions/orderActions";
 import { uploadFileViaStaffApi } from "@/utils/supabase/uploadStorageFile";
 import { OverlayPortal } from "@/components/ui/OverlayPortal";
-import { GoogleMap, useJsApiLoader, Marker } from "@react-google-maps/api";
-
-const libraries: ("places")[] = ["places"];
+import { GoogleMap, useJsApiLoader } from "@react-google-maps/api";
+import { AdvancedMapMarker } from "@/components/maps/AdvancedMapMarker";
+import {
+  GOOGLE_MAPS_DEFAULT_OPTIONS,
+  GOOGLE_MAPS_LIBRARIES,
+  GOOGLE_MAPS_SCRIPT_ID,
+} from "@/components/maps/googleMapsConfig";
 
 export interface ExtendedSignLocation {
   id: string;
@@ -148,10 +152,12 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
     };
   });
 
+  const [map, setMap] = useState<google.maps.Map | null>(null);
+
   const { isLoaded } = useJsApiLoader({
-    id: "google-map-script",
+    id: GOOGLE_MAPS_SCRIPT_ID,
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
-    libraries,
+    libraries: GOOGLE_MAPS_LIBRARIES,
   });
 
   const mapCenter = React.useMemo(() => {
@@ -490,9 +496,11 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
                   mapContainerStyle={{ width: "100%", height: "100%" }}
                   center={mapCenter}
                   zoom={15}
-                  options={{ streetViewControl: false, mapTypeControl: false, disableDefaultUI: true }}
+                  onLoad={setMap}
+                  onUnmount={() => setMap(null)}
+                  options={{ ...GOOGLE_MAPS_DEFAULT_OPTIONS, disableDefaultUI: true }}
                 >
-                  <Marker position={mapCenter} />
+                  <AdvancedMapMarker map={map} position={mapCenter} />
                 </GoogleMap>
               </div>
             )}

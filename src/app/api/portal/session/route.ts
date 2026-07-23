@@ -41,6 +41,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Token revoked" }, { status: 403 });
   }
 
+  // Dual auth: customer must belong to this deploy's company
+  try {
+    const { assertCustomerTenantAccess } = await import(
+      "@/utils/portal/portalTenantAuth"
+    );
+    await assertCustomerTenantAccess(payload.customerId);
+  } catch (err: any) {
+    const msg = err?.message || "Unauthorized";
+    const status = msg.includes("different client workspace") ? 403 : 401;
+    return NextResponse.json({ error: msg }, { status });
+  }
+
   // Set session cookie with HttpOnly, Secure, SameSite strict
   const cookieValue = JSON.stringify({
     customerId: payload.customerId,

@@ -2,7 +2,6 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { getCurrentUser } from "@/features/auth/actions/authActions";
-import { createAdminClient } from "@/utils/supabase/admin";
 import { resolveStagePermission } from "./permissions";
 import type { OrderStage } from "./types";
 
@@ -95,83 +94,13 @@ export async function assertValidPortalSessionForOrder(
   orderId: string,
   requiredScope?: string
 ): Promise<void> {
-  const cookieStore = await cookies();
-  const sessionCookie = cookieStore.get("portal_session")?.value;
-  if (!sessionCookie) {
-    throw new Error("Unauthorized");
-  }
-
-  let session: {
-    customerId?: string;
-    orderId?: string;
-    scopes?: string[];
-    exp?: number;
-  };
-  try {
-    session = JSON.parse(sessionCookie);
-  } catch {
-    throw new Error("Unauthorized");
-  }
-
-  const now = Math.floor(Date.now() / 1000);
-  if (!session.exp || session.exp < now) {
-    throw new Error("Unauthorized");
-  }
-  if (requiredScope && (!session.scopes || !session.scopes.includes(requiredScope))) {
-    throw new Error(`Forbidden: missing portal scope "${requiredScope}"`);
-  }
-
-  // Direct match on uuid or friendly order code in the session.
-  if (session.orderId && session.orderId === orderId) {
-    return;
-  }
-
-  // Portal users have no Supabase Auth session — use service role for ID
-  // resolution only (cookie was already validated for presence/expiry/scope).
-  const admin = createAdminClient();
-  if (!admin) {
-    throw new Error("Unauthorized");
-  }
-
-  let order: { id: string; order_id: string | null; customer_id: string | null } | null = null;
-
-  if (uuidPattern.test(orderId)) {
-    const { data } = await admin
-      .from("orders")
-      .select("id, order_id, customer_id")
-      .eq("id", orderId)
-      .maybeSingle();
-    order = data;
-  } else {
-    const { data } = await admin
-      .from("orders")
-      .select("id, order_id, customer_id")
-      .eq("order_id", orderId)
-      .maybeSingle();
-    order = data;
-  }
-
-  if (!order) {
-    throw new Error("Unauthorized");
-  }
-
-  if (session.orderId && (session.orderId === order.id || session.orderId === order.order_id)) {
-    return;
-  }
-
-  // Customer-scoped portal tokens (friendly customer_id) may access any of their orders.
-  if (session.customerId) {
-    const { data: customer } = await admin
-      .from("customers")
-      .select("id")
-      .eq("customer_id", session.customerId)
-      .maybeSingle();
-    if (customer && order.customer_id === customer.id) {
-      return;
-    }
-  }
-
-  throw new Error("Unauthorized");
+  const { assertPortalTenantAccess } = await import(
+    "@/utils/portal/portalTenantAuth"
+  );
+  await assertPortalTenantAccess({
+    orderId,
+    requiredScope,
+  });
 }
 
 /**

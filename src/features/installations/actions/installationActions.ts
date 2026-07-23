@@ -6,6 +6,7 @@ import { dispatchWhatsAppNotification } from "@/features/notifications/actions/d
 import { getRequestBaseUrl } from "@/features/notifications/whatsapp/requestBaseUrl";
 import { assertStageEditPermission } from "@/features/orders/workspace/shared/serverPermissions";
 import { revalidateStaffQueuePaths } from "@/features/orders/actions/orderActions";
+import { insertOrderActivity } from "@/features/orders/activity/logOrderActivity";
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -76,7 +77,7 @@ export async function markInstallationCompleted(orderId: string, checklist: any[
 
   const { data: order, error: fetchError } = await supabase
     .from("orders")
-    .select("order_id, stage")
+    .select("order_id, stage, company_id")
     .eq("id", orderId)
     .single();
   if (fetchError) throw fetchError;
@@ -109,9 +110,9 @@ export async function markInstallationCompleted(orderId: string, checklist: any[
     .eq("id", orderId);
   if (orderError) throw orderError;
 
-  await supabase.from("order_activity").insert({
+  await insertOrderActivity(supabase, {
     order_id: order.order_id || orderId,
-    activity_type: "timeline",
+    company_id: order.company_id,
     actor_name: "Installation Team",
     actor_role: "Installation",
     content: `Installation marked complete from "${order.stage}". Pending admin payment review.`,
@@ -127,7 +128,7 @@ export async function scheduleInstallationAction(orderId: string, payload: { sch
   const supabase = await getSupabase();
   
   // Get current order
-  const { data: order, error: fetchError } = await supabase.from("orders").select("stage, order_id").eq("id", orderId).single();
+  const { data: order, error: fetchError } = await supabase.from("orders").select("stage, order_id, company_id").eq("id", orderId).single();
   if (fetchError) throw new Error(fetchError.message);
 
   // Upsert so it works even if the installations row doesn't exist yet
@@ -145,9 +146,9 @@ export async function scheduleInstallationAction(orderId: string, payload: { sch
   }
 
   // Activity Log
-  await supabase.from("order_activity").insert({
+  await insertOrderActivity(supabase, {
     order_id: order.order_id || orderId,
-    activity_type: "timeline",
+    company_id: order.company_id,
     actor_name: "System",
     actor_role: "System",
     content: `Installation scheduled for ${payload.scheduledDate} at ${payload.scheduledTime}.`,

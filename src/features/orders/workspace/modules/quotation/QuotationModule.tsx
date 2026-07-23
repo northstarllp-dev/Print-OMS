@@ -1183,9 +1183,9 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
               value={terms}
               disabled={isLocked}
               onChange={(e) => { markDirty(); setTerms(e.target.value); }}
-              rows={10}
+              rows={4}
               placeholder="Terms and conditions - late fees, payment methods, delivery schedule"
-              className={`${inputCls} w-full min-h-[280px] px-3.5 py-2.5 resize-y bg-white font-medium`}
+              className={`${inputCls} w-full px-3.5 py-2.5 resize-none bg-white font-medium`}
             />
           </div>
         </div>

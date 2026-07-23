@@ -87,7 +87,7 @@ export function EmployeeModal({ isOpen, onClose, onSubmit, initialData, companyI
           <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "16px" }}>
             <div>
               <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#475569", marginBottom: "6px" }}>Email ID</label>
-              <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="e.g. amit@printoms.com" style={{ width: "100%", padding: "10px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "14px", color: "#0f172a", outline: "none", transition: "border-color 0.2s" }} onFocus={(e) => e.currentTarget.style.borderColor = "var(--color-primary)"} onBlur={(e) => e.currentTarget.style.borderColor = "#cbd5e1"} />
+              <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="e.g. name@company.com" style={{ width: "100%", padding: "10px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "14px", color: "#0f172a", outline: "none", transition: "border-color 0.2s" }} onFocus={(e) => e.currentTarget.style.borderColor = "var(--color-primary)"} onBlur={(e) => e.currentTarget.style.borderColor = "#cbd5e1"} />
             </div>
           </div>
 

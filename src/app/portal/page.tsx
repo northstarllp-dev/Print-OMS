@@ -4,7 +4,7 @@ import {
   verifyPortalToken,
   isTokenRevoked,
 } from "@/utils/portal-tokens";
-import { checkRateLimit } from "@/utils/rate-limiter";
+import { checkRateLimit, clientIpFromHeaders } from "@/utils/rate-limiter";
 import { PortalClient } from "./PortalClient";
 import React from "react";
 import { mapSiteVisitFromDb, mapSiteVisitMeasurementFromDb } from "@/features/orders/actions/siteVisitMapper";
@@ -35,13 +35,13 @@ export default async function PortalPage({
 
   // ── Rate limiting ──
   const headersList = await headers();
-  const clientIp = headersList.get("x-forwarded-for") || "anonymous";
+  const clientIp = clientIpFromHeaders(headersList);
   const rate = checkRateLimit(`portal-page-${clientIp}-${tokenParam.slice(0, 16)}`);
   if (!rate.allowed) {
     return (
       <PortalError
         title="Too Many Requests"
-        message="Please wait a few minutes and try again."
+        message={`Please wait ${rate.retryAfter ?? 30} seconds and try again.`}
       />
     );
   }
@@ -111,17 +111,48 @@ export default async function PortalPage({
 
   let customerData = customersMatch[0];
 
+  // Prefer customer row matching this deploy's company_id
+  let deployId: string | null = null;
+  try {
+    const { getPortalDeployCompanyId } = await import(
+      "@/utils/portal/portalTenantAuth"
+    );
+    deployId = getPortalDeployCompanyId();
+    const tenantMatch = customersMatch.find((c) => c.company_id === deployId);
+    if (tenantMatch) customerData = tenantMatch;
+  } catch {
+    /* continue — assert below */
+  }
+
+  // Deploy slug + company_id must match (prevent cross-tenant portal access)
+  try {
+    const { assertCompanyMatchesDeploy } = await import(
+      "@/utils/portal/portalTenantAuth"
+    );
+    assertCompanyMatchesDeploy(customerData.company_id);
+  } catch {
+    return (
+      <PortalError
+        title="Wrong Workspace"
+        message="Unauthorized access. This portal link belongs to a different client workspace."
+      />
+    );
+  }
+
   // If there are multiple customers with the same friendly ID (due to multi-tenancy),
   // try to disambiguate using the orderId from the payload if present.
   if (customersMatch.length > 1) {
     if (payload.orderId) {
-      let orderQuery = admin.from("orders").select("customer_id");
+      let orderQuery = admin.from("orders").select("customer_id, company_id");
       const isOrderUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(payload.orderId);
       
       if (isOrderUUID) {
         orderQuery = orderQuery.eq("id", payload.orderId);
       } else {
         orderQuery = orderQuery.eq("order_id", payload.orderId);
+      }
+      if (deployId) {
+        orderQuery = orderQuery.eq("company_id", deployId);
       }
 
       const { data: ordersMatch } = await orderQuery;
@@ -348,6 +379,7 @@ export default async function PortalPage({
 }
 
 import { Logo } from "@/components/ui/Logo";
+import { loadClientConfig } from "@/config/loadClientConfig";
 
 function PortalError({ title, message }: { title: string; message: string }) {
   return (
@@ -413,7 +445,7 @@ function PortalError({ title, message }: { title: string; message: string }) {
         </p>
         <div style={{ marginTop: 32 }}>
           <p style={{ fontSize: 12, color: "#737780", margin: 0, fontWeight: 700 }}>
-            PRINTOMS Signage Solutions
+            {loadClientConfig().name} Signage Solutions
           </p>
         </div>
       </div>

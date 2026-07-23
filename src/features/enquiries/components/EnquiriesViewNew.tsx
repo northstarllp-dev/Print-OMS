@@ -916,11 +916,12 @@ export function WelcomeMessageModal({ isOpen, onClose, customerInfo }: WelcomeMe
         params.append("order_id", customerInfo.orderId);
       }
       fetch(withBasePath(`/api/portal-token?${params.toString()}`))
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.url) {
-            setPortalUrl(data.url);
+        .then(async (res) => {
+          const data = await res.json();
+          if (!res.ok || !data.url) {
+            throw new Error(data.error || "Failed to generate portal link");
           }
+          setPortalUrl(data.url);
           setLoading(false);
         })
         .catch((err) => {

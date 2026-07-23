@@ -1,20 +1,8 @@
 import type { OrderStage, StageActor, StagePermission } from "./types";
-
-export const PRINTOMS_COMPANY_ID = "11111111-1111-1111-1111-111111111111";
-export const BOARD_COMPANY_ID = "22222222-2222-2222-2222-222222222222";
-
-/**
- * Tenants that use dedicated /production and /installation floor/kiosk portals.
- * All other staff (including production/installation grant holders) use /staff/login.
- */
-export const TENANT_USES_FLOOR_PORTALS: Record<string, boolean> = {
-  [PRINTOMS_COMPANY_ID]: true,
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Grant matrix — per stage { canView, canEdit }.
-// Sidebar queues derive from canEdit; order-timeline navigation uses canView.
-// ─────────────────────────────────────────────────────────────────────────────
+import type { RoleStageGrantMapConfig } from "@/config/schema";
+import { clientRegistry } from "@/config/registry";
+import { mergeConfig } from "@/config/mergeConfig";
+import { loadClientConfig } from "@/config/loadClientConfig";
 
 export type RoleStageGrantMap = Partial<Record<OrderStage, StagePermission>>;
 
@@ -25,21 +13,9 @@ function edit(...stages: OrderStage[]): RoleStageGrantMap {
   return map;
 }
 
-/** Sugar for "view-only on these stages". */
-function view(...stages: OrderStage[]): RoleStageGrantMap {
-  const map: RoleStageGrantMap = {};
-  for (const s of stages) map[s] = { canView: true, canEdit: false };
-  return map;
-}
-
-/** Combine multiple partial maps (later ones override earlier). */
-function merge(...maps: RoleStageGrantMap[]): RoleStageGrantMap {
-  return Object.assign({}, ...maps);
-}
-
 /**
  * Default stage grants by staff_role. Used when no tenant-specific override
- * exists in TENANT_ROLE_STAGE_GRANTS for the actor's company_id.
+ * exists for the actor's company_id.
  */
 export const DEFAULT_STAGE_GRANTS_BY_ROLE: Record<string, RoleStageGrantMap> = {
   Production: edit("production", "service_tickets"),
@@ -48,28 +24,56 @@ export const DEFAULT_STAGE_GRANTS_BY_ROLE: Record<string, RoleStageGrantMap> = {
   Marketer: edit("site_visit", "quotation"),
 };
 
-/**
- * Per-tenant stage grant overrides, keyed by company_id → staff_role → matrix.
- */
-export const TENANT_ROLE_STAGE_GRANTS: Record<string, Record<string, RoleStageGrantMap>> = {
-  [PRINTOMS_COMPANY_ID]: {
-    Designer: merge(view("site_visit"), edit("design", "quotation")),
-    Production: merge(view("site_visit"), edit("production", "service_tickets")),
-    Installation: edit("installation"),
-  },
-  [BOARD_COMPANY_ID]: {
-    Designer: merge(view("site_visit"), edit("design", "quotation")),
-    "Production & Service": merge(view("site_visit"), edit("production", "service_tickets")),
-    "Recce & Installation": edit("site_visit", "installation"),
-  },
-};
+function toRoleMap(
+  cfg?: RoleStageGrantMapConfig
+): RoleStageGrantMap | undefined {
+  if (!cfg) return undefined;
+  return cfg as RoleStageGrantMap;
+}
+
+/** company_id → staff_role → grant map, built from all registered clients */
+function buildTenantRoleGrants(): Record<string, Record<string, RoleStageGrantMap>> {
+  const out: Record<string, Record<string, RoleStageGrantMap>> = {};
+  for (const partial of Object.values(clientRegistry)) {
+    const full = mergeConfig(partial);
+    if (!full.companyId || !full.stageGrantsByRole) continue;
+    const roleMap: Record<string, RoleStageGrantMap> = {};
+    for (const [role, grants] of Object.entries(full.stageGrantsByRole)) {
+      const mapped = toRoleMap(grants);
+      if (mapped) roleMap[role] = mapped;
+    }
+    out[full.companyId] = roleMap;
+  }
+  return out;
+}
+
+/** company_id → uses floor portals */
+function buildFloorPortalMap(): Record<string, boolean> {
+  const out: Record<string, boolean> = {};
+  for (const partial of Object.values(clientRegistry)) {
+    const full = mergeConfig(partial);
+    if (!full.companyId) continue;
+    out[full.companyId] = full.usesFloorPortals === true;
+  }
+  return out;
+}
+
+const TENANT_ROLE_STAGE_GRANTS = buildTenantRoleGrants();
+const TENANT_USES_FLOOR_PORTALS = buildFloorPortalMap();
 
 export function tenantUsesFloorPortals(actor: StageActor): boolean {
   if (!actor.company_id) return false;
   return TENANT_USES_FLOOR_PORTALS[actor.company_id] === true;
 }
 
-const ALL_STAGES: OrderStage[] = ["site_visit", "quotation", "design", "production", "installation", "service_tickets"];
+const ALL_STAGES: OrderStage[] = [
+  "site_visit",
+  "quotation",
+  "design",
+  "production",
+  "installation",
+  "service_tickets",
+];
 
 function adminGrantMap(): RoleStageGrantMap {
   const map: RoleStageGrantMap = {};
@@ -82,12 +86,17 @@ export function resolveRoleGrantMap(actor: StageActor): RoleStageGrantMap {
   if (actor.role === "admin") return adminGrantMap();
   if (actor.role !== "staff") return {};
   const staffRole = actor.staff_role ?? "";
-  const tenantGrants = actor.company_id ? TENANT_ROLE_STAGE_GRANTS[actor.company_id] : undefined;
+  const tenantGrants = actor.company_id
+    ? TENANT_ROLE_STAGE_GRANTS[actor.company_id]
+    : undefined;
   return tenantGrants?.[staffRole] ?? DEFAULT_STAGE_GRANTS_BY_ROLE[staffRole] ?? {};
 }
 
 /** Resolve the grant for a single stage (defaults to no access when omitted). */
-export function resolveStageGrant(actor: StageActor, stage: OrderStage): StagePermission {
+export function resolveStageGrant(
+  actor: StageActor,
+  stage: OrderStage
+): StagePermission {
   const map = resolveRoleGrantMap(actor);
   return map[stage] ?? { canView: false, canEdit: false };
 }
@@ -108,7 +117,18 @@ export function getViewableStages(actor: StageActor): OrderStage[] {
 export function getStaffRolesForTenant(companyId?: string | null): string[] {
   if (companyId) {
     const tenantMap = TENANT_ROLE_STAGE_GRANTS[companyId];
-    if (tenantMap) return Object.keys(tenantMap);
+    if (tenantMap && Object.keys(tenantMap).length > 0) {
+      return Object.keys(tenantMap);
+    }
+  }
+  // Fall back to deploy client's roles, then defaults
+  try {
+    const deploy = loadClientConfig();
+    if (deploy.stageGrantsByRole && Object.keys(deploy.stageGrantsByRole).length > 0) {
+      return Object.keys(deploy.stageGrantsByRole);
+    }
+  } catch {
+    /* ignore */
   }
   return Object.keys(DEFAULT_STAGE_GRANTS_BY_ROLE);
 }

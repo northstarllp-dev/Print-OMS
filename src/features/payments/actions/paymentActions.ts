@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { Payment, PaymentAmountType, PaymentStatus } from "@/types";
 import { assertAdminOnly } from "@/features/orders/workspace/shared/serverPermissions";
 import { revalidateStaffQueuePaths } from "@/features/orders/actions/orderActions";
+import { insertOrderActivity } from "@/features/orders/activity/logOrderActivity";
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -200,7 +201,7 @@ export async function createPayment(
 
   const { data: order } = await supabase
     .from("orders")
-    .select("order_id, stage")
+    .select("order_id, stage, company_id")
     .eq("id", orderUuid)
     .single();
 
@@ -223,9 +224,9 @@ export async function createPayment(
 
   if (error) throw new Error(error.message);
 
-  await supabase.from("order_activity").insert({
+  await insertOrderActivity(supabase, {
     order_id: order?.order_id || orderUuid,
-    activity_type: "timeline",
+    company_id: order?.company_id,
     actor_name: "System",
     actor_role: "System",
     content: received
@@ -265,13 +266,13 @@ export async function markPaymentReceived(paymentId: string): Promise<Payment> {
 
   const { data: order } = await supabase
     .from("orders")
-    .select("order_id")
+    .select("order_id, company_id")
     .eq("id", current.order_id)
     .single();
 
-  await supabase.from("order_activity").insert({
+  await insertOrderActivity(supabase, {
     order_id: order?.order_id || current.order_id,
-    activity_type: "timeline",
+    company_id: order?.company_id,
     actor_name: "Staff",
     actor_role: "Staff",
     content: `Payment received: "${current.payment_name}".`,

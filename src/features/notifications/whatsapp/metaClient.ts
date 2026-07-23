@@ -1,4 +1,4 @@
-import { HELLO_WORLD_TEMPLATE, WHATSAPP_TEMPLATES, WhatsAppTemplateKey } from "./templates";
+import { HELLO_WORLD_TEMPLATE, getWhatsAppTemplates, WhatsAppTemplateKey } from "./templates";
 
 const GRAPH_API_VERSION = process.env.WHATSAPP_GRAPH_API_VERSION || "v21.0";
 
@@ -36,7 +36,7 @@ export async function sendWhatsAppTemplateMessage(
   const def = input.useHelloWorld
     ? HELLO_WORLD_TEMPLATE
     : input.templateKey
-      ? WHATSAPP_TEMPLATES[input.templateKey]
+      ? getWhatsAppTemplates()[input.templateKey]
       : null;
 
   if (!def) {
