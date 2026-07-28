@@ -51,6 +51,7 @@ const CURRENT_STAGES_BY_QUEUE: Record<OrderStage, readonly string[]> = {
     "Quotation Negotiation",
     "Quotation Approved",
   ],
+  invoice: [], // Not an order queue — dedicated /staff/invoices list
   design: ["Design In Progress", "Design Approved"],
   production: ["Production"],
   installation: ["Ready For Installation", "Installation Scheduled"],
@@ -65,11 +66,13 @@ function stageIndex(stage: string, workflowType?: WorkflowType): number {
 
 function minCurrentIndex(entryStage: OrderStage, workflowType?: WorkflowType): number {
   const current = CURRENT_STAGES_BY_QUEUE[entryStage];
+  if (current.length === 0) return -1;
   return Math.min(...current.map((s) => stageIndex(s, workflowType)));
 }
 
 function maxCurrentIndex(entryStage: OrderStage, workflowType?: WorkflowType): number {
   const current = CURRENT_STAGES_BY_QUEUE[entryStage];
+  if (current.length === 0) return -1;
   return Math.max(...current.map((s) => stageIndex(s, workflowType)));
 }
 

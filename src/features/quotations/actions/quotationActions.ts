@@ -353,6 +353,11 @@ export async function adminMarkQuotationApprovedAction(orderId: string) {
     metadata: { action: "quotation_approved_by_admin" },
   });
 
+  const { ensureDraftInvoiceFromQuotation } = await import(
+    "@/features/invoices/lib/ensureDraftInvoice"
+  );
+  await ensureDraftInvoiceFromQuotation(uuid, supabase);
+
   revalidateQuotationPaths(friendly, "staff");
 }
 
@@ -363,11 +368,13 @@ export async function customerApproveQuotation(
   portalToken?: string
 ) {
   const supabase = await getSupabase();
-  const { uuid, friendly, companyId } = await resolveOrderId(supabase, orderId);
-  if (!companyId) throw new Error("company_id is required to log quotation activity");
-  await assertPortalOrderOwnership(uuid, portalToken);
+  const { uuid: portalOrderUuid } = await resolveOrderId(supabase, orderId);
+  await assertPortalOrderOwnership(portalOrderUuid, portalToken);
 
+  // Portal/anon RLS cannot read company_id — resolve via service role after ownership check.
   const admin = requireAdminClient();
+  const { uuid, friendly, companyId } = await resolveOrderId(admin, portalOrderUuid);
+  if (!companyId) throw new Error("company_id is required to log quotation activity");
 
   const { data: qt } = await admin
     .from("quotations")
@@ -400,6 +407,11 @@ export async function customerApproveQuotation(
     metadata: { action: "quotation_approved_by_customer" },
   });
 
+  const { ensureDraftInvoiceFromQuotation } = await import(
+    "@/features/invoices/lib/ensureDraftInvoice"
+  );
+  await ensureDraftInvoiceFromQuotation(uuid, admin);
+
   revalidateQuotationPaths(friendly);
 }
 
@@ -414,11 +426,13 @@ export async function customerRequestRevision(
   if (!trimmed) throw new Error("Feedback is required");
 
   const supabase = await getSupabase();
-  const { uuid, friendly, companyId } = await resolveOrderId(supabase, orderId);
-  if (!companyId) throw new Error("company_id is required to log quotation activity");
-  await assertPortalOrderOwnership(uuid, portalToken);
+  const { uuid: portalOrderUuid } = await resolveOrderId(supabase, orderId);
+  await assertPortalOrderOwnership(portalOrderUuid, portalToken);
 
+  // Portal/anon RLS cannot read company_id — resolve via service role after ownership check.
   const admin = requireAdminClient();
+  const { uuid, friendly, companyId } = await resolveOrderId(admin, portalOrderUuid);
+  if (!companyId) throw new Error("company_id is required to log quotation activity");
 
   const { data: qt } = await admin
     .from("quotations")

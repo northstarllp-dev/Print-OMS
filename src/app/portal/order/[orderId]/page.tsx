@@ -206,6 +206,28 @@ export default async function OrderDetailPage({
     updatedAt: quotationData.updated_at as string | undefined,
   } : null;
 
+  const { data: invoiceRow } = await admin
+    .from("invoices")
+    .select("*")
+    .eq("order_id", orderData.id)
+    .maybeSingle();
+  const invoiceDetails = invoiceRow
+    ? {
+        invoiceId: invoiceRow.invoice_id as string,
+        status: invoiceRow.status as string,
+        invoiceDate: invoiceRow.invoice_date as string | null,
+        dueDate: invoiceRow.due_date as string | null,
+        signageOptions: invoiceRow.signage_options || [],
+        discount: Number(invoiceRow.discount || 0),
+        shipping: Number(invoiceRow.shipping || 0),
+        subtotal: Number(invoiceRow.subtotal || 0),
+        tax: Number(invoiceRow.tax || 0),
+        grandTotal: Number(invoiceRow.grand_total || 0),
+        notes: invoiceRow.notes as string | null,
+        terms: invoiceRow.terms as string | null,
+      }
+    : null;
+
   // Find the site visit for this order
   const { data: sv } = await admin
     .from("site_visits")
@@ -259,6 +281,7 @@ export default async function OrderDetailPage({
         : (orderData.site_visits || null)
     ),
     quoteDetails,
+    invoiceDetails,
     design: toCustomerVisibleDesign(
       Array.isArray(orderData.designs) && orderData.designs.length > 0
         ? mapDesignFromDb(orderData.designs[0])

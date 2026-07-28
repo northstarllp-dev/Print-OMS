@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Printer } from "lucide-react";
+import { Download, Printer } from "lucide-react";
 import {
   hasBankDetails,
   type InvoiceProfile,
@@ -23,9 +23,15 @@ import { Logo } from "@/components/ui/Logo";
 export interface QuotationDocumentProps {
   quotationId?: string | null;
   quoteDate?: string | Date | null;
+  /** Optional due date (shown on invoices). */
+  dueDate?: string | Date | null;
   status?: string | null;
   /** When false, omit status line (customer PDF look). Default true for builder preview. */
   showStatus?: boolean;
+  /** Document heading. Default "QUOTATION". */
+  documentTitle?: string;
+  /** Label above the date. Default "Quote Date". */
+  dateLabel?: string;
   billToName: string;
   billToAddress?: string | null;
   placeOfSupply?: string | null;
@@ -41,14 +47,22 @@ export interface QuotationDocumentProps {
   siteVisitItems?: any[];
   /** Show print button (hidden in print media). */
   showPrintButton?: boolean;
+  /**
+   * combined = one "Print / Save as PDF" button (default).
+   * split = separate Print + Download PDF buttons (invoice UX).
+   */
+  printButtonMode?: "combined" | "split";
   className?: string;
 }
 
 export function QuotationDocument({
   quotationId,
   quoteDate,
+  dueDate,
   status,
   showStatus = true,
+  documentTitle = "QUOTATION",
+  dateLabel = "Quote Date",
   billToName,
   billToAddress,
   placeOfSupply,
@@ -63,6 +77,7 @@ export function QuotationDocument({
   invoiceProfile,
   siteVisitItems = [],
   showPrintButton = true,
+  printButtonMode = "combined",
   className = "",
 }: QuotationDocumentProps) {
   const taxSplit = invoiceProfile?.taxSplit || "cgst_sgst";
@@ -138,12 +153,14 @@ export function QuotationDocument({
     const htmlClass = document.documentElement.className;
     const bodyClass = document.body.className;
 
+    const printTitle = [documentTitle, quotationId].filter(Boolean).join(" ");
+
     doc.open();
     doc.write(`<!DOCTYPE html>
 <html lang="en" class="${htmlClass}">
 <head>
   <meta charset="utf-8" />
-  <title></title>
+  <title>${printTitle.replace(/</g, "")}</title>
   ${stylesheetTags}
   ${inlineStyleTags}
   <style>${QUOTATION_IFRAME_PRINT_CSS}</style>
@@ -263,15 +280,37 @@ export function QuotationDocument({
         }
       `}</style>
       {showPrintButton && (
-        <div className="quotation-no-print mb-3 flex justify-stretch sm:justify-end">
-          <button
-            type="button"
-            onClick={handlePrint}
-            className="inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-700 shadow-sm hover:bg-slate-50"
-          >
-            <Printer size={14} />
-            Print / Save as PDF
-          </button>
+        <div className="quotation-no-print mb-3 flex flex-col sm:flex-row justify-stretch sm:justify-end gap-2">
+          {printButtonMode === "split" ? (
+            <>
+              <button
+                type="button"
+                onClick={handlePrint}
+                className="inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-700 shadow-sm hover:bg-slate-50"
+              >
+                <Printer size={14} />
+                Print
+              </button>
+              <button
+                type="button"
+                onClick={handlePrint}
+                className="inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-lg border border-slate-800 bg-slate-900 px-3 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-slate-800"
+                title="Opens print dialog — choose Save as PDF"
+              >
+                <Download size={14} />
+                Download PDF
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={handlePrint}
+              className="inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-700 shadow-sm hover:bg-slate-50"
+            >
+              <Printer size={14} />
+              Print / Save as PDF
+            </button>
+          )}
         </div>
       )}
 
@@ -320,7 +359,7 @@ export function QuotationDocument({
 
                   <div className="quotation-sheet-meta-right sm:text-right shrink-0">
                     <p className="quotation-sheet-title text-xl sm:text-2xl lg:text-3xl font-black tracking-wide text-[#1e293b]">
-                      QUOTATION
+                      {documentTitle}
                     </p>
                     <p className="mt-1 text-sm font-mono font-bold text-slate-700 break-all">
                       {quotationId || "—"}
@@ -349,7 +388,7 @@ export function QuotationDocument({
                   <div className="quotation-sheet-meta-right sm:text-right space-y-2">
                     <div>
                       <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                        Quote Date
+                        {dateLabel}
                       </p>
                       <p
                         className="mt-0.5 text-sm font-semibold text-slate-800"
@@ -358,6 +397,19 @@ export function QuotationDocument({
                         {formatQuoteDate(quoteDate)}
                       </p>
                     </div>
+                    {dueDate && (
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                          Due Date
+                        </p>
+                        <p
+                          className="mt-0.5 text-sm font-semibold text-slate-800"
+                          suppressHydrationWarning
+                        >
+                          {formatQuoteDate(dueDate)}
+                        </p>
+                      </div>
+                    )}
                     {resolvedPlace && (
                       <div>
                         <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">

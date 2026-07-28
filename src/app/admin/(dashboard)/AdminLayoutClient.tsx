@@ -28,6 +28,7 @@ import {
   CalendarDays,
   Boxes,
   Plug,
+  FileText,
 } from "lucide-react";
 import { Logo } from "@/components/ui/Logo";
 import { PlatformMadeWithLove } from "@/components/ui/PlatformMadeWithLove";
@@ -66,6 +67,7 @@ const NAV_ITEMS = [
   { id: "/production/orders", label: "Production", icon: Factory, countKey: "production" },
   { id: "/installation/orders", label: "Installation", icon: Wrench, countKey: "installation" },
   { id: "/admin/payments", label: "Payments", icon: IndianRupee },
+  { id: "/admin/invoices", label: "Invoices", icon: FileText },
   { id: "/admin/calendar", label: "Calendar", icon: CalendarDays },
   { id: "/admin/inventory", label: "Inventory", icon: Boxes },
   { id: "/admin/products", label: "Products", icon: Package },

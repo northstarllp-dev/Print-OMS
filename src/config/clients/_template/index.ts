@@ -8,6 +8,7 @@ const edit = (
   ...stages: Array<
     | "site_visit"
     | "quotation"
+    | "invoice"
     | "design"
     | "production"
     | "installation"
@@ -51,7 +52,7 @@ export const templateClientConfig: Partial<PrintOMSClientConfig> = {
     Production: edit("production", "service_tickets"),
     Installation: edit("site_visit", "installation"),
     Designer: edit("site_visit", "design"),
-    Marketer: edit("site_visit", "quotation"),
+    Marketer: edit("site_visit", "quotation", "invoice"),
   },
   whatsappTemplatePrefix: "PLACEHOLDER_SLUG_",
 };

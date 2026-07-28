@@ -1,12 +1,12 @@
 import { PrintOMSClientConfig } from "../../schema";
 
-const edit = (...stages: Array<"site_visit" | "quotation" | "design" | "production" | "installation" | "service_tickets">) => {
+const edit = (...stages: Array<"site_visit" | "quotation" | "invoice" | "design" | "production" | "installation" | "service_tickets">) => {
   const map: NonNullable<PrintOMSClientConfig["stageGrantsByRole"]>[string] = {};
   for (const s of stages) map[s] = { canView: true, canEdit: true };
   return map;
 };
 
-const view = (...stages: Array<"site_visit" | "quotation" | "design" | "production" | "installation" | "service_tickets">) => {
+const view = (...stages: Array<"site_visit" | "quotation" | "invoice" | "design" | "production" | "installation" | "service_tickets">) => {
   const map: NonNullable<PrintOMSClientConfig["stageGrantsByRole"]>[string] = {};
   for (const s of stages) map[s] = { canView: true, canEdit: false };
   return map;
@@ -42,7 +42,7 @@ export const theBoardCompanyConfig: Partial<PrintOMSClientConfig> = {
   },
   usesFloorPortals: false,
   stageGrantsByRole: {
-    Designer: { ...view("site_visit"), ...edit("design", "quotation") },
+    Designer: { ...view("site_visit"), ...edit("design", "quotation", "invoice") },
     "Production & Service": { ...view("site_visit"), ...edit("production", "service_tickets") },
     "Recce & Installation": edit("site_visit", "installation"),
   },

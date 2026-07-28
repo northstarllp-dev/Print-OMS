@@ -25,6 +25,7 @@ const ProductionStageStub: React.FC = () => (
 export const stageModules: Record<OrderStage, ComponentType<any>> = {
   site_visit: SiteVisitModule,
   quotation: QuotationModule,
+  invoice: () => null,
   design: DesignModule,
   production: ProductionStageStub,
   installation: InstallationModule,

@@ -34,6 +34,7 @@ Feature-level specs (same folder):
 | ---- | ---- |
 | Payment milestones | [`specs/payments.md`](./payments.md) |
 | Quotation | [`specs/quotation.md`](./quotation.md) |
+| Invoice | [`specs/invoice.md`](./invoice.md) |
 | Designer workflow | [`specs/designer-workflow.md`](./designer-workflow.md) |
 | Customer approval | [`specs/customer-approval.md`](./customer-approval.md) |
 | Customer portal | [`specs/customer-portal.md`](./customer-portal.md) |

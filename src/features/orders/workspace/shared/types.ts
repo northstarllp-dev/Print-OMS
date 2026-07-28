@@ -1,6 +1,7 @@
 export type OrderStage =
   | "site_visit"
   | "quotation"
+  | "invoice"
   | "design"
   | "production"
   | "installation"

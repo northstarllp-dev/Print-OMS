@@ -4,6 +4,13 @@
 
 ### Added
 
+#### Invoice Builder Module
+* **Invoices table**: New `public.invoices` table with automated configurable invoice numbers (per-company prefix / FY / start / reset), one invoice per order, company-scoped RLS; migrated on PrintOMS-dev-db and PrintOMS-prod-db.
+* **Auto-create on quote approval**: Approving a quotation (customer or admin) creates a Draft invoice copying line items and totals from the quote.
+* **Admin + Staff nav**: Dedicated Invoices list and editable builder (Zoho-style) with Preview/Print PDF, Send, Mark Paid, and Void.
+* **RBAC**: New `invoice` stage grant (Marketer and quotation editors by default); portal Invoice tab is read-only for Sent/Paid invoices.
+* **Spec**: `specs/invoice.md`.
+
 #### Order Assignment System
 * **Assigned Admins Column**: Added a new database migration (`20260708061027_add_assigned_admins_to_orders.sql`) to add an `assigned_admins` column (`text[]`) to the `orders` table.
 * **Enquiry Conversion Assignment**: Updated the "Convert to Order" modal (`EnquiriesViewNew.tsx`) to include a new "Assign Admins" field below the Business Name field. This allows users to select one or multiple admins to be assigned to the order at the time of conversion.

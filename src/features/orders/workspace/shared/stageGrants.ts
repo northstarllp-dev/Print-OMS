@@ -21,7 +21,7 @@ export const DEFAULT_STAGE_GRANTS_BY_ROLE: Record<string, RoleStageGrantMap> = {
   Production: edit("production", "service_tickets"),
   Installation: edit("site_visit", "installation"),
   Designer: edit("site_visit", "design"),
-  Marketer: edit("site_visit", "quotation"),
+  Marketer: edit("site_visit", "quotation", "invoice"),
 };
 
 function toRoleMap(
@@ -69,6 +69,7 @@ export function tenantUsesFloorPortals(actor: StageActor): boolean {
 const ALL_STAGES: OrderStage[] = [
   "site_visit",
   "quotation",
+  "invoice",
   "design",
   "production",
   "installation",
@@ -171,6 +172,7 @@ export function getStaffHomePath(actor: StageActor): string {
 
 export type StaffNavIcon =
   | "orders"
+  | "invoice"
   | "site_visit"
   | "design"
   | "production"
@@ -199,6 +201,11 @@ const STAGE_NAV: Record<OrderStage, StaffNavItem> = {
     label: "Quotations",
     icon: "orders",
     orderDetailEntryStage: "quotation",
+  },
+  invoice: {
+    href: "/staff/invoices",
+    label: "Invoices",
+    icon: "invoice",
   },
   design: {
     href: "/staff/design",
@@ -229,6 +236,7 @@ const STAGE_NAV: Record<OrderStage, StaffNavItem> = {
 const NAV_STAGE_ORDER: OrderStage[] = [
   "site_visit",
   "quotation",
+  "invoice",
   "design",
   "production",
   "installation",
@@ -258,6 +266,7 @@ export function getNavItemsForActor(actor: StageActor): StaffNavItem[] {
 const BACK_HREF_BY_STAGE: Record<OrderStage, string> = {
   site_visit: "/staff/site-visit",
   quotation: "/staff/orders",
+  invoice: "/staff/invoices",
   design: "/staff/design",
   production: "/staff/production",
   installation: "/staff/installation",
