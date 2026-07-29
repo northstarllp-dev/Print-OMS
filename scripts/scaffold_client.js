@@ -99,7 +99,6 @@ export const ${exportName}: Partial<PrintOMSClientConfig> = {
 const envExample = `# ── Identity (${name}) ──
 CLIENT_SLUG=${slug}
 NEXT_PUBLIC_CLIENT_SLUG=${slug}
-NEXT_PUBLIC_SITE_URL=https://${slug}.example.com
 
 # ── WhatsApp (WABA) ──
 WHATSAPP_ACCESS_TOKEN=

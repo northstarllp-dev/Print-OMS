@@ -459,14 +459,14 @@ export function CustomersViewNew({
                           ) : (
                             <button
                               type="button"
-                              onClick={(e) => handleCopyLink(cust.customerId || cust.id, e)}
+                              onClick={(e) => handleCopyLink(cust.id, e)}
                               className="px-2.5 py-1.5 rounded-md text-[11px] font-semibold text-white"
                               style={{
-                                background: copiedCustomerId === (cust.customerId || cust.id) ? "#dcfce7" : "var(--color-secondary)",
-                                color: copiedCustomerId === (cust.customerId || cust.id) ? "#16a34a" : "white",
+                                background: copiedCustomerId === cust.id ? "#dcfce7" : "var(--color-secondary)",
+                                color: copiedCustomerId === cust.id ? "#16a34a" : "white",
                               }}
                             >
-                              {copiedCustomerId === (cust.customerId || cust.id) ? "Copied!" : "Copy Magic Link"}
+                              {copiedCustomerId === cust.id ? "Copied!" : "Copy Magic Link"}
                             </button>
                           )}
                         </div>
@@ -539,20 +539,20 @@ export function CustomersViewNew({
                           </span>
                         ) : (
                           <button
-                            onClick={(e) => handleCopyLink(cust.customerId || cust.id, e)}
+                            onClick={(e) => handleCopyLink(cust.id, e)}
                             style={{
                               padding: "6px 12px",
-                              background: copiedCustomerId === (cust.customerId || cust.id) ? "#dcfce7" : "var(--color-secondary)",
+                              background: copiedCustomerId === cust.id ? "#dcfce7" : "var(--color-secondary)",
                               border: "none",
                               borderRadius: "6px",
                               fontSize: "11px",
                               fontWeight: "600",
-                              color: copiedCustomerId === (cust.customerId || cust.id) ? "#16a34a" : "white",
+                              color: copiedCustomerId === cust.id ? "#16a34a" : "white",
                               cursor: "pointer",
                               transition: "all 0.2s"
                             }}
                           >
-                            {copiedCustomerId === (cust.customerId || cust.id) ? "Copied!" : "Copy Magic Link"}
+                            {copiedCustomerId === cust.id ? "Copied!" : "Copy Magic Link"}
                           </button>
                         )}
                       </td>
@@ -657,13 +657,13 @@ export function CustomersViewNew({
                             </span>
                           ) : (
                             <button
-                              onClick={(e) => handleCopyOrderLink(selectedCustomer.customerId || selectedCustomer.id, o.orderId || o.id, e)}
+                              onClick={(e) => handleCopyOrderLink(selectedCustomer.id, o.id, e)}
                               className={`p-1 rounded border transition ${
-                                copiedOrderId === (o.orderId || o.id)
+                                copiedOrderId === o.id
                                   ? "bg-emerald-50 border-emerald-250 text-[var(--color-success)]"
                                   : "bg-white border-slate-200 text-slate-500 hover:text-slate-700 hover:bg-slate-50"
                               }`}
-                              title={copiedOrderId === (o.orderId || o.id) ? "Copied!" : "Copy Order Magic Link"}
+                              title={copiedOrderId === o.id ? "Copied!" : "Copy Order Magic Link"}
                             >
                               <Share2 size={12} />
                             </button>

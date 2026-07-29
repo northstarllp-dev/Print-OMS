@@ -825,7 +825,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   const handleCopyMagicLink = async () => {
     if (!client) return;
     try {
-      const res = await fetch(withBasePath(`/api/portal-token?customer_id=${client.customerId || client.id}&order_id=${order.orderId || order.id}`));
+      const res = await fetch(withBasePath(`/api/portal-token?customer_id=${client.id}&order_id=${order.id}`));
       const data = await res.json();
       if (!res.ok || !data.url) {
         throw new Error(data.error || "Failed to generate portal link");

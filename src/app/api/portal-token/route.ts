@@ -39,7 +39,6 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // Authenticate caller (must be staff/admin)
   const supabase = await getSupabase();
   const {
     data: { user },
@@ -49,9 +48,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Staff may only mint portal links for customers in their (deploy) company
+  // Resolve to UUIDs so portal tokens never store ambiguous friendly IDs (A004, etc.)
+  let resolvedCustomerUuid: string;
+  let resolvedOrderUuid: string | undefined;
+
   try {
-    const { assertCustomerTenantAccess } = await import(
+    const { assertCustomerTenantAccess, assertOrderTenantAccess } = await import(
       "@/utils/portal/portalTenantAuth"
     );
     const { getCurrentUser } = await import(
@@ -69,12 +71,19 @@ export async function GET(request: NextRequest) {
         { status: 403 }
       );
     }
-    await assertCustomerTenantAccess(customerId);
+
+    const customer = await assertCustomerTenantAccess(customerId);
+    resolvedCustomerUuid = customer.id;
+
     if (orderId) {
-      const { assertOrderTenantAccess } = await import(
-        "@/utils/portal/portalTenantAuth"
-      );
-      await assertOrderTenantAccess(orderId);
+      const order = await assertOrderTenantAccess(orderId);
+      if (order.customer_id && order.customer_id !== customer.id) {
+        return NextResponse.json(
+          { error: "Order does not belong to this customer." },
+          { status: 403 }
+        );
+      }
+      resolvedOrderUuid = order.id;
     }
   } catch (err: any) {
     return NextResponse.json(
@@ -88,18 +97,11 @@ export async function GET(request: NextRequest) {
   );
   const requestBaseUrl = await getRequestBaseUrl();
 
-  let resolvedCustomerId = customerId;
-  let resolvedOrderId = orderId;
-
-  // We intentionally use UUIDs for resolvedCustomerId and resolvedOrderId if provided,
-  // to prevent ambiguous multi-tenant collisions on friendly IDs like 'A002'.
-
-  // Generate a new HMAC-signed portal token and store it for revocation tracking
   try {
     const { token, url } = await generateAndStorePortalToken(
       supabase,
-      resolvedCustomerId,
-      resolvedOrderId || undefined,
+      resolvedCustomerUuid,
+      resolvedOrderUuid,
       { expiresInDays: 30, createdBy: "api", baseUrl: requestBaseUrl }
     );
     return NextResponse.json({ token, url });

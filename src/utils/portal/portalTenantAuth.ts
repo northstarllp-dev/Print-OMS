@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { loadClientConfig } from "@/config/loadClientConfig";
 import { createAdminClient } from "@/utils/supabase/admin";
-import { verifyPortalToken } from "@/utils/portal-tokens";
+import { resolvePortalToken, type PortalTokenPayload } from "@/utils/portal-tokens";
 
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -146,7 +146,7 @@ export async function assertPortalTenantAccess(opts: {
   const session = await readPortalSession();
 
   let authenticated = false;
-  let tokenPayload: ReturnType<typeof verifyPortalToken> = null;
+  let tokenPayload: PortalTokenPayload | null = null;
 
   if (session) {
     if (
@@ -160,7 +160,7 @@ export async function assertPortalTenantAccess(opts: {
   }
 
   if (!authenticated && opts.portalToken) {
-    tokenPayload = verifyPortalToken(opts.portalToken);
+    tokenPayload = await resolvePortalToken(opts.portalToken);
     if (!tokenPayload) throw new Error("Unauthorized");
     if (
       opts.requiredScope &&
@@ -215,7 +215,7 @@ async function assertOwnershipAgainstOrder(
     customer_id: string | null;
   },
   session: PortalSession | null,
-  tokenPayload: ReturnType<typeof verifyPortalToken>
+  tokenPayload: PortalTokenPayload | null
 ): Promise<boolean> {
   const orderRef = session?.orderId || tokenPayload?.orderId;
   if (orderRef && (orderRef === order.id || orderRef === order.order_id)) {

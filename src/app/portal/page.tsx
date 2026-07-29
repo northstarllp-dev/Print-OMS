@@ -1,9 +1,5 @@
-import { cookies, headers } from "next/headers";
-import { createClient } from "@/utils/supabase/server";
-import {
-  verifyPortalToken,
-  isTokenRevoked,
-} from "@/utils/portal-tokens";
+import { headers } from "next/headers";
+import { resolvePortalToken } from "@/utils/portal-tokens";
 import { checkRateLimit, clientIpFromHeaders } from "@/utils/rate-limiter";
 import { PortalClient } from "./PortalClient";
 import React from "react";
@@ -46,8 +42,8 @@ export default async function PortalPage({
     );
   }
 
-  // ── Verify HMAC + expiry ──
-  const payload = verifyPortalToken(tokenParam);
+  // ── Resolve short opaque token (or legacy HMAC) + expiry / revocation ──
+  const payload = await resolvePortalToken(tokenParam);
   if (!payload) {
     return (
       <PortalError
@@ -57,26 +53,7 @@ export default async function PortalPage({
     );
   }
 
-  // ── DB Revocation check ──
-  const cookieStore = await cookies();
-  const supabase = createClient(cookieStore);
   const admin = createAdminClient();
-
-  let isRevoked: boolean;
-  try {
-    isRevoked = await isTokenRevoked(supabase, payload.jti);
-  } catch {
-    isRevoked = true; // treat DB errors as revoked for safety
-  }
-
-  if (isRevoked) {
-    return (
-      <PortalError
-        title="Access Revoked"
-        message="This portal link has been revoked. Please contact Printoms support for a new link."
-      />
-    );
-  }
 
   // ── Fetch data from Supabase ──
   if (!admin) {
@@ -113,13 +90,16 @@ export default async function PortalPage({
 
   // Prefer customer row matching this deploy's company_id
   let deployId: string | null = null;
+  let tenantMatches = customersMatch;
   try {
     const { getPortalDeployCompanyId } = await import(
       "@/utils/portal/portalTenantAuth"
     );
     deployId = getPortalDeployCompanyId();
-    const tenantMatch = customersMatch.find((c) => c.company_id === deployId);
-    if (tenantMatch) customerData = tenantMatch;
+    tenantMatches = customersMatch.filter((c) => c.company_id === deployId);
+    if (tenantMatches.length >= 1) {
+      customerData = tenantMatches[0];
+    }
   } catch {
     /* continue — assert below */
   }
@@ -139,9 +119,8 @@ export default async function PortalPage({
     );
   }
 
-  // If there are multiple customers with the same friendly ID (due to multi-tenancy),
-  // try to disambiguate using the orderId from the payload if present.
-  if (customersMatch.length > 1) {
+  // Ambiguous only when multiple profiles exist for THIS deploy (not cross-tenant)
+  if (tenantMatches.length > 1) {
     if (payload.orderId) {
       let orderQuery = admin.from("orders").select("customer_id, company_id");
       const isOrderUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(payload.orderId);
@@ -158,7 +137,7 @@ export default async function PortalPage({
       const { data: ordersMatch } = await orderQuery;
         
       if (ordersMatch && ordersMatch.length > 0) {
-        const exactMatch = customersMatch.find(c => 
+        const exactMatch = tenantMatches.find(c => 
           ordersMatch.some(o => o.customer_id === c.id)
         );
         if (exactMatch) {
@@ -180,8 +159,6 @@ export default async function PortalPage({
         );
       }
     } else {
-      // Ambiguous customer ID without an order context. 
-      // We cannot safely determine which customer profile to show.
       return (
         <PortalError
           title="Ambiguous Customer ID"
