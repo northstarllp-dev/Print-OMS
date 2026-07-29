@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkRateLimit } from "@/utils/rate-limiter";
 import { createAdminClient } from "@/utils/supabase/admin";
-import { resolvePublicCompanyId } from "@/features/service-tickets/resolvePublicCompanyId";
+import { getDeployCompanyId } from "@/config/loadClientConfig";
 
 function normalizePhone(raw: string): string {
   return raw.replace(/\s+/g, "").trim();
@@ -14,11 +14,15 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json().catch(() => ({}));
-  const rawCompanyId = typeof body.companyId === "string" ? body.companyId : "";
   const phone = normalizePhone(typeof body.phone === "string" ? body.phone : "");
-  const companyId = resolvePublicCompanyId(rawCompanyId);
+  let companyId: string;
+  try {
+    companyId = getDeployCompanyId();
+  } catch {
+    return NextResponse.json({ customer: null, orders: [] });
+  }
 
-  if (!companyId || !phone) {
+  if (!phone) {
     return NextResponse.json({ customer: null, orders: [] });
   }
 
@@ -71,4 +75,3 @@ export async function POST(req: NextRequest) {
     })),
   });
 }
-

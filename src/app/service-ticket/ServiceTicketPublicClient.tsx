@@ -6,10 +6,6 @@ import { Loader2, Upload, CheckCircle2, AlertCircle, Calendar, Tag, Activity, Ph
 import { Logo } from "@/components/ui/Logo";
 import { withBasePath } from "@/lib/appBasePath";
 
-interface ServiceTicketPublicClientProps {
-  companyId: string;
-}
-
 type LookupOrder = {
   id: string;
   orderId: string;
@@ -30,9 +26,7 @@ function isTechnicalError(message: string): boolean {
   );
 }
 
-export default function ServiceTicketPublicClient({
-  companyId,
-}: ServiceTicketPublicClientProps) {
+export default function ServiceTicketPublicClient() {
   const [phone, setPhone] = React.useState("");
   const [orders, setOrders] = React.useState<LookupOrder[]>([]);
   const [customerId, setCustomerId] = React.useState("");
@@ -81,7 +75,7 @@ export default function ServiceTicketPublicClient({
       const res = await fetch(withBasePath("/api/public/service-ticket/lookup"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ companyId, phone: getFormattedPhone() }),
+        body: JSON.stringify({ phone: getFormattedPhone() }),
       });
       const payload = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -119,7 +113,6 @@ export default function ServiceTicketPublicClient({
     setError(null);
     try {
       const formData = new FormData();
-      formData.set("companyId", companyId);
       formData.set("customerId", customerId);
       formData.set("orderId", orderId);
       formData.set("phone", getFormattedPhone());

@@ -17,7 +17,6 @@ export default async function StaffServiceTicketsPage() {
   return (
     <ServiceTicketsView
       initialTickets={tickets}
-      companyId={profile?.company_id ?? ""}
       isAdmin={false}
       canManage={ticketPerm.canManage}
     />

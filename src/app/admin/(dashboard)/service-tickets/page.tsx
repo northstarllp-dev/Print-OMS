@@ -11,7 +11,6 @@ export default async function AdminServiceTicketsPage() {
   return (
     <ServiceTicketsView
       initialTickets={tickets}
-      companyId={profile?.company_id ?? ""}
       isAdmin={profile?.role === "admin"}
       canManage={
         resolveTicketPermission({
