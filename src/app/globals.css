@@ -361,6 +361,101 @@ body {
   margin-right: 16px;
 }
 
+/* Platform "Made with ♥ by Polaris" — shine on glyphs/logo, text never hidden */
+@keyframes polaris-mwl-shine {
+  0%   { background-position: 120% center; }
+  100% { background-position: -120% center; }
+}
+@keyframes polaris-mwl-heart {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 0 transparent); }
+  40%      { transform: scale(1.2); filter: drop-shadow(0 0 6px rgba(239, 68, 68, 0.8)); }
+  60%      { transform: scale(0.95); }
+}
+
+.polaris-mwl {
+  position: relative;
+}
+
+/* Solid base text + optional shine overlay (overlay can be transparent; base cannot) */
+.polaris-mwl-text {
+  position: relative;
+  display: inline-block;
+  color: inherit;
+}
+.polaris-mwl-text-base {
+  color: inherit;
+}
+.polaris-mwl-text-shine {
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: transparent;
+  background-image: linear-gradient(
+    105deg,
+    transparent 0%,
+    transparent 40%,
+    rgba(255, 255, 255, 0.95) 49%,
+    #7dd3fc 50.5%,
+    rgba(255, 255, 255, 0.95) 52%,
+    transparent 60%,
+    transparent 100%
+  );
+  background-size: 250% 100%;
+  background-repeat: no-repeat;
+  background-position: 120% center;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: polaris-mwl-shine 2.8s linear infinite;
+  pointer-events: none;
+  user-select: none;
+}
+.polaris-mwl-text-a .polaris-mwl-text-shine { animation-delay: 0s; }
+.polaris-mwl-text-b .polaris-mwl-text-shine { animation-delay: 0.35s; }
+
+.polaris-mwl-heart {
+  display: inline-flex;
+  align-items: center;
+  animation: polaris-mwl-heart 2.8s ease-in-out 0.2s infinite;
+}
+
+/* Shine masked to logo pixels — never a rectangle */
+.polaris-mwl-logo-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  line-height: 0;
+}
+.polaris-mwl-logo-wrap::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(
+    105deg,
+    transparent 0%,
+    transparent 42%,
+    rgba(255, 255, 255, 0.15) 46%,
+    rgba(255, 255, 255, 0.95) 50%,
+    rgba(125, 211, 252, 0.7) 52%,
+    rgba(255, 255, 255, 0.15) 56%,
+    transparent 60%,
+    transparent 100%
+  );
+  background-size: 250% 100%;
+  background-repeat: no-repeat;
+  background-position: 120% center;
+  animation: polaris-mwl-shine 2.8s linear 0.55s infinite;
+  pointer-events: none;
+  -webkit-mask-image: var(--mwl-logo);
+  mask-image: var(--mwl-logo);
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+}
+
 /* ANIMATIONS */
 @keyframes prt-fade-up {
   from { opacity: 0; transform: translateY(10px); }

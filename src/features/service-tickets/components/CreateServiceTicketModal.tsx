@@ -9,7 +9,6 @@ import {
   lookupOrdersByPhone,
   type TicketPhoto,
 } from "@/features/service-tickets/actions/serviceTicketActions";
-import { loadClientConfig } from "@/config/loadClientConfig";
 import { Logo } from "@/components/ui/Logo";
 import { CopyLinkButton } from "./CopyLinkButton";
 
@@ -36,7 +35,6 @@ export function CreateServiceTicketModal({
   onCreated,
   preset,
 }: CreateServiceTicketModalProps) {
-  const clientConfig = loadClientConfig();
   const digitsFromPreset = (preset?.phone || "").replace(/\D/g, "").replace(/^91/, "");
   const [phone, setPhone] = React.useState(digitsFromPreset);
   const [description, setDescription] = React.useState("");
@@ -197,7 +195,7 @@ export function CreateServiceTicketModal({
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <CopyLinkButton companyId={clientConfig.companyId} />
+            <CopyLinkButton />
             <button
               type="button"
               onClick={onClose}

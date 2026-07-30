@@ -2,28 +2,15 @@
 
 import React from "react";
 import { Link2 } from "lucide-react";
-import { loadClientConfig } from "@/config/loadClientConfig";
 import { withBasePath } from "@/lib/appBasePath";
-import { resolvePublicCompanyId } from "@/features/service-tickets/resolvePublicCompanyId";
 
-interface CopyLinkButtonProps {
-  /** Company UUID preferred; slug is accepted and resolved to UUID. */
-  companyId: string;
-}
-
-export function CopyLinkButton({ companyId }: CopyLinkButtonProps) {
+export function CopyLinkButton() {
   const [copied, setCopied] = React.useState(false);
 
   const handleCopy = async () => {
-    const resolved =
-      resolvePublicCompanyId(companyId) || loadClientConfig().companyId;
-    if (!resolved) {
-      alert("Unable to build portal link: company is not configured.");
-      return;
-    }
     const base =
       typeof window !== "undefined" ? window.location.origin : "";
-    const shareLink = `${base}${withBasePath(`/service-ticket/${resolved}`)}`;
+    const shareLink = `${base}${withBasePath("/service-ticket")}`;
     try {
       await navigator.clipboard.writeText(shareLink);
       setCopied(true);

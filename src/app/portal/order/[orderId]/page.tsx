@@ -1,10 +1,6 @@
-import { cookies, headers } from "next/headers";
-import { createClient } from "@/utils/supabase/server";
+import { headers } from "next/headers";
 import { createAdminClient } from "@/utils/supabase/admin";
-import {
-  verifyPortalToken,
-  isTokenRevoked,
-} from "@/utils/portal-tokens";
+import { resolvePortalToken } from "@/utils/portal-tokens";
 import { checkRateLimit, clientIpFromHeaders } from "@/utils/rate-limiter";
 import { Info, Clock, CheckCircle, Check, Loader2, PlayCircle, MapPin, Search } from "lucide-react";
 import { mapSiteVisitFromDb, mapSiteVisitMeasurementFromDb } from "@/features/orders/actions/siteVisitMapper";
@@ -51,8 +47,8 @@ export default async function OrderDetailPage({
     );
   }
 
-  // ── Verify HMAC + expiry ──
-  const payload = verifyPortalToken(tokenParam);
+  // ── Resolve short opaque token (or legacy HMAC) + expiry / revocation ──
+  const payload = await resolvePortalToken(tokenParam);
   if (!payload) {
     return (
       <PortalError
@@ -62,9 +58,6 @@ export default async function OrderDetailPage({
     );
   }
 
-  // ── DB Revocation check ──
-  const cookieStore = await cookies();
-  const supabase = createClient(cookieStore);
   const admin = createAdminClient();
 
   if (!admin) {
@@ -72,22 +65,6 @@ export default async function OrderDetailPage({
       <PortalError
         title="Server Configuration Error"
         message="Portal service is temporarily unavailable. Please contact support."
-      />
-    );
-  }
-
-  let isRevoked: boolean;
-  try {
-    isRevoked = await isTokenRevoked(admin, payload.jti);
-  } catch {
-    isRevoked = true;
-  }
-
-  if (isRevoked) {
-    return (
-      <PortalError
-        title="Access Revoked"
-        message="This portal link has been revoked. Please contact Printoms support for a new link."
       />
     );
   }
@@ -206,6 +183,28 @@ export default async function OrderDetailPage({
     updatedAt: quotationData.updated_at as string | undefined,
   } : null;
 
+  const { data: invoiceRow } = await admin
+    .from("invoices")
+    .select("*")
+    .eq("order_id", orderData.id)
+    .maybeSingle();
+  const invoiceDetails = invoiceRow
+    ? {
+        invoiceId: invoiceRow.invoice_id as string,
+        status: invoiceRow.status as string,
+        invoiceDate: invoiceRow.invoice_date as string | null,
+        dueDate: invoiceRow.due_date as string | null,
+        signageOptions: invoiceRow.signage_options || [],
+        discount: Number(invoiceRow.discount || 0),
+        shipping: Number(invoiceRow.shipping || 0),
+        subtotal: Number(invoiceRow.subtotal || 0),
+        tax: Number(invoiceRow.tax || 0),
+        grandTotal: Number(invoiceRow.grand_total || 0),
+        notes: invoiceRow.notes as string | null,
+        terms: invoiceRow.terms as string | null,
+      }
+    : null;
+
   // Find the site visit for this order
   const { data: sv } = await admin
     .from("site_visits")
@@ -259,6 +258,7 @@ export default async function OrderDetailPage({
         : (orderData.site_visits || null)
     ),
     quoteDetails,
+    invoiceDetails,
     design: toCustomerVisibleDesign(
       Array.isArray(orderData.designs) && orderData.designs.length > 0
         ? mapDesignFromDb(orderData.designs[0])

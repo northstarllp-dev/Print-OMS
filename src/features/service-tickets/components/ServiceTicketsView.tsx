@@ -14,7 +14,6 @@ import { CopyLinkButton } from "./CopyLinkButton";
 
 interface ServiceTicketsViewProps {
   initialTickets: ServiceTicketRecord[];
-  companyId: string;
   isAdmin: boolean;
   canManage: boolean;
 }
@@ -34,7 +33,6 @@ const getTicketStatusStyle = (status: string): { bg: string; text: string; label
 
 export function ServiceTicketsView({
   initialTickets,
-  companyId,
   isAdmin,
   canManage,
 }: ServiceTicketsViewProps) {
@@ -91,7 +89,7 @@ export function ServiceTicketsView({
           </p>
         </div>
         <div className="flex flex-wrap gap-2 items-center shrink-0">
-          {isAdmin && <CopyLinkButton companyId={companyId} />}
+          {isAdmin && <CopyLinkButton />}
           {isAdmin && (
             <button
               type="button"

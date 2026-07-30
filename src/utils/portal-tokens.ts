@@ -1,14 +1,17 @@
-import { createHmac, randomUUID, timingSafeEqual } from "crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "crypto";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { APP_BASE_PATH } from "@/lib/appBasePath";
-
 
 // ============================================================
 // Portal Token Configuration
 // ============================================================
-// PORTAL_SECRET: Must be at least 32 bytes. Set this in production.
-// PORTAL_VERSION: For future token format upgrades.
+// Short opaque codes (12 chars) are stored as `jti` and look up claims in DB.
+// Ideal as WhatsApp template URL-button variables (Meta prefers short suffixes).
+// Legacy HMAC tokens (payload.sig) are still accepted until they expire.
 // ============================================================
+
+/** Short code length — fits WhatsApp CTA URL button dynamic params. */
+export const PORTAL_TOKEN_LENGTH = 12;
 
 const DEFAULT_SCOPES = [
   "read_order",
@@ -36,21 +39,22 @@ function getSecret(): string {
 function getVersion(): string {
   return process.env.PORTAL_VERSION || "v1";
 }
+
 // ============================================================
 // Types
 // ============================================================
 export interface PortalTokenPayload {
-  customerId: string; // friendly customer_id e.g. "A012"
-  orderId?: string; // friendly order_id e.g. "A012-001"
+  customerId: string;
+  orderId?: string;
   scopes: string[];
-  iat: number; // issued at, unix seconds
-  exp: number; // expires at, unix seconds
-  jti: string; // unique ID for revocation
+  iat: number;
+  exp: number;
+  jti: string;
 }
 
 export interface GenerateOptions {
-  expiresInDays?: number; // default 30
-  createdBy?: string; // default "system"
+  expiresInDays?: number;
+  createdBy?: string;
   scopes?: string[];
   metadata?: Record<string, any>;
 }
@@ -62,8 +66,17 @@ export interface GenerationResult {
   expiresAt: Date;
 }
 
+function isShortOpaqueToken(token: string): boolean {
+  return /^[A-Za-z0-9_-]{8,32}$/.test(token) && !token.includes(".");
+}
+
+function generateShortCode(): string {
+  // 9 bytes → 12 base64url chars
+  return randomBytes(9).toString("base64url").slice(0, PORTAL_TOKEN_LENGTH);
+}
+
 // ============================================================
-// Core Crypto Functions
+// Legacy HMAC (read-only for old links)
 // ============================================================
 function sign(payloadB64: string): string {
   return createHmac("sha256", getSecret())
@@ -71,7 +84,7 @@ function sign(payloadB64: string): string {
     .digest("base64url");
 }
 
-export function verifyPortalToken(tokenString: string): PortalTokenPayload | null {
+function verifyLegacyHmacToken(tokenString: string): PortalTokenPayload | null {
   try {
     const parts = tokenString.split(".");
     if (parts.length !== 2) return null;
@@ -79,7 +92,6 @@ export function verifyPortalToken(tokenString: string): PortalTokenPayload | nul
     const [payloadB64, signature] = parts;
     if (!payloadB64 || !signature) return null;
 
-    // Verify HMAC signature (timing-safe)
     const expectedSig = sign(payloadB64);
     const sigBuf = Buffer.from(signature);
     const expectedBuf = Buffer.from(expectedSig);
@@ -87,17 +99,14 @@ export function verifyPortalToken(tokenString: string): PortalTokenPayload | nul
     if (sigBuf.length !== expectedBuf.length) return null;
     if (!timingSafeEqual(sigBuf, expectedBuf)) return null;
 
-    // Decode payload
     const payload: PortalTokenPayload = JSON.parse(
       Buffer.from(payloadB64, "base64url").toString("utf-8")
     );
 
-    // Validate required fields
     if (!payload.customerId || !payload.jti) return null;
     if (!Array.isArray(payload.scopes)) return null;
     if (typeof payload.iat !== "number" || typeof payload.exp !== "number") return null;
 
-    // Check expiry
     const now = Math.floor(Date.now() / 1000);
     if (payload.exp < now) return null;
 
@@ -107,41 +116,95 @@ export function verifyPortalToken(tokenString: string): PortalTokenPayload | nul
   }
 }
 
+/**
+ * @deprecated Prefer resolvePortalToken(). Sync HMAC-only check for legacy tokens.
+ */
+export function verifyPortalToken(tokenString: string): PortalTokenPayload | null {
+  if (isShortOpaqueToken(tokenString)) {
+    // Short tokens require DB lookup — cannot verify sync.
+    return null;
+  }
+  return verifyLegacyHmacToken(tokenString);
+}
+
+/**
+ * Resolve a portal token (short opaque or legacy HMAC) to its payload.
+ * Short tokens are looked up by `jti` in portal_access_tokens.
+ */
+export async function resolvePortalToken(
+  tokenString: string
+): Promise<PortalTokenPayload | null> {
+  if (!tokenString) return null;
+
+  if (isShortOpaqueToken(tokenString)) {
+    const db = createAdminClient();
+    if (!db) return null;
+
+    const { data, error } = await db
+      .from("portal_access_tokens")
+      .select("jti, customer_id, order_id, issued_at, expires_at, revoked_at, metadata")
+      .eq("jti", tokenString)
+      .maybeSingle();
+
+    if (error || !data) return null;
+    if (data.revoked_at) return null;
+
+    const expiresAt = new Date(data.expires_at).getTime();
+    if (Number.isNaN(expiresAt) || expiresAt < Date.now()) return null;
+
+    const scopes =
+      Array.isArray(data.metadata?.scopes) && data.metadata.scopes.length > 0
+        ? (data.metadata.scopes as string[])
+        : DEFAULT_SCOPES;
+
+    const issuedMs = data.issued_at ? new Date(data.issued_at).getTime() : Date.now();
+
+    return {
+      customerId: data.customer_id,
+      orderId: data.order_id || undefined,
+      scopes,
+      iat: Math.floor(issuedMs / 1000),
+      exp: Math.floor(expiresAt / 1000),
+      jti: data.jti,
+    };
+  }
+
+  const legacy = verifyLegacyHmacToken(tokenString);
+  if (!legacy) return null;
+
+  // Still honor revocation for legacy links
+  const revoked = await isTokenRevoked(createAdminClient(), legacy.jti);
+  if (revoked) return null;
+  return legacy;
+}
+
+/** Generate a short opaque portal code (also used as jti). */
 export function generatePortalTokenSync(
   customerId: string,
   orderId?: string,
   options: { expiresInDays?: number; scopes?: string[] } = {}
-): { token: string; jti: string; expiresAt: Date } {
-  const jti = randomUUID();
+): { token: string; jti: string; expiresAt: Date; scopes: string[] } {
+  const jti = generateShortCode();
   const now = Math.floor(Date.now() / 1000);
   const expiresInDays = options.expiresInDays ?? 30;
   const exp = now + expiresInDays * 24 * 60 * 60;
+  const scopes = options.scopes ?? DEFAULT_SCOPES;
 
-  const payload: PortalTokenPayload = {
-    customerId,
-    orderId,
-    scopes: options.scopes ?? DEFAULT_SCOPES,
-    iat: now,
-    exp,
+  return {
+    token: jti,
     jti,
+    expiresAt: new Date(exp * 1000),
+    scopes,
   };
-
-  const payloadB64 = Buffer.from(JSON.stringify(payload)).toString("base64url");
-  const signature = sign(payloadB64);
-  const token = `${payloadB64}.${signature}`;
-
-  return { token, jti, expiresAt: new Date(exp * 1000) };
 }
 
 export function buildPortalUrl(token: string, baseUrl?: string): string {
-  const envBaseUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "");
-  if (!baseUrl && !envBaseUrl) {
-    console.warn(
-      "[portal-tokens] NEXT_PUBLIC_SITE_URL is not set. Falling back to http://localhost:3000. " +
-        "Set NEXT_PUBLIC_SITE_URL in .env.local (e.g., http://localhost:3001 for dev) to generate correct portal links."
+  if (!baseUrl) {
+    throw new Error(
+      "buildPortalUrl requires baseUrl from getRequestBaseUrl() (request host)."
     );
   }
-  const resolvedBase = (baseUrl || envBaseUrl || "http://localhost:3000").replace(/\/$/, "");
+  const resolvedBase = baseUrl.replace(/\/$/, "");
   const params = new URLSearchParams({ token });
   return `${resolvedBase}${APP_BASE_PATH}/portal?${params.toString()}`;
 }
@@ -158,8 +221,6 @@ export async function storePortalToken(
   createdBy: string = "system",
   metadata: Record<string, any> = {}
 ): Promise<void> {
-  // Prefer service-role client: token issuance is a privileged server action and
-  // must work for enquiry-time tokens (order_id is null) under tenant RLS.
   const db = createAdminClient() || supabase;
   try {
     const { error } = await db.from("portal_access_tokens").insert({
@@ -185,20 +246,21 @@ export async function isTokenRevoked(
   supabase: any,
   jti: string
 ): Promise<boolean> {
+  const db = createAdminClient() || supabase;
+  if (!db) return true;
   try {
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from("portal_access_tokens")
       .select("revoked_at")
       .eq("jti", jti)
-      .single();
+      .maybeSingle();
 
     if (error) {
-      if (error.code === "PGRST116") return false; // not found
       console.error("[isTokenRevoked] DB Error:", error.message);
-      return true; // treat DB error as revoked/unsafe
+      return true;
     }
-
-    return !!data?.revoked_at;
+    if (!data) return false; // legacy HMAC jti may not be stored
+    return !!data.revoked_at;
   } catch (err: any) {
     console.error("[isTokenRevoked] Exception:", err.message);
     return true;
@@ -209,8 +271,9 @@ export async function revokePortalToken(
   supabase: any,
   jti: string
 ): Promise<void> {
+  const db = createAdminClient() || supabase;
   try {
-    const { error } = await supabase
+    const { error } = await db
       .from("portal_access_tokens")
       .update({ revoked_at: new Date().toISOString() })
       .eq("jti", jti);
@@ -225,34 +288,48 @@ export async function revokePortalToken(
   }
 }
 
-// ============================================================
-// Convenience: Generate & Store in one call
-// ============================================================
 export async function generateAndStorePortalToken(
   supabase: any,
   customerId: string,
   orderId?: string,
   options: GenerateOptions & { baseUrl?: string } = {}
 ): Promise<GenerationResult> {
-  const { expiresInDays = 30, createdBy = "system", metadata = {}, baseUrl } = options;
+  const {
+    expiresInDays = 30,
+    createdBy = "system",
+    metadata = {},
+    baseUrl,
+    scopes,
+  } = options;
 
-  const { token, jti, expiresAt } = generatePortalTokenSync(
-    customerId,
-    orderId,
-    { expiresInDays }
-  );
+  // Retry on rare jti collision
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const { token, jti, expiresAt, scopes: resolvedScopes } =
+      generatePortalTokenSync(customerId, orderId, { expiresInDays, scopes });
 
-  await storePortalToken(
-    supabase,
-    jti,
-    customerId,
-    orderId,
-    expiresAt,
-    createdBy,
-    metadata
-  );
+    try {
+      await storePortalToken(
+        supabase,
+        jti,
+        customerId,
+        orderId,
+        expiresAt,
+        createdBy,
+        { ...metadata, scopes: resolvedScopes }
+      );
 
-  const url = buildPortalUrl(token, baseUrl);
+      const url = buildPortalUrl(token, baseUrl);
+      return { token, jti, url, expiresAt };
+    } catch (err: any) {
+      lastError = err;
+      // unique violation on jti → retry
+      if (String(err?.message || "").includes("portal_access_tokens_jti_key")) {
+        continue;
+      }
+      throw err;
+    }
+  }
 
-  return { token, jti, url, expiresAt };
+  throw lastError || new Error("Failed to generate portal token");
 }

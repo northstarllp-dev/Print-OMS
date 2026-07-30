@@ -8,6 +8,7 @@ export type RoleStageGrantMapConfig = Partial<
   Record<
     | "site_visit"
     | "quotation"
+    | "invoice"
     | "design"
     | "production"
     | "installation"

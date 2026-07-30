@@ -27,7 +27,7 @@ export function PlatformMadeWithLove({
       href={PLATFORM_HOME_URL}
       target="_blank"
       rel="noopener noreferrer"
-      className={className}
+      className={["polaris-mwl", className].filter(Boolean).join(" ")}
       style={{
         display: "inline-flex",
         alignItems: "center",
@@ -43,30 +43,48 @@ export function PlatformMadeWithLove({
         ...style,
       }}
     >
-      Made with{" "}
-      {isGateway || isPortal ? (
-        <Heart size={14} fill="#EF4444" color="#EF4444" />
-      ) : (
-        <span style={{ color: "#EF4444", fontSize: "14px" }}>❤️</span>
-      )}{" "}
-      by
-      <img
-        src={PLATFORM_LOGO_SRC}
-        alt="Polaris"
-        className={isGateway ? undefined : "h-8 lg:h-9 w-auto ml-0.5"}
-        style={
-          isGateway
-            ? {
-                height: "50px",
-                marginLeft: "-2px",
-                marginTop: "-16px",
-                marginBottom: "-12px",
-              }
-            : isPortal
-              ? { height: 28, marginLeft: 2 }
-              : undefined
-        }
-      />
+      <span className="polaris-mwl-text polaris-mwl-text-a">
+        <span className="polaris-mwl-text-base">Made with</span>
+        <span className="polaris-mwl-text-shine" aria-hidden="true">
+          Made with
+        </span>
+      </span>
+      <span className="polaris-mwl-heart">
+        {isGateway || isPortal ? (
+          <Heart size={14} fill="#EF4444" color="#EF4444" />
+        ) : (
+          <span style={{ color: "#EF4444", fontSize: "14px", lineHeight: 1 }}>
+            ❤️
+          </span>
+        )}
+      </span>
+      <span className="polaris-mwl-text polaris-mwl-text-b">
+        <span className="polaris-mwl-text-base">by</span>
+        <span className="polaris-mwl-text-shine" aria-hidden="true">
+          by
+        </span>
+      </span>
+      <span
+        className="polaris-mwl-logo-wrap"
+        style={{ ["--mwl-logo" as string]: `url("${PLATFORM_LOGO_SRC}")` }}
+      >
+        <img
+          src={PLATFORM_LOGO_SRC}
+          alt="Polaris"
+          className={!isGateway ? "h-8 lg:h-9 w-auto" : undefined}
+          style={
+            isGateway
+              ? {
+                  height: "50px",
+                  marginTop: "-16px",
+                  marginBottom: "-12px",
+                }
+              : isPortal
+                ? { height: 28 }
+                : undefined
+          }
+        />
+      </span>
     </a>
   );
 }

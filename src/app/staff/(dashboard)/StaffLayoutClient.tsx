@@ -6,7 +6,7 @@ import {
   History, RotateCcw, Lock, Loader2, Key,
   ShoppingBag, MapPin, Palette, Settings, Wrench,
   ChevronLeft, ChevronRight, Search, Hammer, Truck, Menu, X,
-  CalendarDays,
+  CalendarDays, FileText,
   type LucideIcon,
 } from "lucide-react";
 import { Logo } from "@/components/ui/Logo";
@@ -35,6 +35,7 @@ interface StaffLayoutClientProps {
 
 const NAV_ICON_MAP: Record<StaffNavIcon, LucideIcon> = {
   orders: ShoppingBag,
+  invoice: FileText,
   site_visit: MapPin,
   design: Palette,
   production: Hammer,

@@ -34,6 +34,7 @@ import {
 } from "@/features/orders/realtime/useOrderDetailSync";
 import type { OrderDetailPatch } from "@/features/orders/realtime/orderDetailPatch";
 import { QuotationTab } from "@/app/portal/components/QuotationTab";
+import { InvoiceTab } from "@/app/portal/components/InvoiceTab";
 import { useQuotationActions } from "@/app/portal/hooks/useQuotationActions";
 import { GoogleMap, useJsApiLoader, Autocomplete } from "@react-google-maps/api";
 import { DesignTab } from "@/app/portal/components/DesignTab";
@@ -93,6 +94,7 @@ interface Order {
   chatHistory: any[];
   siteVisitDetails?: any;
   quoteDetails?: any;
+  invoiceDetails?: any;
   design?: any;
   productionDetails?: any;
   installationDetails?: any;
@@ -125,14 +127,14 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
         { id: "design", label: "Design", icon: Layout },
         { id: "quotation", label: "Quotation", icon: FileCheck },
         { id: "payments", label: "Payments", icon: CreditCard },
-        { id: "billing", label: "Billing", icon: CreditCard },
+        { id: "billing", label: "Invoice", icon: FileCheck },
       ]
     : [
         { id: "site_visit", label: "Site Visit", icon: MapPin },
         { id: "quotation", label: "Quotation", icon: FileCheck },
         { id: "design", label: "Design", icon: Layout },
         { id: "payments", label: "Payments", icon: CreditCard },
-        { id: "billing", label: "Billing", icon: CreditCard },
+        { id: "billing", label: "Invoice", icon: FileCheck },
       ];
 
   // Initial tab follows server-rendered stage; realtime advances switch forward only (below).
@@ -891,7 +893,15 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
           <DesignTab order={order} customer={customer} siteVisitItems={siteVisitItems} portalToken={token} />
         )}
         {activeTab === "payments" && <PaymentsTab orderId={order.id} />}
-        {activeTab === "billing" && <BillingTab order={order} />}
+        {activeTab === "billing" && (
+          <InvoiceTab
+            order={order}
+            invoiceDetails={order.invoiceDetails}
+            invoiceProfile={invoiceProfile}
+            billingAddress={customer.billingAddress}
+            customerCity={customer.city}
+          />
+        )}
       </main>
 
       {selectedProductInfo && (
@@ -905,55 +915,6 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
 }
 
 
-
-function BillingTab({ order }: { order: Order }) {
-  return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h3 className="text-lg font-bold text-gray-900 mb-4">Payment Summary</h3>
-
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-gray-600">Total Amount</span>
-              <span className="text-xl font-bold text-gray-900 font-mono">
-                ₹0
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-gray-600">Paid Amount</span>
-              <span className="text-xl font-bold text-green-600 font-mono">
-                ₹0
-              </span>
-            </div>
-            <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-              <span className="text-gray-900 font-bold">Balance</span>
-              <span className="text-2xl font-extrabold text-orange-600 font-mono">
-                ₹0
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h3 className="text-lg font-bold text-gray-900 mb-4">Payment Options</h3>
-
-          <div className="space-y-3">
-            <button className="w-full px-4 py-3 border border-blue-500 text-blue-600 rounded-xl font-semibold hover:bg-blue-50 transition-colors">
-              Pay via UPI
-            </button>
-            <button className="w-full px-4 py-3 border border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-colors">
-              Bank Transfer
-            </button>
-            <button className="w-full px-4 py-3 border border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-colors">
-              Cash on Delivery
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Product Info Popup Modal Component (identical to PortalClient.tsx)

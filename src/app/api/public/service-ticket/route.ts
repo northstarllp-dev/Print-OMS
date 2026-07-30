@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkRateLimit } from "@/utils/rate-limiter";
 import { createAdminClient } from "@/utils/supabase/admin";
-import { resolvePublicCompanyId } from "@/features/service-tickets/resolvePublicCompanyId";
+import { getDeployCompanyId } from "@/config/loadClientConfig";
 
 function normalizePhone(raw: string): string {
   return raw.replace(/\s+/g, "").trim();
@@ -18,8 +18,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Server not configured" }, { status: 500 });
   }
 
+  let companyId: string;
+  try {
+    companyId = getDeployCompanyId();
+  } catch {
+    return NextResponse.json({ error: "Server not configured" }, { status: 500 });
+  }
+
   const contentType = req.headers.get("content-type") || "";
-  let companyId = "";
   let customerId = "";
   let orderId = "";
   let description = "";
@@ -28,7 +34,6 @@ export async function POST(req: NextRequest) {
 
   if (contentType.includes("multipart/form-data")) {
     const formData = await req.formData();
-    companyId = String(formData.get("companyId") || "");
     customerId = String(formData.get("customerId") || "");
     orderId = String(formData.get("orderId") || "");
     description = String(formData.get("description") || "");
@@ -67,7 +72,6 @@ export async function POST(req: NextRequest) {
     }
   } else {
     const body = await req.json().catch(() => ({}));
-    companyId = typeof body.companyId === "string" ? body.companyId : "";
     customerId = typeof body.customerId === "string" ? body.customerId : "";
     orderId = typeof body.orderId === "string" ? body.orderId : "";
     description = typeof body.description === "string" ? body.description : "";
@@ -84,8 +88,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const resolvedCompanyId = resolvePublicCompanyId(companyId);
-  if (!resolvedCompanyId || !customerId || !orderId || !description || !phone) {
+  if (!customerId || !orderId || !description || !phone) {
     return NextResponse.json({ error: "Please complete all required fields." }, { status: 400 });
   }
 
@@ -93,7 +96,7 @@ export async function POST(req: NextRequest) {
     .from("orders")
     .select("id, customer_id, company_id")
     .eq("id", orderId)
-    .eq("company_id", resolvedCompanyId)
+    .eq("company_id", companyId)
     .maybeSingle();
   if (orderError || !order) {
     return NextResponse.json({ error: "Selected order was not found. Please try again." }, { status: 400 });
@@ -105,7 +108,7 @@ export async function POST(req: NextRequest) {
   const { data: created, error: createError } = await admin
     .from("service_tickets")
     .insert({
-      company_id: resolvedCompanyId,
+      company_id: companyId,
       customer_id: customerId,
       order_id: orderId,
       phone,

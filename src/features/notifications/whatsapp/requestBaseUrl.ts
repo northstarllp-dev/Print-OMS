@@ -1,14 +1,18 @@
 import { headers } from "next/headers";
 
-/** Resolve public base URL for portal links in server actions. */
+/**
+ * Resolve the public base URL from the incoming request host.
+ * Do not use NEXT_PUBLIC_SITE_URL — it gets baked at build time and
+ * breaks preview deployments when set to localhost.
+ */
 export async function getRequestBaseUrl(): Promise<string> {
-  const envBase = process.env.NEXT_PUBLIC_SITE_URL;
-  if (envBase) return envBase.replace(/\/$/, "");
-
   const headersList = await headers();
-  const host = headersList.get("host") || "localhost:3000";
+  const host =
+    headersList.get("x-forwarded-host")?.split(",")[0]?.trim() ||
+    headersList.get("host") ||
+    "localhost:3001";
   const protocol =
-    headersList.get("x-forwarded-proto") ||
-    (host.includes("localhost") ? "http" : "https");
+    headersList.get("x-forwarded-proto")?.split(",")[0]?.trim() ||
+    (host.includes("localhost") || host.startsWith("127.") ? "http" : "https");
   return `${protocol}://${host}`;
 }

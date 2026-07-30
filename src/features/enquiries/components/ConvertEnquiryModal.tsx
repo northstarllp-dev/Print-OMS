@@ -246,13 +246,18 @@ export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultClientNa
             
             {showDropdown && (
               <div style={{
+                position: "absolute",
+                left: 0,
+                right: 0,
+                top: "100%",
                 marginTop: "4px",
                 background: "white",
                 border: "1px solid #e2e8f0",
                 borderRadius: "8px",
-                boxShadow: "0 4px 6px -2px rgba(0, 0, 0, 0.05)",
+                boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
                 maxHeight: "200px",
                 overflowY: "auto",
+                zIndex: 50,
               }}>
                 {filteredProducts.length > 0 ? (
                   filteredProducts.map((p) => (

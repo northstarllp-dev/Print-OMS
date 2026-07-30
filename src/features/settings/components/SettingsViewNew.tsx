@@ -7,6 +7,7 @@ import { Save, Palette, MessageCircle, Calendar, Key, X, FileText, Package, Chec
 import {
   updateAppSettings,
   updateInvoiceProfile,
+  updateInvoiceNumbering,
   updateCompanyDetails,
 } from "@/features/settings/actions/settingsActions";
 import type { AppSettings, CompanyDetails } from "@/features/settings/settingsTypes";
@@ -16,6 +17,13 @@ import {
   type InvoiceProfile,
   type InvoiceTaxSplit,
 } from "@/features/quotations/types/invoiceProfile";
+import {
+  EMPTY_INVOICE_NUMBERING,
+  previewInvoiceNumber,
+  type InvoiceNumberingConfig,
+  type InvoiceNumberReset,
+  type InvoiceYearPart,
+} from "@/features/invoices/types/invoiceNumbering";
 import {
   createProductionChecklistItemId,
   normalizeProductionChecklistItems,
@@ -57,6 +65,12 @@ export function SettingsViewNew({ initialAppSettings, companyDetails }: Settings
   const [invoiceProfile, setInvoiceProfile] = useState<InvoiceProfile>(
     initialAppSettings?.invoiceProfile ?? EMPTY_INVOICE_PROFILE
   );
+  const [invoiceNumbering, setInvoiceNumbering] = useState<InvoiceNumberingConfig>(
+    initialAppSettings?.invoiceNumbering ?? EMPTY_INVOICE_NUMBERING
+  );
+  const [numberingSaveStatus, setNumberingSaveStatus] = useState<
+    "idle" | "saving" | "saved" | "error"
+  >("idle");
 
   const initialChecklist = useMemo(
     () => normalizeProductionChecklistItems(initialAppSettings?.productionChecklistItems),
@@ -137,6 +151,28 @@ export function SettingsViewNew({ initialAppSettings, companyDetails }: Settings
       setTimeout(() => setInvoiceSaveStatus("idle"), 3000);
     }
   };
+
+  const setNumberingField = <K extends keyof InvoiceNumberingConfig>(
+    key: K,
+    value: InvoiceNumberingConfig[K]
+  ) => {
+    setInvoiceNumbering((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleSaveInvoiceNumbering = async () => {
+    setNumberingSaveStatus("saving");
+    try {
+      await updateInvoiceNumbering(invoiceNumbering);
+      setNumberingSaveStatus("saved");
+      setTimeout(() => setNumberingSaveStatus("idle"), 2500);
+    } catch (e) {
+      console.error("Failed to save invoice numbering", e);
+      setNumberingSaveStatus("error");
+      setTimeout(() => setNumberingSaveStatus("idle"), 3000);
+    }
+  };
+
+  const numberingPreview = previewInvoiceNumber(invoiceNumbering);
 
   const inputStyle: React.CSSProperties = {
     width: "100%",
@@ -692,6 +728,200 @@ export function SettingsViewNew({ initialAppSettings, companyDetails }: Settings
                 : invoiceSaveStatus === "error"
                   ? "Save failed — retry"
                   : "Save letterhead"}
+          </button>
+        </div>
+
+        {/* Invoice numbering (per company) */}
+        <div
+          style={{
+            background: "white",
+            border: "1px solid #e2e8f0",
+            borderRadius: "12px",
+            padding: "24px",
+            marginBottom: "20px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "20px", paddingBottom: "16px", borderBottom: "1px solid #e2e8f0" }}>
+            <div style={{ width: "40px", height: "40px", background: "#f0fdf4", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", color: "#16a34a" }}>
+              <FileText size={20} />
+            </div>
+            <div>
+              <div style={{ fontSize: "16px", fontWeight: "700", color: "#0f172a" }}>
+                Invoice Number
+              </div>
+              <div style={{ fontSize: "12px", color: "#64748b", marginTop: "2px" }}>
+                Configurable numbering for this company — never uses UUIDs. Applies to newly created invoices.
+              </div>
+              {companyDetails?.id && (
+                <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "4px", fontFamily: "ui-monospace, monospace" }}>
+                  Company ID: {companyDetails.id}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label style={labelStyle}>Prefix</label>
+              <input
+                style={inputStyle}
+                value={invoiceNumbering.prefix}
+                onChange={(e) => setNumberingField("prefix", e.target.value)}
+                placeholder="INV or PRT/INV"
+              />
+            </div>
+            <div>
+              <label style={labelStyle}>Separator</label>
+              <input
+                style={inputStyle}
+                value={invoiceNumbering.separator}
+                onChange={(e) => setNumberingField("separator", e.target.value || "-")}
+                placeholder="- or /"
+                maxLength={3}
+              />
+            </div>
+            <div>
+              <label style={labelStyle}>Year segment</label>
+              <select
+                style={inputStyle}
+                value={invoiceNumbering.yearPart}
+                onChange={(e) =>
+                  setNumberingField("yearPart", e.target.value as InvoiceYearPart)
+                }
+              >
+                <option value="calendar">Calendar year (2026)</option>
+                <option value="financial">Financial year (26-27)</option>
+                <option value="none">None</option>
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>Financial year starts (month)</label>
+              <select
+                style={inputStyle}
+                value={invoiceNumbering.financialYearStartMonth}
+                disabled={invoiceNumbering.yearPart !== "financial" && invoiceNumbering.reset !== "yearly"}
+                onChange={(e) =>
+                  setNumberingField(
+                    "financialYearStartMonth",
+                    Number(e.target.value) || 4
+                  )
+                }
+              >
+                {[
+                  [1, "January"],
+                  [2, "February"],
+                  [3, "March"],
+                  [4, "April"],
+                  [5, "May"],
+                  [6, "June"],
+                  [7, "July"],
+                  [8, "August"],
+                  [9, "September"],
+                  [10, "October"],
+                  [11, "November"],
+                  [12, "December"],
+                ].map(([m, label]) => (
+                  <option key={m} value={m}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>Starting number</label>
+              <input
+                style={inputStyle}
+                type="number"
+                min={1}
+                value={invoiceNumbering.startingNumber}
+                onChange={(e) =>
+                  setNumberingField(
+                    "startingNumber",
+                    Math.max(1, Number(e.target.value) || 1)
+                  )
+                }
+                placeholder="1001"
+              />
+            </div>
+            <div>
+              <label style={labelStyle}>Digit padding</label>
+              <input
+                style={inputStyle}
+                type="number"
+                min={1}
+                max={12}
+                value={invoiceNumbering.padding}
+                onChange={(e) =>
+                  setNumberingField(
+                    "padding",
+                    Math.min(12, Math.max(1, Number(e.target.value) || 4))
+                  )
+                }
+                placeholder="4"
+              />
+            </div>
+            <div>
+              <label style={labelStyle}>Reset sequence</label>
+              <select
+                style={inputStyle}
+                value={invoiceNumbering.reset}
+                onChange={(e) =>
+                  setNumberingField("reset", e.target.value as InvoiceNumberReset)
+                }
+              >
+                <option value="yearly">Every Year</option>
+                <option value="monthly">Every Month</option>
+                <option value="never">Never</option>
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>Preview (next style)</label>
+              <div
+                style={{
+                  ...inputStyle,
+                  background: "#f8fafc",
+                  fontFamily: "ui-monospace, monospace",
+                  fontWeight: 700,
+                  color: "#0f172a",
+                }}
+              >
+                {numberingPreview}
+              </div>
+              <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 6 }}>
+                Examples: INV-2026-000001 · INV/26-27/0001 · PRT/INV/2026/00001
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleSaveInvoiceNumbering}
+            disabled={numberingSaveStatus === "saving"}
+            style={{
+              marginTop: 20,
+              padding: "12px 20px",
+              background:
+                numberingSaveStatus === "saved"
+                  ? "#10b981"
+                  : numberingSaveStatus === "error"
+                    ? "#ef4444"
+                    : "var(--color-primary)",
+              color: "white",
+              border: "none",
+              borderRadius: "8px",
+              fontSize: "13px",
+              fontWeight: 700,
+              cursor: numberingSaveStatus === "saving" ? "not-allowed" : "pointer",
+              opacity: numberingSaveStatus === "saving" ? 0.7 : 1,
+            }}
+          >
+            {numberingSaveStatus === "saving"
+              ? "Saving numbering..."
+              : numberingSaveStatus === "saved"
+                ? "Numbering saved"
+                : numberingSaveStatus === "error"
+                  ? "Save failed — retry"
+                  : "Save invoice numbering"}
           </button>
         </div>
 
