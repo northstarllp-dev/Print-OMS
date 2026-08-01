@@ -852,11 +852,12 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
             </>
           )}
 
-          <span className={`text-[10px] px-2.5 py-1 rounded-full font-black uppercase border ${status === "Approved" ? "bg-emerald-50 border-emerald-200 text-emerald-700" :
-              status === "Sent" ? "bg-blue-50 border-blue-200 text-blue-700" :
-                status === "Rejected" ? "bg-rose-50 border-rose-200 text-rose-700" :
-                  "bg-slate-100 border-slate-200 text-slate-600"
-            }`}>
+          <span className={`text-xs px-3 py-1.5 rounded-md font-black uppercase shadow-sm ${
+            status === "Approved" ? "bg-emerald-600 text-white" :
+            status === "Sent" ? "bg-blue-600 text-white" :
+            status === "Rejected" ? "bg-rose-600 text-white" :
+            "bg-slate-600 text-white"
+          }`}>
             {status}
           </span>
         </div>
