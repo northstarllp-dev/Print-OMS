@@ -556,11 +556,11 @@ export function InvoiceBuilder({
             </div>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 w-full sm:w-auto">
           <button
             type="button"
             onClick={() => setShowPreview(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 text-sm font-bold hover:bg-slate-50"
+            className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl border border-slate-200 text-sm font-bold hover:bg-slate-50 w-full sm:w-auto"
           >
             <Eye className="w-4 h-4" /> Preview / Print / PDF
           </button>
@@ -569,7 +569,7 @@ export function InvoiceBuilder({
               type="button"
               disabled={isPending}
               onClick={handleSave}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900 text-white text-sm font-bold hover:bg-slate-800 disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-slate-900 text-white text-sm font-bold hover:bg-slate-800 disabled:opacity-50 w-full sm:w-auto"
             >
               {isPending ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -584,7 +584,7 @@ export function InvoiceBuilder({
               type="button"
               disabled={isPending}
               onClick={handleMarkPaid}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-emerald-200 text-emerald-700 text-sm font-bold hover:bg-emerald-50 disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl border border-emerald-200 text-emerald-700 text-sm font-bold hover:bg-emerald-50 disabled:opacity-50 w-full sm:w-auto"
             >
               <CheckCircle2 className="w-4 h-4" /> Mark Paid
             </button>
@@ -594,7 +594,7 @@ export function InvoiceBuilder({
               type="button"
               disabled={isPending}
               onClick={handleVoid}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-red-200 text-red-700 text-sm font-bold hover:bg-red-50 disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl border border-red-200 text-red-700 text-sm font-bold hover:bg-red-50 disabled:opacity-50 w-full sm:w-auto"
             >
               <Ban className="w-4 h-4" /> Void
             </button>
@@ -709,7 +709,10 @@ export function InvoiceBuilder({
             className="overflow-x-auto overscroll-x-contain -mx-px"
             style={{ WebkitOverflowScrolling: "touch" }}
           >
-            <div className="min-w-[980px] md:min-w-[1040px]">
+            <p className="md:hidden px-4 pt-2 pb-1 text-[11px] font-semibold text-slate-400">
+              Swipe sideways to edit all columns
+            </p>
+            <div className="min-w-[720px] md:min-w-[1040px]">
               <div
                 className="grid gap-3 px-4 py-2.5 text-[10px] font-black text-[#64748b] uppercase tracking-wider bg-slate-50 border-b border-slate-100"
                 style={{
@@ -1029,16 +1032,16 @@ export function InvoiceBuilder({
       </div>
 
       {showPreview && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-start justify-center overflow-y-auto p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl my-8 relative">
+        <div className="fixed inset-0 z-[100000] bg-black/50 flex items-end sm:items-start justify-center overflow-y-auto p-0 sm:p-4">
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full max-w-4xl my-0 sm:my-8 relative max-h-[96dvh] sm:max-h-none overflow-y-auto">
             <button
               type="button"
               onClick={() => setShowPreview(false)}
-              className="absolute right-3 top-3 z-10 p-2 rounded-full bg-white border border-slate-200 shadow"
+              className="sticky top-3 float-right mr-3 mt-3 z-10 p-2 rounded-full bg-white border border-slate-200 shadow"
             >
               <X className="w-4 h-4" />
             </button>
-            <div className="p-4">
+            <div className="p-3 sm:p-4 clear-both overflow-x-auto">
               <InvoiceDocument
                 invoiceId={invoiceId}
                 invoiceDate={invoiceDate}
@@ -1066,8 +1069,8 @@ export function InvoiceBuilder({
       )}
 
       {selectedProductInfo && (
-        <div className="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-5">
+        <div className="fixed inset-0 z-[100000] bg-black/40 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl max-w-md w-full p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="font-bold text-slate-900">

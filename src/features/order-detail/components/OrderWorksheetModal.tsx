@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, startTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import { OrderCommunicationCenter } from "@/components/communication/OrderCommunicationCenter";
@@ -20,7 +20,6 @@ import { SiteVisitModule } from "@/features/orders/workspace/modules/site-visit/
 import { SiteVisitReviewModal } from "@/features/orders/workspace/modules/site-visit/SiteVisitReviewModal";
 import { QuotationModule } from "@/features/orders/workspace/modules/quotation/QuotationModule";
 import { DesignModule } from "@/features/orders/workspace/modules/design/DesignModule";
-import { Logo } from "@/components/ui/Logo";
 import { AdminControlModule } from "./admin/AdminControlModule";
 import { PaymentsModule } from "./payments/PaymentsModule";
 import { CustomerDetailsDrawer } from "./CustomerDetailsDrawer";
@@ -651,6 +650,12 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   const executeAdminApprove = async () => {
     const wasJobDonePending = order.stageStatus === "Pending Admin Approval: Job Done";
     const fromStage = order.stage;
+    // Optimistic clear of pending status so mobile UI responds immediately.
+    setOrder((prev) => ({
+      ...prev,
+      stageStatus: "Normal",
+      stageAdminNotes: "",
+    }));
     const result = await adminApproveStageAction(order.id);
     const resultRow = Array.isArray(result) ? result[0] : (result as any);
     const nextStage =
@@ -665,7 +670,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     if (nextStage) {
       setActiveStepTab(stageToTabIndex(nextStage, order.workflow_type || "quote_first"));
     }
-    router.refresh();
+    startTransition(() => router.refresh());
     triggerLocalAlert(
       wasJobDonePending
         ? "Order marked as completed."
@@ -684,8 +689,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     try {
       // Don't draft-save Admin/Payments tabs — they aren't stage worksheets.
       if (activeStepTab !== ADMIN_TAB && activeStepTab !== PAYMENTS_TAB) {
-        await handleSaveDraft({ suppressCustomerPopup: true });
-        setIsProcessing(true);
+        await handleSaveDraft({ suppressCustomerPopup: true, silent: true });
       }
       // On Site Visit tab with normal status, open review modal first.
       if (activeStepTab === 0 && order.stageStatus === "Normal") {
@@ -728,7 +732,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     try {
       await updateOrderStageAction(orderId, stage);
       setOrder(prev => ({ ...prev, stage: stage as PipelineStage }));
-      router.refresh();
+      startTransition(() => router.refresh());
       triggerLocalAlert(`Stage changed to ${stage}`, "success");
       openStageCustomerMessage(stage);
     } catch (err: any) {
@@ -762,7 +766,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     setIsProcessing(true);
     try {
       if (activeStepTab !== designTabIndex) {
-        await handleSaveDraft();
+        await handleSaveDraft({ silent: true });
       }
       // Site Visit: show summary confirmation first (push only — no lock).
       if (activeStepTab === 0) {
@@ -796,11 +800,20 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
         return;
       }
 
-      await requestStageAdvancementAction(order.id);
       const nextStatus = computePendingStageStatus(order.stage, workflowType);
+      const previousStatus = order.stageStatus;
       setOrder((prev) => ({ ...prev, stageStatus: nextStatus, stageAdminNotes: "" }));
-      await addChatMessageAction(order.id, "System", `${currentEmployee?.name || "Staff"} requested stage advancement.`);
-      router.refresh();
+      try {
+        await requestStageAdvancementAction(order.id);
+      } catch (err) {
+        setOrder((prev) => ({ ...prev, stageStatus: previousStatus }));
+        throw err;
+      }
+      void addChatMessageAction(
+        order.id,
+        "System",
+        `${currentEmployee?.name || "Staff"} requested stage advancement.`
+      );
       triggerLocalAlert("Stage advancement requested.", "success");
     } catch (err: any) {
       triggerLocalAlert(err?.message || "Failed to submit.", "error");
@@ -811,13 +824,14 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
 
   const handleAdminReject = async (notes: string) => {
     setIsProcessing(true);
+    const previousStatus = order.stageStatus;
+    setOrder((prev) => ({ ...prev, stageStatus: "Normal", stageAdminNotes: notes }));
     try {
       await adminRejectStageAction(order.id, notes);
-      setOrder((prev) => ({ ...prev, stageStatus: "Normal", stageAdminNotes: notes }));
       setAdminOverrideUnlocked(false);
-      router.refresh();
       triggerLocalAlert("Changes requested. Staff can now revise.", "success");
     } catch (err: any) {
+      setOrder((prev) => ({ ...prev, stageStatus: previousStatus }));
       triggerLocalAlert(err?.message || "Failed to request changes.", "error");
     } finally {
       setIsProcessing(false);
@@ -900,8 +914,8 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     }
   };
 
-  const handleSaveDraft = async (opts?: { suppressCustomerPopup?: boolean }) => {
-    setIsProcessing(true);
+  const handleSaveDraft = async (opts?: { suppressCustomerPopup?: boolean; silent?: boolean }) => {
+    if (!opts?.silent) setIsProcessing(true);
     const workflowType = order.workflow_type || "quote_first";
     // Tab indices depend on workflow:
     // quote_first:  0=SiteVisit, 1=Quote, 2=Design, 3=Production, 4=Installation
@@ -957,13 +971,16 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           }
           break;
       }
-      triggerLocalAlert("Draft saved successfully!", "success");
-      router.refresh();
+      if (!opts?.silent) {
+        triggerLocalAlert("Draft saved successfully!", "success");
+        startTransition(() => router.refresh());
+      }
     } catch (err) {
       triggerLocalAlert("Failed to save draft.", "error");
       console.error(err);
+      if (opts?.silent) throw err;
     } finally {
-      setIsProcessing(false);
+      if (!opts?.silent) setIsProcessing(false);
     }
   };
 
@@ -1341,10 +1358,9 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   return (
     <div style={{ position: "relative", display: "flex", flexDirection: "column", flex: 1, height: "100%", maxHeight: "100%", overflow: "hidden", background: "#F8FAFC" }}>
       {isProcessing && (
-        <div className="absolute inset-0 z-[9999] flex items-center justify-center bg-white/80 backdrop-blur-sm">
-          <div className="animate-pulse flex items-center justify-center drop-shadow-xl px-6">
-            <Logo width={240} height={60} align="center" className="md:hidden" />
-            <Logo width={400} height={100} align="center" className="hidden md:block" />
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-[9999] flex justify-center pt-3">
+          <div className="rounded-full bg-slate-900/80 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-white shadow-lg">
+            Working…
           </div>
         </div>
       )}
@@ -1795,7 +1811,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           </PullToRefresh>
 
           {/* Sticky footer actions — hidden entirely when the active stage is inaccessible */}
-          <div className="px-3 sm:px-5 py-3 flex flex-row flex-wrap items-stretch sm:items-center justify-end gap-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]" style={{ background: "#F8FAFC", borderTop: "1px solid #E2E8F0", flexShrink: 0, boxShadow: "0 -2px 10px rgba(0,0,0,0.05)" }}>
+          <div className="px-3 sm:px-5 py-3 flex flex-row flex-wrap items-stretch sm:items-center justify-end gap-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] touch-manipulation" style={{ background: "#F8FAFC", borderTop: "1px solid #E2E8F0", flexShrink: 0, boxShadow: "0 -2px 10px rgba(0,0,0,0.05)" }}>
             {isActiveStageInaccessible ? (
               <span style={{ fontSize: "12px", fontWeight: "700", color: "#94A3B8", display: "flex", alignItems: "center", gap: "6px" }}>
                 <Lock size={13} /> No actions available for this stage
@@ -2007,16 +2023,21 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
             try {
               if (siteVisitReviewMode === "staff_push") {
                 const workflowType = order.workflow_type || "quote_first";
-                await requestStageAdvancementAction(order.id);
                 const nextStatus = computePendingStageStatus(order.stage, workflowType);
+                const previousStatus = order.stageStatus;
                 setOrder((prev) => ({ ...prev, stageStatus: nextStatus, stageAdminNotes: "" }));
-                await addChatMessageAction(
+                setIsReviewModalOpen(false);
+                try {
+                  await requestStageAdvancementAction(order.id);
+                } catch (err) {
+                  setOrder((prev) => ({ ...prev, stageStatus: previousStatus }));
+                  throw err;
+                }
+                void addChatMessageAction(
                   order.id,
                   "System",
                   `${currentEmployee?.name || "Staff"} requested stage advancement.`
                 );
-                setIsReviewModalOpen(false);
-                router.refresh();
                 triggerLocalAlert("Site visit submitted for admin approval.", "success");
                 return;
               }

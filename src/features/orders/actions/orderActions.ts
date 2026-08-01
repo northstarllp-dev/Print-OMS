@@ -269,14 +269,23 @@ export async function updateOrder(id: string, updates: any) {
   if (error) throw new Error(error.message);
   if (data && data.length > 0) {
     const orderIdFriendly = data[0].order_id || id;
-    await revalidateStaffQueuePaths();
-    revalidatePath(`/admin/orders/${orderIdFriendly}`);
-    revalidatePath(`/admin/orders/${orderUuid}`);
-    revalidatePath(`/staff/orders/${orderIdFriendly}`);
-    revalidatePath(`/staff/orders/${orderUuid}`);
-    revalidatePath("/printoms/portal");
-    revalidatePath(`/printoms/portal/order/${orderIdFriendly}`);
-    revalidatePath(`/printoms/portal/order/${orderUuid}`);
+    const updateKeys = Object.keys(updates);
+    // Status-only patches (staff request approval) don't need every floor/portal path.
+    const statusOnly =
+      updateKeys.length > 0 &&
+      updateKeys.every((k) => k === "stage_status" || k === "stage_admin_notes");
+    if (statusOnly) {
+      revalidatePath("/admin/orders");
+      revalidatePath("/admin/dashboard");
+      revalidatePath("/staff/orders");
+      revalidateOrderDetailPaths(orderIdFriendly);
+      revalidateOrderDetailPaths(orderUuid);
+    } else {
+      await revalidateStaffQueuePaths();
+      revalidateOrderDetailPaths(orderIdFriendly);
+      revalidateOrderDetailPaths(orderUuid);
+      revalidatePath("/printoms/portal");
+    }
   }
   return data;
 }
@@ -390,17 +399,11 @@ export async function updateSiteVisitDetailsAction(orderId: string, details: any
     }
   }
 
-  // Revalidate cache for all possible URLs
+  // Revalidate this order only — queues refresh when stage/status changes.
   const orderCode = order?.order_id;
-  await revalidateStaffQueuePaths();
-  revalidatePath(`/admin/orders/${orderId}`);
-  revalidatePath(`/staff/orders/${orderId}`);
-  revalidatePath("/printoms/portal");
-  revalidatePath(`/printoms/portal/order/${orderId}`);
-  if (orderCode) {
-    revalidatePath(`/admin/orders/${orderCode}`);
-    revalidatePath(`/staff/orders/${orderCode}`);
-    revalidatePath(`/printoms/portal/order/${orderCode}`);
+  revalidateOrderDetailPaths(orderId);
+  if (orderCode && orderCode !== orderId) {
+    revalidateOrderDetailPaths(orderCode);
   }
 
   const mappedVisit = mapSiteVisitFromDb(siteVisit);
@@ -432,18 +435,10 @@ export async function updateProductionDetailsAction(orderId: string, details: an
     if (insertError) throw new Error(insertError.message);
   }
   
-  // Revalidate cache
-  await revalidateStaffQueuePaths();
-  revalidatePath(`/production/orders/${orderId}`);
-  revalidatePath(`/production/orders/${orderUuid}`);
-  revalidatePath(`/admin/orders/${orderId}`);
-  revalidatePath(`/admin/orders/${orderUuid}`);
-  revalidatePath(`/staff/orders/${orderId}`);
-  revalidatePath(`/staff/orders/${orderUuid}`);
-  revalidatePath("/printoms/portal");
-  revalidatePath(`/printoms/portal/order/${orderId}`);
-  revalidatePath(`/printoms/portal/order/${orderUuid}`);
-  
+  // Client owns checklist UI — only refresh this order's detail pages.
+  revalidateOrderDetailPaths(orderId);
+  revalidateOrderDetailPaths(orderUuid);
+
   return { success: true };
 }
 
@@ -463,18 +458,9 @@ export async function updateInstallationDetailsAction(orderId: string, details: 
     if (insertError) throw new Error(insertError.message);
   }
   
-  // Revalidate cache
-  await revalidateStaffQueuePaths();
-  revalidatePath(`/installation/orders/${orderId}`);
-  revalidatePath(`/installation/orders/${orderUuid}`);
-  revalidatePath(`/admin/orders/${orderId}`);
-  revalidatePath(`/admin/orders/${orderUuid}`);
-  revalidatePath(`/staff/orders/${orderId}`);
-  revalidatePath(`/staff/orders/${orderUuid}`);
-  revalidatePath("/printoms/portal");
-  revalidatePath(`/printoms/portal/order/${orderId}`);
-  revalidatePath(`/printoms/portal/order/${orderUuid}`);
-  
+  revalidateOrderDetailPaths(orderId);
+  revalidateOrderDetailPaths(orderUuid);
+
   return { success: true };
 }
 
@@ -653,8 +639,11 @@ export async function adminApproveStageAction(orderId: string) {
     metadata: { action: "stage_approved", old: o.stage, new: nextStage }
   });
 
+  // Don't block the admin UI on WhatsApp delivery.
   if (nextStage !== o.stage) {
-    await dispatchWhatsAppForPipelineStage(supabase, orderUuid, nextStage);
+    void dispatchWhatsAppForPipelineStage(supabase, orderUuid, nextStage).catch((err) =>
+      console.error("WhatsApp pipeline notify failed:", err)
+    );
   }
 
   return result;

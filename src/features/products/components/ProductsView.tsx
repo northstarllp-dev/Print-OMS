@@ -173,7 +173,7 @@ function PricingSection({
   return (
     <div>
       <label style={labelStyle}>Pricing (fill whichever apply)</label>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "12px" }}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
         {pricingFields.map(({ key, label, placeholder }) => {
           const disabled = isFieldDisabled(key, form.pricing_type);
           return (
@@ -296,8 +296,8 @@ function ProductFormModal({
   };
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.55)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 }}>
-      <div style={{ background: "white", width: "100%", maxWidth: 620, maxHeight: "90vh", overflowY: "auto", borderRadius: 16, padding: "28px 28px 24px", boxShadow: "0 24px 48px rgba(0,0,0,0.18)" }}>
+    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-slate-900/55 backdrop-blur-[4px] p-0 sm:p-4">
+      <div className="bg-white w-full sm:max-w-[620px] max-h-[92dvh] sm:max-h-[90vh] overflow-y-auto overscroll-contain rounded-t-2xl sm:rounded-2xl shadow-2xl px-4 pt-5 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-7 sm:py-6">
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -318,7 +318,7 @@ function ProductFormModal({
 
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           {/* Row 1: ID + Name */}
-          <div style={{ display: "grid", gridTemplateColumns: "140px 1fr", gap: 12 }}>
+          <div className="grid grid-cols-1 sm:grid-cols-[140px_1fr] gap-3">
             <div>
               <label style={labelStyle}>Product ID</label>
               <input type="text" readOnly value={form.product_id} style={{ ...inputStyle, background: "#f8fafc", color: "#64748b", fontFamily: "monospace", fontSize: 12 }} />
@@ -354,7 +354,7 @@ function ProductFormModal({
             </div>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label style={labelStyle}>Category</label>
                 <select value={form.category ?? ""} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} style={{ ...inputStyle, appearance: "none" }}>
@@ -405,7 +405,7 @@ function ProductFormModal({
 
           {/* Inventory Attributes */}
           <div style={{ border: "1px solid #e2e8f0", borderRadius: 10, padding: 14, display: "flex", flexDirection: "column", gap: 12 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
               <span style={{ fontSize: 11, fontWeight: 800, color: "#334155", textTransform: "uppercase", letterSpacing: "0.05em" }}>Inventory Attributes</span>
               <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, fontWeight: 700, color: "#374151", cursor: "pointer", userSelect: "none" }}>
                 <input
@@ -417,7 +417,7 @@ function ProductFormModal({
                 Track Inventory
               </label>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               <div>
                 <label style={labelStyle}>Unit</label>
                 <input type="text" placeholder="e.g. pcs, sqft, kg" value={form.unit ?? ""} onChange={e => setForm(f => ({ ...f, unit: e.target.value }))} style={inputStyle} />
@@ -473,7 +473,7 @@ function ProductFormModal({
           />
 
           {/* Status */}
-          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: "#f8fafc", borderRadius: 8, border: "1px solid #e2e8f0" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: "#f8fafc", borderRadius: 8, border: "1px solid #e2e8f0", flexWrap: "wrap" }}>
             <button
               type="button"
               onClick={() => setForm(f => ({ ...f, is_active: !f.is_active }))}
@@ -490,14 +490,14 @@ function ProductFormModal({
           </div>
 
           {/* Actions */}
-          <div style={{ display: "flex", gap: 10, paddingTop: 4 }}>
-            <button type="button" onClick={handleClose} style={{ flex: 1, padding: "10px 16px", background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 10, fontSize: 13, fontWeight: 700, color: "#64748b", cursor: "pointer" }}>
+          <div className="flex flex-col-reverse sm:flex-row gap-2.5 sm:gap-2.5 pt-1">
+            <button type="button" onClick={handleClose} className="w-full sm:flex-1 py-3 sm:py-2.5 px-4 rounded-[10px] bg-slate-100 border border-slate-200 text-[13px] font-bold text-slate-500 cursor-pointer">
               Cancel
             </button>
             <button
               type="submit"
               disabled={isPending}
-              style={{ flex: 2, padding: "10px 16px", background: "#1e40af", border: "none", borderRadius: 10, fontSize: 13, fontWeight: 800, color: "white", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
+              className="w-full sm:flex-[2] py-3 sm:py-2.5 px-4 rounded-[10px] bg-[#1e40af] border-none text-[13px] font-extrabold text-white cursor-pointer flex items-center justify-center gap-2 disabled:opacity-70"
             >
               {isPending ? <Loader2 size={14} style={{ animation: "prt-spin 1s linear infinite" }} /> : (isEdit ? "Save Changes" : "Add Product")}
             </button>

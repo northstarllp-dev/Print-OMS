@@ -420,13 +420,15 @@ body {
 }
 
 /* Shine masked to logo pixels — never a rectangle */
-.polaris-mwl-logo-wrap {
+.polaris-mwl-logo-wrap,
+.company-logo-shine {
   position: relative;
   display: inline-flex;
   align-items: center;
   line-height: 0;
 }
-.polaris-mwl-logo-wrap::after {
+.polaris-mwl-logo-wrap::after,
+.company-logo-shine::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -454,6 +456,14 @@ body {
   mask-repeat: no-repeat;
   -webkit-mask-position: center;
   mask-position: center;
+}
+
+@media print {
+  .company-logo-shine::after,
+  .polaris-mwl-logo-wrap::after {
+    display: none !important;
+    animation: none !important;
+  }
 }
 
 /* ANIMATIONS */

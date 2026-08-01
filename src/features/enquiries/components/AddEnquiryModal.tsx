@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { X, Send, Loader, CheckSquare, Square } from "lucide-react";
+import { X, Send, Loader } from "lucide-react";
 
 interface AddEnquiryModalProps {
   isOpen: boolean;
@@ -22,27 +22,13 @@ export interface EnquiryFormData {
 }
 
 const formatPhoneNumber = (value: string): string => {
-  // Remove all non-digit characters
   let digits = value.replace(/\D/g, "");
-  
-  // If starts with 91, trim it (we'll add it back)
-  if (digits.startsWith("91")) {
-    digits = digits.slice(2);
-  }
-  
-  // If starts with 0, trim it
-  if (digits.startsWith("0")) {
-    digits = digits.slice(1);
-  }
-  
-  // Take only first 10 digits
+  if (digits.startsWith("91")) digits = digits.slice(2);
+  if (digits.startsWith("0")) digits = digits.slice(1);
   digits = digits.slice(0, 10);
-  
-  // Format with +91 prefix if we have 10 digits
   if (digits.length === 10) {
     return `+91 ${digits.slice(0, 5)} ${digits.slice(5)}`;
   }
-  
   return digits;
 };
 
@@ -52,9 +38,13 @@ const validatePhoneNumber = (phone: string): boolean => {
 };
 
 const validateEmail = (email: string): boolean => {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email);
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 };
+
+const fieldClass =
+  "w-full px-3.5 py-2.5 rounded-lg border border-slate-300 bg-slate-50 text-[14px] font-medium text-slate-800 outline-none transition-colors focus:border-[var(--color-primary)] focus:bg-white";
+const labelClass =
+  "block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1.5";
 
 export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalProps) {
   const [formData, setFormData] = useState<EnquiryFormData>({
@@ -74,72 +64,48 @@ export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalPr
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const formatted = formatPhoneNumber(e.target.value);
-    setFormData(prev => {
+    setFormData((prev) => {
       const newData = { ...prev, phone: formatted };
-      if (syncWhatsapp) {
-        newData.whatsappNumber = formatted;
-      }
+      if (syncWhatsapp) newData.whatsappNumber = formatted;
       return newData;
     });
-    if (errors.phone) {
-      setErrors(prev => ({ ...prev, phone: "" }));
-    }
+    if (errors.phone) setErrors((prev) => ({ ...prev, phone: "" }));
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+  ) => {
     const { name, value } = e.target;
-    setFormData(prev => {
+    setFormData((prev) => {
       const next = { ...prev, [name]: value };
-      if (name === "phone" && syncWhatsapp) {
-        next.whatsappNumber = value;
-      }
+      if (name === "phone" && syncWhatsapp) next.whatsappNumber = value;
       return next;
     });
-    if (errors[name]) {
-      setErrors(prev => ({ ...prev, [name]: "" }));
-    }
+    if (errors[name]) setErrors((prev) => ({ ...prev, [name]: "" }));
   };
 
   const handleSyncToggle = (e: React.ChangeEvent<HTMLInputElement>) => {
     const checked = e.target.checked;
     setSyncWhatsapp(checked);
-    if (checked) {
-      setFormData(prev => ({ ...prev, whatsappNumber: prev.phone }));
-    }
+    if (checked) setFormData((prev) => ({ ...prev, whatsappNumber: prev.phone }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Validate form
     const newErrors: { [key: string]: string } = {};
-    
-    if (!formData.businessName.trim()) {
-      newErrors.businessName = "Business name is required";
-    }
-
-    if (!formData.leadName.trim()) {
-      newErrors.leadName = "Lead name is required";
-    }
-    
+    if (!formData.businessName.trim()) newErrors.businessName = "Business name is required";
+    if (!formData.leadName.trim()) newErrors.leadName = "Lead name is required";
     if (!validatePhoneNumber(formData.phone)) {
       newErrors.phone = "Please enter a valid 10-digit phone number";
     }
-    
-    if (!validateEmail(formData.email)) {
-      newErrors.email = "Please enter a valid email address";
-    }
-    
+    if (!validateEmail(formData.email)) newErrors.email = "Please enter a valid email address";
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
     }
-    
+
     setIsSubmitting(true);
-    
-    // Execute actual submit
     await onSubmit(formData);
-    
     setIsSubmitting(false);
     setFormData({
       businessName: "",
@@ -159,450 +125,240 @@ export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalPr
   if (!isOpen) return null;
 
   return (
-    <>
-      {/* Backdrop */}
+    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center">
       <div
-        style={{
-          position: "fixed",
-          inset: 0,
-          background: "rgba(15, 23, 42, 0.4)",
-          backdropFilter: "blur(4px)",
-          zIndex: 50,
-          animation: "fadeIn 0.2s ease-out",
-        }}
+        className="absolute inset-0 bg-slate-900/40 backdrop-blur-[4px]"
         onClick={onClose}
+        aria-hidden
       />
 
-      {/* Modal */}
       <div
-        style={{
-          position: "fixed",
-          top: "50%",
-          left: "50%",
-          transform: "translate(-50%, -50%)",
-          background: "white",
-          borderRadius: "16px",
-          width: "90%",
-          maxWidth: "600px",
-          maxHeight: "90vh",
-          overflow: "auto",
-          zIndex: 51,
-          animation: "slideUp 0.3s ease-out",
-          boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)",
-        }}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-enquiry-title"
+        className="relative z-[101] w-full sm:w-[90%] sm:max-w-[600px] max-h-[92dvh] sm:max-h-[90vh] flex flex-col bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden"
       >
-        {/* Header */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            padding: "20px 24px",
-            background: "#f8fafc",
-            borderBottom: "1px solid #e2e8f0",
-          }}
-        >
-          <div>
-            <h2 style={{ fontSize: "18px", fontWeight: "800", color: "#0f172a", margin: 0 }}>
+        <div className="shrink-0 flex items-start justify-between gap-3 px-4 py-4 sm:px-6 bg-slate-50 border-b border-slate-200">
+          <div className="min-w-0">
+            <h2 id="add-enquiry-title" className="text-[17px] sm:text-lg font-extrabold text-slate-900 m-0">
               New Lead Enquiry
             </h2>
-            <p style={{ fontSize: "12px", color: "#64748b", margin: "4px 0 0 0" }}>
-              Enter the client's details to log a new enquiry.
+            <p className="text-xs text-slate-500 mt-1 mb-0">
+              Enter the client&apos;s details to log a new enquiry.
             </p>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            style={{
-              background: "white",
-              border: "1px solid #e2e8f0",
-              cursor: "pointer",
-              color: "#64748b",
-              padding: "6px",
-              borderRadius: "8px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              transition: "all 0.2s"
-            }}
-            onMouseEnter={(e) => e.currentTarget.style.background = "#f1f5f9"}
-            onMouseLeave={(e) => e.currentTarget.style.background = "white"}
+            className="shrink-0 p-2 rounded-lg bg-white border border-slate-200 text-slate-500 hover:bg-slate-100"
+            aria-label="Close"
           >
             <X size={18} />
           </button>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} style={{ padding: "24px" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
-            
-            {/* Business Name */}
-            <div>
-              <label style={{ display: "block", fontSize: "12px", fontWeight: "700", color: "#0f172a", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.03em" }}>
-                Business Name *
-              </label>
-              <input
-                type="text"
-                name="businessName"
-                value={formData.businessName}
-                onChange={handleChange}
-                required
-                placeholder="e.g. Gourmet Cafe"
-                style={{
-                  width: "100%",
-                  padding: "10px 14px",
-                  border: "1px solid #cbd5e1",
-                  borderRadius: "8px",
-                  fontSize: "14px",
-                  boxSizing: "border-box",
-                  fontFamily: "inherit",
-                  transition: "all 0.2s",
-                  background: "#f8fafc"
-                }}
-                onFocus={(e) => { e.currentTarget.style.borderColor = "#018F10"; e.currentTarget.style.background = "white"; }}
-                onBlur={(e) => { e.currentTarget.style.borderColor = "#cbd5e1"; e.currentTarget.style.background = "#f8fafc"; }}
-              />
-              {errors.businessName && (
-                <p style={{ fontSize: "12px", color: "#ef4444", marginTop: "4px", marginBottom: 0 }}>
-                  {errors.businessName}
-                </p>
-              )}
-            </div>
-
-            {/* Lead Name */}
-            <div>
-              <label style={{ display: "block", fontSize: "12px", fontWeight: "700", color: "#0f172a", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.03em" }}>
-                Lead Name *
-              </label>
-              <input
-                type="text"
-                name="leadName"
-                value={formData.leadName}
-                onChange={handleChange}
-                required
-                placeholder="e.g. Ramesh Kumar"
-                style={{
-                  width: "100%",
-                  padding: "10px 14px",
-                  border: "1px solid #cbd5e1",
-                  borderRadius: "8px",
-                  fontSize: "14px",
-                  boxSizing: "border-box",
-                  fontFamily: "inherit",
-                  transition: "all 0.2s",
-                  background: "#f8fafc"
-                }}
-                onFocus={(e) => { e.currentTarget.style.borderColor = "#018F10"; e.currentTarget.style.background = "white"; }}
-                onBlur={(e) => { e.currentTarget.style.borderColor = "#cbd5e1"; e.currentTarget.style.background = "#f8fafc"; }}
-              />
-              {errors.leadName && (
-                <p style={{ fontSize: "12px", color: "#ef4444", marginTop: "4px", marginBottom: 0 }}>
-                  {errors.leadName}
-                </p>
-              )}
-            </div>
-
-            {/* Phone */}
-            <div>
-              <label style={{ display: "block", fontSize: "12px", fontWeight: "700", color: "#0f172a", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.03em" }}>
-                Phone Number *
-              </label>
-              <input
-                type="tel"
-                name="phone"
-                value={formData.phone}
-                onChange={handlePhoneChange}
-                required
-                placeholder="Enter 10-digit phone number"
-                style={{
-                  width: "100%",
-                  padding: "10px 14px",
-                  border: "1px solid #cbd5e1",
-                  borderRadius: "8px",
-                  fontSize: "14px",
-                  boxSizing: "border-box",
-                  fontFamily: "inherit",
-                  transition: "all 0.2s",
-                  background: "#f8fafc"
-                }}
-                onFocus={(e) => { e.currentTarget.style.borderColor = "#018F10"; e.currentTarget.style.background = "white"; }}
-                onBlur={(e) => { e.currentTarget.style.borderColor = "#cbd5e1"; e.currentTarget.style.background = "#f8fafc"; }}
-              />
-              {errors.phone && (
-                <p style={{ fontSize: "12px", color: "#ef4444", marginTop: "4px", marginBottom: 0 }}>
-                  {errors.phone}
-                </p>
-              )}
-            </div>
-
-            {/* WhatsApp Number */}
-            <div>
-              <label style={{ display: "block", fontSize: "12px", fontWeight: "700", color: "#0f172a", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.03em" }}>
-                WhatsApp Number
-              </label>
-              <input
-                type="tel"
-                name="whatsappNumber"
-                value={formData.whatsappNumber}
-                onChange={handleChange}
-                placeholder="+91 98765 43210"
-                style={{
-                  width: "100%",
-                  padding: "10px 14px",
-                  border: "1px solid #cbd5e1",
-                  borderRadius: "8px",
-                  fontSize: "14px",
-                  boxSizing: "border-box",
-                  fontFamily: "inherit",
-                  transition: "all 0.2s",
-                  background: "#f8fafc"
-                }}
-                onFocus={(e) => { e.currentTarget.style.borderColor = "#018F10"; e.currentTarget.style.background = "white"; }}
-                onBlur={(e) => { e.currentTarget.style.borderColor = "#cbd5e1"; e.currentTarget.style.background = "#f8fafc"; }}
-              />
-              <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "8px" }}>
-                <input 
-                  type="checkbox" 
-                  id="sync-wa" 
-                  checked={syncWhatsapp} 
-                  onChange={handleSyncToggle} 
-                  style={{ cursor: "pointer", accentColor: "#018F10", width: "14px", height: "14px", margin: 0 }} 
+        <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1">
+          <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5 space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className={labelClass} htmlFor="enquiry-business">
+                  Business Name *
+                </label>
+                <input
+                  id="enquiry-business"
+                  type="text"
+                  name="businessName"
+                  value={formData.businessName}
+                  onChange={handleChange}
+                  required
+                  placeholder="e.g. Gourmet Cafe"
+                  className={fieldClass}
                 />
-                <label htmlFor="sync-wa" style={{ fontSize: "11px", fontWeight: "600", color: "#64748b", cursor: "pointer", userSelect: "none" }}>
-                  Same as phone number
+                {errors.businessName && (
+                  <p className="text-xs text-red-500 mt-1 mb-0">{errors.businessName}</p>
+                )}
+              </div>
+
+              <div>
+                <label className={labelClass} htmlFor="enquiry-lead">
+                  Lead Name *
+                </label>
+                <input
+                  id="enquiry-lead"
+                  type="text"
+                  name="leadName"
+                  value={formData.leadName}
+                  onChange={handleChange}
+                  required
+                  placeholder="e.g. Ramesh Kumar"
+                  className={fieldClass}
+                />
+                {errors.leadName && (
+                  <p className="text-xs text-red-500 mt-1 mb-0">{errors.leadName}</p>
+                )}
+              </div>
+
+              <div>
+                <label className={labelClass} htmlFor="enquiry-phone">
+                  Phone Number *
+                </label>
+                <input
+                  id="enquiry-phone"
+                  type="tel"
+                  name="phone"
+                  value={formData.phone}
+                  onChange={handlePhoneChange}
+                  required
+                  placeholder="Enter 10-digit phone number"
+                  className={fieldClass}
+                  inputMode="tel"
+                />
+                {errors.phone && (
+                  <p className="text-xs text-red-500 mt-1 mb-0">{errors.phone}</p>
+                )}
+              </div>
+
+              <div>
+                <label className={labelClass} htmlFor="enquiry-wa">
+                  WhatsApp Number
+                </label>
+                <input
+                  id="enquiry-wa"
+                  type="tel"
+                  name="whatsappNumber"
+                  value={formData.whatsappNumber}
+                  onChange={handleChange}
+                  placeholder="+91 98765 43210"
+                  className={fieldClass}
+                  inputMode="tel"
+                />
+                <label
+                  htmlFor="sync-wa"
+                  className="mt-2.5 flex items-center gap-2.5 min-h-[44px] sm:min-h-0 sm:mt-2 cursor-pointer select-none"
+                >
+                  <input
+                    type="checkbox"
+                    id="sync-wa"
+                    checked={syncWhatsapp}
+                    onChange={handleSyncToggle}
+                    className="w-4 h-4 accent-[var(--color-primary)] cursor-pointer"
+                  />
+                  <span className="text-xs font-semibold text-slate-500">
+                    Same as phone number
+                  </span>
                 </label>
               </div>
-            </div>
 
-            {/* Email */}
-            <div>
-              <label style={{ display: "block", fontSize: "12px", fontWeight: "700", color: "#0f172a", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.03em" }}>
-                Email Address *
-              </label>
-              <input
-                type="email"
-                name="email"
-                value={formData.email}
-                onChange={handleChange}
-                required
-                placeholder="client@company.com"
-                style={{
-                  width: "100%",
-                  padding: "10px 14px",
-                  border: "1px solid #cbd5e1",
-                  borderRadius: "8px",
-                  fontSize: "14px",
-                  boxSizing: "border-box",
-                  fontFamily: "inherit",
-                  transition: "all 0.2s",
-                  background: "#f8fafc"
-                }}
-                onFocus={(e) => { e.currentTarget.style.borderColor = "#018F10"; e.currentTarget.style.background = "white"; }}
-                onBlur={(e) => { e.currentTarget.style.borderColor = "#cbd5e1"; e.currentTarget.style.background = "#f8fafc"; }}
-              />
-              {errors.email && (
-                <p style={{ fontSize: "12px", color: "#ef4444", marginTop: "4px", marginBottom: 0 }}>
-                  {errors.email}
-                </p>
-              )}
-            </div>
+              <div>
+                <label className={labelClass} htmlFor="enquiry-email">
+                  Email Address *
+                </label>
+                <input
+                  id="enquiry-email"
+                  type="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  required
+                  placeholder="client@company.com"
+                  className={fieldClass}
+                  inputMode="email"
+                />
+                {errors.email && (
+                  <p className="text-xs text-red-500 mt-1 mb-0">{errors.email}</p>
+                )}
+              </div>
 
-            {/* Primary Mode of Communication */}
-            <div>
-              <label style={{ display: "block", fontSize: "12px", fontWeight: "700", color: "#0f172a", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.03em" }}>
-                Primary Mode *
-              </label>
-              <select
-                name="primaryMode"
-                value={formData.primaryMode}
-                onChange={handleChange}
-                style={{
-                  width: "100%",
-                  padding: "10px 14px",
-                  border: "1px solid #cbd5e1",
-                  borderRadius: "8px",
-                  fontSize: "14px",
-                  boxSizing: "border-box",
-                  fontFamily: "inherit",
-                  background: "#f8fafc",
-                  transition: "all 0.2s",
-                  cursor: "pointer"
-                }}
-                onFocus={(e) => { e.currentTarget.style.borderColor = "#018F10"; e.currentTarget.style.background = "white"; }}
-                onBlur={(e) => { e.currentTarget.style.borderColor = "#cbd5e1"; e.currentTarget.style.background = "#f8fafc"; }}
-              >
-                <option value="whatsapp">WhatsApp</option>
-                <option value="email">Email</option>
-              </select>
-            </div>
+              <div>
+                <label className={labelClass} htmlFor="enquiry-mode">
+                  Primary Mode *
+                </label>
+                <select
+                  id="enquiry-mode"
+                  name="primaryMode"
+                  value={formData.primaryMode}
+                  onChange={handleChange}
+                  className={`${fieldClass} cursor-pointer`}
+                >
+                  <option value="whatsapp">WhatsApp</option>
+                  <option value="email">Email</option>
+                </select>
+              </div>
 
-            {/* Source */}
-            <div>
-              <label style={{ display: "block", fontSize: "12px", fontWeight: "700", color: "#0f172a", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.03em" }}>
-                Source *
-              </label>
-              <select
-                name="source"
-                value={formData.source}
-                onChange={handleChange}
-                style={{
-                  width: "100%",
-                  padding: "10px 14px",
-                  border: "1px solid #cbd5e1",
-                  borderRadius: "8px",
-                  fontSize: "14px",
-                  boxSizing: "border-box",
-                  fontFamily: "inherit",
-                  background: "#f8fafc",
-                  transition: "all 0.2s",
-                  cursor: "pointer"
-                }}
-                onFocus={(e) => { e.currentTarget.style.borderColor = "#018F10"; e.currentTarget.style.background = "white"; }}
-                onBlur={(e) => { e.currentTarget.style.borderColor = "#cbd5e1"; e.currentTarget.style.background = "#f8fafc"; }}
-              >
-                <option value="Meta Ads">Meta Ads</option>
-                <option value="Referrals">Referrals</option>
-                <option value="Walk-ins">Walk-ins</option>
-                <option value="Google Enquiry (Ph Call)">Google Enquiry (Ph Call)</option>
-                <option value="Website">Website</option>
-              </select>
-            </div>
+              <div>
+                <label className={labelClass} htmlFor="enquiry-source">
+                  Source *
+                </label>
+                <select
+                  id="enquiry-source"
+                  name="source"
+                  value={formData.source}
+                  onChange={handleChange}
+                  className={`${fieldClass} cursor-pointer`}
+                >
+                  <option value="Meta Ads">Meta Ads</option>
+                  <option value="Referrals">Referrals</option>
+                  <option value="Walk-ins">Walk-ins</option>
+                  <option value="Google Enquiry (Ph Call)">Google Enquiry (Ph Call)</option>
+                  <option value="Website">Website</option>
+                </select>
+              </div>
 
-            {/* Location */}
-            <div>
-              <label style={{ display: "block", fontSize: "12px", fontWeight: "700", color: "#0f172a", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.03em" }}>
-                Location / Area
-              </label>
-              <input
-                type="text"
-                name="location"
-                value={formData.location}
-                onChange={handleChange}
-                placeholder="e.g., WhiteField, JP Nagar"
-                style={{
-                  width: "100%",
-                  padding: "10px 14px",
-                  border: "1px solid #cbd5e1",
-                  borderRadius: "8px",
-                  fontSize: "14px",
-                  boxSizing: "border-box",
-                  fontFamily: "inherit",
-                  transition: "all 0.2s",
-                  background: "#f8fafc"
-                }}
-                onFocus={(e) => { e.currentTarget.style.borderColor = "#018F10"; e.currentTarget.style.background = "white"; }}
-                onBlur={(e) => { e.currentTarget.style.borderColor = "#cbd5e1"; e.currentTarget.style.background = "#f8fafc"; }}
-              />
-            </div>
+              <div>
+                <label className={labelClass} htmlFor="enquiry-location">
+                  Location / Area
+                </label>
+                <input
+                  id="enquiry-location"
+                  type="text"
+                  name="location"
+                  value={formData.location}
+                  onChange={handleChange}
+                  placeholder="e.g., WhiteField, JP Nagar"
+                  className={fieldClass}
+                />
+              </div>
 
-            {/* Requirements */}
-            <div style={{ gridColumn: "1 / -1" }}>
-              <label style={{ display: "block", fontSize: "12px", fontWeight: "700", color: "#0f172a", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.03em" }}>
-                Requirement Notes
-              </label>
-              <textarea
-                name="notes"
-                value={formData.notes}
-                onChange={handleChange}
-                placeholder="Enter any details about their requirements..."
-                style={{
-                  width: "100%",
-                  padding: "12px 14px",
-                  border: "1px solid #cbd5e1",
-                  borderRadius: "8px",
-                  fontSize: "14px",
-                  minHeight: "100px",
-                  boxSizing: "border-box",
-                  fontFamily: "inherit",
-                  resize: "vertical",
-                  transition: "all 0.2s",
-                  background: "#f8fafc"
-                }}
-                onFocus={(e) => { e.currentTarget.style.borderColor = "#018F10"; e.currentTarget.style.background = "white"; }}
-                onBlur={(e) => { e.currentTarget.style.borderColor = "#cbd5e1"; e.currentTarget.style.background = "#f8fafc"; }}
-              />
+              <div className="sm:col-span-2">
+                <label className={labelClass} htmlFor="enquiry-notes">
+                  Requirement Notes
+                </label>
+                <textarea
+                  id="enquiry-notes"
+                  name="notes"
+                  value={formData.notes}
+                  onChange={handleChange}
+                  placeholder="Enter any details about their requirements..."
+                  rows={4}
+                  className={`${fieldClass} min-h-[100px] resize-y`}
+                />
+              </div>
             </div>
           </div>
 
-          {/* Footer Buttons */}
-          <div style={{ display: "flex", gap: "12px", marginTop: "24px", paddingTop: "24px", borderTop: "1px solid #e2e8f0" }}>
+          <div className="shrink-0 flex flex-col-reverse sm:flex-row gap-2.5 sm:gap-3 px-4 py-4 sm:px-6 border-t border-slate-200 bg-white pb-[max(1rem,env(safe-area-inset-bottom))]">
             <button
               type="button"
               onClick={onClose}
-              style={{
-                flex: 1,
-                padding: "10px 16px",
-                background: "#f1f5f9",
-                border: "1px solid #e2e8f0",
-                borderRadius: "8px",
-                fontSize: "14px",
-                fontWeight: "600",
-                color: "#0f172a",
-                cursor: "pointer",
-                transition: "all 0.2s",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "#e2e8f0";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "#f1f5f9";
-              }}
+              className="w-full sm:flex-1 py-3 sm:py-2.5 px-4 rounded-lg bg-slate-100 border border-slate-200 text-sm font-semibold text-slate-900 hover:bg-slate-200"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
-              style={{
-                flex: 1,
-                padding: "10px 16px",
-                background: "var(--color-primary)",
-                border: "none",
-                borderRadius: "8px",
-                fontSize: "14px",
-                fontWeight: "600",
-                color: "white",
-                cursor: isSubmitting ? "not-allowed" : "pointer",
-                transition: "all 0.2s",
-                opacity: isSubmitting ? 0.7 : 1,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "6px",
-              }}
-              onMouseEnter={(e) => {
-                if (!isSubmitting) e.currentTarget.style.background = "var(--color-primary-container)";
-              }}
-              onMouseLeave={(e) => {
-                if (!isSubmitting) e.currentTarget.style.background = "var(--color-primary)";
-              }}
+              className="w-full sm:flex-1 py-3 sm:py-2.5 px-4 rounded-lg bg-[var(--color-primary)] text-sm font-semibold text-white flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed hover:opacity-95"
             >
-              {isSubmitting ? <Loader size={16} style={{ animation: "spin 1s linear infinite" }} /> : <Send size={16} />}
+              {isSubmitting ? (
+                <Loader size={16} className="animate-spin" />
+              ) : (
+                <Send size={16} />
+              )}
               {isSubmitting ? "Creating..." : "Create Enquiry"}
             </button>
           </div>
         </form>
-
-        <style>{`
-          @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-          }
-          @keyframes slideUp {
-            from {
-              opacity: 0;
-              transform: translate(-50%, -45%);
-            }
-            to {
-              opacity: 1;
-              transform: translate(-50%, -50%);
-            }
-          }
-          @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-          }
-        `}</style>
       </div>
-    </>
+    </div>
   );
 }

@@ -12,6 +12,8 @@ interface LogoProps {
   align?: "left" | "center" | "right";
   /** When false, skip client.logoScale (use for loaders so size stays predictable). */
   applyScale?: boolean;
+  /** Shine sweep over logo pixels (same as Polaris footer). Default true. */
+  shine?: boolean;
 }
 
 function tryLoadClientConfig(): ClientConfig | null {
@@ -22,7 +24,29 @@ function tryLoadClientConfig(): ClientConfig | null {
   }
 }
 
-export function Logo({ className = "", forceText = false, width = 200, height = 48, align = "center", applyScale = true }: LogoProps) {
+function logoSrc(logoUrl: string): string {
+  return `/printoms${logoUrl}`;
+}
+
+/** CSS url() needs spaces / special chars encoded for mask-image. */
+function logoCssUrl(logoUrl: string): string {
+  const path = logoSrc(logoUrl);
+  const encoded = path
+    .split("/")
+    .map((seg, i) => (i === 0 ? seg : encodeURIComponent(decodeURIComponent(seg))))
+    .join("/");
+  return `url("${encoded}")`;
+}
+
+export function Logo({
+  className = "",
+  forceText = false,
+  width = 200,
+  height = 48,
+  align = "center",
+  applyScale = true,
+  shine = true,
+}: LogoProps) {
   // Resolve sync when NEXT_PUBLIC_CLIENT_SLUG is available so loaders show the logo immediately.
   const [client, setClient] = useState<ClientConfig | null>(() => tryLoadClientConfig());
 
@@ -40,6 +64,25 @@ export function Logo({ className = "", forceText = false, width = 200, height = 
     const scale = applyScale ? (client.logoScale || 1) : 1;
     const finalWidth = width * scale;
     const finalHeight = height * scale;
+    const src = logoSrc(client.logoUrl);
+
+    const img = (
+      <img
+        src={src}
+        alt={`${client.name} Logo`}
+        width={finalWidth}
+        height={finalHeight}
+        className="object-contain"
+        style={{
+          maxHeight: finalHeight,
+          maxWidth: finalWidth,
+          width: "100%",
+          height: "100%",
+          objectPosition: align === "center" ? "center" : align,
+          transition: "all 0.25s cubic-bezier(0.4,0,0.2,1)",
+        }}
+      />
+    );
 
     return (
       <div
@@ -51,21 +94,20 @@ export function Logo({ className = "", forceText = false, width = 200, height = 
           transition: "all 0.25s cubic-bezier(0.4,0,0.2,1)",
         }}
       >
-        <img
-          src={`/printoms${client.logoUrl}`}
-          alt={`${client.name} Logo`}
-          width={finalWidth}
-          height={finalHeight}
-          className="object-contain"
-          style={{
-            maxHeight: finalHeight,
-            maxWidth: finalWidth,
-            width: "100%",
-            height: "100%",
-            objectPosition: align === "center" ? "center" : align,
-            transition: "all 0.25s cubic-bezier(0.4,0,0.2,1)",
-          }}
-        />
+        {shine ? (
+          <span
+            className="company-logo-shine"
+            style={{
+              width: "100%",
+              height: "100%",
+              ["--mwl-logo" as string]: logoCssUrl(client.logoUrl),
+            }}
+          >
+            {img}
+          </span>
+        ) : (
+          img
+        )}
       </div>
     );
   }
