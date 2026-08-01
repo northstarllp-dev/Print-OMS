@@ -11,6 +11,9 @@ import { getRequestBaseUrl } from "@/features/notifications/whatsapp/requestBase
 import { createAdminClient } from "@/utils/supabase/admin";
 import { revalidateStaffQueuePaths } from "@/features/orders/actions/orderActions";
 import { insertOrderActivity } from "@/features/orders/activity/logOrderActivity";
+import { getCurrentUser } from "@/features/auth/actions/authActions";
+import { resolveStagePermission } from "@/features/orders/workspace/shared/permissions";
+import { assertStageEditPermission } from "@/features/orders/workspace/shared/serverPermissions";
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -34,7 +37,25 @@ async function getSupabase() {
   );
 }
 
+function revalidateEnquiryPaths() {
+  revalidatePath("/admin/enquire");
+  revalidatePath("/staff/enquiries");
+  revalidatePath("/admin/dashboard");
+}
+
 export async function getEnquiries() {
+  const profile = await getCurrentUser();
+  if (!profile) throw new Error("Unauthorized");
+  if (profile.role !== "admin") {
+    const { canView, canEdit } = resolveStagePermission("enquiry", {
+      role: profile.role,
+      staff_role: profile.staff_role ?? null,
+      company_id: profile.company_id ?? null,
+    });
+    // Soft-deny for incidental callers (staff queues, reports) — return empty
+    if (!canView && !canEdit) return [];
+  }
+
   const supabase = await getSupabase();
   const { data, error } = await supabase
     .from("enquiries")
@@ -127,6 +148,11 @@ export async function createEnquiry(formData: any) {
   const supabase = await getSupabase();
 
   const { data: { user } } = await supabase.auth.getUser();
+  // Public /quote may create without a session; logged-in users need edit grant
+  if (user) {
+    await assertStageEditPermission("enquiry");
+  }
+
   let addedBy = "System";
   const { resolveWriteCompanyId } = await import("@/lib/resolveWriteCompanyId");
   const companyId = await resolveWriteCompanyId();
@@ -167,11 +193,12 @@ export async function createEnquiry(formData: any) {
     }
   }
 
-  revalidatePath("/admin/enquire");
+  revalidateEnquiryPaths();
   return data;
 }
 
 export async function resendEnquiryWhatsAppAction(enquiryId: string) {
+  await assertStageEditPermission("enquiry");
   const supabase = await getSupabase();
   const { data: enq, error } = await supabase
     .from("enquiries")
@@ -208,10 +235,11 @@ export async function resendEnquiryWhatsAppAction(enquiryId: string) {
 }
 
 export async function updateEnquiry(id: string, updates: any) {
+  await assertStageEditPermission("enquiry");
   const supabase = await getSupabase();
   const { data, error } = await supabase.from("enquiries").update(updates).eq("id", id).select();
   if (error) throw new Error(error.message);
-  revalidatePath("/admin/enquire");
+  revalidateEnquiryPaths();
   return data;
 }
 
@@ -230,6 +258,7 @@ export async function getAdmins() {
 }
 
 export async function convertEnquiryToOrderAction(enquiryId: string, clientName: string, businessName: string, productType?: string, requirements?: string, assignedAdmins?: string[]) {
+  await assertStageEditPermission("enquiry");
   const supabase = await getSupabase();
   
   // 1. Fetch enquiry
@@ -373,7 +402,7 @@ export async function convertEnquiryToOrderAction(enquiryId: string, clientName:
   });
 
   // 6. Revalidate cache (all staff queues — not only /staff/orders)
-  revalidatePath("/admin/enquire");
+  revalidateEnquiryPaths();
   await revalidateStaffQueuePaths();
   revalidatePath(`/admin/orders/${friendlyOrderId}`);
   revalidatePath(`/staff/orders/${friendlyOrderId}`);

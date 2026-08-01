@@ -21,7 +21,7 @@ export const DEFAULT_STAGE_GRANTS_BY_ROLE: Record<string, RoleStageGrantMap> = {
   Production: edit("production", "service_tickets"),
   Installation: edit("site_visit", "installation"),
   Designer: edit("site_visit", "design"),
-  Marketer: edit("site_visit", "quotation", "invoice"),
+  Marketer: edit("enquiry", "site_visit", "quotation", "invoice"),
 };
 
 function toRoleMap(
@@ -67,6 +67,7 @@ export function tenantUsesFloorPortals(actor: StageActor): boolean {
 }
 
 const ALL_STAGES: OrderStage[] = [
+  "enquiry",
   "site_visit",
   "quotation",
   "invoice",
@@ -173,6 +174,7 @@ export function getStaffHomePath(actor: StageActor): string {
 export type StaffNavIcon =
   | "orders"
   | "invoice"
+  | "enquiry"
   | "site_visit"
   | "design"
   | "production"
@@ -191,6 +193,11 @@ export interface StaffNavItem {
 }
 
 const STAGE_NAV: Record<OrderStage, StaffNavItem> = {
+  enquiry: {
+    href: "/staff/enquiries",
+    label: "Enquiries",
+    icon: "enquiry",
+  },
   site_visit: {
     href: "/staff/site-visit",
     label: "Site Visit",
@@ -235,6 +242,7 @@ const STAGE_NAV: Record<OrderStage, StaffNavItem> = {
 };
 
 const NAV_STAGE_ORDER: OrderStage[] = [
+  "enquiry",
   "site_visit",
   "quotation",
   "invoice",
@@ -244,13 +252,18 @@ const NAV_STAGE_ORDER: OrderStage[] = [
   "service_tickets",
 ];
 
-/** Sidebar tabs derived from tenant stage grants (canEdit stages only). */
+/** Sidebar tabs derived from tenant stage grants (canEdit stages only; enquiry also shows for canView). */
 export function getNavItemsForActor(actor: StageActor): StaffNavItem[] {
-  const stages = getEditableStages(actor);
+  const editable = getEditableStages(actor);
+  const viewable = getViewableStages(actor);
   const items: StaffNavItem[] = [];
 
   for (const stage of NAV_STAGE_ORDER) {
-    if (stages.includes(stage)) {
+    const show =
+      stage === "enquiry"
+        ? viewable.includes(stage) || editable.includes(stage)
+        : editable.includes(stage);
+    if (show) {
       items.push({ ...STAGE_NAV[stage] });
     }
   }
@@ -266,6 +279,7 @@ export function getNavItemsForActor(actor: StageActor): StaffNavItem[] {
 }
 
 const BACK_HREF_BY_STAGE: Record<OrderStage, string> = {
+  enquiry: "/staff/enquiries",
   site_visit: "/staff/site-visit",
   quotation: "/staff/orders",
   invoice: "/staff/invoices",

@@ -419,16 +419,14 @@ body {
   animation: polaris-mwl-heart 2.8s ease-in-out 0.2s infinite;
 }
 
-/* Shine masked to logo pixels — never a rectangle */
-.polaris-mwl-logo-wrap,
-.company-logo-shine {
+/* Shine masked to Polaris footer logo pixels — never a rectangle */
+.polaris-mwl-logo-wrap {
   position: relative;
   display: inline-flex;
   align-items: center;
   line-height: 0;
 }
-.polaris-mwl-logo-wrap::after,
-.company-logo-shine::after {
+.polaris-mwl-logo-wrap::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -459,7 +457,6 @@ body {
 }
 
 @media print {
-  .company-logo-shine::after,
   .polaris-mwl-logo-wrap::after {
     display: none !important;
     animation: none !important;

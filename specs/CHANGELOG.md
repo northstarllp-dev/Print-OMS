@@ -2,6 +2,13 @@
 
 ## [Unreleased] - 2026-08-01
 
+### Added
+
+#### Enquiry view/edit RBAC
+* Grant key `enquiry` with `{ canView, canEdit }` in `stageGrantsByRole` (admins always full access).
+* Staff `/staff/enquiries` list; sidebar shows Enquiries when view or edit; edit unlocks Add / Convert / updates.
+* Marketer defaults include enquiry edit; public `/quote` create unchanged.
+
 ### Changed
 
 #### Meta WhatsApp off — admin customer message popup

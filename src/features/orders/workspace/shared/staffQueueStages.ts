@@ -44,6 +44,7 @@ export function getPipelineStageOrder(workflowType?: WorkflowType) {
 
 /** Orders actively being worked in this queue (default tab). */
 const CURRENT_STAGES_BY_QUEUE: Record<OrderStage, readonly string[]> = {
+  enquiry: [], // Not an order queue — dedicated /staff/enquiries list
   site_visit: ["Site Visit Pending", "Site Visit Scheduled", "Site Visit Completed"],
   quotation: [
     "Quotation In Progress",

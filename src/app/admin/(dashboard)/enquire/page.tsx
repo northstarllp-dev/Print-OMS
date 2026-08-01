@@ -34,5 +34,5 @@ export default async function EnquirePage() {
     customerCode: c.customer_id || c.id
   })) || [];
 
-  return <EnquiriesViewNew initialEnquiries={mappedEnquiries} initialCustomers={mappedCustomers} />;
+  return <EnquiriesViewNew initialEnquiries={mappedEnquiries} initialCustomers={mappedCustomers} canEdit />;
 }

@@ -327,10 +327,10 @@ export function QuotationDocument({
                       <div className="flex flex-col min-w-0">
                         <div className="mb-2 max-w-full overflow-hidden">
                           <div className="quotation-logo-mobile sm:hidden">
-                            <Logo width={150} height={32} align="left" shine={false} />
+                            <Logo width={150} height={32} align="left" />
                           </div>
                           <div className="quotation-logo-desktop hidden sm:block">
-                            <Logo width={220} height={40} align="left" shine={false} />
+                            <Logo width={220} height={40} align="left" />
                           </div>
                         </div>
                         {legalName && legalName !== brand && (

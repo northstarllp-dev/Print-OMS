@@ -7,7 +7,7 @@ import { Search, Filter, Plus, AlertCircle, CheckCircle, Clock, Phone, X, Check,
 import { AddEnquiryModal, EnquiryFormData } from "./AddEnquiryModal";
 import { ConvertEnquiryModal } from "./ConvertEnquiryModal";
 import { AssignTeamModal } from "./AssignTeamModal";
-import { createEnquiry, updateEnquiry, convertEnquiryToOrderAction } from "@/features/enquiries/actions/enquiryActions";
+import { createEnquiry, convertEnquiryToOrderAction } from "@/features/enquiries/actions/enquiryActions";
 import { createOrder } from "@/features/orders/actions/orderActions";
 import { createCustomer } from "@/features/customers/actions/customerActions";
 import { CustomerMessageModal, CustomerMessageInfo } from "@/features/notifications/customer-message/CustomerMessageModal";
@@ -86,7 +86,17 @@ function SuccessModal({ title, message, onClose }: { title: string; message: str
   );
 }
 
-export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initialEnquiries: any[], initialCustomers: any[] }) {
+export function EnquiriesViewNew({
+  initialEnquiries,
+  initialCustomers,
+  canEdit = true,
+  orderBasePath = "/admin/orders",
+}: {
+  initialEnquiries: any[];
+  initialCustomers: any[];
+  canEdit?: boolean;
+  orderBasePath?: string;
+}) {
   const [enquiries, setEnquiries] = useState(initialEnquiries);
   const [customers, setCustomers] = useState(initialCustomers);
   const [searchTerm, setSearchTerm] = useState("");
@@ -325,13 +335,15 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
               Track and manage incoming customer enquiries and leads
             </p>
           </div>
-          <button
-            type="button"
-            className="inline-flex items-center justify-center gap-1.5 sm:gap-2 shrink-0 px-2.5 sm:px-4 py-2 sm:py-2.5 text-[11px] sm:text-[13px] font-semibold text-white bg-[var(--color-primary)] rounded-lg"
-            onClick={() => setIsAddModalOpen(true)}
-          >
-            <Plus size={16} /> New Enquiry
-          </button>
+          {canEdit ? (
+            <button
+              type="button"
+              className="inline-flex items-center justify-center gap-1.5 sm:gap-2 shrink-0 px-2.5 sm:px-4 py-2 sm:py-2.5 text-[11px] sm:text-[13px] font-semibold text-white bg-[var(--color-primary)] rounded-lg"
+              onClick={() => setIsAddModalOpen(true)}
+            >
+              <Plus size={16} /> New Enquiry
+            </button>
+          ) : null}
         </div>
 
         {/* Mobile KPI chips */}
@@ -704,16 +716,25 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
                       </div>
                       <div className="mt-2.5 flex flex-wrap gap-2">
                         {enq.status !== "Converted" ? (
-                          <button
-                            type="button"
-                            onClick={() => openConvert(enq)}
-                            className="px-3 py-1.5 rounded-md text-[12px] font-semibold text-white bg-[var(--color-primary)] whitespace-nowrap"
-                          >
-                            Convert to Order
-                          </button>
+                          canEdit ? (
+                            <button
+                              type="button"
+                              onClick={() => openConvert(enq)}
+                              className="px-3 py-1.5 rounded-md text-[12px] font-semibold text-white bg-[var(--color-primary)] whitespace-nowrap"
+                            >
+                              Convert to Order
+                            </button>
+                          ) : (
+                            <span
+                              className="px-3 py-1.5 rounded-md text-[12px] font-semibold whitespace-nowrap"
+                              style={{ background: statusColor.bg, color: statusColor.text }}
+                            >
+                              {statusColor.label}
+                            </span>
+                          )
                         ) : enq.orderId ? (
                           <Link
-                            href={`/admin/orders/${enq.orderId}`}
+                            href={`${orderBasePath}/${enq.orderId}`}
                             className="px-3 py-1.5 rounded-md text-[12px] font-semibold text-slate-600 bg-slate-100 border border-slate-200 whitespace-nowrap"
                           >
                             View Order
@@ -774,6 +795,7 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
                     <td style={{ padding: "16px 20px", textAlign: "right" }}>
                       <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", alignItems: "center" }}>
                         {enq.status !== "Converted" ? (
+                          canEdit ? (
                           <button 
                             onClick={() => openConvert(enq)}
                             style={{ padding: "6px 12px", background: "var(--color-primary)", border: "none", borderRadius: "6px", fontSize: "12px", fontWeight: "600", color: "white", cursor: "pointer", transition: "all 0.2s", whiteSpace: "nowrap" }}
@@ -782,9 +804,14 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
                           >
                             Convert to Order
                           </button>
+                          ) : (
+                            <span style={{ fontSize: "12px", fontWeight: "700", color: "#64748b" }}>
+                              {getStatusColor(enq.status).label}
+                            </span>
+                          )
                         ) : enq.orderId ? (
                           <Link
-                            href={`/admin/orders/${enq.orderId}`}
+                            href={`${orderBasePath}/${enq.orderId}`}
                             style={{
                               display: "inline-flex",
                               alignItems: "center",
@@ -831,13 +858,15 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
         </div>
       </div>
       
-      <AddEnquiryModal 
-        isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
-        onSubmit={handleAddEnquiry}
-      />
+      {canEdit ? (
+        <AddEnquiryModal
+          isOpen={isAddModalOpen}
+          onClose={() => setIsAddModalOpen(false)}
+          onSubmit={handleAddEnquiry}
+        />
+      ) : null}
 
-      {selectedEnquiry && (
+      {canEdit && selectedEnquiry ? (
         <ConvertEnquiryModal
           isOpen={convertModalOpen}
           onClose={() => {
@@ -870,7 +899,7 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
             setSelectedEnquiry(null);
           }}
         />
-      )}
+      ) : null}
 
       {customerMsg && (
         <CustomerMessageModal

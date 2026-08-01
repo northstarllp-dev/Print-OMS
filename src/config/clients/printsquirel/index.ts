@@ -1,6 +1,7 @@
 import { PrintOMSClientConfig } from "../../schema";
 
 type Stage =
+  | "enquiry"
   | "site_visit"
   | "quotation"
   | "invoice"
@@ -54,7 +55,7 @@ export const printsquirelConfig: Partial<PrintOMSClientConfig> = {
   usesFloorPortals: false,
   stageGrantsByRole: {
     Designer: { ...view("site_visit"), ...edit("design", "quotation", "invoice") },
-    Marketer: edit("site_visit","design", "quotation", "invoice"),
+    Marketer: edit("enquiry", "site_visit", "design", "quotation", "invoice"),
     "Production & Installation": {...view("site_visit"), ...edit("production","installation","service_tickets")},
   },
   whatsappTemplatePrefix: "printsquirel_",

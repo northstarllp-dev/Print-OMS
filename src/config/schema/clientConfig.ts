@@ -6,6 +6,7 @@ export type StagePermissionConfig = { canView: boolean; canEdit: boolean };
 
 export type RoleStageGrantMapConfig = Partial<
   Record<
+    | "enquiry"
     | "site_visit"
     | "quotation"
     | "invoice"
