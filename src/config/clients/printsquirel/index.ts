@@ -1,18 +1,23 @@
 import { PrintOMSClientConfig } from "../../schema";
 
-const edit = (
-  ...stages: Array<
-    | "site_visit"
-    | "quotation"
-    | "invoice"
-    | "design"
-    | "production"
-    | "installation"
-    | "service_tickets"
-  >
-) => {
+type Stage =
+  | "site_visit"
+  | "quotation"
+  | "invoice"
+  | "design"
+  | "production"
+  | "installation"
+  | "service_tickets";
+
+const edit = (...stages: Stage[]) => {
   const map: NonNullable<PrintOMSClientConfig["stageGrantsByRole"]>[string] = {};
   for (const s of stages) map[s] = { canView: true, canEdit: true };
+  return map;
+};
+
+const view = (...stages: Stage[]) => {
+  const map: NonNullable<PrintOMSClientConfig["stageGrantsByRole"]>[string] = {};
+  for (const s of stages) map[s] = { canView: true, canEdit: false };
   return map;
 };
 
@@ -48,14 +53,9 @@ export const printsquirelConfig: Partial<PrintOMSClientConfig> = {
   },
   usesFloorPortals: false,
   stageGrantsByRole: {
-    Designer: edit("site_visit", "design"),
-    Marketer: edit("site_visit", "quotation", "invoice"),
-    "Production & Installation": edit(
-      "site_visit",
-      "production",
-      "installation",
-      "service_tickets"
-    ),
+    Designer: { ...view("site_visit"), ...edit("design", "quotation", "invoice") },
+    Marketer: edit("site_visit","design", "quotation", "invoice"),
+    "Production & Installation": {...view("site_visit"), ...edit("production","installation","service_tickets")},
   },
   whatsappTemplatePrefix: "printsquirel_",
 };
