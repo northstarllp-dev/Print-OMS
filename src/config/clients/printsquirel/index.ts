@@ -39,7 +39,7 @@ export const printsquirelConfig: Partial<PrintOMSClientConfig> = {
     sidebarAccent: "#4ade80",
   },
   logoUrl: "/clients/printsquirel/printsquirel.png",
-  logoScale: 1.35,
+  logoScale: 1.1,
   faviconUrl: "/clients/printsquirel/favicon_io/favicon.ico",
   loadingText: "PRINT SQUIREL",
   features: {
