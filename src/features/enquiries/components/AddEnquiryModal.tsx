@@ -23,8 +23,10 @@ export interface EnquiryFormData {
 
 const formatPhoneNumber = (value: string): string => {
   let digits = value.replace(/\D/g, "");
-  if (digits.startsWith("91")) digits = digits.slice(2);
-  if (digits.startsWith("0")) digits = digits.slice(1);
+  // Only strip +91 / leading 0 when a full local number was pasted with the prefix
+  // (e.g. 919876543210). Do NOT strip while typing — "91…" is a valid start of a 10-digit mobile.
+  if (digits.length > 10 && digits.startsWith("91")) digits = digits.slice(2);
+  if (digits.length === 11 && digits.startsWith("0")) digits = digits.slice(1);
   digits = digits.slice(0, 10);
   if (digits.length === 10) {
     return `+91 ${digits.slice(0, 5)} ${digits.slice(5)}`;
