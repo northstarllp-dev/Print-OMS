@@ -504,18 +504,22 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
         .portal-scroll::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 4px; }
         @keyframes slideUp { from { opacity:0; transform: translateY(8px); } to { opacity:1; transform: translateY(0); } }
         .animate-slide-up { animation: slideUp 0.3s ease forwards; }
+        .stepper-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+        .stepper-scroll::-webkit-scrollbar { display: none; }
+        .date-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+        .date-scroll::-webkit-scrollbar { display: none; }
       `}</style>
 
       {/* --- TOP HEADER --- */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-20">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3 flex items-center justify-between gap-3">
           {/* Left: Logo + Order Info */}
-          <div className="flex items-center gap-3 min-w-0">
-            <Logo height={40} className="shrink-0 sm:h-[50px]" />
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+            <Logo height={32} className="shrink-0 sm:h-[40px]" />
             <div className="w-px h-6 bg-slate-200 shrink-0 hidden sm:block" />
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-sm sm:text-base font-black text-[#0b1c30] leading-none truncate">
+                <h1 className="text-xs sm:text-base font-black text-[#0b1c30] leading-none truncate">
                   Order #{activeOrder?.orderCode || activeOrder?.id}
                 </h1>
                 <a
@@ -524,40 +528,40 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                   title="Call Manager"
                 >
                   <Phone size={11} className="stroke-[2.5]" />
-                  <span className="hidden xs:inline sm:inline">Call</span>
+                  <span className="hidden sm:inline">Call</span>
                 </a>
               </div>
-              <p className="text-slate-500 mt-1 text-[11px] sm:text-sm truncate">
+              <p className="text-slate-500 mt-0.5 text-[10px] sm:text-sm truncate">
                 {activeOrder?.clientName || customer.name}
                 <span className="hidden sm:inline"> | {activeOrder?.businessName || "Signage Project"}</span>
               </p>
             </div>
           </div>
 
-          {/* Right: Action Buttons */}
-          <div className="flex items-center gap-2.5 w-full sm:w-auto">
-            {orders.length > 1 && (
+          {/* Right: Order Switcher */}
+          {orders.length > 1 && (
+            <div className="shrink-0">
               <select
                 value={activeOrderId}
                 onChange={e => setActiveOrderId(e.target.value)}
-                className="w-full sm:w-auto text-xs border border-slate-200 rounded-lg px-3 py-2 text-slate-600 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
+                className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 text-slate-600 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium max-w-[120px] sm:max-w-none"
               >
                 {orders.map(o => (
                   <option key={o.id} value={o.id}>{o.orderCode || o.id} — {o.stage}</option>
                 ))}
               </select>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </header>
 
       {/* --- PROGRESS STEPPER --- */}
       <div className="bg-white border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-5">
-          <div className="flex items-start gap-1 sm:justify-between relative overflow-x-auto pb-1 -mx-1 px-1">
-            {/* Background line — desktop only */}
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3 sm:py-5">
+          <div className="flex items-start gap-0 sm:gap-1 sm:justify-between relative stepper-scroll overflow-x-auto pb-1">
+            {/* Background line — sm and up */}
             <div className="hidden sm:block absolute top-[18px] left-0 right-0 h-[2px] bg-slate-100 z-0" />
-            {/* Progress fill — desktop only */}
+            {/* Progress fill — sm and up */}
             <div
               className="hidden sm:block absolute top-[18px] left-0 h-[2px] bg-emerald-500 z-0 portal-stepper-line"
               style={{ width: `${(currentStep / Math.max(STEPS.filter(s => s.key !== "payments").length - 1, 1)) * 100}%` }}
@@ -575,7 +579,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
               return (
                 <div
                   key={step.key}
-                  className={`flex flex-col items-center text-center relative z-10 shrink-0 sm:flex-1 min-w-[3.25rem] sm:min-w-0 ${canOpen ? 'cursor-pointer hover:opacity-80' : ''}`}
+                  className={`flex flex-col items-center text-center relative z-10 shrink-0 sm:flex-1 min-w-[3rem] sm:min-w-0 px-1 sm:px-0 snap-start ${canOpen ? 'cursor-pointer hover:opacity-80 active:opacity-70' : ''}`}
                   onClick={() => {
                     if (canOpen) {
                       setViewedStep(idx);
@@ -592,7 +596,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                     }`}>
                     {isCompleted && !isActive ? <Check size={14} className="stroke-[3]" /> : <Icon size={14} />}
                   </div>
-                  <span className={`text-[9px] sm:text-[11px] font-bold mt-1.5 sm:mt-2 block max-w-[4.5rem] sm:max-w-none leading-tight ${isActive ? "text-[#1E40AF]" : isCompleted ? "text-emerald-600" : isPaymentsTab ? "text-blue-500" : "text-slate-400"
+                  <span className={`text-[9px] sm:text-[11px] font-bold mt-1.5 sm:mt-2 block w-[3rem] sm:w-auto sm:max-w-none leading-tight ${isActive ? "text-[#1E40AF]" : isCompleted ? "text-emerald-600" : isPaymentsTab ? "text-blue-500" : "text-slate-400"
                     }`}>
                     {step.label}
                   </span>
@@ -699,7 +703,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                               <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
                                 Pick a Date
                               </label>
-                              <div className="flex gap-2 overflow-x-auto pb-1">
+                              <div className="flex gap-2 date-scroll overflow-x-auto pb-2 snap-x snap-mandatory">
                                 {getBusinessDays().map((day, idx) => {
                                   const ds = day.toISOString().split("T")[0];
                                   const dayName = day.toLocaleDateString("en-US", { weekday: "short" });
@@ -710,9 +714,9 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                                       key={idx}
                                       type="button"
                                       onClick={() => { setSelectedDate(ds); setSelectedTime(""); }}
-                                      className={`flex flex-col items-center p-3 rounded-xl border text-center min-w-[64px] transition-all cursor-pointer ${selected
+                                      className={`flex flex-col items-center p-3 rounded-xl border text-center min-w-[64px] snap-start shrink-0 transition-all cursor-pointer ${selected
                                         ? "bg-[#eff4ff] border-[#1E40AF] text-[#1E40AF] ring-2 ring-blue-100"
-                                        : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
+                                        : "bg-white border-slate-200 text-slate-600 hover:border-slate-300 active:bg-slate-50"
                                         }`}
                                     >
                                       <span className="text-[9px] uppercase tracking-wider text-slate-400">{dayName}</span>
@@ -827,7 +831,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                               <button
                                 type="submit"
                                 disabled={!selectedDate || !selectedTime || schedulingLoading}
-                                className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition-all disabled:opacity-50 shadow-sm"
+                                className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-3 sm:py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 active:bg-emerald-800 transition-all disabled:opacity-50 shadow-sm"
                               >
                                 {schedulingLoading ? <Loader2 size={14} className="animate-spin" /> : null}
                                 Confirm Site Visit
@@ -863,7 +867,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                           </div>
                         </div>
                         {appSettings?.siteVisitSchedulingEnabled !== false && (
-                          <button onClick={() => setIsRescheduling(true)} className="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50 transition-all flex items-center gap-2 mx-auto">
+                          <button onClick={() => setIsRescheduling(true)} className="w-full sm:w-auto px-4 py-3 sm:py-2 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50 active:bg-slate-100 transition-all flex items-center justify-center gap-2 mx-auto">
                             <RefreshCw size={12} /> Reschedule Appointment
                           </button>
                         )}
@@ -1190,7 +1194,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                 )}
 
                 {STEPS[activeStepToRender]?.key === "payments" && activeOrder && (
-                  <div className="p-6">
+                  <div className="p-4 sm:p-6">
                     <PaymentsTab orderId={activeOrder.id} />
                   </div>
                 )}
@@ -1238,29 +1242,29 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
           className="fixed inset-0 z-[99999] bg-black/90 flex items-center justify-center backdrop-blur-sm"
           onClick={() => setViewerIndex(null)}
         >
-          {/* Close button */}
-          <button
-            className="absolute top-6 right-6 text-white/70 hover:text-white bg-black/50 hover:bg-black/80 rounded-full p-2.5 transition-all focus:outline-none"
-            onClick={() => setViewerIndex(null)}
-          >
-            <X size={24} />
-          </button>
-
-          {/* Download button */}
-          <a
-            href={viewerPhotos[viewerIndex]}
-            download
-            target="_blank"
-            rel="noopener noreferrer"
-            className="absolute top-6 right-20 text-white/70 hover:text-white bg-black/50 hover:bg-black/80 rounded-xl px-4 py-2.5 transition-all focus:outline-none flex items-center gap-2 text-xs font-bold"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Download size={16} />
-            <span>Download</span>
-          </a>
+          {/* Top action bar */}
+          <div className="absolute top-0 left-0 right-0 flex items-center justify-end gap-2 p-3 sm:p-4 bg-gradient-to-b from-black/60 to-transparent z-10">
+            <a
+              href={viewerPhotos[viewerIndex]}
+              download
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-white/80 hover:text-white bg-black/40 hover:bg-black/70 rounded-xl px-3 py-2 transition-all focus:outline-none flex items-center gap-2 text-xs font-bold"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Download size={15} />
+              <span className="hidden sm:inline">Download</span>
+            </a>
+            <button
+              className="text-white/80 hover:text-white bg-black/40 hover:bg-black/70 rounded-full p-2 transition-all focus:outline-none"
+              onClick={() => setViewerIndex(null)}
+            >
+              <X size={20} />
+            </button>
+          </div>
 
           {/* Main Image */}
-          <div className="relative max-w-4xl max-h-[80vh] w-full h-full flex items-center justify-center p-4">
+          <div className="relative w-full h-full flex items-center justify-center p-10 sm:p-16">
             <img
               src={viewerPhotos[viewerIndex]}
               className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
@@ -1272,25 +1276,27 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
           {/* Previous button */}
           {viewerIndex > 0 && (
             <button
-              className="absolute left-6 top-1/2 -translate-y-1/2 text-white/70 hover:text-white bg-black/50 hover:bg-black/80 rounded-full p-3 transition-all focus:outline-none"
+              className="absolute left-2 sm:left-6 top-1/2 -translate-y-1/2 text-white/70 hover:text-white bg-black/50 hover:bg-black/80 rounded-full p-2 sm:p-3 transition-all focus:outline-none"
               onClick={(e) => { e.stopPropagation(); setViewerIndex(viewerIndex - 1); }}
             >
-              <ChevronLeft size={32} />
+              <ChevronLeft size={24} className="sm:hidden" />
+              <ChevronLeft size={32} className="hidden sm:block" />
             </button>
           )}
 
           {/* Next button */}
           {viewerIndex < viewerPhotos.length - 1 && (
             <button
-              className="absolute right-6 top-1/2 -translate-y-1/2 text-white/70 hover:text-white bg-black/50 hover:bg-black/80 rounded-full p-3 transition-all focus:outline-none"
+              className="absolute right-2 sm:right-6 top-1/2 -translate-y-1/2 text-white/70 hover:text-white bg-black/50 hover:bg-black/80 rounded-full p-2 sm:p-3 transition-all focus:outline-none"
               onClick={(e) => { e.stopPropagation(); setViewerIndex(viewerIndex + 1); }}
             >
-              <ChevronRight size={32} />
+              <ChevronRight size={24} className="sm:hidden" />
+              <ChevronRight size={32} className="hidden sm:block" />
             </button>
           )}
 
           {/* Image Counter */}
-          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-black/60 text-white text-sm font-medium px-4 py-1.5 rounded-full backdrop-blur-md">
+          <div className="absolute bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 bg-black/60 text-white text-xs sm:text-sm font-medium px-3 sm:px-4 py-1.5 rounded-full backdrop-blur-md">
             {viewerIndex + 1} / {viewerPhotos.length}
           </div>
         </div>
