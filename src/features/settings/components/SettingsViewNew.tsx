@@ -51,6 +51,7 @@ export function SettingsViewNew({ initialAppSettings, companyDetails }: Settings
   const defaultSettings = {
     companyName: companyDetails?.name || "Printoms",
     address: companyDetails?.address || "123 Business Park, Tech City",
+    googleReviewLink: initialAppSettings?.googleReviewLink ?? "",
     notifications: true,
     twoFactorAuth: true,
     theme: "light",
@@ -101,6 +102,13 @@ export function SettingsViewNew({ initialAppSettings, companyDetails }: Settings
       fields: [
         { label: "Company Name", key: "companyName", type: "text" },
         { label: "Business Address", key: "address", type: "text" },
+        {
+          label: "Google Review Link",
+          key: "googleReviewLink",
+          type: "url",
+          description:
+            "Used in the post-installation feedback WhatsApp/email message instead of the customer portal.",
+        },
       ],
     },
     {
@@ -260,6 +268,7 @@ export function SettingsViewNew({ initialAppSettings, companyDetails }: Settings
         updateAppSettings({
           siteVisitSchedulingEnabled: settings.siteVisitSchedulingEnabled,
           installationSchedulingEnabled: settings.installationSchedulingEnabled,
+          googleReviewLink: settings.googleReviewLink,
           productionChecklistItems: checklistItems,
         }),
       ]);

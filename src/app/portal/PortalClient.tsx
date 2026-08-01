@@ -1121,22 +1121,71 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                       />
                     </div>
 
-                    {inst.photoUrl ? (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="border border-slate-200 rounded-xl overflow-hidden aspect-video">
-                          <img src={inst.photoUrl} alt="Installation" className="w-full h-full object-cover" onError={e => { e.currentTarget.src = "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?w=400&auto=format&fit=crop"; }} />
-                        </div>
-                        <div className="space-y-3">
-                          <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-800">? Job Completed & Signed off by Client</div>
-                          <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-xs">
-                            <span className="text-slate-400 uppercase font-bold text-[10px] block mb-1">Signature</span>
-                            <span className="font-serif italic text-slate-800 text-sm">{inst.customerSignature}</span>
+                    {(() => {
+                      const installPhotos: string[] = Array.from(
+                        new Set(
+                          [
+                            ...(Array.isArray(inst.afterPhotos) ? inst.afterPhotos : []),
+                            ...(Array.isArray(inst.photos) ? inst.photos : []),
+                            ...(inst.photoUrl ? [inst.photoUrl] : []),
+                          ].filter((u): u is string => typeof u === "string" && !!u.trim())
+                        )
+                      );
+                      const installDone =
+                        installPhotos.length > 0 ||
+                        inst.status === "Completed" ||
+                        activeOrder.stage === "Completed" ||
+                        activeOrder.stage === "Closed";
+
+                      if (!installDone) {
+                        return (
+                          <div className="p-8 bg-slate-50 border border-slate-200 rounded-xl text-center text-slate-400 text-sm">
+                            Installation records will appear here once complete.
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div className="space-y-4">
+                          {installPhotos.length > 0 ? (
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                              {installPhotos.map((url, index) => (
+                                <div
+                                  key={`${url}-${index}`}
+                                  className="border border-slate-200 rounded-xl overflow-hidden aspect-video bg-slate-100"
+                                >
+                                  <img
+                                    src={url}
+                                    alt={`Installation photo ${index + 1}`}
+                                    className="w-full h-full object-cover"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
+                          <div className="space-y-3">
+                            <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-800">
+                              Job completed{inst.customerSignature ? " & signed off by client" : ""}
+                            </div>
+                            {inst.customerSignature ? (
+                              <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-xs">
+                                <span className="text-slate-400 uppercase font-bold text-[10px] block mb-1">
+                                  Signature
+                                </span>
+                                <span className="font-serif italic text-slate-800 text-sm">
+                                  {inst.customerSignature}
+                                </span>
+                              </div>
+                            ) : null}
+                            {inst.notes ? (
+                              <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600 whitespace-pre-wrap">
+                                {inst.notes}
+                              </div>
+                            ) : null}
                           </div>
                         </div>
-                      </div>
-                    ) : (
-                      <div className="p-8 bg-slate-50 border border-slate-200 rounded-xl text-center text-slate-400 text-sm">Installation records will appear here once complete.</div>
-                    )}
+                      );
+                    })()}
                   </div>
                 )}
 

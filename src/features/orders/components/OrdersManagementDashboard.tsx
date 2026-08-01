@@ -13,7 +13,6 @@ import {
   Eye,
   Trash2,
   X,
-  Briefcase,
   AlertTriangle,
   CheckCircle,
   Calendar,
@@ -359,33 +358,13 @@ export function OrdersManagementDashboard({
     [queueScopedOrders, matchesToolbarFilters]
   );
 
-  // KPI counts reflect the same toolbar filters as the list
+  // KPI counts reflect the same toolbar filters as the list (admin only)
   const activeOrders = toolbarFilteredOrders.filter(o => o.stage !== "Completed" && o.stage !== "Closed").length;
   const unassignedOrders = toolbarFilteredOrders.filter(o => o.stage !== "Completed" && o.stage !== "Closed" && (!o.assignedEmployees || o.assignedEmployees.length === 0)).length;
   const pendingApprovals = toolbarFilteredOrders.filter(o => needsAdminApproval(o.stageStatus)).length;
   const completedOrders = toolbarFilteredOrders.filter(o => o.stage === "Completed" || o.stage === "Closed").length;
 
-  const myActiveOrders = toolbarFilteredOrders.filter(o => o.stage !== "Completed" && o.stage !== "Closed" && (o.assignedEmployees.includes(employeeName) || o.assignedEmployees.includes(currentEmployeeId))).length;
-  const myCompletedOrders = toolbarFilteredOrders.filter(o => (o.stage === "Completed" || o.stage === "Closed") && (o.assignedEmployees.includes(employeeName) || o.assignedEmployees.includes(currentEmployeeId))).length;
-
-  const stats = currentUserRole === "Employee" ? [
-    {
-      label: "ASSIGNED TO ME",
-      value: myActiveOrders.toString(),
-      change: "Active projects in your queue",
-      filterKey: "myactive",
-      icon: Briefcase,
-      color: "var(--color-secondary)",
-    },
-    {
-      label: "MY COMPLETED",
-      value: myCompletedOrders.toString(),
-      change: "All-time completed orders",
-      filterKey: "mycompleted",
-      icon: CheckCircle,
-      color: "#22c55e",
-    },
-  ] : [
+  const stats = currentUserRole === "Employee" ? [] : [
     {
       label: "TOTAL ACTIVE",
       value: activeOrders.toString(),
@@ -430,10 +409,6 @@ export function OrdersManagementDashboard({
       list = list.filter(o => needsAdminApproval(o.stageStatus));
     } else if (selectedKpi === "completed") {
       list = list.filter(o => o.stage === "Completed" || o.stage === "Closed");
-    } else if (selectedKpi === "myactive") {
-      list = list.filter(o => o.stage !== "Completed" && o.stage !== "Closed" && (o.assignedEmployees?.includes(employeeName) || o.assignedEmployees?.includes(currentEmployeeId)));
-    } else if (selectedKpi === "mycompleted") {
-      list = list.filter(o => (o.stage === "Completed" || o.stage === "Closed") && (o.assignedEmployees?.includes(employeeName) || o.assignedEmployees?.includes(currentEmployeeId)));
     }
     return list;
   }, [toolbarFilteredOrders, selectedKpi, employeeName, currentEmployeeId]);
@@ -538,7 +513,8 @@ export function OrdersManagementDashboard({
           </div>
         )}
 
-        {/* Desktop/tablet: Stats Cards */}
+        {/* Desktop/tablet: Stats Cards (admin only) */}
+        {currentUserRole !== "Employee" && (
         <div className="hidden lg:grid grid-cols-2 xl:grid-cols-4 gap-4">
           {stats.map((stat: any, idx) => {
             const Icon = stat.icon;
@@ -585,6 +561,7 @@ export function OrdersManagementDashboard({
             );
           })}
         </div>
+        )}
       </div>
 
       {/* Main Content Area */}
@@ -990,25 +967,6 @@ export function OrdersManagementDashboard({
                               {order.health || "Active"}
                             </span>
                           </div>
-                          <div className="flex items-center shrink-0">
-                            {order.assignedEmployees?.slice(0, 4).map((empId: string, i: number) => {
-                              const staff = employees.find(e => e.id === empId);
-                              const name = staff ? staff.name : "Un";
-                              return (
-                                <div
-                                  key={i}
-                                  title={name}
-                                  className="w-6 h-6 rounded-full bg-[var(--color-primary)] text-white flex items-center justify-center text-[9px] font-bold border-2 border-white"
-                                  style={{ marginLeft: i > 0 ? "-6px" : "0" }}
-                                >
-                                  {name.substring(0, 2).toUpperCase()}
-                                </div>
-                              );
-                            })}
-                            {(!order.assignedEmployees || order.assignedEmployees.length === 0) && (
-                              <span className="text-[11px] text-slate-400 italic">Unassigned</span>
-                            )}
-                          </div>
                         </div>
 
                         {(visitDate && visitTime) ? (
@@ -1055,9 +1013,6 @@ export function OrdersManagementDashboard({
                 </th>
                 <th style={{ padding: "14px 20px", textAlign: "center", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                   HEALTH
-                </th>
-                <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                  TEAM
                 </th>
                 <th style={{ padding: "14px 20px", textAlign: "center", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                   ACTIONS
@@ -1189,49 +1144,6 @@ export function OrdersManagementDashboard({
                       >
                         {order.health || "Active"}
                       </span>
-                    </td>
-                    <td 
-                      style={{ 
-                        padding: "16px 20px", 
-                        cursor: currentUserRole === "Admin" ? "pointer" : "default",
-                        transition: "background 0.2s"
-                      }}
-                      onClick={() => {
-                        if (currentUserRole === "Admin") {
-                          setAssignPanelOrderId(order.id);
-                        }
-                      }}
-                      title={currentUserRole === "Admin" ? "Click to assign team" : ""}
-                      onMouseEnter={(e) => {
-                        if (currentUserRole === "Admin") {
-                          e.currentTarget.style.background = "#eff6ff";
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (currentUserRole === "Admin") {
-                          e.currentTarget.style.background = "transparent";
-                        }
-                      }}
-                    >
-                      <div className="flex items-center gap-1 relative">
-                        {order.assignedEmployees && order.assignedEmployees.map((empId: string, i: number) => {
-                          const staff = employees.find(e => e.id === empId);
-                          const name = staff ? staff.name : "Un";
-                          return (
-                            <div
-                              key={i}
-                              title={name}
-                              className="w-7 h-7 rounded-full bg-[var(--color-primary)] text-white flex items-center justify-center text-[10px] font-bold border-2 border-white"
-                              style={{ marginLeft: i > 0 ? "-8px" : "0" }}
-                            >
-                              {name.substring(0, 2).toUpperCase()}
-                            </div>
-                          );
-                        })}
-                        {(!order.assignedEmployees || order.assignedEmployees.length === 0) && (
-                          <span className="text-xs text-slate-400 italic">Unassigned</span>
-                        )}
-                      </div>
                     </td>
                     <td style={{ padding: "16px 20px", textAlign: "center" }}>
                       <div className="relative inline-flex items-center gap-1.5">

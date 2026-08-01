@@ -6,7 +6,7 @@ import { OverlayPortal } from "@/components/ui/OverlayPortal";
 import {
   Plus, Trash2, Search, Check, ChevronDown, Info, X,
   ClipboardList, IndianRupee, Loader2, AlertCircle, Package, Save, Sparkles, Shield,
-  Eye, ArrowLeft
+  Eye, ArrowLeft, MessageSquare
 } from "lucide-react";
 import {
   upsertQuotation,
@@ -115,6 +115,14 @@ interface QuotationModuleProps {
   currentUserRole?: string;
   currentUserName?: string;
   onRequestAdvance?: () => void;
+  /** Opens the admin customer-update message popup (copy / wa.me / mailto). */
+  onCustomerMessage?: (
+    key:
+      | "quotation_ready"
+      | "revised_quotation_ready"
+      | "quotation_follow_up"
+      | "final_quotation_shared"
+  ) => void;
   /** DB-shaped quotation row from parent realtime (when externalRealtime). */
   realtimeQuotation?: Record<string, unknown> | null;
   /** Parent (OrderWorksheetModal) owns the quotations realtime channel. */
@@ -389,6 +397,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
   initialQuotation,
   siteVisitItems = [],
   onRequestAdvance,
+  onCustomerMessage,
   externalRealtime = false,
   realtimeQuotation = null,
   adminOverrideUnlocked,
@@ -746,11 +755,14 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
         shipping,
       });
       if (saved.quotation_id) setQuotationId(saved.quotation_id);
-      await sendQuotationToCustomer(saved.id, actorName);
+      const { isRevisionResend } = await sendQuotationToCustomer(saved.id, actorName);
       setStatus("Sent");
       isDirtyRef.current = false;
       setSaveMsg({ text: "Quotation sent to customer successfully!", ok: true });
       setTimeout(() => setSaveMsg(null), 4000);
+      onCustomerMessage?.(
+        isRevisionResend ? "revised_quotation_ready" : "quotation_ready"
+      );
     } catch (err: any) {
       setSaveMsg({ text: err.message || "Send failed", ok: false });
     } finally {
@@ -818,6 +830,27 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
             <Eye size={13} />
             Preview / Print
           </button>
+
+          {onCustomerMessage && status !== "Draft" && (
+            <>
+              <button
+                type="button"
+                onClick={() => onCustomerMessage("quotation_follow_up")}
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-bold text-amber-700 hover:bg-amber-100 shadow-sm w-full sm:w-auto"
+              >
+                <MessageSquare size={13} />
+                Follow-Up Msg
+              </button>
+              <button
+                type="button"
+                onClick={() => onCustomerMessage("final_quotation_shared")}
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] font-bold text-emerald-700 hover:bg-emerald-100 shadow-sm w-full sm:w-auto"
+              >
+                <MessageSquare size={13} />
+                Final Quote Msg
+              </button>
+            </>
+          )}
 
           <span className={`text-[10px] px-2.5 py-1 rounded-full font-black uppercase border ${status === "Approved" ? "bg-emerald-50 border-emerald-200 text-emerald-700" :
               status === "Sent" ? "bg-blue-50 border-blue-200 text-blue-700" :
@@ -1553,6 +1586,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
       {showSendConfirm && (
         <QuotationConfirmModal
           status={status}
+          isRevisionResend={status === "Rejected" || !!rejectionReason.trim()}
           subtotal={subtotal}
           discount={effectiveDiscount}
           tax={tax}
@@ -1728,8 +1762,8 @@ function ProductInfoModal({ product, onClose }: { product: Product; onClose: () 
 // ─────────────────────────────────────────────────────────────────────────────
 // Quotation Confirm Modal Component
 // ─────────────────────────────────────────────────────────────────────────────
-function getSendConfirmSubtitle(status: string): string {
-  if (status === "Rejected") {
+function getSendConfirmSubtitle(status: string, isRevisionResend: boolean): string {
+  if (isRevisionResend || status === "Rejected") {
     return "Review revised totals before resending to the customer.";
   }
   if (status === "Sent") {
@@ -1740,6 +1774,7 @@ function getSendConfirmSubtitle(status: string): string {
 
 function QuotationConfirmModal({
   status,
+  isRevisionResend = false,
   subtotal,
   discount,
   tax,
@@ -1751,6 +1786,7 @@ function QuotationConfirmModal({
   onClose,
 }: {
   status: string;
+  isRevisionResend?: boolean;
   subtotal: number;
   discount: number;
   tax: number;
@@ -1767,7 +1803,10 @@ function QuotationConfirmModal({
   onConfirm: () => void;
   onClose: () => void;
 }) {
-  const confirmLabel = status === "Rejected" ? "Resend to Customer" : "Send to Customer";
+  const confirmLabel =
+    isRevisionResend || status === "Rejected"
+      ? "Resend to Customer"
+      : "Send to Customer";
 
   return (
     <OverlayPortal>
@@ -1801,7 +1840,7 @@ function QuotationConfirmModal({
               Confirm Quotation
             </h4>
             <span style={{ fontSize: "10px", color: "#64748b", fontWeight: 600, display: "block", marginTop: "2px" }}>
-              {getSendConfirmSubtitle(status)}
+              {getSendConfirmSubtitle(status, isRevisionResend)}
             </span>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 shrink-0 p-1" aria-label="Close">

@@ -34,6 +34,8 @@ import type {
 import { getTaskById } from "@/features/tasks/actions/taskActions";
 import type { TaskRecord } from "@/features/tasks/types";
 import { TaskDetailPanel } from "@/features/tasks/components/TaskDetailPanel";
+import { CustomerMessageModal } from "@/features/notifications/customer-message/CustomerMessageModal";
+import type { CustomerMessageKey } from "@/features/notifications/customer-message/templates";
 
 const TYPE_META: Record<
   CalendarEventType,
@@ -190,6 +192,13 @@ export function CompanyCalendarView({
   const [rescheduleTime, setRescheduleTime] = useState("");
   const [isPending, startTransition] = useTransition();
   const [rescheduleError, setRescheduleError] = useState("");
+  // Customer update popup after a reschedule (admin only)
+  const [customerMsg, setCustomerMsg] = useState<{
+    key: CustomerMessageKey;
+    orderId: string;
+    date: string;
+    time?: string;
+  } | null>(null);
   const [selectedTask, setSelectedTask] = useState<TaskRecord | null>(null);
   const [taskLoadingId, setTaskLoadingId] = useState<string | null>(null);
 
@@ -313,6 +322,8 @@ export function CompanyCalendarView({
     setRescheduleError("");
     startTransition(async () => {
       try {
+        let messageKey: CustomerMessageKey | null = null;
+        let messageTime = rescheduleTime;
         if (rescheduleEvent.type === "site_visit" && onRescheduleSiteVisit) {
           await onRescheduleSiteVisit(orderId, {
             auditDate: rescheduleDate,
@@ -320,13 +331,24 @@ export function CompanyCalendarView({
             preferredTime: rescheduleTime || undefined,
             customerAddress: rescheduleEvent.address || undefined,
           });
+          messageKey = "site_visit_scheduled";
         } else if (rescheduleEvent.type === "installation" && onRescheduleInstallation) {
+          messageTime = rescheduleTime || "10:00";
           await onRescheduleInstallation(orderId, {
             scheduledDate: rescheduleDate,
-            scheduledTime: rescheduleTime || "10:00",
+            scheduledTime: messageTime,
           });
+          messageKey = "installation_scheduled";
         }
         setRescheduleEvent(null);
+        if (isAdmin && messageKey) {
+          setCustomerMsg({
+            key: messageKey,
+            orderId,
+            date: rescheduleDate,
+            time: messageTime || undefined,
+          });
+        }
       } catch (err: any) {
         setRescheduleError(err?.message || "Failed to reschedule");
       }
@@ -1042,6 +1064,31 @@ export function CompanyCalendarView({
           onClose={() => setSelectedTask(null)}
         />
       ) : null}
+
+      {/* Customer update popup after reschedule (copy / WhatsApp / email) */}
+      {customerMsg && (() => {
+        const msgOrder = orders.find((o) => o.id === customerMsg.orderId);
+        const msgCustomer = msgOrder?.customerId
+          ? customers.find((c) => c.id === msgOrder.customerId)
+          : undefined;
+        return (
+          <CustomerMessageModal
+            isOpen
+            templateKey={customerMsg.key}
+            info={{
+              customerId: msgOrder?.customerId,
+              orderId: customerMsg.orderId,
+              orderNo: msgOrder?.orderCode || msgOrder?.orderId,
+              businessName:
+                msgOrder?.businessName || msgOrder?.clientName || msgCustomer?.name || "Customer",
+              phone: msgCustomer?.phone || "",
+              date: customerMsg.date,
+              time: customerMsg.time,
+            }}
+            onClose={() => setCustomerMsg(null)}
+          />
+        );
+      })()}
     </div>
   );
 }

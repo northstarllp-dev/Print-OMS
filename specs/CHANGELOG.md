@@ -1,5 +1,14 @@
 # Changelog
 
+## [Unreleased] - 2026-08-01
+
+### Changed
+
+#### Meta WhatsApp off — admin customer message popup
+* **Meta Cloud API dispatch disabled**: `dispatchWhatsAppNotification` early-returns (skipped) so no Graph API sends occur; call sites and outbox stay intact for a later re-enable.
+* **Admin customer message popup**: New shared `CustomerMessageModal` (`src/features/notifications/customer-message/`) with 19 Meta-ready utility templates (`{{n}}` body params, portal link appended for share channels). Variables (business name, client brand, enquiry/order/ticket numbers, date/time, portal link) auto-fill from context; actions: Copy, WhatsApp (`wa.me/91…`), Email (`mailto:`).
+* **Wired triggers**: create enquiry, convert-to-order (replaces the old Printoms welcome modal), site visit schedule/complete, quotation send (ready/revised) + manual Follow-Up and Final Quotation buttons, design send (ready/revision), stage advances (Design In Progress / Production / Ready For Installation / Completed), installation schedule (worksheet + calendar reschedule), service ticket create/resolve, and a feedback request offered after Installation Completed.
+
 ## [Unreleased] - 2026-07-08
 
 ### Changed

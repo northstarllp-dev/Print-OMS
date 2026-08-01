@@ -10,7 +10,7 @@ import {
   MapPin, FileText, LayoutDashboard, CheckSquare,
   ArrowLeft, MoreVertical, Lock, Save,
   BarChart3, Palette, Package, Wrench, User, CreditCard,
-  AlertTriangle, History,
+  AlertTriangle, History, MessageSquare,
 } from "lucide-react";
 import {
   Order, PipelineStage, SiteVisitDetails,
@@ -69,6 +69,19 @@ import {
   useOrderDetailSync,
 } from "@/features/orders/realtime/useOrderDetailSync";
 import { areAllDesignItemsApproved } from "@/features/designs/utils/designApproval";
+import { CustomerMessageModal } from "@/features/notifications/customer-message/CustomerMessageModal";
+import { CustomerMessageTemplatePicker } from "@/features/notifications/customer-message/CustomerMessageTemplatePicker";
+import { getScheduleExtrasForTemplate } from "@/features/notifications/customer-message/stageTemplates";
+import { listCustomerMessageShares } from "@/features/notifications/customer-message/shareActions";
+import type { CustomerMessageKey } from "@/features/notifications/customer-message/templates";
+
+/** Pipeline stage → customer update template shown after the stage change. */
+const STAGE_MESSAGE_TEMPLATES: Partial<Record<string, CustomerMessageKey>> = {
+  "Design In Progress": "design_resources_required",
+  "Production": "production_started",
+  "Ready For Installation": "ready_for_installation",
+  "Completed": "installation_completed",
+};
 
 /* ─── helpers ──────────────────────────────────────────────────── */
 const STAGE_LABEL: Record<string, { label: string; color: string }> = {
@@ -307,6 +320,17 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   const [orderTab, setOrderTab] = useState<"all" | "active" | "pending">("all");
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  // Customer update popup (copy / wa.me / mailto) — admin only
+  const [customerMsg, setCustomerMsg] = useState<{
+    key: CustomerMessageKey;
+    date?: string;
+    time?: string;
+    followUpKey?: CustomerMessageKey;
+  } | null>(null);
+  // Catch-up template picker (FAB) — when admin skipped the auto popup
+  const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
+  const [sentMessageKeys, setSentMessageKeys] = useState<CustomerMessageKey[]>([]);
+
   const [messages, setMessages] = useState<any[]>([]);
   const orderRef = useRef(order);
   orderRef.current = order;
@@ -398,6 +422,19 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     loadMessages();
   }, [isOpen, order.id, order.orderId, companyId]);
 
+  // Load which customer message templates were already shared for this order.
+  useEffect(() => {
+    if (!isOpen || currentUserRole !== "Admin") return;
+    let cancelled = false;
+    void listCustomerMessageShares(order.id, order.orderId).then((res) => {
+      if (cancelled || "error" in res) return;
+      setSentMessageKeys(res.keys);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, order.id, order.orderId, currentUserRole, templatePickerOpen]);
+
   useOrderDetailSync({
     orderId: order.id,
     businessOrderId: order.orderId || order.id,
@@ -480,6 +517,23 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   /* ── Data ── */
   const client = customers.find((c) => c.id === order.customerId);
   const isEmployee = currentUserRole === "Employee";
+
+  /* Customer message popup — admin portal only */
+  const openCustomerMessage = (
+    key: CustomerMessageKey,
+    extra?: { date?: string; time?: string }
+  ) => {
+    if (currentUserRole !== "Admin") return;
+    setCustomerMsg({
+      key,
+      ...extra,
+      followUpKey: key === "installation_completed" ? "feedback_request" : undefined,
+    });
+  };
+  const openStageCustomerMessage = (stage?: string) => {
+    const key = stage ? STAGE_MESSAGE_TEMPLATES[stage] : undefined;
+    if (key) openCustomerMessage(key);
+  };
   const isStaffOrAdmin = currentUserRole === "Employee" || currentUserRole === "Admin";
   const currentStageIndex = stageToTabIndex(order.stage, order.workflow_type);
   const actor = {
@@ -620,6 +674,9 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           : "Stage approved and advanced.",
       "success"
     );
+    if (nextStage && nextStage !== fromStage) {
+      openStageCustomerMessage(nextStage);
+    }
   };
 
   const handleAdminApprove = async () => {
@@ -627,7 +684,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     try {
       // Don't draft-save Admin/Payments tabs — they aren't stage worksheets.
       if (activeStepTab !== ADMIN_TAB && activeStepTab !== PAYMENTS_TAB) {
-        await handleSaveDraft();
+        await handleSaveDraft({ suppressCustomerPopup: true });
         setIsProcessing(true);
       }
       // On Site Visit tab with normal status, open review modal first.
@@ -673,6 +730,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
       setOrder(prev => ({ ...prev, stage: stage as PipelineStage }));
       router.refresh();
       triggerLocalAlert(`Stage changed to ${stage}`, "success");
+      openStageCustomerMessage(stage);
     } catch (err: any) {
       console.error(err);
       triggerLocalAlert(err?.message || "Failed to change stage", "error");
@@ -842,7 +900,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     }
   };
 
-  const handleSaveDraft = async () => {
+  const handleSaveDraft = async (opts?: { suppressCustomerPopup?: boolean }) => {
     setIsProcessing(true);
     const workflowType = order.workflow_type || "quote_first";
     // Tab indices depend on workflow:
@@ -873,8 +931,19 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           break;
         case designTab: // Design
           if (order.design) {
+            // Same revision detection as the server action: any version that
+            // had customer changes requested means this send is a revision.
+            const hadChangesRequested = ((order.design as DesignRecord)?.items || []).some(
+              (item: any) =>
+                (item.versions || []).some((v: any) => v.status === "Changes Requested")
+            );
             const updated = await sendDesignToCustomerAction(order.id);
             setOrder(prev => ({ ...prev, design: updated }));
+            if (!opts?.suppressCustomerPopup) {
+              openCustomerMessage(
+                hadChangesRequested ? "design_revision_uploaded" : "design_ready_for_review"
+              );
+            }
           }
           break;
         case 3: // Production
@@ -1045,6 +1114,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           onClose={onClose} onUpdate={(d) => updateSiteVisitDetails(order.id, d)}
           onSubmitForApproval={handleRequestAdvancement}
           onAdminApprove={async (): Promise<void> => { await handleAdminApprove(); }}
+          onCustomerMessage={currentUserRole === "Admin" ? openCustomerMessage : undefined}
           onSkipSiteVisit={async () => {
             if (!getStagePermissionInContext("site_visit", actor, entryStage).canEdit) return;
             const now = new Date().toISOString();
@@ -1084,6 +1154,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           initialQuotation={initialQuotation}
           siteVisitItems={siteVisitItems}
           onRequestAdvance={handleQuotationAdvance}
+          onCustomerMessage={currentUserRole === "Admin" ? openCustomerMessage : undefined}
           externalRealtime
           realtimeQuotation={quotationRealtimeRow}
           adminOverrideUnlocked={effectiveAdminOverrideUnlocked}
@@ -1156,6 +1227,10 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
               setActiveStepTab(4);
               router.refresh();
               triggerLocalAlert("Installation scheduled — stage advanced.", "success");
+              openCustomerMessage("installation_scheduled", {
+                date: scheduledDate,
+                time: scheduledTime,
+              });
             },
           }}
           adminOverrideUnlocked={effectiveAdminOverrideUnlocked}
@@ -1184,6 +1259,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                   stageStatus: "Pending Admin Approval: Site Visit Completed",
                   siteVisitDetails: { ...prev.siteVisitDetails, completed: true } as any,
                 }));
+                openCustomerMessage("site_visit_completed");
               } catch (err: any) {
                 triggerLocalAlert(err?.message || "Failed to lock site visit.", "error");
                 setIsProcessing(false);
@@ -1766,7 +1842,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                           return (
                             <>
                               <button
-                                onClick={handleSaveDraft}
+                                onClick={() => handleSaveDraft()}
                                 className="flex-1 sm:flex-none min-w-0 justify-center"
                                 style={
                                   activeStepTab === designTab
@@ -1951,6 +2027,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                 stageStatus: "Pending Admin Approval: Site Visit Completed",
                 siteVisitDetails: { ...prev.siteVisitDetails, completed: true } as any,
               }));
+              openCustomerMessage("site_visit_completed");
               setIsReviewModalOpen(false);
               router.refresh();
               setIsWorkflowChoiceOpen(true);
@@ -2028,6 +2105,76 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           onClose={() => setShowCustomerPanel(false)}
           customer={client}
           orderId={initialOrder.id}
+        />
+      )}
+
+      {/* Catch-up WhatsApp FAB — admin only, when auto popup was skipped */}
+      {currentUserRole === "Admin" && !customerMsg && !templatePickerOpen && (
+        <button
+          type="button"
+          onClick={() => setTemplatePickerOpen(true)}
+          title="Send customer WhatsApp message"
+          aria-label="Send customer WhatsApp message"
+          style={{
+            position: "fixed",
+            right: "max(20px, env(safe-area-inset-right))",
+            bottom: "max(88px, calc(env(safe-area-inset-bottom) + 72px))",
+            zIndex: 1050,
+            width: 56,
+            height: 56,
+            borderRadius: "50%",
+            border: "none",
+            background: "#25D366",
+            color: "white",
+            boxShadow: "0 8px 20px rgba(37, 211, 102, 0.45)",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <MessageSquare size={26} />
+        </button>
+      )}
+
+      {currentUserRole === "Admin" && (
+        <CustomerMessageTemplatePicker
+          isOpen={templatePickerOpen}
+          onClose={() => setTemplatePickerOpen(false)}
+          stage={order.stage}
+          workflowType={order.workflow_type || "quote_first"}
+          orderNo={order.orderId || order.orderCode || order.id}
+          sentKeys={sentMessageKeys}
+          onSelect={(key) => {
+            openCustomerMessage(key, getScheduleExtrasForTemplate(key, order));
+          }}
+        />
+      )}
+
+      {/* Customer update message popup (copy / WhatsApp / email) */}
+      {customerMsg && (
+        <CustomerMessageModal
+          isOpen
+          templateKey={customerMsg.key}
+          info={{
+            customerId: client?.id || order.customerId,
+            orderId: order.id,
+            orderNo: order.orderId || order.id,
+            businessName: order.businessName || client?.name || "Customer",
+            phone: client?.whatsapp || client?.phone || "",
+            email: client?.email || "",
+            date: customerMsg.date,
+            time: customerMsg.time,
+          }}
+          onShared={(key) => {
+            setSentMessageKeys((prev) =>
+              prev.includes(key) ? prev : [...prev, key]
+            );
+          }}
+          onClose={() => {
+            const followUpKey = customerMsg.followUpKey;
+            setCustomerMsg(followUpKey ? { key: followUpKey } : null);
+          }}
         />
       )}
     </div>

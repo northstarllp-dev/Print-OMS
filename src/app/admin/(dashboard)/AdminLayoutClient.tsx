@@ -38,6 +38,7 @@ import { PlatformMadeWithLove } from "@/components/ui/PlatformMadeWithLove";
 import { PullToRefresh } from "@/components/ui/PullToRefresh";
 import { useRouter, usePathname } from "next/navigation";
 import { signOut } from "@/features/auth/actions/authActions";
+import { IdleSessionGuard } from "@/features/auth/components/IdleSessionGuard";
 
 interface AdminLayoutClientProps {
   children: React.ReactNode;
@@ -173,6 +174,7 @@ export function AdminLayoutClient({
 
   return (
     <div style={{ display: "flex", height: "100dvh", maxHeight: "100dvh", overflow: "hidden", background: "var(--color-background)" }}>
+      <IdleSessionGuard loginPath="/admin/login" />
 
       {/* ── DARK SIDEBAR ── */}
       <aside

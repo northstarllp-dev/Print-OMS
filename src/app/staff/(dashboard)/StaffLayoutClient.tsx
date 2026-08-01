@@ -14,6 +14,7 @@ import { PlatformMadeWithLove } from "@/components/ui/PlatformMadeWithLove";
 import { PullToRefresh } from "@/components/ui/PullToRefresh";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { signOut, updateUserPassword } from "@/features/auth/actions/authActions";
+import { IdleSessionGuard } from "@/features/auth/components/IdleSessionGuard";
 import {
   getNavItemsForActor,
   type StaffNavIcon,
@@ -194,6 +195,7 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
 
   return (
     <div style={{ display: "flex", height: "100dvh", maxHeight: "100dvh", overflow: "hidden", background: "var(--color-background)" }}>
+      <IdleSessionGuard loginPath="/staff/login" />
 
       {/* ── DARK SIDEBAR ── */}
       <aside

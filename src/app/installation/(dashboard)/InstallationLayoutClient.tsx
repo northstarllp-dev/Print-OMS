@@ -11,6 +11,7 @@ import { PlatformMadeWithLove } from "@/components/ui/PlatformMadeWithLove";
 import { PullToRefresh } from "@/components/ui/PullToRefresh";
 import { useRouter, usePathname } from "next/navigation";
 import { signOut, updateUserPassword } from "@/features/auth/actions/authActions";
+import { IdleSessionGuard } from "@/features/auth/components/IdleSessionGuard";
 import { getEditableStages } from "@/features/orders/workspace/shared/stageGrants";
 
 interface InstallationLayoutClientProps {
@@ -136,6 +137,7 @@ export function InstallationLayoutClient({ children, profile }: InstallationLayo
 
   return (
     <div style={{ display: "flex", height: "100dvh", maxHeight: "100dvh", overflow: "hidden", background: "var(--color-background)" }}>
+      <IdleSessionGuard loginPath="/installation/login" />
 
       {/* ── DARK SIDEBAR ── */}
       <aside

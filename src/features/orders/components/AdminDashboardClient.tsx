@@ -23,6 +23,7 @@ import {
 import { AddEnquiryModal, EnquiryFormData } from "@/features/enquiries/components/AddEnquiryModal";
 import { createEnquiry } from "@/features/enquiries/actions/enquiryActions";
 import { CreateServiceTicketModal } from "@/features/service-tickets/components/CreateServiceTicketModal";
+import { CustomerMessageModal, CustomerMessageInfo } from "@/features/notifications/customer-message/CustomerMessageModal";
 
 /* ─── helpers ──────────────────────────────────────────────────── */
 const STAGE_LABEL: Record<string, { label: string; dot: string }> = {
@@ -105,6 +106,7 @@ export function AdminDashboardClient({
   const router = useRouter();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isTicketModalOpen, setIsTicketModalOpen] = useState(false);
+  const [enquiryMsgInfo, setEnquiryMsgInfo] = useState<CustomerMessageInfo | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [selectedPipelineStage, setSelectedPipelineStage] = useState<string | null>(null);
   const [selectedKpi, setSelectedKpi] = useState<string | null>(null);
@@ -871,15 +873,33 @@ export function AdminDashboardClient({
               location: data.location,
               status: "Pending"
             };
-            await createEnquiry(newEnq);
+            const result = await createEnquiry(newEnq);
             setIsAddModalOpen(false);
             router.refresh();
+            const row = result?.[0];
+            if (row) {
+              setEnquiryMsgInfo({
+                businessName: row.business_name || row.lead_name || "Customer",
+                phone: row.whatsapp || row.phone || "",
+                email: row.email || "",
+                enquiryNo: row.enquire_id || "",
+              });
+            }
           } catch (error) {
             console.error("Error adding enquiry:", error);
             alert("Failed to add enquiry.");
           }
         }}
       />
+
+      {enquiryMsgInfo && (
+        <CustomerMessageModal
+          isOpen
+          templateKey="enquiry_received"
+          info={enquiryMsgInfo}
+          onClose={() => setEnquiryMsgInfo(null)}
+        />
+      )}
 
       {/* ── Add Service Ticket Modal ── */}
       {isTicketModalOpen && (

@@ -270,20 +270,30 @@ export async function upsertQuotation(orderId: string, payload: QuotationPayload
 // WRITE — Quotation Status Actions (Admin)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Admin approves quotation — marks it Sent and moves order stage to Quotation Sent */
-export async function sendQuotationToCustomer(quotationId: string, adminName: string) {
+/** Admin sends quotation to customer — marks Sent and moves order to Quotation Sent.
+ *  Returns whether this was a resend after customer revision (for the message popup).
+ */
+export async function sendQuotationToCustomer(
+  quotationId: string,
+  adminName: string
+): Promise<{ isRevisionResend: boolean }> {
   await assertStageEditPermission("quotation");
   const supabase = await getSupabase();
   const { data: qt, error: qErr } = await supabase
     .from("quotations")
-    .select("order_id, quotation_id, status")
+    .select("order_id, quotation_id, status, rejection_reason, customer_response")
     .eq("id", quotationId)
     .single();
   if (qErr || !qt) throw new Error("Quotation not found");
 
   assertCanSendQuotationToCustomer(qt.status);
 
-  const isRevisionResend = qt.status === "Rejected";
+  // After customer "request changes", status may still be Rejected — or admin may
+  // have saved a Draft while rejection_reason / customer_response remain set.
+  const isRevisionResend =
+    qt.status === "Rejected" ||
+    qt.customer_response === "Revision" ||
+    !!(typeof qt.rejection_reason === "string" && qt.rejection_reason.trim());
 
   const { error } = await supabase
     .from("quotations")
@@ -315,7 +325,11 @@ export async function sendQuotationToCustomer(quotationId: string, adminName: st
     actor_name: "System",
     actor_role: "System",
     content: `Quotation ${qt.quotation_id} approved by ${adminName} and sent to the customer.`,
-    metadata: { action: "quotation_sent", quotation_id: qt.quotation_id },
+    metadata: {
+      action: "quotation_sent",
+      quotation_id: qt.quotation_id,
+      revision: isRevisionResend,
+    },
   });
 
   const baseUrl = await getRequestBaseUrl();
@@ -327,6 +341,7 @@ export async function sendQuotationToCustomer(quotationId: string, adminName: st
   });
 
   revalidateQuotationPaths(orderRow?.order_id || qt.order_id);
+  return { isRevisionResend };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

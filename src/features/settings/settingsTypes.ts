@@ -5,6 +5,8 @@ import type { InvoiceNumberingConfig } from "@/features/invoices/types/invoiceNu
 export interface AppSettings {
   siteVisitSchedulingEnabled: boolean;
   installationSchedulingEnabled: boolean;
+  /** Google Business / review URL used in post-install feedback messages. */
+  googleReviewLink: string;
   invoiceProfile: InvoiceProfile;
   invoiceNumbering: InvoiceNumberingConfig;
   productionChecklistItems: ProductionChecklistItem[];

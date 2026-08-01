@@ -212,13 +212,19 @@ export function ProductionMaterialsPanel({
   return (
     <div className="prt-card p-6">
       <div className="flex items-center justify-between gap-2 mb-4 pb-3 border-b border-slate-100">
-        <div className="flex items-center gap-2">
-          <Boxes size={18} className="text-amber-600" />
+        <div className="flex items-center gap-2 flex-wrap min-w-0">
+          <Boxes size={18} className="text-amber-600 shrink-0" />
           <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider">
             Materials Consumed
           </h2>
+          <span
+            className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide bg-amber-50 text-amber-700 border border-amber-200"
+            title="This materials panel is still in development"
+          >
+            Dev stage
+          </span>
         </div>
-        <span className="text-xs font-bold text-slate-600">
+        <span className="text-xs font-bold text-slate-600 shrink-0">
           Material cost: ₹{totalCost.toFixed(2)}
         </span>
       </div>

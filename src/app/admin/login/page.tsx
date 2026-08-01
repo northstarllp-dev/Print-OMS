@@ -7,6 +7,7 @@ import { adminSignIn } from "@/features/auth/actions/authActions";
 import { Logo } from "@/components/ui/Logo";
 import { PlatformMadeWithLove } from "@/components/ui/PlatformMadeWithLove";
 import { PrintomsLoading } from "@/components/ui/PrintomsLoading";
+import { withBasePath } from "@/lib/appBasePath";
 
 export default function AdminLogin() {
   const router = useRouter();
@@ -28,7 +29,7 @@ export default function AdminLogin() {
         setError(res.error);
         setLoading(false);
       } else {
-        window.location.href = "/printoms/admin/dashboard";
+        window.location.href = withBasePath("/admin/dashboard");
       }
     } catch (err: any) {
       setError(err.message || "An unexpected error occurred.");
