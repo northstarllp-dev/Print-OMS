@@ -515,15 +515,22 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
         <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2.5 sm:py-3 flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
           
           {/* Row 1 on mobile: Logo + Order Switcher */}
-          <div className="flex items-center justify-between gap-3 w-full sm:w-auto shrink-0">
-            <Logo height={32} className="shrink-0 sm:h-[40px]" />
+          <div className="flex items-center justify-between gap-3 w-full sm:w-auto min-w-0">
+            <div className="min-w-0 shrink">
+              <div className="sm:hidden">
+                <Logo width={140} height={32} align="left" />
+              </div>
+              <div className="hidden sm:block">
+                <Logo width={180} height={40} align="left" />
+              </div>
+            </div>
             
             {orders.length > 1 && (
               <div className="sm:hidden shrink-0">
                 <select
                   value={activeOrderId}
                   onChange={e => setActiveOrderId(e.target.value)}
-                  className="text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-600 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 font-semibold"
+                  className="text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-600 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 font-semibold max-w-[120px]"
                 >
                   {orders.map(o => (
                     <option key={o.id} value={o.id}>{o.orderCode || o.id}</option>
