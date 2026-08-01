@@ -23,11 +23,11 @@ export const printsquirelConfig: Partial<PrintOMSClientConfig> = {
   companyId: "55555555-5555-5555-5555-555555555555",
   colors: {
     primary: "#4ade80",
-    onPrimary: "#052e16",
+    onPrimary: "#ffffff",
     primaryContainer: "#dcfce7",
     onPrimaryContainer: "#14532d",
     secondary: "#4ade80",
-    onSecondary: "#052e16",
+    onSecondary: "#ffffff",
     secondaryContainer: "#dcfce7",
     onSecondaryContainer: "#14532d",
     background: "#ffffff",
@@ -39,7 +39,7 @@ export const printsquirelConfig: Partial<PrintOMSClientConfig> = {
     sidebarAccent: "#4ade80",
   },
   logoUrl: "/clients/printsquirel/printsquirel.png",
-  logoScale: 1.15,
+  logoScale: 1.35,
   faviconUrl: "/clients/printsquirel/favicon_io/favicon.ico",
   loadingText: "PRINT SQUIREL",
   features: {
