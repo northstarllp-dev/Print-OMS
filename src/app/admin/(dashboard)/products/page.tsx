@@ -1,12 +1,10 @@
 import { getProducts, getProductCategories } from "@/features/products/actions/productActions";
 import { ProductsView } from "@/features/products/components/ProductsView";
-import { getAppSettings } from "@/features/settings/actions/settingsActions";
 
 export default async function ProductsPage() {
-  const [productsData, categoriesData, appSettings] = await Promise.all([
+  const [productsData, categoriesData] = await Promise.all([
     getProducts().catch(() => []),
     getProductCategories().catch(() => []),
-    getAppSettings().catch(() => null),
   ]);
 
   const products = (productsData || []).map((p: any) => ({
@@ -22,6 +20,18 @@ export default async function ProductsPage() {
     price_per_unit: p.price_per_unit != null ? Number(p.price_per_unit) : null,
     images: Array.isArray(p.images) ? p.images : [],
     final_prdt: p.final_prdt ?? false,
+    unit: p.unit ?? null,
+    brand: p.brand ?? null,
+    supplier_name: p.supplier_name ?? null,
+    purchase_price: p.purchase_price != null ? Number(p.purchase_price) : null,
+    min_stock: p.min_stock != null ? Number(p.min_stock) : null,
+    max_stock: p.max_stock != null ? Number(p.max_stock) : null,
+    hsn_code: p.hsn_code ?? null,
+    gst_rate: p.gst_rate != null ? Number(p.gst_rate) : null,
+    barcode: p.barcode ?? null,
+    qr_code: p.qr_code ?? null,
+    default_warehouse_id: p.default_warehouse_id ?? null,
+    track_inventory: p.track_inventory ?? true,
   }));
 
   const mappedCategories = (categoriesData || []).map((c: any) => ({
@@ -35,7 +45,6 @@ export default async function ProductsPage() {
     <ProductsView
       initialProducts={products}
       initialCategories={mappedCategories}
-      enableFinalProduct={appSettings?.enableFinalProduct ?? false}
     />
   );
 }

@@ -29,12 +29,16 @@ import {
   Boxes,
   Plug,
   FileText,
+  ListTodo,
+  ShoppingCart,
+  Landmark,
 } from "lucide-react";
 import { Logo } from "@/components/ui/Logo";
 import { PlatformMadeWithLove } from "@/components/ui/PlatformMadeWithLove";
 import { PullToRefresh } from "@/components/ui/PullToRefresh";
 import { useRouter, usePathname } from "next/navigation";
 import { signOut } from "@/features/auth/actions/authActions";
+import { IdleSessionGuard } from "@/features/auth/components/IdleSessionGuard";
 
 interface AdminLayoutClientProps {
   children: React.ReactNode;
@@ -63,6 +67,7 @@ const NAV_ITEMS = [
   { id: "/admin/customers", label: "Customers", icon: Users, countKey: "customers" },
   { id: "/admin/service-tickets", label: "Service Tickets", icon: Wrench, countKey: "support" },
   { id: "/admin/employees", label: "Employees", icon: UserCheck },
+  { id: "/admin/tasks", label: "Tasks", icon: ListTodo },
   { id: "/admin/reports", label: "Reports", icon: BarChart2 },
   { id: "/production/orders", label: "Production", icon: Factory, countKey: "production" },
   { id: "/installation/orders", label: "Installation", icon: Wrench, countKey: "installation" },
@@ -70,6 +75,8 @@ const NAV_ITEMS = [
   { id: "/admin/invoices", label: "Invoices", icon: FileText },
   { id: "/admin/calendar", label: "Calendar", icon: CalendarDays },
   { id: "/admin/inventory", label: "Inventory", icon: Boxes },
+  { id: "/admin/purchase-orders", label: "Purchase Orders", icon: ShoppingCart },
+  { id: "/admin/finance", label: "Finance", icon: Landmark },
   { id: "/admin/products", label: "Products", icon: Package },
   { id: "/admin/settings", label: "Settings", icon: Settings },
 ] as const;
@@ -167,6 +174,7 @@ export function AdminLayoutClient({
 
   return (
     <div style={{ display: "flex", height: "100dvh", maxHeight: "100dvh", overflow: "hidden", background: "var(--color-background)" }}>
+      <IdleSessionGuard loginPath="/admin/login" />
 
       {/* ── DARK SIDEBAR ── */}
       <aside

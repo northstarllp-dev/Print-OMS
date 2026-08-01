@@ -252,7 +252,20 @@ export async function updateOrder(id: string, updates: any) {
   // Resolve UUID in case a friendly order_id was passed
   const orderUuid = await resolveOrderUuid(supabase, id);
 
-  const { data, error } = await supabase.from("orders").update(updates).eq("id", orderUuid).select();
+  const { stageProgressPatch } = await import("@/features/orders/lib/orderHealth");
+  let patch = { ...updates };
+  if (updates.stage !== undefined) {
+    const { data: current } = await supabase
+      .from("orders")
+      .select("stage, health")
+      .eq("id", orderUuid)
+      .maybeSingle();
+    if (current && current.stage !== updates.stage) {
+      patch = { ...patch, ...stageProgressPatch(current.health) };
+    }
+  }
+
+  const { data, error } = await supabase.from("orders").update(patch).eq("id", orderUuid).select();
   if (error) throw new Error(error.message);
   if (data && data.length > 0) {
     const orderIdFriendly = data[0].order_id || id;
@@ -904,7 +917,20 @@ export async function assignTeamToOrder(orderId: string, employeeIds: string[]) 
   return { success: true };
 }
 
-export async function updateOrderHealthAction(orderId: string, health: string, lostReason?: string) {
+export async function updateOrderHealthAction(
+  orderId: string,
+  health: string,
+  lostReason?: string,
+  callRemarks?: string
+) {
+  const { isOrderHealth } = await import("@/features/orders/lib/orderHealth");
+  if (!isOrderHealth(health)) {
+    throw new Error("Invalid health. Use Active, Needs Attention, On Hold, or Lost.");
+  }
+  if (health === "Lost" && !lostReason?.trim()) {
+    throw new Error("A reason is required when marking an order as Lost.");
+  }
+
   const supabase = await getSupabase();
   const { data: o, error: fetchError } = await supabase
     .from("orders")
@@ -915,19 +941,86 @@ export async function updateOrderHealthAction(orderId: string, health: string, l
 
   const result = await updateOrder(orderId, {
     health,
-    lost_reason: lostReason || null,
+    lost_reason: health === "Lost" ? lostReason!.trim() : null,
   });
+
+  const remarks = callRemarks?.trim();
+  if (remarks) {
+    await insertOrderActivity(supabase, {
+      order_id: o.order_id || orderId,
+      company_id: o.company_id,
+      actor_name: "System",
+      actor_role: "System",
+      content: `Admin call: ${remarks}`,
+      metadata: { action: "call_remarks", health },
+    });
+  }
 
   await insertOrderActivity(supabase, {
     order_id: o.order_id || orderId,
     company_id: o.company_id,
     actor_name: "System",
     actor_role: "System",
-    content: `Order health status updated to "${health}"${lostReason ? ` with reason: "${lostReason}"` : ""}.`,
-    metadata: { action: "health_changed", health, lost_reason: lostReason || null }
+    content: `Order health status updated to "${health}"${
+      health === "Lost" && lostReason?.trim() ? ` with reason: "${lostReason.trim()}"` : ""
+    }.`,
+    metadata: {
+      action: "health_changed",
+      health,
+      lost_reason: health === "Lost" ? lostReason!.trim() : null,
+    },
   });
 
   return result;
+}
+
+/** Mark Active orders stalled past the slug threshold as Needs Attention. Idempotent. */
+export async function flagStalledOrdersAction(): Promise<{ flagged: number }> {
+  const { loadClientConfig, getDeployCompanyId } = await import("@/config/loadClientConfig");
+  const config = loadClientConfig();
+  const days = config.features.needsAttentionAfterDays ?? 6;
+  const companyId = getDeployCompanyId();
+
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  const cutoffIso = cutoff.toISOString();
+
+  const supabase = await getSupabase();
+  const { data: stalled, error } = await supabase
+    .from("orders")
+    .select("id, order_id, company_id")
+    .eq("company_id", companyId)
+    .eq("health", "Active")
+    .not("stage", "in", '("Completed","Closed")')
+    .lte("stage_changed_at", cutoffIso);
+
+  if (error) throw new Error(error.message);
+  if (!stalled || stalled.length === 0) return { flagged: 0 };
+
+  const ids = stalled.map((o) => o.id);
+  const { error: updateError } = await supabase
+    .from("orders")
+    .update({ health: "Needs Attention" })
+    .in("id", ids);
+  if (updateError) throw new Error(updateError.message);
+
+  for (const o of stalled) {
+    await insertOrderActivity(supabase, {
+      order_id: o.order_id || o.id,
+      company_id: o.company_id,
+      actor_name: "System",
+      actor_role: "System",
+      content: `Order health set to "Needs Attention" — no stage progress for ${days}+ days.`,
+      metadata: {
+        action: "health_changed",
+        health: "Needs Attention",
+        reason: "stalled_stage",
+        days,
+      },
+    });
+  }
+
+  return { flagged: stalled.length };
 }
 
 export async function reopenOrderAction(orderId: string) {
@@ -1001,7 +1094,7 @@ export async function scheduleSiteVisitAction(
 
   const { data: order, error: fetchError } = await supabase
     .from("orders")
-    .select("company_id, order_id, customer_id, business_name")
+    .select("company_id, order_id, customer_id, business_name, health, stage")
     .eq("id", orderUuid)
     .single();
 
@@ -1061,9 +1154,15 @@ export async function scheduleSiteVisitAction(
   const date = sanitizedSchedule.auditDate || sanitizedSchedule.preferredDate;
   const time = sanitizedSchedule.preferredTime || sanitizedSchedule.auditTime;
 
+  const { stageProgressPatch } = await import("@/features/orders/lib/orderHealth");
+  const stagePatch =
+    order.stage === "Site Visit Scheduled"
+      ? { stage_status: "Normal" as const }
+      : { stage: "Site Visit Scheduled", stage_status: "Normal" as const, ...stageProgressPatch(order.health) };
+
   const { data: updatedOrderRow, error: updateError } = await supabase
     .from("orders")
-    .update({ stage: "Site Visit Scheduled", stage_status: "Normal" })
+    .update(stagePatch)
     .eq("id", orderUuid)
     .select()
     .single();
@@ -1115,7 +1214,7 @@ export async function approveSiteVisitAction(orderId: string) {
   
   const { data: order, error: fetchError } = await supabase
     .from("orders")
-    .select("company_id, order_id, customer_id")
+    .select("company_id, order_id, customer_id, health, stage")
     .eq("id", orderUuid)
     .single();
     
@@ -1132,9 +1231,19 @@ export async function approveSiteVisitAction(orderId: string) {
   const { data: siteVisit, error: svError } = await supabase.from("site_visits").upsert(dbPayload, { onConflict: "order_id" }).select().single();
   if (svError) throw new Error(svError.message);
 
+  const { stageProgressPatch } = await import("@/features/orders/lib/orderHealth");
+  const approveStagePatch =
+    order.stage === "Site Visit Scheduled"
+      ? { stage_status: "Pending Admin Approval: Site Visit Schedule" as const }
+      : {
+          stage: "Site Visit Scheduled",
+          stage_status: "Pending Admin Approval: Site Visit Schedule",
+          ...stageProgressPatch(order.health),
+        };
+
   const { data: updatedOrderRow, error: updateError } = await supabase
     .from("orders")
-    .update({ stage: "Site Visit Scheduled", stage_status: "Pending Admin Approval: Site Visit Schedule" })
+    .update(approveStagePatch)
     .eq("id", orderUuid)
     .select()
     .single();

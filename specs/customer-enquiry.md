@@ -27,7 +27,8 @@
 ## Business Rules
 
 * Every new order must be associated with a `company_id` for multi-tenant data isolation.
-* `health` status defaults to "Active" upon creation.
+* `health` status defaults to "Active" upon creation. Allowed values: Active, Needs Attention, On Hold, Lost.
+* Active orders with no stage progress for `needsAttentionAfterDays` (client config, default 6) auto-move to Needs Attention on admin list/dashboard load.
 * System logs an automated timeline event ("Order created manually by Admin") upon creation.
 
 ## User Roles
@@ -61,8 +62,9 @@ Permissions:
 | project_name | text | Name of the project |
 | customer_id | text | Reference to customer record/phone |
 | stage | text | Current pipeline stage (e.g., "Enquiry") |
-| health | text | Status indicator (Active, Needs Attention, Lost) |
+| health | text | Status indicator (Active, Needs Attention, On Hold, Lost) |
 | lost_reason | text | Reason if the order is marked lost |
+| stage_changed_at | timestamptz | Last pipeline stage change (stall clock) |
 | workflow_type | text | "quote_first" or "design_first" |
 
 #### order_activity

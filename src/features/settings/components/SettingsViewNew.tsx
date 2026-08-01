@@ -3,7 +3,7 @@
 import React, { useMemo, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { Save, Palette, MessageCircle, Calendar, Key, X, FileText, Package, CheckSquare, Plus, Trash2, GripVertical } from "lucide-react";
+import { Save, Palette, MessageCircle, Calendar, Key, X, FileText, CheckSquare, Plus, Trash2, GripVertical } from "lucide-react";
 import {
   updateAppSettings,
   updateInvoiceProfile,
@@ -51,12 +51,12 @@ export function SettingsViewNew({ initialAppSettings, companyDetails }: Settings
   const defaultSettings = {
     companyName: companyDetails?.name || "Printoms",
     address: companyDetails?.address || "123 Business Park, Tech City",
+    googleReviewLink: initialAppSettings?.googleReviewLink ?? "",
     notifications: true,
     twoFactorAuth: true,
     theme: "light",
     siteVisitSchedulingEnabled: initialAppSettings?.siteVisitSchedulingEnabled ?? true,
     installationSchedulingEnabled: initialAppSettings?.installationSchedulingEnabled ?? true,
-    enableFinalProduct: initialAppSettings?.enableFinalProduct ?? false,
   };
   
   const [settings, setSettings] = useState(defaultSettings);
@@ -102,18 +102,12 @@ export function SettingsViewNew({ initialAppSettings, companyDetails }: Settings
       fields: [
         { label: "Company Name", key: "companyName", type: "text" },
         { label: "Business Address", key: "address", type: "text" },
-      ],
-    },
-    {
-      title: "Products",
-      icon: <Package size={20} />,
-      description: "Configure how products are managed and displayed",
-      fields: [
-        { 
-          label: "Enable 'Final Product' Designation", 
-          key: "enableFinalProduct", 
-          type: "toggle", 
-          description: "Allows you to mark specific items as 'Final Products'. When enabled, both regular and final products will be searchable when quoting or converting an enquiry to an order." 
+        {
+          label: "Google Review Link",
+          key: "googleReviewLink",
+          type: "url",
+          description:
+            "Used in the post-installation feedback WhatsApp/email message instead of the customer portal.",
         },
       ],
     },
@@ -274,7 +268,7 @@ export function SettingsViewNew({ initialAppSettings, companyDetails }: Settings
         updateAppSettings({
           siteVisitSchedulingEnabled: settings.siteVisitSchedulingEnabled,
           installationSchedulingEnabled: settings.installationSchedulingEnabled,
-          enableFinalProduct: settings.enableFinalProduct,
+          googleReviewLink: settings.googleReviewLink,
           productionChecklistItems: checklistItems,
         }),
       ]);

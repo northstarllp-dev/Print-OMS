@@ -23,6 +23,7 @@ import {
 import { AddEnquiryModal, EnquiryFormData } from "@/features/enquiries/components/AddEnquiryModal";
 import { createEnquiry } from "@/features/enquiries/actions/enquiryActions";
 import { CreateServiceTicketModal } from "@/features/service-tickets/components/CreateServiceTicketModal";
+import { CustomerMessageModal, CustomerMessageInfo } from "@/features/notifications/customer-message/CustomerMessageModal";
 
 /* ─── helpers ──────────────────────────────────────────────────── */
 const STAGE_LABEL: Record<string, { label: string; dot: string }> = {
@@ -105,6 +106,7 @@ export function AdminDashboardClient({
   const router = useRouter();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isTicketModalOpen, setIsTicketModalOpen] = useState(false);
+  const [enquiryMsgInfo, setEnquiryMsgInfo] = useState<CustomerMessageInfo | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [selectedPipelineStage, setSelectedPipelineStage] = useState<string | null>(null);
   const [selectedKpi, setSelectedKpi] = useState<string | null>(null);
@@ -146,6 +148,7 @@ export function AdminDashboardClient({
   const newEnquiries = enquiries.filter((e) => e.status !== "Converted").length;
   
   const pendingApprovals = orders.filter((o) => needsAdminApproval(o.stageStatus)).length;
+  const needsAttentionOrders = orders.filter((o) => o.health === "Needs Attention").length;
   const lostOrders = orders.filter((o) => o.health === "Lost").length;
 
   let revenue = 0;
@@ -218,6 +221,15 @@ export function AdminDashboardClient({
       icon: AlertTriangle,
       iconBg: "#FFFBEB",
       iconColor: "#D97706",
+    },
+    {
+      label: "Needs Attention",
+      value: needsAttentionOrders,
+      sub: "Stalled — no stage progress",
+      filterKey: "needsAttention",
+      icon: AlertCircle,
+      iconBg: "#FFFBEB",
+      iconColor: "#B45309",
     },
     {
       label: "Revenue",
@@ -294,6 +306,7 @@ export function AdminDashboardClient({
       return (orderRev - orderRec) > 0;
     }) };
     if (selectedKpi === "lost")       return { type: "orders" as const, data: orders.filter(o => o.health === "Lost") };
+    if (selectedKpi === "needsAttention") return { type: "orders" as const, data: orders.filter(o => o.health === "Needs Attention") };
     return { type: "orders" as const, data: orders.slice(0, 5) };
   };
 
@@ -860,15 +873,33 @@ export function AdminDashboardClient({
               location: data.location,
               status: "Pending"
             };
-            await createEnquiry(newEnq);
+            const result = await createEnquiry(newEnq);
             setIsAddModalOpen(false);
             router.refresh();
+            const row = result?.[0];
+            if (row) {
+              setEnquiryMsgInfo({
+                businessName: row.business_name || row.lead_name || "Customer",
+                phone: row.whatsapp || row.phone || "",
+                email: row.email || "",
+                enquiryNo: row.enquire_id || "",
+              });
+            }
           } catch (error) {
             console.error("Error adding enquiry:", error);
             alert("Failed to add enquiry.");
           }
         }}
       />
+
+      {enquiryMsgInfo && (
+        <CustomerMessageModal
+          isOpen
+          templateKey="enquiry_received"
+          info={enquiryMsgInfo}
+          onClose={() => setEnquiryMsgInfo(null)}
+        />
+      )}
 
       {/* ── Add Service Ticket Modal ── */}
       {isTicketModalOpen && (

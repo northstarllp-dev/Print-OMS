@@ -20,10 +20,9 @@ const getStatusColor = (status: string | undefined) => {
 const getHealthBadgeColor = (health: string) => {
   const colors: Record<string, string> = {
     "Active": "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
-    "On Hold": "bg-amber-500/10 text-amber-600 border-amber-500/20",
+    "Needs Attention": "bg-amber-500/10 text-amber-700 border-amber-500/20",
+    "On Hold": "bg-slate-500/10 text-slate-600 border-slate-500/20",
     "Lost": "bg-rose-500/10 text-rose-600 border-rose-500/20",
-    "Cancelled": "bg-slate-500/10 text-slate-600 border-slate-500/20",
-    "Completed": "bg-indigo-500/10 text-indigo-600 border-indigo-500/20",
   };
   return colors[health] || "bg-slate-100 text-slate-600 border-slate-200";
 };

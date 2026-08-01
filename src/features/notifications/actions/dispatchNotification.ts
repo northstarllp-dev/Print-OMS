@@ -55,10 +55,24 @@ async function logOutboxAttempt(
   }
 }
 
+/**
+ * Meta Cloud API sends are disabled for now — customer updates go out through
+ * the admin CustomerMessageModal popup (copy / wa.me / mailto) instead.
+ * Remove this early return to re-enable automated Meta template dispatch.
+ */
+const META_WHATSAPP_DISPATCH_DISABLED = true;
+
 export async function dispatchWhatsAppNotification(
   supabase: SupabaseClient,
   input: DispatchInput
 ): Promise<DispatchResult> {
+  if (META_WHATSAPP_DISPATCH_DISABLED) {
+    return {
+      sent: false,
+      skipped: true,
+      reason: "Meta WhatsApp disabled; use admin message popup",
+    };
+  }
   const testMode = isWhatsAppTestMode();
   const idempotencyKey = resolveWhatsAppIdempotencyKey(input.idempotencyKey);
   const db = getDbClient(supabase);

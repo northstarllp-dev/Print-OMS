@@ -32,6 +32,7 @@ export const hitechVisionConfig: Partial<PrintOMSClientConfig> = {
   loadingText: "HITECH VISION",
   features: {
     enableAdminAssignment: false,
+    needsAttentionAfterDays: 6,
   },
   usesFloorPortals: false,
   stageGrantsByRole: {

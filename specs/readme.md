@@ -41,6 +41,10 @@ Feature-level specs (same folder):
 | Admin dashboard | [`specs/admin-dashboard.md`](./admin-dashboard.md) |
 | Product catalog | [`specs/product-catalog.md`](./product-catalog.md) |
 | Site visit | [`specs/site-visit.md`](./site-visit.md) |
+| Tasks | [`specs/tasks.md`](./tasks.md) |
+| Inventory & warehouse | [`specs/inventory.md`](./inventory.md) |
+| Purchase orders | [`specs/purchase-orders.md`](./purchase-orders.md) |
+| Finance | [`specs/finance.md`](./finance.md) |
 
 ---
 

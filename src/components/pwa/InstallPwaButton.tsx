@@ -15,11 +15,23 @@ export function InstallPwaButton() {
   const deferredPrompt = useRef<BeforeInstallPromptEvent | null>(null);
 
   useEffect(() => {
-    // Register service worker scoped to /printoms/
+    // Never register (or keep) a service worker on localhost — it fights
+    // Next.js / Turbopack HMR and causes "module factory is not available".
+    const isLocalDev =
+      typeof window !== "undefined" &&
+      (window.location.hostname === "localhost" ||
+        window.location.hostname === "127.0.0.1");
+
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker
-        .register("/printoms/sw.js", { scope: "/printoms" })
-        .catch((err) => console.warn("SW registration failed:", err));
+      if (isLocalDev) {
+        void navigator.serviceWorker.getRegistrations().then((regs) => {
+          for (const reg of regs) void reg.unregister();
+        });
+      } else {
+        navigator.serviceWorker
+          .register("/printoms/sw.js", { scope: "/printoms" })
+          .catch((err) => console.warn("SW registration failed:", err));
+      }
     }
 
     // Already running as installed PWA (standalone mode)

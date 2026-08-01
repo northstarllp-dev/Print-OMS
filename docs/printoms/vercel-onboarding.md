@@ -5,9 +5,9 @@ One GitHub repo → many Vercel projects. Same `main` branch; env differs.
 ## Checklist
 
 1. **New project** — Vercel → Add New → Project → same repo → name `printoms-{slug}`.
-2. **Shared env** — paste from `config/env/.env.shared.example` into Production, Preview, Development.
+2. **Shared env** — paste from `config/env/.env.shared.example` into Production, Preview, Development (Supabase only).
 3. **Client env** — paste from `config/env/{slug}.env.example` with real secrets.
-   - Required: `CLIENT_SLUG`, `NEXT_PUBLIC_CLIENT_SLUG`
+   - Required: `CLIENT_SLUG`, `NEXT_PUBLIC_CLIENT_SLUG`, unique `PORTAL_SECRET` (do not reuse across projects)
    - WhatsApp vars if messaging is enabled
    - Portal links use the request host automatically (no `NEXT_PUBLIC_SITE_URL`)
 4. **Domain** — Project → Domains → add client domain.

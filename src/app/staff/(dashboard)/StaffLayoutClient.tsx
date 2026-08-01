@@ -6,7 +6,7 @@ import {
   History, RotateCcw, Lock, Loader2, Key,
   ShoppingBag, MapPin, Palette, Settings, Wrench,
   ChevronLeft, ChevronRight, Search, Hammer, Truck, Menu, X,
-  CalendarDays, FileText,
+  CalendarDays, FileText, ListTodo,
   type LucideIcon,
 } from "lucide-react";
 import { Logo } from "@/components/ui/Logo";
@@ -14,6 +14,7 @@ import { PlatformMadeWithLove } from "@/components/ui/PlatformMadeWithLove";
 import { PullToRefresh } from "@/components/ui/PullToRefresh";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { signOut, updateUserPassword } from "@/features/auth/actions/authActions";
+import { IdleSessionGuard } from "@/features/auth/components/IdleSessionGuard";
 import {
   getNavItemsForActor,
   type StaffNavIcon,
@@ -41,6 +42,7 @@ const NAV_ICON_MAP: Record<StaffNavIcon, LucideIcon> = {
   production: Hammer,
   installation: Truck,
   support: Wrench,
+  tasks: ListTodo,
   calendar: CalendarDays,
   settings: Settings,
 };
@@ -193,6 +195,7 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
 
   return (
     <div style={{ display: "flex", height: "100dvh", maxHeight: "100dvh", overflow: "hidden", background: "var(--color-background)" }}>
+      <IdleSessionGuard loginPath="/staff/login" />
 
       {/* ── DARK SIDEBAR ── */}
       <aside

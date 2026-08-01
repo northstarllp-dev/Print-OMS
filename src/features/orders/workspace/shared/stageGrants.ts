@@ -178,6 +178,7 @@ export type StaffNavIcon =
   | "production"
   | "installation"
   | "support"
+  | "tasks"
   | "calendar"
   | "settings";
 
@@ -258,6 +259,7 @@ export function getNavItemsForActor(actor: StageActor): StaffNavItem[] {
     items.push({ ...STAGE_NAV.quotation });
   }
 
+  items.push({ href: "/staff/tasks", label: "My Tasks", icon: "tasks" });
   items.push({ href: "/staff/calendar", label: "Calendar", icon: "calendar" });
   items.push({ href: "/staff/settings", label: "Settings", icon: "settings" });
   return items;

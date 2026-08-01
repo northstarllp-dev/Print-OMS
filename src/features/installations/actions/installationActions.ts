@@ -128,7 +128,7 @@ export async function scheduleInstallationAction(orderId: string, payload: { sch
   const supabase = await getSupabase();
   
   // Get current order
-  const { data: order, error: fetchError } = await supabase.from("orders").select("stage, order_id, company_id").eq("id", orderId).single();
+  const { data: order, error: fetchError } = await supabase.from("orders").select("stage, health, order_id, company_id").eq("id", orderId).single();
   if (fetchError) throw new Error(fetchError.message);
 
   // Upsert so it works even if the installations row doesn't exist yet
@@ -141,7 +141,11 @@ export async function scheduleInstallationAction(orderId: string, payload: { sch
   
   // Only advance stage if currently "Ready For Installation"
   if (order.stage === "Ready For Installation") {
-    const { error } = await supabase.from("orders").update({ stage: "Installation Scheduled" }).eq("id", orderId);
+    const { stageProgressPatch } = await import("@/features/orders/lib/orderHealth");
+    const { error } = await supabase
+      .from("orders")
+      .update({ stage: "Installation Scheduled", ...stageProgressPatch(order.health) })
+      .eq("id", orderId);
     if (error) throw new Error(error.message);
   }
 

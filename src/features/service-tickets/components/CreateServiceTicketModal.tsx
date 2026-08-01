@@ -8,9 +8,11 @@ import {
   createServiceTicketAction,
   lookupOrdersByPhone,
   type TicketPhoto,
+  type ServiceTicketRecord,
 } from "@/features/service-tickets/actions/serviceTicketActions";
 import { Logo } from "@/components/ui/Logo";
 import { CopyLinkButton } from "./CopyLinkButton";
+import { CustomerMessageModal } from "@/features/notifications/customer-message/CustomerMessageModal";
 
 interface CreateServiceTicketModalProps {
   onClose: () => void;
@@ -56,6 +58,8 @@ export function CreateServiceTicketModal({
   const [lookupLoading, setLookupLoading] = React.useState(false);
   const [saveLoading, setSaveLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  // Ticket created — show the customer message popup before closing
+  const [createdTicket, setCreatedTicket] = React.useState<ServiceTicketRecord | null>(null);
 
   const canSubmit =
     selectedCustomerId &&
@@ -145,7 +149,7 @@ export function CreateServiceTicketModal({
     setSaveLoading(true);
     setError(null);
     try {
-      await createServiceTicketAction({
+      const ticket = await createServiceTicketAction({
         customerId: selectedCustomerId,
         orderId: selectedOrderId,
         phone: getFormattedPhone(phone),
@@ -153,8 +157,8 @@ export function CreateServiceTicketModal({
         photos,
         resolutionNotes: resolutionNotes || undefined,
       });
-      onCreated();
-      onClose();
+      // Show the customer message popup first; onCreated/onClose fire when it closes.
+      setCreatedTicket(ticket);
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Failed to create ticket"));
     } finally {
@@ -397,6 +401,32 @@ export function CreateServiceTicketModal({
         )}
         </div>
       </div>
+
+      {createdTicket && (
+        // Stop propagation so popup clicks don't hit the backdrop's onClose
+        <div onClick={(e) => e.stopPropagation()}>
+          <CustomerMessageModal
+            isOpen
+            templateKey="service_ticket_created"
+            info={{
+              customerId: createdTicket.customer_id,
+              orderId: createdTicket.order_id,
+              orderNo: createdTicket.order_code || undefined,
+              businessName:
+                createdTicket.customer_business_name ||
+                createdTicket.customer_name ||
+                "Customer",
+              phone: createdTicket.phone,
+              ticketNo: createdTicket.ticket_id,
+            }}
+            onClose={() => {
+              setCreatedTicket(null);
+              onCreated();
+              onClose();
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }

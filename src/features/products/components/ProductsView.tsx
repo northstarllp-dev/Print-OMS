@@ -209,14 +209,13 @@ function PricingSection({
 
 // ── Product Form Modal ───────────────────────────────────────────────────────
 function ProductFormModal({
-  product, allProducts, categories, onClose, onSaved, enableFinalProduct
+  product, allProducts, categories, onClose, onSaved
 }: {
   product: Product | null;
   allProducts: Product[];
   categories: ProductCategory[];
   onClose: () => void;
   onSaved: (p: Product) => void;
-  enableFinalProduct: boolean;
 }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
@@ -248,6 +247,16 @@ function ProductFormModal({
       images: product?.images ?? [],
       is_active: product?.is_active ?? true,
       final_prdt,
+      unit: product?.unit ?? "",
+      brand: product?.brand ?? "",
+      supplier_name: product?.supplier_name ?? "",
+      purchase_price: product?.purchase_price ?? null,
+      min_stock: product?.min_stock ?? null,
+      max_stock: product?.max_stock ?? null,
+      hsn_code: product?.hsn_code ?? "",
+      gst_rate: product?.gst_rate ?? null,
+      barcode: product?.barcode ?? "",
+      track_inventory: product?.track_inventory ?? true,
     };
   });
 
@@ -258,15 +267,8 @@ function ProductFormModal({
     startTransition(async () => {
       try {
         const payloadToSave = { ...form };
-        if (payloadToSave.final_prdt) {
-          payloadToSave.category = "";
-          payloadToSave.pricing_type = null;
-          payloadToSave.price_per_sqft = null;
-          payloadToSave.price_per_unit = null;
-        } else {
-          if (payloadToSave.pricing_type === "Per Unit") payloadToSave.pricing_type = "per_unit";
-          else if (payloadToSave.pricing_type === "Per Sq.Ft") payloadToSave.pricing_type = "per_sqft";
-        }
+        if (payloadToSave.pricing_type === "Per Unit") payloadToSave.pricing_type = "per_unit";
+        else if (payloadToSave.pricing_type === "Per Sq.Ft") payloadToSave.pricing_type = "per_sqft";
 
         if (isEdit) {
           const res = await updateProduct(product!.id, payloadToSave);
@@ -329,33 +331,30 @@ function ProductFormModal({
                 style={inputStyle}
               />
               <div style={{ marginTop: "8px" }}>
-                {enableFinalProduct && (
-                  <label style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "11px", fontWeight: "700", color: "#374151", textTransform: "uppercase", letterSpacing: "0.04em", cursor: "pointer", userSelect: "none" }}>
-                    <input
-                      type="checkbox"
-                      checked={form.final_prdt ?? false}
-                      onChange={e => {
-                        const checked = e.target.checked;
-                        setForm(f => {
-                          const updated = {
-                            ...f,
-                            final_prdt: checked,
-                            product_id: isEdit ? f.product_id : (checked ? generateFinalProductId(allProducts, tenantCompanyId) : generateProductId(allProducts, tenantCompanyId))
-                          };
-                          return updated;
-                        });
-                      }}
-                      style={{ cursor: "pointer" }}
-                    />
-                    Final Products
-                  </label>
-                )}
+                <label style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "11px", fontWeight: "700", color: "#374151", textTransform: "uppercase", letterSpacing: "0.04em", cursor: "pointer", userSelect: "none" }}>
+                  <input
+                    type="checkbox"
+                    checked={form.final_prdt ?? false}
+                    onChange={e => {
+                      const checked = e.target.checked;
+                      setForm(f => {
+                        const updated = {
+                          ...f,
+                          final_prdt: checked,
+                          product_id: isEdit ? f.product_id : (checked ? generateFinalProductId(allProducts, tenantCompanyId) : generateProductId(allProducts, tenantCompanyId))
+                        };
+                        return updated;
+                      });
+                    }}
+                    style={{ cursor: "pointer" }}
+                  />
+                  Final Product
+                </label>
               </div>
             </div>
           </div>
 
-          {!form.final_prdt && (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <div>
                 <label style={labelStyle}>Category</label>
                 <select value={form.category ?? ""} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} style={{ ...inputStyle, appearance: "none" }}>
@@ -388,8 +387,7 @@ function ProductFormModal({
                   {PRICING_TYPES.map(u => <option key={u} value={u}>{u}</option>)}
                 </select>
               </div>
-            </div>
-          )}
+          </div>
 
           {/* Description */}
           <div>
@@ -403,7 +401,61 @@ function ProductFormModal({
           </div>
 
           {/* Pricing Section */}
-          {!form.final_prdt && <PricingSection form={form} setForm={setForm} />}
+          <PricingSection form={form} setForm={setForm} />
+
+          {/* Inventory Attributes */}
+          <div style={{ border: "1px solid #e2e8f0", borderRadius: 10, padding: 14, display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span style={{ fontSize: 11, fontWeight: 800, color: "#334155", textTransform: "uppercase", letterSpacing: "0.05em" }}>Inventory Attributes</span>
+              <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, fontWeight: 700, color: "#374151", cursor: "pointer", userSelect: "none" }}>
+                <input
+                  type="checkbox"
+                  checked={form.track_inventory ?? true}
+                  onChange={e => setForm(f => ({ ...f, track_inventory: e.target.checked }))}
+                  style={{ cursor: "pointer" }}
+                />
+                Track Inventory
+              </label>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+              <div>
+                <label style={labelStyle}>Unit</label>
+                <input type="text" placeholder="e.g. pcs, sqft, kg" value={form.unit ?? ""} onChange={e => setForm(f => ({ ...f, unit: e.target.value }))} style={inputStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>Brand</label>
+                <input type="text" placeholder="Brand" value={form.brand ?? ""} onChange={e => setForm(f => ({ ...f, brand: e.target.value }))} style={inputStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>Supplier</label>
+                <input type="text" placeholder="Supplier name" value={form.supplier_name ?? ""} onChange={e => setForm(f => ({ ...f, supplier_name: e.target.value }))} style={inputStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>Purchase Price (₹)</label>
+                <input type="number" min={0} step="0.01" value={form.purchase_price ?? ""} onChange={e => setForm(f => ({ ...f, purchase_price: e.target.value === "" ? null : Number(e.target.value) }))} style={inputStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>Min Stock</label>
+                <input type="number" min={0} step="0.01" value={form.min_stock ?? ""} onChange={e => setForm(f => ({ ...f, min_stock: e.target.value === "" ? null : Number(e.target.value) }))} style={inputStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>Max Stock</label>
+                <input type="number" min={0} step="0.01" value={form.max_stock ?? ""} onChange={e => setForm(f => ({ ...f, max_stock: e.target.value === "" ? null : Number(e.target.value) }))} style={inputStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>HSN Code</label>
+                <input type="text" placeholder="HSN" value={form.hsn_code ?? ""} onChange={e => setForm(f => ({ ...f, hsn_code: e.target.value }))} style={inputStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>GST Rate (%)</label>
+                <input type="number" min={0} max={100} step="0.01" value={form.gst_rate ?? ""} onChange={e => setForm(f => ({ ...f, gst_rate: e.target.value === "" ? null : Number(e.target.value) }))} style={inputStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>Barcode</label>
+                <input type="text" placeholder="Scan or type" value={form.barcode ?? ""} onChange={e => setForm(f => ({ ...f, barcode: e.target.value }))} style={inputStyle} />
+              </div>
+            </div>
+          </div>
 
           {/* Image Upload */}
           <ProductImageUpload
@@ -603,14 +655,12 @@ function ProductCard({
 }
 
 // ── Main Component ───────────────────────────────────────────────────────────
-export function ProductsView({ 
-  initialProducts, 
+export function ProductsView({
+  initialProducts,
   initialCategories = [],
-  enableFinalProduct = false,
-}: { 
-  initialProducts: Product[]; 
+}: {
+  initialProducts: Product[];
   initialCategories?: ProductCategory[];
-  enableFinalProduct?: boolean;
 }) {
   const [products, setProducts] = useState<Product[]>(initialProducts);
   const [categories, setCategories] = useState<ProductCategory[]>(initialCategories);
@@ -960,7 +1010,6 @@ export function ProductsView({
           allProducts={products}
           categories={categories}
           onClose={() => { setEditingProduct(null); setShowForm(false); }}
-          enableFinalProduct={enableFinalProduct}
           onSaved={handleSaved}
         />
       )}

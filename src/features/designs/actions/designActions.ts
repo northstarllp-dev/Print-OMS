@@ -140,16 +140,17 @@ async function revalidateDesignPaths(orderId: string, fromPortal = false) {
 async function updateOrderStage(supabase: SupabaseClient, orderUuid: string, stage: string) {
   const { data: o, error } = await supabase
     .from("orders")
-    .select("stage, order_id, company_id")
+    .select("stage, health, order_id, company_id")
     .eq("id", orderUuid)
     .single();
   if (error) throw new Error(error.message);
 
   const isChanged = stage !== o.stage;
   if (isChanged) {
+    const { stageProgressPatch } = await import("@/features/orders/lib/orderHealth");
     const { error: updateError } = await supabase
       .from("orders")
-      .update({ stage })
+      .update({ stage, ...stageProgressPatch(o.health) })
       .eq("id", orderUuid);
     if (updateError) throw new Error(updateError.message);
 

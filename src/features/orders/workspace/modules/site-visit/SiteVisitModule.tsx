@@ -87,6 +87,11 @@ interface SiteVisitModuleProps {
   adminOverrideUnlocked?: boolean;
   setAdminOverrideUnlocked?: (val: boolean) => void;
   onSkipSiteVisit?: () => void;
+  /** Opens the admin customer-update message popup (copy / wa.me / mailto). */
+  onCustomerMessage?: (
+    key: "site_visit_scheduled",
+    extra?: { date?: string; time?: string }
+  ) => void;
   /** RBAC — when canEdit is false the module renders read-only. */
   permission?: StagePermission;
 }
@@ -111,6 +116,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
   adminOverrideUnlocked,
   setAdminOverrideUnlocked,
   onSkipSiteVisit,
+  onCustomerMessage,
   permission,
 }) => {
   // RBAC: when canEdit is false (e.g. Designer viewing Site Visit read-only),
@@ -563,6 +569,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
               ...saved,
               locations: saved.locations ?? prev.locations,
             }));
+            onCustomerMessage?.("site_visit_scheduled", { date, time });
           } catch (err) {
             console.error("Failed to schedule site visit", err);
             alert("Failed to schedule site visit. Please try again.");

@@ -23,16 +23,17 @@ Reporting doesn't have states itself, but it groups data based on:
 
 | Metric Bucket | Related State / Field | Description |
 | ------------- | --------------------- | ----------- |
-| Active Pipeline | `orders.stage` != Completed/Lost | Current WIP |
-| Stalled Orders | `orders.health` == "Needs Attention" | Flagged by staff or time-delayed |
+| Active Pipeline | `orders.stage` != Completed/Closed | Current WIP |
+| Stalled Orders | `orders.health` == "Needs Attention" | Auto-flagged after N days with no stage move |
 | Realized Revenue | `quotations.status` == "Approved" | Confirmed sales |
-| Lost Opportunities | `orders.stage` == "Lost" | Failed conversions |
+| Lost Opportunities | `orders.health` == "Lost" | Soft-cancelled deals |
 
 ## Business Rules
 
 * Only Admin roles can view aggregate financial data and company-wide reports.
 * Data is strictly isolated by `company_id` for multi-tenant setups.
-* `lost_reason` must be provided when an order stage is manually changed to "Lost".
+* `lost_reason` must be provided when an order health is manually changed to "Lost".
+* Order health values: Active, Needs Attention, On Hold, Lost.
 
 ## User Roles
 
