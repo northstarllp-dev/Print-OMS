@@ -512,46 +512,66 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
 
       {/* --- TOP HEADER --- */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-20">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3 flex items-center justify-between gap-3">
-          {/* Left: Logo + Order Info */}
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2.5 sm:py-3 flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+          
+          {/* Row 1 on mobile: Logo + Order Switcher */}
+          <div className="flex items-center justify-between gap-3 w-full sm:w-auto shrink-0">
             <Logo height={32} className="shrink-0 sm:h-[40px]" />
-            <div className="w-px h-6 bg-slate-200 shrink-0 hidden sm:block" />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-xs sm:text-base font-black text-[#0b1c30] leading-none truncate">
-                  Order #{activeOrder?.orderCode || activeOrder?.id}
-                </h1>
-                <a
-                  href="tel:+919876543210"
-                  className="inline-flex items-center gap-1 px-2 sm:px-2.5 py-1 bg-blue-50 hover:bg-blue-100 border border-blue-100 hover:border-blue-200 text-[#1E40AF] rounded-lg text-[10px] font-bold transition-all shadow-sm shrink-0"
-                  title="Call Manager"
+            
+            {orders.length > 1 && (
+              <div className="sm:hidden shrink-0">
+                <select
+                  value={activeOrderId}
+                  onChange={e => setActiveOrderId(e.target.value)}
+                  className="text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-600 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 font-semibold"
                 >
-                  <Phone size={11} className="stroke-[2.5]" />
-                  <span className="hidden sm:inline">Call</span>
-                </a>
+                  {orders.map(o => (
+                    <option key={o.id} value={o.id}>{o.orderCode || o.id}</option>
+                  ))}
+                </select>
               </div>
-              <p className="text-slate-500 mt-0.5 text-[10px] sm:text-sm truncate">
+            )}
+          </div>
+
+          {/* Row 2 on mobile: Order Info + Call Button */}
+          <div className="flex items-center justify-between gap-3 w-full sm:w-auto min-w-0 sm:border-l sm:border-slate-200 sm:pl-4 flex-1">
+            <div className="min-w-0 flex-1">
+              <h1 className="text-xs sm:text-sm font-black text-[#0b1c30] leading-none uppercase tracking-wider">
+                Order #{activeOrder?.orderCode || activeOrder?.id}
+              </h1>
+              <p className="text-slate-500 mt-1 text-[10px] sm:text-xs truncate">
                 {activeOrder?.clientName || customer.name}
                 <span className="hidden sm:inline"> | {activeOrder?.businessName || "Signage Project"}</span>
               </p>
             </div>
+            
+            <div className="flex items-center gap-2 shrink-0">
+              <a
+                href="tel:+919876543210"
+                className="inline-flex items-center gap-1.5 px-3 py-2 bg-blue-50 hover:bg-blue-100 border border-blue-100 hover:border-blue-200 text-[#1E40AF] rounded-lg text-xs font-bold transition-all shadow-sm"
+                title="Call Manager"
+              >
+                <Phone size={12} className="stroke-[2.5]" />
+                <span>Call Manager</span>
+              </a>
+            </div>
+
+            {/* Desktop Switcher */}
+            {orders.length > 1 && (
+              <div className="hidden sm:block shrink-0 sm:ml-4">
+                <select
+                  value={activeOrderId}
+                  onChange={e => setActiveOrderId(e.target.value)}
+                  className="text-xs border border-slate-200 rounded-lg px-3 py-2 text-slate-600 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
+                >
+                  {orders.map(o => (
+                    <option key={o.id} value={o.id}>{o.orderCode || o.id} — {o.stage}</option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
 
-          {/* Right: Order Switcher */}
-          {orders.length > 1 && (
-            <div className="shrink-0">
-              <select
-                value={activeOrderId}
-                onChange={e => setActiveOrderId(e.target.value)}
-                className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 text-slate-600 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium max-w-[120px] sm:max-w-none"
-              >
-                {orders.map(o => (
-                  <option key={o.id} value={o.id}>{o.orderCode || o.id} — {o.stage}</option>
-                ))}
-              </select>
-            </div>
-          )}
         </div>
       </header>
 
