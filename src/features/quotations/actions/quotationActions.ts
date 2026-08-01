@@ -59,12 +59,13 @@ async function resolveOrderId(
   customerId?: string;
   customerName?: string;
   companyId?: string;
+  health?: string;
 }> {
   const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   if (!uuidPattern.test(orderId)) {
     const { data: o } = await supabase
       .from("orders")
-      .select("id, order_id, customer_id, business_name, company_id")
+      .select("id, order_id, customer_id, business_name, company_id, health")
       .eq("order_id", orderId)
       .maybeSingle();
     if (o) {
@@ -74,13 +75,14 @@ async function resolveOrderId(
         customerId: o.customer_id,
         customerName: o.business_name,
         companyId: o.company_id,
+        health: o.health,
       };
     }
     return { uuid: orderId, friendly: orderId };
   }
   const { data: o } = await supabase
     .from("orders")
-    .select("order_id, customer_id, business_name, company_id")
+    .select("order_id, customer_id, business_name, company_id, health")
     .eq("id", orderId)
     .maybeSingle();
   return {
@@ -89,6 +91,7 @@ async function resolveOrderId(
     customerId: o?.customer_id,
     customerName: o?.business_name,
     companyId: o?.company_id,
+    health: o?.health,
   };
 }
 
@@ -294,11 +297,15 @@ export async function sendQuotationToCustomer(quotationId: string, adminName: st
 
   const { data: orderRow } = await supabase
     .from("orders")
-    .select("order_id, company_id")
+    .select("order_id, company_id, health")
     .eq("id", qt.order_id)
     .maybeSingle();
 
-  await supabase.from("orders").update({ stage: "Quotation Sent" }).eq("id", qt.order_id);
+  const { stageProgressPatch } = await import("@/features/orders/lib/orderHealth");
+  await supabase
+    .from("orders")
+    .update({ stage: "Quotation Sent", ...stageProgressPatch(orderRow?.health) })
+    .eq("id", qt.order_id);
   if (!orderRow?.company_id) {
     throw new Error("company_id is required to log quotation activity");
   }
@@ -329,7 +336,7 @@ export async function sendQuotationToCustomer(quotationId: string, adminName: st
 export async function adminMarkQuotationApprovedAction(orderId: string) {
   await assertStageEditPermission("quotation");
   const supabase = await getSupabase();
-  const { uuid, friendly, companyId } = await resolveOrderId(supabase, orderId);
+  const { uuid, friendly, companyId, health } = await resolveOrderId(supabase, orderId);
   if (!companyId) throw new Error("company_id is required to log quotation activity");
 
   const { error: qErr } = await supabase
@@ -338,9 +345,10 @@ export async function adminMarkQuotationApprovedAction(orderId: string) {
     .eq("order_id", uuid);
   if (qErr) throw new Error(qErr.message);
 
+  const { stageProgressPatch } = await import("@/features/orders/lib/orderHealth");
   const { error: oErr } = await supabase
     .from("orders")
-    .update({ stage: "Quotation Approved", stage_status: "Normal" })
+    .update({ stage: "Quotation Approved", stage_status: "Normal", ...stageProgressPatch(health) })
     .eq("id", uuid);
   if (oErr) throw new Error(oErr.message);
 
@@ -373,7 +381,7 @@ export async function customerApproveQuotation(
 
   // Portal/anon RLS cannot read company_id — resolve via service role after ownership check.
   const admin = requireAdminClient();
-  const { uuid, friendly, companyId } = await resolveOrderId(admin, portalOrderUuid);
+  const { uuid, friendly, companyId, health } = await resolveOrderId(admin, portalOrderUuid);
   if (!companyId) throw new Error("company_id is required to log quotation activity");
 
   const { data: qt } = await admin
@@ -392,9 +400,10 @@ export async function customerApproveQuotation(
     .eq("status", "Sent");
   if (qErr) throw new Error(qErr.message);
 
+  const { stageProgressPatch } = await import("@/features/orders/lib/orderHealth");
   const { error: oErr } = await admin
     .from("orders")
-    .update({ stage: "Quotation Approved" })
+    .update({ stage: "Quotation Approved", ...stageProgressPatch(health) })
     .eq("id", uuid);
   if (oErr) throw new Error(oErr.message);
 
@@ -431,7 +440,7 @@ export async function customerRequestRevision(
 
   // Portal/anon RLS cannot read company_id — resolve via service role after ownership check.
   const admin = requireAdminClient();
-  const { uuid, friendly, companyId } = await resolveOrderId(admin, portalOrderUuid);
+  const { uuid, friendly, companyId, health } = await resolveOrderId(admin, portalOrderUuid);
   if (!companyId) throw new Error("company_id is required to log quotation activity");
 
   const { data: qt } = await admin
@@ -454,9 +463,10 @@ export async function customerRequestRevision(
     .eq("status", "Sent");
   if (qErr) throw new Error(qErr.message);
 
+  const { stageProgressPatch } = await import("@/features/orders/lib/orderHealth");
   const { error: oErr } = await admin
     .from("orders")
-    .update({ stage: "Quotation Negotiation" })
+    .update({ stage: "Quotation Negotiation", ...stageProgressPatch(health) })
     .eq("id", uuid);
   if (oErr) throw new Error(oErr.message);
 

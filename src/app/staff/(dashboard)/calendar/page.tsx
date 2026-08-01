@@ -5,6 +5,35 @@ import { getOrders } from "@/features/orders/actions/orderActions";
 import { getCustomers } from "@/features/customers/actions/customerActions";
 import { getCurrentUser } from "@/features/auth/actions/authActions";
 import { getEmployees } from "@/features/employees/actions/employeeActions";
+import { scheduleSiteVisitAction } from "@/features/orders/actions/orderActions";
+import { scheduleInstallationAction } from "@/features/installations/actions/installationActions";
+import type { PaymentOutstandingMap } from "@/features/calendar/types";
+import { getTasks } from "@/features/tasks/actions/taskActions";
+
+function buildPaymentMap(orders: any[]): PaymentOutstandingMap {
+  const map: PaymentOutstandingMap = {};
+  for (const o of orders) {
+    const quotations = o.quotations as any[] | null;
+    const payments = o.payments as any[] | null;
+    const grandTotal = quotations?.reduce((sum: number, q: any) => {
+      if (q.status === "approved" || q.status === "sent") {
+        return sum + (Number(q.grand_total) || 0);
+      }
+      return sum;
+    }, 0) ?? 0;
+    const paid = payments?.reduce((sum: number, p: any) => {
+      if (p.status === "received") {
+        return sum + (Number(p.calculated_amount ?? p.amount) || 0);
+      }
+      return sum;
+    }, 0) ?? 0;
+    const outstanding = Math.max(0, Math.round((grandTotal - paid) * 100) / 100);
+    if (outstanding > 0) {
+      map[o.id] = outstanding;
+    }
+  }
+  return map;
+}
 
 export default async function StaffCalendarPage() {
   const profile = await getCurrentUser();
@@ -12,11 +41,14 @@ export default async function StaffCalendarPage() {
     redirect("/staff/login");
   }
 
-  const [ordersData, customersData, employeesData] = await Promise.all([
+  const [ordersData, customersData, employeesData, tasksData] = await Promise.all([
     getOrders(),
     getCustomers(),
     getEmployees(),
+    getTasks(),
   ]);
+
+  const paymentMap = buildPaymentMap(ordersData || []);
 
   const mappedEmployee = {
     id: profile.id,
@@ -53,12 +85,28 @@ export default async function StaffCalendarPage() {
       name: e.name,
     })) || [];
 
+  const mappedTasks =
+    tasksData?.map((task) => ({
+      id: task.id,
+      taskId: task.task_id,
+      title: task.title,
+      status: task.status,
+      assignedAt: task.assigned_at,
+      dueDate: task.due_date,
+      assigneeId: task.assignee_id,
+      orderCode: task.order_code || null,
+    })) || [];
+
   return (
     <EmployeeCalendarView
       orders={mappedOrders}
       customers={mappedCustomers}
       currentEmployee={mappedEmployee}
       employees={mappedEmployees}
+      paymentMap={paymentMap}
+      tasks={mappedTasks}
+      onRescheduleSiteVisit={scheduleSiteVisitAction}
+      onRescheduleInstallation={scheduleInstallationAction}
     />
   );
 }

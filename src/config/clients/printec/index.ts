@@ -32,6 +32,7 @@ export const printecConfig: Partial<PrintOMSClientConfig> = {
   loadingText: "PRINTEC",
   features: {
     enableAdminAssignment: false,
+    needsAttentionAfterDays: 6,
   },
   usesFloorPortals: false,
   stageGrantsByRole: {

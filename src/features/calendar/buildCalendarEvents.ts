@@ -1,7 +1,9 @@
 import type {
+  CalendarTaskInput,
   CalendarCustomerInput,
   CalendarEvent,
   CalendarOrderInput,
+  PaymentOutstandingMap,
 } from "./types";
 
 /** Parse a date string into a local YYYY-MM-DD key. */
@@ -31,9 +33,16 @@ export function todayDateKey(): string {
   return `${y}-${m}-${d}`;
 }
 
+/** Build a Google Maps search URL from an address string. */
+function buildGmapSearch(address: string): string {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+}
+
 export function buildCalendarEvents(
   orders: CalendarOrderInput[],
-  customers: CalendarCustomerInput[] = []
+  customers: CalendarCustomerInput[] = [],
+  paymentMap?: PaymentOutstandingMap,
+  tasks: CalendarTaskInput[] = []
 ): CalendarEvent[] {
   const customerById = new Map(customers.map((c) => [c.id, c]));
   const events: CalendarEvent[] = [];
@@ -48,11 +57,19 @@ export function buildCalendarEvents(
     const clientPhone = customer?.phone || "";
     const fallbackAddress = customer?.shippingAddress || "";
     const assignees = order.assignedEmployees || [];
+    const outstanding = paymentMap?.[order.id] ?? 0;
 
     const sv = order.siteVisitDetails;
     if (sv) {
       const visitDate = toDateKey(sv.auditDate || sv.preferredDate || null);
       if (visitDate) {
+        const svAddress = sv.customerAddress || fallbackAddress || undefined;
+        let svGmap: string | null = null;
+        if (sv.gpsLocation) {
+          svGmap = buildGmapSearch(sv.gpsLocation);
+        } else if (svAddress) {
+          svGmap = buildGmapSearch(svAddress);
+        }
         events.push({
           id: `${order.id}-site_visit`,
           orderId: order.id,
@@ -63,7 +80,9 @@ export function buildCalendarEvents(
           projectName,
           clientName,
           clientPhone,
-          address: sv.customerAddress || fallbackAddress || undefined,
+          address: svAddress,
+          gmapLink: svGmap,
+          outstandingAmount: outstanding,
           assigneeIds: assignees,
           stage: order.stage,
         });
@@ -74,6 +93,8 @@ export function buildCalendarEvents(
     if (inst) {
       const installDate = toDateKey(inst.scheduledDate || inst.scheduled_date || null);
       if (installDate) {
+        const instAddress = fallbackAddress || undefined;
+        const instGmap = inst.gmapLink || (instAddress ? buildGmapSearch(instAddress) : null);
         events.push({
           id: `${order.id}-installation`,
           orderId: order.id,
@@ -84,7 +105,9 @@ export function buildCalendarEvents(
           projectName,
           clientName,
           clientPhone,
-          address: fallbackAddress || undefined,
+          address: instAddress,
+          gmapLink: instGmap,
+          outstandingAmount: outstanding,
           assigneeIds: assignees,
           stage: order.stage,
         });
@@ -104,16 +127,62 @@ export function buildCalendarEvents(
         clientName,
         clientPhone,
         address: fallbackAddress || undefined,
+        gmapLink: fallbackAddress ? buildGmapSearch(fallbackAddress) : null,
+        outstandingAmount: outstanding,
         assigneeIds: assignees,
         stage: order.stage,
       });
     }
   }
 
-  return events.sort((a, b) => {
+  const allEvents = [...events, ...buildTaskCalendarEvents(tasks)];
+
+  return allEvents.sort((a, b) => {
     if (a.dateKey !== b.dateKey) return a.dateKey.localeCompare(b.dateKey);
     return (a.time || "").localeCompare(b.time || "");
   });
+}
+
+export function buildTaskCalendarEvents(tasks: CalendarTaskInput[]): CalendarEvent[] {
+  const events: CalendarEvent[] = [];
+  for (const task of tasks) {
+    const assigneeIds = [task.assigneeId];
+    const assignedDate = toDateKey(task.assignedAt);
+    const dueDate = toDateKey(task.dueDate);
+
+    if (assignedDate) {
+      events.push({
+        id: `${task.id}-assigned`,
+        taskId: task.id,
+        orderCode: task.taskId || undefined,
+        type: "task",
+        dateKey: assignedDate,
+        time: null,
+        projectName: task.title,
+        clientName: "Assigned Task",
+        assigneeIds,
+        stage: task.status,
+        metaLabel: "Assigned",
+      });
+    }
+
+    if (dueDate) {
+      events.push({
+        id: `${task.id}-due`,
+        taskId: task.id,
+        orderCode: task.taskId || undefined,
+        type: "task",
+        dateKey: dueDate,
+        time: null,
+        projectName: task.title,
+        clientName: "Task Deadline",
+        assigneeIds,
+        stage: task.status,
+        metaLabel: "Due",
+      });
+    }
+  }
+  return events;
 }
 
 const SITE_VISIT_ACTIVE = new Set(["Site Visit Pending", "Site Visit Scheduled"]);
@@ -136,6 +205,9 @@ export function eventStatus(
     return "done";
   }
   if (event.type === "deadline" && DEADLINE_DONE.has(event.stage)) {
+    return "done";
+  }
+  if (event.type === "task" && (event.stage === "Completed" || event.stage === "Cancelled")) {
     return "done";
   }
 

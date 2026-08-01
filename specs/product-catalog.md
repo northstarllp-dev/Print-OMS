@@ -56,6 +56,16 @@ Permissions:
 | is_active | boolean | Determines visibility in quotes |
 | final_prdt | boolean | Marks whether the product is a "Final Product" |
 | images | jsonb | Array of product image URLs (optional) |
+| unit | text | Base unit for inventory (pcs, sqft, kg, ...) |
+| brand | text | Brand / make |
+| supplier_name | text | Default supplier |
+| purchase_price | numeric | Default cost price |
+| min_stock / max_stock | numeric | Low/over-stock thresholds |
+| hsn_code | text | HSN code for GST |
+| gst_rate | numeric | Default GST % |
+| barcode / qr_code | text | Scanner codes (barcode indexed) |
+| default_warehouse_id | uuid | Default warehouse for receive/issue |
+| track_inventory | boolean | Include in stock tracking (default true) |
 
 #### product_categories
 
@@ -94,10 +104,16 @@ Admin edits price in Product Modal
 → Next.js `revalidatePath` updates the UI
 → Subsequent quotes load the new price
 
+## Final Products
+
+* `final_prdt` designation is **always available** — there is no settings toggle (`app_settings.enable_final_product` was dropped).
+* Final products are priced like regular products (category + pricing UI shown) and appear in quotation / enquiry search.
+* There is **no by-product** concept anywhere.
+* ID prefixes: `FP###` for finals, `PRD-###` for regular.
+
 ## Future Enhancements
 
 * **Cost vs Retail Price**: Track both the internal cost to manufacture and the retail price to automatically calculate profit margins in the Reporting dashboard.
-* **Inventory Tracking**: Link products to actual physical stock counts that decrement when an order goes into Production.
 
 ## Change Log
 
@@ -112,3 +128,7 @@ Summary: Removed running-feet pricing (`price_per_running_ft` / `per_running_ft`
 Version: 1.2
 Date: 2026-07-06
 Summary: Added `final_prdt` property to distinguish final packaged products.
+
+Version: 1.3
+Date: 2026-07-30
+Summary: Final Product always available (settings toggle and `app_settings.enable_final_product` removed); finals keep pricing and quote search. Added inventory attribute columns (unit, brand, supplier, purchase price, min/max stock, HSN, GST, barcode/QR, default warehouse, track_inventory). Products are the inventory master — see `specs/inventory.md`.

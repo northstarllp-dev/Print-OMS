@@ -24,7 +24,6 @@ import type { AppSettings, CompanyDetails } from "@/features/settings/settingsTy
 const DEFAULT_SETTINGS: AppSettings = {
   siteVisitSchedulingEnabled: true,
   installationSchedulingEnabled: true,
-  enableFinalProduct: false,
   invoiceProfile: EMPTY_INVOICE_PROFILE,
   invoiceNumbering: EMPTY_INVOICE_NUMBERING,
   productionChecklistItems: DEFAULT_PRODUCTION_CHECKLIST_ITEMS,
@@ -33,7 +32,6 @@ const DEFAULT_SETTINGS: AppSettings = {
 function mapRow(data: {
   site_visit_scheduling_enabled?: boolean;
   installation_scheduling_enabled?: boolean;
-  enable_final_product?: boolean;
   invoice_profile?: unknown;
   invoice_numbering?: unknown;
   production_checklist_items?: unknown;
@@ -41,7 +39,6 @@ function mapRow(data: {
   return {
     siteVisitSchedulingEnabled: data.site_visit_scheduling_enabled ?? true,
     installationSchedulingEnabled: data.installation_scheduling_enabled ?? true,
-    enableFinalProduct: data.enable_final_product ?? false,
     invoiceProfile: normalizeInvoiceProfile(data.invoice_profile),
     invoiceNumbering: normalizeInvoiceNumbering(data.invoice_numbering),
     productionChecklistItems: normalizeProductionChecklistItems(
@@ -80,7 +77,7 @@ export async function getAppSettingsForCompany(
   const { data, error } = await supabase
     .from("app_settings")
     .select(
-      "site_visit_scheduling_enabled, installation_scheduling_enabled, enable_final_product, invoice_profile, invoice_numbering, production_checklist_items"
+      "site_visit_scheduling_enabled, installation_scheduling_enabled, invoice_profile, invoice_numbering, production_checklist_items"
     )
     .eq("company_id", companyId)
     .maybeSingle();
@@ -97,13 +94,12 @@ export async function getAppSettingsForCompany(
       site_visit_scheduling_enabled: DEFAULT_SETTINGS.siteVisitSchedulingEnabled,
       installation_scheduling_enabled:
         DEFAULT_SETTINGS.installationSchedulingEnabled,
-      enable_final_product: DEFAULT_SETTINGS.enableFinalProduct,
       invoice_profile: EMPTY_INVOICE_PROFILE,
       invoice_numbering: EMPTY_INVOICE_NUMBERING,
       production_checklist_items: DEFAULT_PRODUCTION_CHECKLIST_ITEMS,
     })
     .select(
-      "site_visit_scheduling_enabled, installation_scheduling_enabled, enable_final_product, invoice_profile, invoice_numbering, production_checklist_items"
+      "site_visit_scheduling_enabled, installation_scheduling_enabled, invoice_profile, invoice_numbering, production_checklist_items"
     )
     .single();
 
@@ -138,8 +134,6 @@ export async function updateAppSettings(
   const newInstallation =
     settings.installationSchedulingEnabled ??
     current.installationSchedulingEnabled;
-  const newEnableFinalProduct =
-    settings.enableFinalProduct ?? current.enableFinalProduct;
   const newInvoiceProfile = normalizeInvoiceProfile(
     settings.invoiceProfile !== undefined
       ? { ...current.invoiceProfile, ...settings.invoiceProfile, bank: {
@@ -164,7 +158,6 @@ export async function updateAppSettings(
       company_id: userProfile.company_id,
       site_visit_scheduling_enabled: newSiteVisit,
       installation_scheduling_enabled: newInstallation,
-      enable_final_product: newEnableFinalProduct,
       invoice_profile: newInvoiceProfile,
       invoice_numbering: newInvoiceNumbering,
       production_checklist_items: newProductionChecklistItems,

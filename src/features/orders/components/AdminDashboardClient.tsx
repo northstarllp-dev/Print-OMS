@@ -146,6 +146,7 @@ export function AdminDashboardClient({
   const newEnquiries = enquiries.filter((e) => e.status !== "Converted").length;
   
   const pendingApprovals = orders.filter((o) => needsAdminApproval(o.stageStatus)).length;
+  const needsAttentionOrders = orders.filter((o) => o.health === "Needs Attention").length;
   const lostOrders = orders.filter((o) => o.health === "Lost").length;
 
   let revenue = 0;
@@ -218,6 +219,15 @@ export function AdminDashboardClient({
       icon: AlertTriangle,
       iconBg: "#FFFBEB",
       iconColor: "#D97706",
+    },
+    {
+      label: "Needs Attention",
+      value: needsAttentionOrders,
+      sub: "Stalled — no stage progress",
+      filterKey: "needsAttention",
+      icon: AlertCircle,
+      iconBg: "#FFFBEB",
+      iconColor: "#B45309",
     },
     {
       label: "Revenue",
@@ -294,6 +304,7 @@ export function AdminDashboardClient({
       return (orderRev - orderRec) > 0;
     }) };
     if (selectedKpi === "lost")       return { type: "orders" as const, data: orders.filter(o => o.health === "Lost") };
+    if (selectedKpi === "needsAttention") return { type: "orders" as const, data: orders.filter(o => o.health === "Needs Attention") };
     return { type: "orders" as const, data: orders.slice(0, 5) };
   };
 

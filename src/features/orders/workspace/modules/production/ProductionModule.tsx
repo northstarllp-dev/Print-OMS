@@ -14,6 +14,7 @@ import {
   type ProductionChecklistItem,
 } from "@/features/settings/productionChecklist";
 import { resolveSiteVisitInstallationAddress } from "@/features/orders/actions/siteVisitMapper";
+import { ProductionMaterialsPanel } from "@/features/inventory/components/ProductionMaterialsPanel";
 
 interface LocationMeasurement {
   id: string;
@@ -572,6 +573,9 @@ export function ProductionModule({
               </div>
             )}
           </div>
+
+          {/* MATERIALS CONSUMED + FINAL YIELD */}
+          <ProductionMaterialsPanel orderId={order.id} canEdit={!!canEdit} />
 
         </div>
 

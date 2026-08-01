@@ -795,16 +795,16 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
       setIsProcessing(false);
     }
   };
-  const handleUpdateHealth = async (health: string, reason?: string) => {
+  const handleUpdateHealth = async (health: string, reason?: string, callRemarks?: string) => {
     setIsProcessing(true);
     try {
-      const res = await updateOrderHealthAction(order.id, health, reason);
+      const res = await updateOrderHealthAction(order.id, health, reason, callRemarks);
       if (res && res.length > 0) {
         setOrder((prev) => ({ ...prev, health: res[0].health, lost_reason: res[0].lost_reason, chatHistory: res[0].chat_history }));
         triggerLocalAlert(`Order health set to ${health}.`, "success");
         router.refresh();
       }
-    } catch (err) { triggerLocalAlert("Failed to update health.", "error"); }
+    } catch (err: any) { triggerLocalAlert(err?.message || "Failed to update health.", "error"); }
     finally { setIsProcessing(false); }
   };
   const handleReopen = async () => {
@@ -1195,6 +1195,8 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           }}
           updateSiteVisitDetails={updateSiteVisitDetails}
           updateOrderStage={handleUpdateOrderStage}
+          onUpdateHealth={handleUpdateHealth}
+          onReopen={handleReopen}
         />
       );
     }

@@ -39,6 +39,7 @@ export const defaultConfig: PrintOMSClientConfig = {
   loadingText: "PRINTOMS",
   features: {
     enableAdminAssignment: false,
+    needsAttentionAfterDays: 6,
   },
   usesFloorPortals: true,
   stageGrantsByRole: {

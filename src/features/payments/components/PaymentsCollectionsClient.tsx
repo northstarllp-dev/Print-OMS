@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useTransition, useCallback } from "react";
 import Link from "next/link";
 import {
   IndianRupee,
@@ -11,11 +11,21 @@ import {
   Clock,
   ArrowRight,
   BarChart2,
+  Download,
+  Receipt,
+  X,
+  FileText,
+  Loader2,
 } from "lucide-react";
 import type {
   CompanyCollectionsData,
   OrderPaymentSummary,
 } from "@/features/payments/actions/paymentActions";
+import { createPayment } from "@/features/payments/actions/paymentActions";
+import {
+  nextInstallmentName,
+} from "@/features/payments/utils/installmentName";
+import type { PaymentAmountType } from "@/types";
 
 function formatINR(n: number) {
   return `₹${n.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
@@ -47,8 +57,17 @@ const PAY_STATUS_META = {
   },
 } as const;
 
-type BalanceFilter = "outstanding" | "paid" | "all";
-type SortKey = "outstanding" | "last_paid" | "date";
+const INVOICE_STATUS_META: Record<string, { className: string }> = {
+  Draft: { className: "bg-slate-50 text-slate-600 border-slate-200" },
+  Sent: { className: "bg-blue-50 text-blue-700 border-blue-200" },
+  Paid: { className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  Overdue: { className: "bg-red-50 text-red-700 border-red-200" },
+  Cancelled: { className: "bg-slate-50 text-slate-400 border-slate-200" },
+};
+
+type BalanceFilter = "outstanding" | "paid" | "all" | "collected" | "expected";
+type AgingFilter = "0-30" | "31-60" | "61-90" | "90+" | null;
+type SortKey = "outstanding" | "last_paid" | "date" | "aging";
 
 interface PaymentsCollectionsClientProps {
   data: CompanyCollectionsData;
@@ -58,18 +77,35 @@ function orderHref(orderCode: string) {
   return `/admin/orders/${orderCode}?tab=payments`;
 }
 
+function agingBucket(days: number): "0-30" | "31-60" | "61-90" | "90+" {
+  if (days <= 30) return "0-30";
+  if (days <= 60) return "31-60";
+  if (days <= 90) return "61-90";
+  return "90+";
+}
+
 export function PaymentsCollectionsClient({ data }: PaymentsCollectionsClientProps) {
   const [balanceFilter, setBalanceFilter] = useState<BalanceFilter>(() =>
     data.kpis.ordersWithBalance > 0 ? "outstanding" : "all"
   );
+  const [agingFilter, setAgingFilter] = useState<AgingFilter>(null);
   const [stageFilter, setStageFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("outstanding");
   const [showAllReceipts, setShowAllReceipts] = useState(false);
+  const [receiptModal, setReceiptModal] = useState<OrderPaymentSummary | null>(null);
 
   const stages = useMemo(() => {
     const set = new Set(data.orders.map((o) => o.stage).filter(Boolean));
     return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [data.orders]);
+
+  const agingCounts = useMemo(() => {
+    const counts = { "0-30": 0, "31-60": 0, "61-90": 0, "90+": 0 };
+    for (const o of data.orders) {
+      if (o.outstanding > 0) counts[agingBucket(o.agingDays)]++;
+    }
+    return counts;
   }, [data.orders]);
 
   const filtered = useMemo(() => {
@@ -77,6 +113,10 @@ export function PaymentsCollectionsClient({ data }: PaymentsCollectionsClientPro
     const list = data.orders.filter((o) => {
       if (balanceFilter === "outstanding" && !(o.outstanding > 0)) return false;
       if (balanceFilter === "paid" && o.payStatus !== "fully_paid") return false;
+      if (balanceFilter === "collected" && o.receivedTotal <= 0) return false;
+      if (balanceFilter === "expected" && o.expectedTotal <= 0) return false;
+      if (agingFilter && (o.outstanding <= 0 || agingBucket(o.agingDays) !== agingFilter))
+        return false;
       if (stageFilter !== "all" && o.stage !== stageFilter) return false;
       if (!q) return true;
       const haystack = `${o.orderCode} ${o.clientName} ${o.businessName}`.toLowerCase();
@@ -91,9 +131,12 @@ export function PaymentsCollectionsClient({ data }: PaymentsCollectionsClientPro
       if (sortKey === "last_paid") {
         return (b.lastPaidAt || "").localeCompare(a.lastPaidAt || "");
       }
+      if (sortKey === "aging") {
+        return b.agingDays - a.agingDays;
+      }
       return (b.dateCreated || "").localeCompare(a.dateCreated || "");
     });
-  }, [data.orders, balanceFilter, stageFilter, search, sortKey]);
+  }, [data.orders, balanceFilter, agingFilter, stageFilter, search, sortKey]);
 
   const { kpis, recentReceipts } = data;
   const RECEIPTS_PREVIEW = 5;
@@ -101,6 +144,39 @@ export function PaymentsCollectionsClient({ data }: PaymentsCollectionsClientPro
     ? recentReceipts
     : recentReceipts.slice(0, RECEIPTS_PREVIEW);
   const hasMoreReceipts = recentReceipts.length > RECEIPTS_PREVIEW;
+
+  function downloadCsv() {
+    const headers = [
+      "Order Code",
+      "Client",
+      "Stage",
+      "Quoted Total",
+      "Received",
+      "Outstanding",
+      "Aging Days",
+      "Last Paid Date",
+    ];
+    const rows = filtered.map((o) => [
+      o.orderCode,
+      o.businessName || o.clientName,
+      o.stage,
+      String(o.quoteTotal),
+      String(o.receivedTotal),
+      String(o.outstanding),
+      String(o.agingDays),
+      o.lastPaidAt ? new Date(o.lastPaidAt).toLocaleDateString("en-IN") : "",
+    ]);
+    const csvContent = [headers, ...rows]
+      .map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `collections-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   return (
     <div className="space-y-4 sm:space-y-6" style={{ padding: "16px 16px 28px" }}>
@@ -116,51 +192,119 @@ export function PaymentsCollectionsClient({ data }: PaymentsCollectionsClientPro
             Track outstanding balances and recent receipts. Record payments on the order Payment tab.
           </p>
         </div>
-        <Link
-          href="/admin/reports"
-          className="inline-flex items-center gap-1.5 self-start text-xs font-semibold text-slate-600 hover:text-slate-900 border border-slate-200 bg-white rounded-lg px-3 py-2"
-        >
-          <BarChart2 size={14} />
-          View trends
-        </Link>
+        <div className="flex items-center gap-2 self-start">
+          <button
+            type="button"
+            onClick={downloadCsv}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 border border-slate-200 bg-white rounded-lg px-3 py-2 cursor-pointer"
+          >
+            <Download size={14} />
+            Download CSV
+          </button>
+          <Link
+            href="/admin/reports"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 border border-slate-200 bg-white rounded-lg px-3 py-2"
+          >
+            <BarChart2 size={14} />
+            View trends
+          </Link>
+        </div>
       </div>
 
-      {/* KPIs */}
+      {/* KPIs — clickable */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
-        <Kpi
+        <KpiClickable
           label="Collected"
           value={formatINR(kpis.collected)}
           sub="all received payments"
           icon={Wallet}
           tone="emerald"
+          active={balanceFilter === "collected"}
+          onClick={() => setBalanceFilter((f) => (f === "collected" ? "all" : "collected"))}
         />
-        <Kpi
+        <KpiClickable
           label="Outstanding"
           value={formatINR(kpis.outstanding)}
           sub={`${kpis.ordersWithBalance} order${kpis.ordersWithBalance === 1 ? "" : "s"}`}
           icon={AlertCircle}
           tone="amber"
+          active={balanceFilter === "outstanding"}
+          onClick={() => setBalanceFilter((f) => (f === "outstanding" ? "all" : "outstanding"))}
         />
-        <Kpi
+        <KpiClickable
           label="Expected"
           value={formatINR(kpis.expected)}
           sub="logged as expected"
           icon={Clock}
           tone="slate"
+          active={balanceFilter === "expected"}
+          onClick={() => setBalanceFilter((f) => (f === "expected" ? "all" : "expected"))}
         />
-        <Kpi
+        <KpiClickable
           label="Fully paid"
           value={String(kpis.fullyPaidOrders)}
           sub="orders settled"
           icon={CheckCircle2}
           tone="blue"
+          active={balanceFilter === "paid"}
+          onClick={() => setBalanceFilter((f) => (f === "paid" ? "all" : "paid"))}
         />
       </div>
 
-      {/* Orders + receipts — side by side on laptop; filters only above orders table */}
+      {/* Aging bucket chips */}
+      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-1">
+          Aging:
+        </span>
+        {(
+          [
+            ["0-30", "0–30 days"],
+            ["31-60", "31–60 days"],
+            ["61-90", "61–90 days"],
+            ["90+", "90+ days"],
+          ] as const
+        ).map(([key, label]) => {
+          const isActive = agingFilter === key;
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => {
+                setAgingFilter((f) => (f === key ? null : key));
+                if (!isActive) setBalanceFilter("outstanding");
+              }}
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-bold border cursor-pointer transition-colors ${
+                isActive
+                  ? "bg-slate-900 text-white border-slate-900"
+                  : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+              }`}
+            >
+              <span>{label}</span>
+              <span
+                className={`inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-extrabold ${
+                  isActive ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"
+                }`}
+              >
+                {agingCounts[key]}
+              </span>
+            </button>
+          );
+        })}
+        {agingFilter && (
+          <button
+            type="button"
+            onClick={() => setAgingFilter(null)}
+            className="text-[10px] font-bold text-slate-400 hover:text-slate-600 cursor-pointer ml-1"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+
+      {/* Orders + receipts */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-5 lg:items-start">
         <div className="lg:col-span-8 flex flex-col gap-3 min-h-0">
-          {/* Compact filters — not full-page width */}
+          {/* Compact filters */}
           <div className="inline-flex flex-wrap items-center gap-1.5 sm:gap-2 bg-white border border-slate-200 rounded-lg px-2 py-1.5 sm:px-2.5 sm:py-2 w-full lg:w-fit lg:max-w-full">
             <div className="relative shrink-0 w-[9.5rem] sm:w-44">
               <Search
@@ -188,7 +332,10 @@ export function PaymentsCollectionsClient({ data }: PaymentsCollectionsClientPro
                   key={value}
                   type="button"
                   aria-pressed={balanceFilter === value}
-                  onClick={() => setBalanceFilter(value)}
+                  onClick={() => {
+                    setBalanceFilter(value);
+                    setAgingFilter(null);
+                  }}
                   className={`px-2 py-1 rounded-md text-[11px] sm:text-xs font-semibold border whitespace-nowrap cursor-pointer transition-colors ${
                     balanceFilter === value
                       ? "bg-slate-900 text-white border-slate-900"
@@ -225,6 +372,7 @@ export function PaymentsCollectionsClient({ data }: PaymentsCollectionsClientPro
                 <option value="outstanding">outstanding</option>
                 <option value="last_paid">last paid</option>
                 <option value="date">order date</option>
+                <option value="aging">aging</option>
               </select>
             </div>
           </div>
@@ -250,18 +398,24 @@ export function PaymentsCollectionsClient({ data }: PaymentsCollectionsClientPro
                     <th className="font-bold px-3 py-2.5 text-right bg-slate-50">Received</th>
                     <th className="font-bold px-3 py-2.5 text-right bg-slate-50">Outstanding</th>
                     <th className="font-bold px-3 py-2.5 bg-slate-50">Status</th>
+                    <th className="font-bold px-3 py-2.5 bg-slate-50">Aging</th>
+                    <th className="font-bold px-3 py-2.5 bg-slate-50">Invoice</th>
                     <th className="font-bold px-3 py-2.5 bg-slate-50">Last payment</th>
                     <th className="font-bold px-3 py-2.5 w-8 bg-slate-50" />
                   </tr>
                 </thead>
                 <tbody>
                   {filtered.map((row) => (
-                    <OrderTableRow key={row.orderId} row={row} />
+                    <OrderTableRow
+                      key={row.orderId}
+                      row={row}
+                      onRecordReceipt={() => setReceiptModal(row)}
+                    />
                   ))}
                   {filtered.length === 0 && (
                     <tr>
                       <td
-                        colSpan={8}
+                        colSpan={10}
                         className="px-4 py-10 text-center text-slate-400 font-semibold"
                       >
                         No orders match these filters.
@@ -276,7 +430,11 @@ export function PaymentsCollectionsClient({ data }: PaymentsCollectionsClientPro
           {/* Mobile cards */}
           <div className="md:hidden flex-1 min-h-[22rem] overflow-y-auto space-y-2.5 pr-0.5">
             {filtered.map((row) => (
-              <OrderCard key={row.orderId} row={row} />
+              <OrderCard
+                key={row.orderId}
+                row={row}
+                onRecordReceipt={() => setReceiptModal(row)}
+              />
             ))}
             {filtered.length === 0 && (
               <div className="bg-slate-50 border border-slate-200 border-dashed rounded-[var(--radius-xl)] p-8 text-center text-slate-400 text-xs font-semibold">
@@ -286,7 +444,7 @@ export function PaymentsCollectionsClient({ data }: PaymentsCollectionsClientPro
           </div>
         </div>
 
-        {/* Recent receipts — top-aligned beside orders on laptop */}
+        {/* Recent receipts */}
         <div className="lg:col-span-4 flex flex-col gap-3 lg:sticky lg:top-4">
           <div className="flex items-center justify-between gap-2 shrink-0">
             <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-500 m-0">
@@ -344,22 +502,34 @@ export function PaymentsCollectionsClient({ data }: PaymentsCollectionsClientPro
           </div>
         </div>
       </div>
+
+      {/* Record Receipt Modal */}
+      {receiptModal && (
+        <RecordReceiptModal
+          order={receiptModal}
+          onClose={() => setReceiptModal(null)}
+        />
+      )}
     </div>
   );
 }
 
-function Kpi({
+function KpiClickable({
   label,
   value,
   sub,
   icon: Icon,
   tone,
+  active,
+  onClick,
 }: {
   label: string;
   value: string;
   sub: string;
   icon: React.ElementType;
   tone: "emerald" | "amber" | "slate" | "blue";
+  active: boolean;
+  onClick: () => void;
 }) {
   const tones = {
     emerald: "bg-emerald-50 text-emerald-700",
@@ -368,7 +538,14 @@ function Kpi({
     blue: "bg-blue-50 text-blue-700",
   };
   return (
-    <div className="bg-white border border-[var(--border)] rounded-[var(--radius-lg)] p-3 sm:p-4">
+    <div
+      onClick={onClick}
+      className={`bg-white border rounded-[var(--radius-lg)] p-3 sm:p-4 cursor-pointer transition-all ${
+        active
+          ? "border-slate-900 ring-1 ring-slate-900/10"
+          : "border-[var(--border)] hover:border-slate-300"
+      }`}
+    >
       <div className="flex items-start justify-between gap-2 mb-2">
         <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
           {label}
@@ -385,7 +562,27 @@ function Kpi({
   );
 }
 
-function OrderTableRow({ row }: { row: OrderPaymentSummary }) {
+function InvoiceBadge({ invoiceId, invoiceStatus }: { invoiceId: string | null; invoiceStatus: string | null }) {
+  if (!invoiceId || !invoiceStatus) return <span className="text-slate-300">—</span>;
+  const meta = INVOICE_STATUS_META[invoiceStatus] ?? INVOICE_STATUS_META.Draft;
+  return (
+    <Link
+      href={`/admin/invoices/${invoiceId}`}
+      className={`inline-flex items-center gap-1 prt-badge border text-[9px] uppercase hover:opacity-80 ${meta.className}`}
+    >
+      <FileText size={10} />
+      {invoiceStatus}
+    </Link>
+  );
+}
+
+function OrderTableRow({
+  row,
+  onRecordReceipt,
+}: {
+  row: OrderPaymentSummary;
+  onRecordReceipt: () => void;
+}) {
   const meta = PAY_STATUS_META[row.payStatus];
   return (
     <tr className="border-b border-slate-50 hover:bg-slate-50/60">
@@ -415,42 +612,68 @@ function OrderTableRow({ row }: { row: OrderPaymentSummary }) {
           {meta.label}
         </span>
       </td>
+      <td className="px-3 py-3 tabular-nums text-slate-600 font-medium">
+        {row.outstanding > 0 ? `${row.agingDays}d` : "—"}
+      </td>
+      <td className="px-3 py-3">
+        <InvoiceBadge invoiceId={row.invoiceId} invoiceStatus={row.invoiceStatus} />
+      </td>
       <td className="px-3 py-3 text-slate-500">
         <div className="font-medium truncate max-w-[8rem]">{row.lastPaymentName || "—"}</div>
         <div className="text-[10px]">{formatDate(row.lastPaidAt)}</div>
       </td>
       <td className="px-3 py-3">
-        <Link
-          href={orderHref(row.orderCode)}
-          className="inline-flex text-slate-400 hover:text-slate-700"
-          aria-label={`Open payments for ${row.orderCode}`}
-        >
-          <ArrowRight size={14} />
-        </Link>
+        <div className="flex items-center gap-1">
+          {row.outstanding > 0 && (
+            <button
+              type="button"
+              onClick={onRecordReceipt}
+              className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-600 hover:text-blue-800 cursor-pointer"
+              title="Record Receipt"
+            >
+              <Receipt size={12} />
+            </button>
+          )}
+          <Link
+            href={orderHref(row.orderCode)}
+            className="inline-flex text-slate-400 hover:text-slate-700"
+            aria-label={`Open payments for ${row.orderCode}`}
+          >
+            <ArrowRight size={14} />
+          </Link>
+        </div>
       </td>
     </tr>
   );
 }
 
-function OrderCard({ row }: { row: OrderPaymentSummary }) {
+function OrderCard({
+  row,
+  onRecordReceipt,
+}: {
+  row: OrderPaymentSummary;
+  onRecordReceipt: () => void;
+}) {
   const meta = PAY_STATUS_META[row.payStatus];
   return (
-    <Link
-      href={orderHref(row.orderCode)}
-      className="block p-3.5 bg-white border border-[var(--border)] rounded-[var(--radius-xl)] space-y-2.5"
-    >
+    <div className="p-3.5 bg-white border border-[var(--border)] rounded-[var(--radius-xl)] space-y-2.5">
       <div className="flex justify-between items-start gap-2">
-        <div className="min-w-0">
+        <Link href={orderHref(row.orderCode)} className="block min-w-0">
           <p className="m-0 text-sm font-bold text-slate-800">{row.orderCode}</p>
           <p className="m-0 mt-0.5 text-[10px] font-semibold text-slate-400 truncate">
             {row.businessName || row.clientName} · {row.stage}
           </p>
+        </Link>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {row.invoiceId && (
+            <InvoiceBadge invoiceId={row.invoiceId} invoiceStatus={row.invoiceStatus} />
+          )}
+          <span className={`prt-badge border text-[9px] uppercase ${meta.className}`}>
+            {meta.label}
+          </span>
         </div>
-        <span className={`prt-badge border text-[9px] uppercase shrink-0 ${meta.className}`}>
-          {meta.label}
-        </span>
       </div>
-      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-50 text-[10px]">
+      <div className="grid grid-cols-4 gap-2 pt-2 border-t border-slate-50 text-[10px]">
         <div>
           <div className="font-bold uppercase text-slate-400 tracking-wide">Quote</div>
           <div className="font-semibold text-slate-700 tabular-nums mt-0.5">
@@ -469,7 +692,202 @@ function OrderCard({ row }: { row: OrderPaymentSummary }) {
             {formatINR(row.outstanding)}
           </div>
         </div>
+        <div>
+          <div className="font-bold uppercase text-slate-400 tracking-wide">Aging</div>
+          <div className="font-semibold text-slate-600 tabular-nums mt-0.5">
+            {row.outstanding > 0 ? `${row.agingDays}d` : "—"}
+          </div>
+        </div>
       </div>
-    </Link>
+      {row.outstanding > 0 && (
+        <button
+          type="button"
+          onClick={onRecordReceipt}
+          className="w-full flex items-center justify-center gap-1.5 py-2 text-[11px] font-bold text-blue-600 hover:text-blue-800 border border-blue-200 bg-blue-50/50 rounded-lg cursor-pointer"
+        >
+          <Receipt size={12} />
+          Record Receipt
+        </button>
+      )}
+    </div>
+  );
+}
+
+function RecordReceiptModal({
+  order,
+  onClose,
+}: {
+  order: OrderPaymentSummary;
+  onClose: () => void;
+}) {
+  const [name, setName] = useState(() => nextInstallmentName(0));
+  const [amountType, setAmountType] = useState<PaymentAmountType | "rest">("fixed");
+  const [value, setValue] = useState(String(order.outstanding));
+  const [notes, setNotes] = useState("");
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = useCallback(() => {
+    startTransition(async () => {
+      try {
+        setError(null);
+        if (!name.trim()) throw new Error("Enter a payment name.");
+
+        let finalType: PaymentAmountType = amountType === "rest" ? "fixed" : amountType;
+        let amount: number | null = null;
+        let percentage: number | null = null;
+
+        if (amountType === "rest") {
+          amount = order.outstanding;
+        } else if (amountType === "fixed") {
+          amount = parseFloat(value);
+          if (!Number.isFinite(amount) || amount <= 0) throw new Error("Enter a valid amount.");
+        } else {
+          const pct = parseFloat(value);
+          if (!Number.isFinite(pct) || pct <= 0 || pct > 100)
+            throw new Error("Percentage must be 1–100.");
+          percentage = pct;
+        }
+
+        await createPayment(order.orderId, {
+          payment_name: name.trim(),
+          amount_type: finalType,
+          amount,
+          percentage,
+          notes: notes.trim() || null,
+          received: true,
+        });
+
+        onClose();
+        window.location.reload();
+      } catch (e: any) {
+        setError(e.message || "Failed to record receipt");
+      }
+    });
+  }, [name, amountType, value, notes, order, onClose]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+          <div>
+            <h3 className="text-sm font-extrabold text-slate-900 m-0">Record Receipt</h3>
+            <p className="text-[11px] text-slate-500 m-0 mt-0.5">
+              {order.orderCode} · {order.businessName || order.clientName}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 cursor-pointer"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="px-5 py-4 space-y-4">
+          <div>
+            <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">
+              Installment name
+            </label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg bg-white"
+            />
+          </div>
+
+          <div>
+            <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">
+              Amount type
+            </label>
+            <div className="flex gap-3 pt-1 flex-wrap">
+              {(
+                [
+                  ["fixed", "Fixed (₹)"],
+                  ["percentage", "Percentage (%)"],
+                  ["rest", "Rest of amount"],
+                ] as const
+              ).map(([key, label]) => (
+                <label
+                  key={key}
+                  className="flex items-center gap-1.5 text-xs font-bold text-slate-700 cursor-pointer"
+                >
+                  <input
+                    type="radio"
+                    checked={amountType === key}
+                    onChange={() => {
+                      setAmountType(key);
+                      if (key === "rest") setValue(String(order.outstanding));
+                      else if (key === "percentage") setValue("50");
+                    }}
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">
+              Amount
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              disabled={amountType === "rest"}
+              className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg bg-white font-mono disabled:bg-slate-50 disabled:text-slate-500"
+            />
+            {amountType === "rest" && (
+              <p className="text-[10px] font-semibold text-slate-400 mt-1">
+                Outstanding: {formatINR(order.outstanding)}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">
+              Notes (optional)
+            </label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={2}
+              className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg bg-white resize-none"
+            />
+          </div>
+
+          {error && (
+            <div className="text-xs font-bold text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+              {error}
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-slate-100 bg-slate-50/50">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isPending}
+            className="px-4 py-2 text-xs font-bold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={isPending}
+            className="px-4 py-2 text-xs font-bold rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+          >
+            {isPending && <Loader2 size={12} className="animate-spin" />}
+            {isPending ? "Saving…" : "Record Receipt"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

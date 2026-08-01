@@ -29,6 +29,9 @@ import {
   Boxes,
   Plug,
   FileText,
+  ListTodo,
+  ShoppingCart,
+  Landmark,
 } from "lucide-react";
 import { Logo } from "@/components/ui/Logo";
 import { PlatformMadeWithLove } from "@/components/ui/PlatformMadeWithLove";
@@ -63,6 +66,7 @@ const NAV_ITEMS = [
   { id: "/admin/customers", label: "Customers", icon: Users, countKey: "customers" },
   { id: "/admin/service-tickets", label: "Service Tickets", icon: Wrench, countKey: "support" },
   { id: "/admin/employees", label: "Employees", icon: UserCheck },
+  { id: "/admin/tasks", label: "Tasks", icon: ListTodo },
   { id: "/admin/reports", label: "Reports", icon: BarChart2 },
   { id: "/production/orders", label: "Production", icon: Factory, countKey: "production" },
   { id: "/installation/orders", label: "Installation", icon: Wrench, countKey: "installation" },
@@ -70,6 +74,8 @@ const NAV_ITEMS = [
   { id: "/admin/invoices", label: "Invoices", icon: FileText },
   { id: "/admin/calendar", label: "Calendar", icon: CalendarDays },
   { id: "/admin/inventory", label: "Inventory", icon: Boxes },
+  { id: "/admin/purchase-orders", label: "Purchase Orders", icon: ShoppingCart },
+  { id: "/admin/finance", label: "Finance", icon: Landmark },
   { id: "/admin/products", label: "Products", icon: Package },
   { id: "/admin/settings", label: "Settings", icon: Settings },
 ] as const;

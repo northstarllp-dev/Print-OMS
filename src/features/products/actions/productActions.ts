@@ -41,6 +41,19 @@ export type Product = {
   is_active: boolean;
   final_prdt?: boolean;
   created_at?: string;
+  // Inventory attributes
+  unit?: string | null;
+  brand?: string | null;
+  supplier_name?: string | null;
+  purchase_price?: number | null;
+  min_stock?: number | null;
+  max_stock?: number | null;
+  hsn_code?: string | null;
+  gst_rate?: number | null;
+  barcode?: string | null;
+  qr_code?: string | null;
+  default_warehouse_id?: string | null;
+  track_inventory?: boolean;
 };
 
 export type CreateProductPayload = {
@@ -55,6 +68,19 @@ export type CreateProductPayload = {
   images?: string[];
   is_active?: boolean;
   final_prdt?: boolean;
+  // Inventory attributes
+  unit?: string | null;
+  brand?: string | null;
+  supplier_name?: string | null;
+  purchase_price?: number | null;
+  min_stock?: number | null;
+  max_stock?: number | null;
+  hsn_code?: string | null;
+  gst_rate?: number | null;
+  barcode?: string | null;
+  qr_code?: string | null;
+  default_warehouse_id?: string | null;
+  track_inventory?: boolean;
 };
 
 export async function getProducts(): Promise<Product[]> {

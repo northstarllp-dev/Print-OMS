@@ -13,8 +13,8 @@ export function ComingSoonPage({ title, description, icon: Icon }: ComingSoonPag
         <div className="mx-auto mb-5 w-14 h-14 rounded-2xl bg-[rgba(30,64,175,0.08)] flex items-center justify-center">
           <Icon size={26} className="text-[var(--color-primary,#1E40AF)]" />
         </div>
-        <p className="m-0 mb-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-[var(--color-primary,#1E40AF)]">
-          Coming soon
+        <p className="m-0 mb-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-amber-600">
+          Under development
         </p>
         <h1 className="m-0 mb-3 text-xl sm:text-2xl font-extrabold text-slate-900">
           {title}

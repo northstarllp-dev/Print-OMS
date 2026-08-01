@@ -29,6 +29,11 @@ import {
   markInvoicePaid,
 } from "@/features/invoices/actions/invoiceActions";
 import {
+  convertProformaToInvoiceAction,
+  setInvoiceTypeAction,
+} from "@/features/finance/actions/financeActions";
+import { INVOICE_TYPES, type InvoiceType } from "@/features/finance/types";
+import {
   calcLineAmount,
   getLineMeasurement,
   normalizeLineItem,
@@ -337,7 +342,10 @@ export function InvoiceBuilder({
     (initial.due_date as string)?.slice(0, 10) || ""
   );
   const [status, setStatus] = useState(initial.status || "Draft");
-  const [invoiceId] = useState(initial.invoice_id || "—");
+  const [invoiceType, setInvoiceType] = useState<InvoiceType>(
+    (initial.invoice_type as InvoiceType) || "Tax Invoice"
+  );
+  const [invoiceId, setInvoiceId] = useState(initial.invoice_id || "—");
   const [showPreview, setShowPreview] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
@@ -493,9 +501,59 @@ export function InvoiceBuilder({
                 {order.order_id || "Order"}
               </Link>
             </p>
-            <span className="inline-flex mt-2 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase border bg-slate-100 text-slate-700 border-slate-200">
-              {status}
-            </span>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <span className="inline-flex px-2 py-0.5 rounded-md text-[10px] font-bold uppercase border bg-slate-100 text-slate-700 border-slate-200">
+                {status}
+              </span>
+              {canEdit ? (
+                <select
+                  value={invoiceType}
+                  disabled={isPending || locked}
+                  onChange={(e) => {
+                    const nextType = e.target.value as InvoiceType;
+                    setInvoiceType(nextType);
+                    startTransition(async () => {
+                      try {
+                        await setInvoiceTypeAction(initial.id, nextType);
+                      } catch (err: any) {
+                        setError(err?.message || "Failed to change invoice type");
+                      }
+                    });
+                  }}
+                  className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-bold uppercase text-slate-700"
+                >
+                  {INVOICE_TYPES.map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              ) : (
+                <span className="inline-flex px-2 py-0.5 rounded-md text-[10px] font-bold uppercase border bg-indigo-50 text-indigo-700 border-indigo-200">
+                  {invoiceType}
+                </span>
+              )}
+              {canEdit && invoiceType === "Proforma Invoice" ? (
+                <button
+                  type="button"
+                  disabled={isPending}
+                  onClick={() => {
+                    startTransition(async () => {
+                      try {
+                        const result = await convertProformaToInvoiceAction(initial.id);
+                        setInvoiceType("Tax Invoice");
+                        setStatus("Draft");
+                        if (result?.invoiceId) setInvoiceId(result.invoiceId);
+                        setSaveMsg("Proforma converted to Tax Invoice");
+                      } catch (err: any) {
+                        setError(err?.message || "Failed to convert proforma");
+                      }
+                    });
+                  }}
+                  className="inline-flex px-2 py-0.5 rounded-md text-[10px] font-bold uppercase border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+                >
+                  Convert to Invoice
+                </button>
+              ) : null}
+            </div>
           </div>
         </div>
         <div className="flex flex-wrap gap-2">

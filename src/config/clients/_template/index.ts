@@ -46,6 +46,7 @@ export const templateClientConfig: Partial<PrintOMSClientConfig> = {
   loadingText: "PLACEHOLDER_NAME",
   features: {
     enableAdminAssignment: false,
+    needsAttentionAfterDays: 6,
   },
   usesFloorPortals: false,
   stageGrantsByRole: {

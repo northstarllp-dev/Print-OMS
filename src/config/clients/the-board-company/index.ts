@@ -39,6 +39,7 @@ export const theBoardCompanyConfig: Partial<PrintOMSClientConfig> = {
   loadingText: "THE BOARD COMPANY",
   features: {
     enableAdminAssignment: true,
+    needsAttentionAfterDays: 6,
   },
   usesFloorPortals: false,
   stageGrantsByRole: {

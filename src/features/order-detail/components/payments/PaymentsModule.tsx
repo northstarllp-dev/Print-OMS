@@ -114,8 +114,8 @@ export const PaymentsModule: React.FC<PaymentsModuleProps> = ({
             <CreditCard size={16} className="text-blue-600 shrink-0" />
             Payment Tracking
           </h2>
-          <p className="text-xs text-amber-600 mt-2 font-medium bg-amber-50 p-2 rounded-lg border border-amber-200/60 leading-relaxed">
-            Note: Payment gateway integration is in progress. Until then, use this as a payment received tool only.
+          <p className="text-xs text-slate-500 mt-2 font-medium bg-slate-50 p-2 rounded-lg border border-slate-200/60 leading-relaxed">
+            Record bank transfers, UPI, cash, and cheque receipts here.
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">

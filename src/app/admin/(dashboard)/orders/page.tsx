@@ -1,11 +1,13 @@
 import { OrdersManagementDashboard } from "@/features/orders/components/OrdersManagementDashboard";
-import { getOrders } from "@/features/orders/actions/orderActions";
+import { getOrders, flagStalledOrdersAction } from "@/features/orders/actions/orderActions";
 import { getCustomers } from "@/features/customers/actions/customerActions";
 import { getEnquiries } from "@/features/enquiries/actions/enquiryActions";
 import { getUserSession } from "@/features/auth/actions/authActions";
 import { getEmployees } from "@/features/employees/actions/employeeActions";
 
 export default async function OrdersPage() {
+  await flagStalledOrdersAction().catch(() => ({ flagged: 0 }));
+
   // Fetch data on the server
   const orders = await getOrders();
   const customers = await getCustomers();

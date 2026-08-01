@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { Order, Customer, Employee, SiteVisitDetails, PipelineStage } from "@/types";
-import { Users, Settings, Briefcase, FileText, CheckCircle2, XCircle, AlertTriangle, Shield, ShieldOff } from "lucide-react";
+import { Order, Customer, Employee, SiteVisitDetails } from "@/types";
+import { Users, Settings, Briefcase, CheckCircle2, XCircle, AlertTriangle, Shield, ShieldOff, HeartPulse } from "lucide-react";
 import { OverlayPortal } from "@/components/ui/OverlayPortal";
 import { fetchEmployeeStats, assignTeamToOrder } from "@/features/orders/actions/orderActions";
 import { revokePortalAccessAction } from "@/features/portal/actions/portalAdminActions";
+import { ORDER_HEALTH_VALUES, type OrderHealth } from "@/features/orders/lib/orderHealth";
 
 interface AdminControlModuleProps {
   order: Order;
@@ -14,58 +15,57 @@ interface AdminControlModuleProps {
   onApproveWithWorkflowChoice?: () => void;
   updateSiteVisitDetails: (orderId: string, details: Partial<SiteVisitDetails>) => Promise<void>;
   updateOrderStage: (orderId: string, stage: string) => Promise<void>;
+  onUpdateHealth?: (health: string, lostReason?: string, callRemarks?: string) => Promise<void>;
+  onReopen?: () => Promise<void>;
 }
 
-const STAGE_LABEL: Record<string, { label: string; color: string }> = {
-  "Site Visit Pending":    { label: "Site Visit Pending",  color: "#818CF8" },
-  "Site Visit Scheduled":  { label: "Site Visit Scheduled",   color: "#818CF8" },
-  "Site Visit Completed":  { label: "Site Visit Completed",   color: "#818CF8" },
-  "Quotation In Progress": { label: "Quotation In Progress",     color: "#F97316" },
-  "Quotation Sent":        { label: "Quotation Sent",  color: "#F97316" },
-  "Quotation Negotiation": { label: "Quotation Negotiation", color: "#F97316" },
-  "Quotation Approved":    { label: "Quotation Approved",    color: "#F97316" },
-  "Design In Progress":    { label: "Design In Progress",      color: "#EC4899" },
-  "Design Approved":       { label: "Design Approved",   color: "#EC4899" },
-  "Production":            { label: "Production",  color: "#3B82F6" },
-  "Ready For Installation":{ label: "Ready For Installation",       color: "#3B82F6" },
-  "Installation Scheduled":{ label: "Installation Scheduled",     color: "#0EA5E9" },
-  "Completed":             { label: "Completed",   color: "#22C55E" },
-  "Closed":                { label: "Closed",      color: "#22C55E" },
+const HEALTH_HINT: Record<OrderHealth, string> = {
+  Active: "Order is progressing normally.",
+  "Needs Attention": "No stage progress for too long — review and call the customer.",
+  "On Hold": "Temporarily paused.",
+  Lost: "Soft-cancelled; approvals are blocked.",
 };
 
 export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
   order,
-  customers,
-  employees,
   onAdminApprove,
   onAdminReject,
   onApproveWithWorkflowChoice,
-  updateSiteVisitDetails,
-  updateOrderStage
+  onUpdateHealth,
+  onReopen,
 }) => {
-  const [savingNotes, setSavingNotes] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectNotes, setRejectNotes] = useState("");
   const [rejecting, setRejecting] = useState(false);
 
-  // Employee stats for assignment
   const [employeeStats, setEmployeeStats] = useState<any[]>([]);
   const [loadingStats, setLoadingStats] = useState(true);
-  
-  // Local state for assignments
+
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<Set<string>>(
     new Set(order.assignedEmployees || [])
   );
   const [savingTeam, setSavingTeam] = useState(false);
 
-  // Local state for revoke portal access
   const [revoking, setRevoking] = useState(false);
   const [revokeResult, setRevokeResult] = useState<string | null>(null);
 
+  const currentHealth = (order.health || "Active") as OrderHealth;
+  const [healthDraft, setHealthDraft] = useState<OrderHealth>(
+    ORDER_HEALTH_VALUES.includes(currentHealth) ? currentHealth : "Active"
+  );
+  const [lostReason, setLostReason] = useState(order.lost_reason || "");
+  const [callRemarks, setCallRemarks] = useState("");
+  const [savingHealth, setSavingHealth] = useState(false);
 
   useEffect(() => {
     setSelectedEmployeeIds(new Set(order.assignedEmployees || []));
   }, [order.assignedEmployees]);
+
+  useEffect(() => {
+    const h = (order.health || "Active") as OrderHealth;
+    setHealthDraft(ORDER_HEALTH_VALUES.includes(h) ? h : "Active");
+    setLostReason(order.lost_reason || "");
+  }, [order.health, order.lost_reason]);
 
   useEffect(() => {
     fetchEmployeeStats().then(data => {
@@ -86,7 +86,6 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
     }
   };
 
-  // All tenant staff roles (Designer, Recce & Installation, Production & Service, etc.)
   const visibleEmployees = employeeStats;
 
   const toggleEmployee = (id: string) => {
@@ -111,7 +110,6 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
     }
   };
 
-
   const handleRejectSubmit = async () => {
     if (!onAdminReject || !rejectNotes.trim()) return;
     setRejecting(true);
@@ -126,14 +124,123 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
     }
   };
 
-  const isJobDonePending = order.stageStatus === "Pending Admin Approval: Job Done";
+  const handleSaveHealth = async () => {
+    if (!onUpdateHealth) return;
+    if (healthDraft === "Lost" && !lostReason.trim()) {
+      alert("A reason is required when marking an order as Lost.");
+      return;
+    }
+    setSavingHealth(true);
+    try {
+      await onUpdateHealth(
+        healthDraft,
+        healthDraft === "Lost" ? lostReason.trim() : undefined,
+        callRemarks.trim() || undefined
+      );
+      setCallRemarks("");
+    } catch (e: any) {
+      alert(e?.message || "Failed to update health");
+    } finally {
+      setSavingHealth(false);
+    }
+  };
 
+  const isJobDonePending = order.stageStatus === "Pending Admin Approval: Job Done";
+  const healthBannerClass =
+    currentHealth === "Lost"
+      ? "bg-red-50 border-red-200 text-red-900"
+      : currentHealth === "Needs Attention"
+        ? "bg-amber-50 border-amber-200 text-amber-900"
+        : currentHealth === "On Hold"
+          ? "bg-slate-50 border-slate-200 text-slate-800"
+          : "bg-emerald-50 border-emerald-200 text-emerald-900";
 
   return (
     <>
     <div className="space-y-6 max-w-none">
-      
-      {/* ── APPROVALS AND STAGE OVERRIDE ── */}
+
+      {onUpdateHealth && (
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+            <div className="flex items-center gap-2">
+              <HeartPulse size={18} className="text-slate-500" />
+              <h3 className="text-sm font-extrabold text-slate-800 uppercase tracking-wider">Order Health</h3>
+            </div>
+          </div>
+          <div className="p-5 space-y-4">
+            <div className={`rounded-xl border p-3 text-xs font-medium ${healthBannerClass}`}>
+              Current: <span className="font-bold">{currentHealth}</span>
+              {order.lost_reason && currentHealth === "Lost" ? ` — ${order.lost_reason}` : ""}
+              <p className="mt-1 opacity-80">{HEALTH_HINT[ORDER_HEALTH_VALUES.includes(currentHealth) ? currentHealth : "Active"]}</p>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                Set health
+              </label>
+              <select
+                value={healthDraft}
+                onChange={(e) => setHealthDraft(e.target.value as OrderHealth)}
+                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[13px] font-medium text-slate-700"
+              >
+                {ORDER_HEALTH_VALUES.map((h) => (
+                  <option key={h} value={h}>{h}</option>
+                ))}
+              </select>
+            </div>
+
+            {healthDraft === "Lost" && (
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                  Lost reason <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={lostReason}
+                  onChange={(e) => setLostReason(e.target.value)}
+                  placeholder="e.g. Price too high, Unresponsive, Competitor"
+                  className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[13px] font-medium text-slate-700"
+                />
+              </div>
+            )}
+
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                Call remarks (optional)
+              </label>
+              <textarea
+                value={callRemarks}
+                onChange={(e) => setCallRemarks(e.target.value)}
+                rows={2}
+                placeholder="Notes from calling the customer…"
+                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[13px] font-medium text-slate-700 resize-y"
+              />
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2">
+              <button
+                type="button"
+                onClick={handleSaveHealth}
+                disabled={savingHealth}
+                className="px-4 py-2.5 bg-[#1E40AF] text-white rounded-lg text-xs font-bold hover:bg-blue-800 transition-colors disabled:opacity-50"
+              >
+                {savingHealth ? "Saving…" : "Update Health"}
+              </button>
+              {currentHealth === "Lost" && onReopen && (
+                <button
+                  type="button"
+                  onClick={() => onReopen()}
+                  disabled={savingHealth}
+                  className="px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-lg text-xs font-bold hover:bg-slate-50 transition-colors disabled:opacity-50"
+                >
+                  Reopen to Active
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
           <div className="flex items-center gap-2">
@@ -170,7 +277,7 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
                   )}
                 </p>
               </div>
-              
+
                 <div className="flex flex-col sm:flex-row flex-wrap gap-2 shrink-0 w-full sm:w-auto">
                   {onAdminReject && (
                     <button
@@ -191,8 +298,8 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
                       <span className="hidden sm:inline">Choose Workflow &amp; Approve</span>
                     </button>
                   ) : (
-                    <button 
-                      onClick={onAdminApprove} 
+                    <button
+                      onClick={onAdminApprove}
                       className="px-4 py-2.5 bg-emerald-500 text-white rounded-lg text-xs font-bold hover:bg-emerald-600 transition-colors flex items-center justify-center gap-1.5 w-full sm:w-auto"
                     >
                       <CheckCircle2 size={16} />
@@ -214,7 +321,6 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
         </div>
       </div>
 
-      {/* ── PORTAL ACCESS SECURITY ── */}
       <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
           <div className="flex items-center gap-2">
@@ -247,7 +353,6 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
         </div>
       </div>
 
-      {/* ── TEAM ASSIGNMENT ── */}
       <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -311,8 +416,6 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
           )}
         </div>
       </div>
-
-
 
     </div>
 

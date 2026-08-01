@@ -21,8 +21,11 @@ import {
   RefreshCw,
   MoreHorizontal,
   Wrench,
+  CirclePlay,
+  Pause,
+  Ban,
 } from "lucide-react";
-import { updateOrder, assignTeamToOrder } from "@/features/orders/actions/orderActions";
+import { assignTeamToOrder, updateOrderHealthAction } from "@/features/orders/actions/orderActions";
 import { loadClientConfig } from "@/config/loadClientConfig";
 import { parseOrderStage } from "@/features/orders/workspace/shared/stageGrants";
 import {
@@ -33,6 +36,7 @@ import {
 import { QueueViewToggle } from "./QueueViewToggle";
 import type { QueueView } from "@/features/orders/workspace/shared/staffQueueStages";
 import { CreateServiceTicketModal } from "@/features/service-tickets/components/CreateServiceTicketModal";
+import type { OrderHealth } from "@/features/orders/lib/orderHealth";
 
 const getStatusColor = (status: string) => {
   const colors: Record<string, { bg: string; text: string; label: string }> = {
@@ -57,16 +61,54 @@ const getStatusColor = (status: string) => {
 const getHealthBadgeColor = (health: string) => {
   const colors: Record<string, string> = {
     "Active": "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
-    "On Hold": "bg-amber-500/10 text-amber-600 border-amber-500/20",
+    "Needs Attention": "bg-amber-500/10 text-amber-700 border-amber-500/20",
+    "On Hold": "bg-slate-500/10 text-slate-600 border-slate-500/20",
     "Lost": "bg-rose-500/10 text-rose-600 border-rose-500/20",
-    "Cancelled": "bg-slate-500/10 text-slate-600 border-slate-500/20",
-    "Completed": "bg-indigo-500/10 text-indigo-600 border-indigo-500/20",
   };
   return colors[health] || "bg-slate-100 text-slate-600 border-slate-200";
 };
 
 function needsAdminApproval(stageStatus?: string | null) {
   return !!stageStatus && stageStatus !== "Normal" && stageStatus.startsWith("Pending Admin Approval");
+}
+
+/** Quick health transitions available from the row ⋯ menu (admin). */
+function healthMenuActions(health: string): Array<{
+  health: OrderHealth;
+  label: string;
+  icon: typeof CirclePlay;
+  className: string;
+}> {
+  const colors: Record<OrderHealth, string> = {
+    Active: "text-emerald-600 hover:bg-emerald-50",
+    "Needs Attention": "text-amber-700 hover:bg-amber-50",
+    "On Hold": "text-slate-600 hover:bg-slate-50",
+    Lost: "text-rose-600 hover:bg-rose-50",
+  };
+  const h = health || "Active";
+  if (h === "Needs Attention") {
+    return [
+      { health: "Active", label: "Make Active", icon: CirclePlay, className: colors.Active },
+      { health: "On Hold", label: "On Hold", icon: Pause, className: colors["On Hold"] },
+      { health: "Lost", label: "Mark as Lost", icon: Ban, className: colors.Lost },
+    ];
+  }
+  if (h === "On Hold") {
+    return [
+      { health: "Active", label: "Make Active", icon: CirclePlay, className: colors.Active },
+      { health: "Lost", label: "Mark as Lost", icon: Ban, className: colors.Lost },
+    ];
+  }
+  if (h === "Lost") {
+    return [
+      { health: "Active", label: "Reopen (Active)", icon: CirclePlay, className: colors.Active },
+    ];
+  }
+  // Active
+  return [
+    { health: "On Hold", label: "On Hold", icon: Pause, className: colors["On Hold"] },
+    { health: "Lost", label: "Mark as Lost", icon: Ban, className: colors.Lost },
+  ];
 }
 
 export function OrdersManagementDashboard({ 
@@ -175,6 +217,45 @@ export function OrdersManagementDashboard({
       });
     },
     [initialCustomers]
+  );
+
+  const applyOrderHealth = useCallback(
+    async (orderId: string, health: OrderHealth) => {
+      setOpenMenuId(null);
+      let lostReason: string | undefined;
+      if (health === "Lost") {
+        const entered = window.prompt("Reason for marking this order as Lost:");
+        if (entered === null) return;
+        lostReason = entered.trim();
+        if (!lostReason) {
+          alert("A reason is required when marking an order as Lost.");
+          return;
+        }
+      }
+      const prev = orders.find((o) => o.id === orderId);
+      setOrders((list) =>
+        list.map((o) =>
+          o.id === orderId
+            ? { ...o, health, lost_reason: health === "Lost" ? lostReason : null }
+            : o
+        )
+      );
+      try {
+        await updateOrderHealthAction(orderId, health, lostReason);
+      } catch (err: any) {
+        if (prev) {
+          setOrders((list) =>
+            list.map((o) =>
+              o.id === orderId
+                ? { ...o, health: prev.health, lost_reason: prev.lost_reason }
+                : o
+            )
+          );
+        }
+        alert(err?.message || "Failed to update order health.");
+      }
+    },
+    [orders]
   );
 
   const employeeName = currentEmployeeName;
@@ -607,10 +688,9 @@ export function OrdersManagementDashboard({
                     >
                       <option value="ALL">All Health States</option>
                       <option value="Active">Active</option>
+                      <option value="Needs Attention">Needs Attention</option>
                       <option value="On Hold">On Hold</option>
                       <option value="Lost">Lost</option>
-                      <option value="Cancelled">Cancelled</option>
-                      <option value="Completed">Completed</option>
                     </select>
                   </div>
                   {showAdminAssignFilter && (
@@ -764,10 +844,9 @@ export function OrdersManagementDashboard({
             >
               <option value="ALL">All Health States</option>
               <option value="Active">Active</option>
+              <option value="Needs Attention">Needs Attention</option>
               <option value="On Hold">On Hold</option>
               <option value="Lost">Lost</option>
-              <option value="Cancelled">Cancelled</option>
-              <option value="Completed">Completed</option>
             </select>
 
             <button
@@ -868,11 +947,25 @@ export function OrdersManagementDashboard({
                                 >
                                   <Eye size={13} /> View Order
                                 </button>
+                                {currentUserRole === "Admin" &&
+                                  healthMenuActions(order.health || "Active").map((action) => {
+                                    const Icon = action.icon;
+                                    return (
+                                      <button
+                                        key={action.health}
+                                        type="button"
+                                        onClick={() => applyOrderHealth(order.id, action.health)}
+                                        className={`w-full px-3.5 py-2.5 flex items-center gap-2 text-left text-xs font-semibold ${action.className}`}
+                                      >
+                                        <Icon size={13} /> {action.label}
+                                      </button>
+                                    );
+                                  })}
                                 {currentUserRole === "Admin" && (
                                   <button
                                     type="button"
                                     onClick={() => openServiceTicketForOrder(order)}
-                                    className="w-full px-3.5 py-2.5 flex items-center gap-2 text-left text-xs font-semibold text-slate-800 hover:bg-slate-50"
+                                    className="w-full px-3.5 py-2.5 flex items-center gap-2 text-left text-xs font-semibold text-slate-800 hover:bg-slate-50 border-t border-slate-100"
                                   >
                                     <Wrench size={13} /> Add Service Ticket
                                   </button>
@@ -1190,10 +1283,23 @@ export function OrdersManagementDashboard({
                                   onClick={() => setOpenMenuId(null)}
                                 />
                                 <div className="absolute right-0 top-full mt-1 z-50 min-w-[170px] rounded-lg border border-slate-200 bg-white shadow-lg overflow-hidden">
+                                  {healthMenuActions(order.health || "Active").map((action) => {
+                                    const Icon = action.icon;
+                                    return (
+                                      <button
+                                        key={action.health}
+                                        type="button"
+                                        onClick={() => applyOrderHealth(order.id, action.health)}
+                                        className={`w-full px-3.5 py-2.5 flex items-center gap-2 text-left text-xs font-semibold ${action.className}`}
+                                      >
+                                        <Icon size={13} /> {action.label}
+                                      </button>
+                                    );
+                                  })}
                                   <button
                                     type="button"
                                     onClick={() => openServiceTicketForOrder(order)}
-                                    className="w-full px-3.5 py-2.5 flex items-center gap-2 text-left text-xs font-semibold text-slate-800 hover:bg-slate-50"
+                                    className="w-full px-3.5 py-2.5 flex items-center gap-2 text-left text-xs font-semibold text-slate-800 hover:bg-slate-50 border-t border-slate-100"
                                   >
                                     <Wrench size={13} /> Add Service Ticket
                                   </button>

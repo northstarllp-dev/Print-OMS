@@ -37,6 +37,10 @@ The Admin Dashboard oversees all states, specifically managing:
 * Admins can assign or reassign employees to any order.
 * Admins can change the `workflow_type` (Quote First vs Design First) to adapt to specific customer requests.
 * Deleting orders is generally restricted or soft-deleted via marking as `Lost`.
+* **Order health** is limited to: `Active`, `Needs Attention`, `On Hold`, `Lost`.
+* Active orders with no pipeline stage change for `features.needsAttentionAfterDays` days (default 6, per client slug config) are auto-flagged to `Needs Attention` when an admin opens the dashboard or orders list.
+* From Needs Attention / On Hold, admin may set Active, On Hold, or Lost. Marking Lost requires a `lost_reason`. Optional call remarks are logged to `order_activity`.
+* Advancing pipeline stage resets `stage_changed_at` and clears Needs Attention back to Active.
 
 ## User Roles
 
@@ -55,7 +59,9 @@ Permissions:
 #### orders
 * `stage_status`: The primary column driving the alert system in the dashboard.
 * `stage_admin_notes`: Feedback from the Admin to the staff when rejecting a stage progression.
-* `health`: "Active", "Needs Attention", "Lost", "Completed".
+* `health`: "Active", "Needs Attention", "On Hold", "Lost".
+* `stage_changed_at`: Timestamp of last pipeline stage change (stall detection).
+* `lost_reason`: Required when health is set to Lost.
 
 #### order_assignments
 * Junction table managing which staff members are assigned to which `order_id`.
@@ -66,6 +72,14 @@ Permissions:
 Method: Server Action (`adminApproveStageAction`, `adminRejectStageAction`)
 Behavior: Updates `stage_status` to "Normal" and logs the action in `order_activity`. Rejecting requires mandatory `notes`.
 
+### Flag Stalled Orders
+Method: Server Action (`flagStalledOrdersAction`)
+Behavior: Marks Active (non-terminal) orders whose `stage_changed_at` is older than the slug config threshold as Needs Attention. Called on admin dashboard/orders page load.
+
+### Update Order Health
+Method: Server Action (`updateOrderHealthAction`)
+Behavior: Sets health to one of Active / Needs Attention / On Hold / Lost. Lost requires reason. Optional call remarks written to timeline.
+
 ### Update Order Assignment
 Method: Server Action (`assignEmployeeToOrder`)
 Behavior: Upserts `order_assignments` table.
@@ -75,14 +89,15 @@ Behavior: Upserts `order_assignments` table.
 ### AdminControlModule
 Purpose: Rendered at the top of an order's detail page if the user is an Admin.
 Fields:
+* Order Health panel (set Active / Needs Attention / On Hold / Lost, lost reason, call remarks).
 * Yellow warning banner if stage is pending approval.
 * Action buttons (Approve Stage, Request Changes).
-* Internal Notes editor (Budget, Product Type, Customer demands).
+* Team assignment and portal revoke.
 
 ### Pipeline Board (Kanban / List)
 Purpose: High-level view of all orders grouped by stage.
 Filters:
-* `health`: Active, On Hold, Lost, Completed.
+* `health`: Active, Needs Attention, On Hold, Lost.
 * `assigned_employee`: Staff filtering.
 * **Date Range**: Filter orders created within a specific custom date range.
 

@@ -5,7 +5,6 @@ import type { InvoiceNumberingConfig } from "@/features/invoices/types/invoiceNu
 export interface AppSettings {
   siteVisitSchedulingEnabled: boolean;
   installationSchedulingEnabled: boolean;
-  enableFinalProduct: boolean;
   invoiceProfile: InvoiceProfile;
   invoiceNumbering: InvoiceNumberingConfig;
   productionChecklistItems: ProductionChecklistItem[];

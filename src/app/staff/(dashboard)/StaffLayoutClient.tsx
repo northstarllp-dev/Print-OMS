@@ -6,7 +6,7 @@ import {
   History, RotateCcw, Lock, Loader2, Key,
   ShoppingBag, MapPin, Palette, Settings, Wrench,
   ChevronLeft, ChevronRight, Search, Hammer, Truck, Menu, X,
-  CalendarDays, FileText,
+  CalendarDays, FileText, ListTodo,
   type LucideIcon,
 } from "lucide-react";
 import { Logo } from "@/components/ui/Logo";
@@ -41,6 +41,7 @@ const NAV_ICON_MAP: Record<StaffNavIcon, LucideIcon> = {
   production: Hammer,
   installation: Truck,
   support: Wrench,
+  tasks: ListTodo,
   calendar: CalendarDays,
   settings: Settings,
 };
