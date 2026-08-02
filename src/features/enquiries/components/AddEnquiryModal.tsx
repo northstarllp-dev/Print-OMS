@@ -94,6 +94,8 @@ export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalPr
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
+
     const newErrors: { [key: string]: string } = {};
     if (!formData.businessName.trim()) newErrors.businessName = "Business name is required";
     if (!formData.leadName.trim()) newErrors.leadName = "Lead name is required";

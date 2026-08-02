@@ -15,6 +15,10 @@ import {
   dispatchWhatsAppForPipelineStage,
   notifyOrderStageChange,
 } from "@/features/notifications/actions/dispatchNotification";
+import {
+  dispatchDirectNotification,
+  dispatchAdminNotification,
+} from "@/features/notifications/lib/dispatchNotification";
 import { getRequestBaseUrl } from "@/features/notifications/whatsapp/requestBaseUrl";
 import {
   assertAdminOnly,
@@ -530,7 +534,24 @@ export async function requestStageAdvancementAction(orderId: string) {
     nextStatus = "Pending Admin Approval: Job Done";
   }
   
-  return await updateOrder(orderId, { stage_status: nextStatus, stage_admin_notes: "" });
+  const result = await updateOrder(orderId, { stage_status: nextStatus, stage_admin_notes: "" });
+
+  // Notify all admins that stage advancement has been requested
+  const { data: reqOrder } = await supabase
+    .from("orders")
+    .select("order_id, company_id")
+    .eq("id", orderUuid)
+    .single();
+  if (reqOrder?.company_id) {
+    await dispatchAdminNotification(reqOrder.company_id, {
+      title: `Stage Approval Requested`,
+      message: `Order ${reqOrder.order_id} needs your approval to advance from "${current.stage}".`,
+      type: "warning",
+      link: `/admin/orders/${reqOrder.order_id}`,
+    });
+  }
+
+  return result;
 }
 
 export async function adminApproveStageAction(orderId: string) {
@@ -644,6 +665,10 @@ export async function adminApproveStageAction(orderId: string) {
     void dispatchWhatsAppForPipelineStage(supabase, orderUuid, nextStage).catch((err) =>
       console.error("WhatsApp pipeline notify failed:", err)
     );
+    // Notify relevant staff that stage was approved and advanced
+    void notifyOrderStageChange(supabase, orderUuid, nextStage, o.stage).catch((err) =>
+      console.error("Stage change notify failed:", err)
+    );
   }
 
   return result;
@@ -689,6 +714,14 @@ export async function adminRejectStageAction(orderId: string, notes: string) {
     actor_role: "Admin",
     content: `Admin requested changes at "${o.stage}": ${trimmed}`,
     metadata: { action: "stage_rejected", stage: o.stage, notes: trimmed },
+  });
+
+  // Notify relevant staff that changes were requested (rejection)
+  await dispatchAdminNotification(o.company_id, {
+    title: `Changes Requested on Order ${o.order_id || orderId}`,
+    message: `Admin has requested changes at "${o.stage}": ${trimmed.slice(0, 80)}`,
+    type: "warning",
+    link: `/admin/orders/${o.order_id || orderId}`,
   });
 
   return result;
@@ -895,6 +928,26 @@ export async function assignTeamToOrder(orderId: string, employeeIds: string[]) 
     content: `Team assigned: ${employeeIds.length} employee(s) allocated to this order.`,
     metadata: { action: "team_assigned", count: employeeIds.length }
   });
+
+  // Notify each assigned employee directly
+  if (employeeIds.length > 0) {
+    const { data: employees } = await supabase
+      .from("users")
+      .select("id, name")
+      .in("id", employeeIds);
+    for (const emp of employees || []) {
+      await dispatchDirectNotification(
+        emp.id,
+        o.company_id,
+        {
+          title: `You've been assigned to Order ${o.order_id || orderId}`,
+          message: `You have been added to the team for this order.`,
+          type: "info",
+          link: `/staff/orders/${o.order_id || orderUuid}`,
+        }
+      );
+    }
+  }
 
   await revalidateStaffQueuePaths();
   if (o?.order_id) {

@@ -192,6 +192,19 @@ export async function createEnquiry(formData: any) {
       );
     }
   }
+  if (enq) {
+    const { dispatchStageNotification } = await import("@/features/notifications/lib/dispatchNotification");
+    await dispatchStageNotification(
+      "enquiry",
+      enq.company_id,
+      {
+        title: "New Enquiry Received",
+        message: `A new enquiry has been added by ${addedBy}.`,
+        type: "success",
+        link: "/staff/enquiries"
+      }
+    );
+  }
 
   revalidateEnquiryPaths();
   return data;
@@ -400,6 +413,19 @@ export async function convertEnquiryToOrderAction(enquiryId: string, clientName:
     idempotencyKey: `order_created:${friendlyOrderId}`,
     baseUrl,
   });
+
+  // Dispatch internal notification to admins and relevant staff
+  const { dispatchStageNotification } = await import("@/features/notifications/lib/dispatchNotification");
+  await dispatchStageNotification(
+    "Site Visit Pending",
+    companyId,
+    {
+      title: `Enquiry Converted to Order`,
+      message: `${businessName || clientName} enquiry has been converted to Order #${friendlyOrderId}.`,
+      type: "success",
+      link: `/admin/orders/${friendlyOrderId}`,
+    }
+  );
 
   // 6. Revalidate cache (all staff queues — not only /staff/orders)
   revalidateEnquiryPaths();

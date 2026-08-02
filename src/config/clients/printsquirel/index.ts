@@ -45,7 +45,7 @@ export const printsquirelConfig: Partial<PrintOMSClientConfig> = {
     sidebarAccent: "#4ade80",
   },
   logoUrl: "/clients/printsquirel/printsquirel.png",
-  logoScale: 1.9,
+  logoScale: 3,
   faviconUrl: "/clients/printsquirel/favicon_io/favicon.ico",
   loadingText: "PRINT SQUIREL",
   features: {
@@ -56,7 +56,7 @@ export const printsquirelConfig: Partial<PrintOMSClientConfig> = {
   stageGrantsByRole: {
     Designer: { ...view("site_visit"), ...edit("design", "quotation", "invoice") },
     Marketer: edit("enquiry", "site_visit", "design", "quotation", "invoice"),
-    "Production & Installation": {...view("site_visit"), ...edit("production","installation","service_tickets")},
+    "Production & Installation": { ...view("site_visit"), ...edit("production", "installation", "service_tickets") },
   },
   whatsappTemplatePrefix: "printsquirel_",
 };

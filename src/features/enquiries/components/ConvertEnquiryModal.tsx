@@ -22,6 +22,7 @@ export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultClientNa
   const [admins, setAdmins] = useState<{ id: string; name: string }[]>([]);
   const [selectedAdmins, setSelectedAdmins] = useState<string[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const clientConfig = loadClientConfig();
 
@@ -317,7 +318,6 @@ export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultClientNa
 
         </div>
 
-        {/* Footer */}
         <div style={{
           padding: "16px 24px",
           borderTop: "1px solid #e2e8f0",
@@ -328,6 +328,7 @@ export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultClientNa
         }}>
           <button 
             onClick={onClose}
+            disabled={isSubmitting}
             style={{
               padding: "10px 16px",
               background: "white",
@@ -336,17 +337,25 @@ export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultClientNa
               color: "#475569",
               fontSize: "14px",
               fontWeight: "600",
-              cursor: "pointer",
+              cursor: isSubmitting ? "not-allowed" : "pointer",
               transition: "all 0.2s"
             }}
-            onMouseEnter={(e) => e.currentTarget.style.background = "#f1f5f9"}
-            onMouseLeave={(e) => e.currentTarget.style.background = "white"}
+            onMouseEnter={(e) => { if (!isSubmitting) e.currentTarget.style.background = "#f1f5f9" }}
+            onMouseLeave={(e) => { if (!isSubmitting) e.currentTarget.style.background = "white" }}
           >
             Cancel
           </button>
           <button 
-            onClick={() => onSubmit(clientName, businessName, productType, requirements, selectedAdmins)}
-            disabled={!clientName.trim() || !businessName.trim()}
+            onClick={async () => {
+              if (isSubmitting) return;
+              setIsSubmitting(true);
+              try {
+                await onSubmit(clientName, businessName, productType, requirements, selectedAdmins);
+              } finally {
+                setIsSubmitting(false);
+              }
+            }}
+            disabled={!clientName.trim() || !businessName.trim() || isSubmitting}
             style={{
               padding: "10px 16px",
               background: "var(--color-primary)",
@@ -355,12 +364,12 @@ export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultClientNa
               color: "white",
               fontSize: "14px",
               fontWeight: "600",
-              cursor: (clientName.trim() && businessName.trim()) ? "pointer" : "not-allowed",
-              opacity: (clientName.trim() && businessName.trim()) ? 1 : 0.6,
+              cursor: (!clientName.trim() || !businessName.trim() || isSubmitting) ? "not-allowed" : "pointer",
+              opacity: (!clientName.trim() || !businessName.trim() || isSubmitting) ? 0.6 : 1,
               transition: "all 0.2s"
             }}
           >
-            Create Order
+            {isSubmitting ? "Creating..." : "Create Order"}
           </button>
         </div>
       </div>

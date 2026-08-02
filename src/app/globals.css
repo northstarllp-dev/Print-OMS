@@ -205,6 +205,10 @@ body {
   line-height: 1.5;
 }
 
+button, a, input, select, textarea, [role="button"] {
+  touch-action: manipulation;
+}
+
 /* UTILITY CLASSES for custom UI elements */
 .prt-page {
   padding: 24px;
