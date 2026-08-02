@@ -225,7 +225,7 @@ export async function createTaskAction(input: {
       profile.company_id,
       {
         title: `New Task Assigned: ${input.title}`,
-        message: `You have been assigned a new task${input.priority !== "Normal" ? ` [${input.priority}]` : ""}.`,
+        message: `You have been assigned a new task [${input.priority}].`,
         type: "info",
         link: `/staff/tasks`,
       }
