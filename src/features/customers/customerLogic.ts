@@ -36,6 +36,7 @@ export type CustomerOrderRow = {
   stage?: string | null;
   budget?: number | null;
   orderCode?: string | null;
+  orderId?: string | null;
   health?: string | null;
   businessName?: string | null;
   clientName?: string | null;
@@ -67,7 +68,7 @@ export function isCustomerPortalExpired(
   return linked.length > 0 && linked.every((o) => isClosedOrderStage(o.stage));
 }
 
-export function getCustomerStatusColor(status: string | undefined): {
+export function getCustomerStatusColor(status: string | null | undefined): {
   bg: string;
   text: string;
   label: string;
@@ -82,14 +83,14 @@ export function getCustomerStatusColor(status: string | undefined): {
   return colors[status || "Active"] || colors.Active;
 }
 
-export function getOrderHealthBadgeClass(health: string): string {
+export function getOrderHealthBadgeClass(health: string | null | undefined): string {
   const colors: Record<string, string> = {
     Active: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
     "Needs Attention": "bg-amber-500/10 text-amber-700 border-amber-500/20",
     "On Hold": "bg-slate-500/10 text-slate-600 border-slate-200",
     Lost: "bg-rose-500/10 text-rose-600 border-rose-500/20",
   };
-  return colors[health] || "bg-slate-100 text-slate-600 border-slate-200";
+  return colors[health || ""] || "bg-slate-100 text-slate-600 border-slate-200";
 }
 
 export function mapDbCustomerToListRow(c: {

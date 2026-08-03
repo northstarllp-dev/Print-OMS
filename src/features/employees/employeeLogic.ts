@@ -108,10 +108,10 @@ export function employeeMatchesSearch(emp: EmployeeListRow, rawSearch: string): 
   );
 }
 
-export function filterEmployeesCatalog(
-  employees: EmployeeListRow[],
+export function filterEmployeesCatalog<T extends EmployeeListRow>(
+  employees: T[],
   opts: EmployeeCatalogFilters = {}
-): EmployeeListRow[] {
+): T[] {
   const statusFilter = opts.statusFilter ?? "ALL";
   const roleFilter = opts.roleFilter ?? "ALL";
   const departmentFilter = opts.departmentFilter ?? "ALL";

@@ -3,6 +3,7 @@
 import React from "react";
 import { Link2 } from "lucide-react";
 import { withBasePath } from "@/lib/appBasePath";
+import { copyTextToClipboard } from "@/lib/clipboard";
 
 export function CopyLinkButton() {
   const [copied, setCopied] = React.useState(false);
@@ -12,7 +13,7 @@ export function CopyLinkButton() {
       typeof window !== "undefined" ? window.location.origin : "";
     const shareLink = `${base}${withBasePath("/service-ticket")}`;
     try {
-      await navigator.clipboard.writeText(shareLink);
+      await copyTextToClipboard(shareLink);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1500);
     } catch {

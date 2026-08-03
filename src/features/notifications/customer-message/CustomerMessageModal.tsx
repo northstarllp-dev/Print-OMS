@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { Copy, Mail, MessageSquare, X } from "lucide-react";
 import { loadClientConfig } from "@/config/loadClientConfig";
 import { withBasePath } from "@/lib/appBasePath";
+import { copyTextToClipboard } from "@/lib/clipboard";
 import { CUSTOMER_MESSAGE_TEMPLATES, CustomerMessageKey } from "./templates";
 import { renderCustomerMessage } from "./renderMessage";
 import { buildMailtoLink, buildWhatsAppShareLink } from "./buildShareLinks";
@@ -181,11 +182,15 @@ export function CustomerMessageModal({
   const hasPhone = !!info.phone?.replace(/[^0-9]/g, "");
   const hasEmail = !!info.email;
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(messageText);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-    markShared("copy");
+  const handleCopy = async () => {
+    try {
+      await copyTextToClipboard(messageText);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      markShared("copy");
+    } catch {
+      // Silent — copy may be blocked in restricted contexts.
+    }
   };
 
   const handleSendWhatsApp = () => {

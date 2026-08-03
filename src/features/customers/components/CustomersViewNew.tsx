@@ -7,12 +7,14 @@ import { Search, Filter, MapPin, Mail, Phone, X, ShoppingBag, ExternalLink, Shar
 import { useRouter } from "next/navigation";
 import { updateCustomer } from "@/features/customers/actions/customerActions";
 import { withBasePath } from "@/lib/appBasePath";
+import { copyTextToClipboard } from "@/lib/clipboard";
 import {
   computeCustomerKpis,
   computeCustomerTotalSpend,
   filterCustomersCatalog,
   getCustomerStatusColor,
   getOrderHealthBadgeClass,
+  isClosedOrderStage,
   isCustomerPortalExpired,
   linkedOrdersForCustomer,
   resetCustomerFilters,
@@ -92,7 +94,7 @@ export function CustomersViewNew({
       if (!res.ok || !data.url) {
         throw new Error(data.error || "Failed to generate portal link");
       }
-      await navigator.clipboard.writeText(data.url);
+      await copyTextToClipboard(data.url);
       setCopiedCustomerId(customerId);
       setTimeout(() => setCopiedCustomerId(null), 2000);
     } catch (err) {
@@ -109,7 +111,7 @@ export function CustomersViewNew({
       if (!res.ok || !data.url) {
         throw new Error(data.error || "Failed to generate portal link");
       }
-      await navigator.clipboard.writeText(data.url);
+      await copyTextToClipboard(data.url);
       setCopiedOrderId(orderId);
       setTimeout(() => setCopiedOrderId(null), 2000);
     } catch (err) {

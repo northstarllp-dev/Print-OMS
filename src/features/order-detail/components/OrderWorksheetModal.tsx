@@ -28,6 +28,7 @@ import { ProductionModule } from "@/features/orders/workspace/modules/production
 import { InstallationModule } from "@/features/orders/workspace/modules/installation/InstallationModule";
 import { InstallationPaymentApprovalModal } from "./InstallationPaymentApprovalModal";
 import { withBasePath } from "@/lib/appBasePath";
+import { copyTextToClipboard } from "@/lib/clipboard";
 
 import {
   isTimelineStageAccessible,
@@ -902,7 +903,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
       if (!res.ok || !data.url) {
         throw new Error(data.error || "Failed to generate portal link");
       }
-      await navigator.clipboard.writeText(data.url);
+      await copyTextToClipboard(data.url);
       setCopiedLink(true);
       setTimeout(() => setCopiedLink(false), 2000);
       triggerLocalAlert("Magic portal link copied!", "success");
