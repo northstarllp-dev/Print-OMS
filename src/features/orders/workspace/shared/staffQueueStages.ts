@@ -201,14 +201,64 @@ export function orderedMyOrdersStages(
   return PIPELINE_QUEUE_STAGES.filter((s) => allowedStages.includes(s));
 }
 
-/** Incoming tab only when the earliest editable stage is not site_visit. */
-export function myOrdersHasIncomingTab(allowedStages: readonly OrderStage[]): boolean {
+function pipelineQueueIndex(stage: PipelineQueueStage): number {
+  return PIPELINE_QUEUE_STAGES.indexOf(stage);
+}
+
+/** True when two consecutive grants skip one or more pipeline stages. */
+export function myOrdersHasPipelineGaps(allowedStages: readonly OrderStage[]): boolean {
   const ordered = orderedMyOrdersStages(allowedStages);
-  return ordered.length > 0 && queueHasIncomingTab(ordered[0]);
+  for (let i = 0; i < ordered.length - 1; i++) {
+    if (pipelineQueueIndex(ordered[i + 1]) - pipelineQueueIndex(ordered[i]) > 1) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export type MyOrdersTab = "incoming" | PipelineQueueStage | "completed";
 
+/**
+ * Incoming tab when:
+ * - earliest editable stage is after site_visit (classic pre-stage Incoming), or
+ * - grants skip pipeline stages (gap Incoming between Site Visit → Production, etc.).
+ */
+export function myOrdersHasIncomingTab(allowedStages: readonly OrderStage[]): boolean {
+  const ordered = orderedMyOrdersStages(allowedStages);
+  if (ordered.length === 0) return false;
+  return queueHasIncomingTab(ordered[0]) || myOrdersHasPipelineGaps(ordered);
+}
+
+/**
+ * Tab strip order: classic Incoming first; otherwise Incoming inserted after the
+ * stage that precedes the first pipeline gap (e.g. Site Visit | Incoming | Production).
+ */
+export function buildMyOrdersTabList(
+  allowedStages: readonly OrderStage[]
+): MyOrdersTab[] {
+  const ordered = orderedMyOrdersStages(allowedStages);
+  if (ordered.length === 0) return [];
+
+  const tabs: MyOrdersTab[] = [];
+  const classicIncoming = queueHasIncomingTab(ordered[0]);
+  if (classicIncoming) tabs.push("incoming");
+
+  let gapIncomingInserted = false;
+  for (let i = 0; i < ordered.length; i++) {
+    tabs.push(ordered[i]);
+    if (
+      !classicIncoming &&
+      !gapIncomingInserted &&
+      i < ordered.length - 1 &&
+      pipelineQueueIndex(ordered[i + 1]) - pipelineQueueIndex(ordered[i]) > 1
+    ) {
+      tabs.push("incoming");
+      gapIncomingInserted = true;
+    }
+  }
+  tabs.push("completed");
+  return tabs;
+}
 export function parseMyOrdersTab(
   value: string | null | undefined,
   allowedStages: readonly OrderStage[]
@@ -224,16 +274,28 @@ export function parseMyOrdersTab(
   return undefined;
 }
 
-/** Approaching work: before earliest editable stage, not already in a current band. */
+/**
+ * Approaching work: before any editable stage's current band, and not already
+ * in a current band or past the latest editable stage.
+ * Covers classic pre-stage Incoming and gap stages between non-contiguous grants.
+ */
 export function isMyOrdersIncoming(
   stage: string,
   allowedStages: readonly OrderStage[],
   workflowType?: WorkflowType
 ): boolean {
   const ordered = orderedMyOrdersStages(allowedStages);
-  if (ordered.length === 0 || !queueHasIncomingTab(ordered[0])) return false;
+  if (ordered.length === 0) return false;
   if (ordered.some((s) => isStaffQueueCurrent(stage, s))) return false;
-  return isStaffQueueIncoming(stage, ordered[0], workflowType);
+  if (isMyOrdersCompleted(stage, ordered, workflowType)) return false;
+
+  const idx = stageIndex(stage, workflowType);
+  if (idx === -1) return false;
+
+  return ordered.some((s) => {
+    const min = minCurrentIndex(s, workflowType);
+    return min >= 0 && idx < min;
+  });
 }
 
 /** Past work: after latest editable stage, not already in a current band. */

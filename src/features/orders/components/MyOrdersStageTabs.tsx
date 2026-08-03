@@ -3,11 +3,11 @@
 import React, { useMemo } from "react";
 import type { OrderStage } from "@/features/orders/workspace/shared/types";
 import {
+  buildMyOrdersTabList,
   MY_ORDERS_STAGE_LABELS,
-  myOrdersHasIncomingTab,
-  orderedMyOrdersStages,
   type MyOrdersTab,
   type MyOrdersTabCounts,
+  type PipelineQueueStage,
 } from "@/features/orders/workspace/shared/staffQueueStages";
 
 interface MyOrdersStageTabsProps {
@@ -24,20 +24,19 @@ export function MyOrdersStageTabs({
   counts,
 }: MyOrdersStageTabsProps) {
   const tabs = useMemo(() => {
-    const ordered = orderedMyOrdersStages(stages);
-    const items: { id: MyOrdersTab; label: string; count: number }[] = [];
-    if (myOrdersHasIncomingTab(ordered)) {
-      items.push({ id: "incoming", label: "Incoming", count: counts.incoming ?? 0 });
-    }
-    for (const stage of ordered) {
-      items.push({
-        id: stage,
-        label: MY_ORDERS_STAGE_LABELS[stage],
-        count: counts[stage] ?? 0,
-      });
-    }
-    items.push({ id: "completed", label: "Completed", count: counts.completed ?? 0 });
-    return items;
+    return buildMyOrdersTabList(stages).map((id) => {
+      if (id === "incoming") {
+        return { id, label: "Incoming", count: counts.incoming ?? 0 };
+      }
+      if (id === "completed") {
+        return { id, label: "Completed", count: counts.completed ?? 0 };
+      }
+      return {
+        id,
+        label: MY_ORDERS_STAGE_LABELS[id as PipelineQueueStage],
+        count: counts[id] ?? 0,
+      };
+    });
   }, [stages, counts]);
 
   return (

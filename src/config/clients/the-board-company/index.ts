@@ -44,8 +44,9 @@ export const theBoardCompanyConfig: Partial<PrintOMSClientConfig> = {
   usesFloorPortals: false,
   stageGrantsByRole: {
     Designer: { ...view("site_visit"), ...edit("design", "quotation", "invoice") },
+    Finance: edit("quotation", "invoice"),
     "Production & Service": { ...view("site_visit"), ...edit("production", "service_tickets") },
-    "Recce & Installation": edit("site_visit", "installation"),
+    "Recce & Installation": edit("site_visit", "installation","production", "service_tickets"),
   },
   whatsappTemplatePrefix: "boardco_",
 };

@@ -7,10 +7,12 @@ import {
   MY_ORDERS_NAV,
 } from "@/features/orders/workspace/shared/stageGrants";
 import {
+  buildMyOrdersTabList,
   countMyOrdersTabs,
   defaultMyOrdersTab,
   filterMyOrdersAssigned,
   myOrdersHasIncomingTab,
+  myOrdersHasPipelineGaps,
   partitionMyOrdersByTab,
   PIPELINE_QUEUE_STAGES,
 } from "@/features/orders/workspace/shared/staffQueueStages";
@@ -84,10 +86,42 @@ describe("My Orders stage partition + Incoming/Completed", () => {
     },
   ];
 
-  it("hides Incoming when earliest grant is site_visit; shows for quotation-first roles", () => {
+  it("hides Incoming when earliest is site_visit with contiguous grants; shows for gaps or later starts", () => {
     expect(myOrdersHasIncomingTab(["site_visit", "quotation"])).toBe(false);
+    expect(myOrdersHasPipelineGaps(["site_visit", "quotation"])).toBe(false);
     expect(myOrdersHasIncomingTab(["quotation", "design"])).toBe(true);
     expect(myOrdersHasIncomingTab(["production"])).toBe(true);
+    expect(myOrdersHasPipelineGaps(["site_visit", "production", "installation"])).toBe(true);
+    expect(myOrdersHasIncomingTab(["site_visit", "production", "installation"])).toBe(true);
+    expect(buildMyOrdersTabList(["site_visit", "production", "installation"])).toEqual([
+      "site_visit",
+      "incoming",
+      "production",
+      "installation",
+      "completed",
+    ]);
+    expect(buildMyOrdersTabList(["production", "installation"])).toEqual([
+      "incoming",
+      "production",
+      "installation",
+      "completed",
+    ]);
+  });
+
+  it("gap between site_visit and production treats quotation/design as Incoming", () => {
+    const allowed = ["site_visit", "production", "installation"] as const;
+    const filtered = filterMyOrdersAssigned(orders, userId, [...allowed]);
+    expect(partitionMyOrdersByTab(filtered, "incoming", allowed).map((o) => o.id).sort()).toEqual([
+      "2",
+      "3",
+    ]);
+    expect(partitionMyOrdersByTab(filtered, "site_visit", allowed).map((o) => o.id).sort()).toEqual([
+      "1",
+      "6",
+    ]);
+    expect(partitionMyOrdersByTab(filtered, "completed", allowed).map((o) => o.id)).toEqual([
+      "5",
+    ]);
   });
 
   it("filterMyOrdersAssigned includes current bands + completed (+ incoming when applicable)", () => {
