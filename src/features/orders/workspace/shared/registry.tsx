@@ -23,8 +23,10 @@ const ProductionStageStub: React.FC = () => (
 
 /** Placeholder registry — modules have heterogeneous props; ModuleRenderer is not wired to production yet. */
 export const stageModules: Record<OrderStage, ComponentType<any>> = {
+  enquiry: () => null,
   site_visit: SiteVisitModule,
   quotation: QuotationModule,
+  invoice: () => null,
   design: DesignModule,
   production: ProductionStageStub,
   installation: InstallationModule,

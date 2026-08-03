@@ -6,6 +6,9 @@ import { revalidatePath } from "next/cache";
 import { Payment, PaymentAmountType, PaymentStatus } from "@/types";
 import { assertAdminOnly } from "@/features/orders/workspace/shared/serverPermissions";
 import { revalidateStaffQueuePaths } from "@/features/orders/actions/orderActions";
+import { insertOrderActivity } from "@/features/orders/activity/logOrderActivity";
+import { syncSalesReceiptFromOrderPayment } from "@/features/finance/syncFinance";
+import { dispatchAdminNotification } from "@/features/notifications/lib/dispatchNotification";
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -78,6 +81,7 @@ async function revalidatePaymentPaths(orderId: string) {
   revalidatePath(`/admin/orders/${orderId}`);
   revalidatePath(`/staff/orders/${orderId}`);
   revalidatePath("/admin/payments");
+  revalidatePath("/admin/finance");
   revalidatePath("/printoms/portal");
   revalidatePath(`/printoms/portal/order/${orderId}`);
 }
@@ -118,10 +122,14 @@ export async function getPaymentBalanceSummary(
 
   const payments = await getPaymentsByOrder(orderUuid);
   const expectedTotal = Math.round(
-    payments.reduce((s, p) => s + Number(p.calculated_amount ?? p.amount ?? 0), 0) * 100
+    payments
+      .filter((p) => p.status === "expected")
+      .reduce((s, p) => s + Number(p.calculated_amount ?? p.amount ?? 0), 0) * 100
   ) / 100;
   const receivedTotal = Math.round(
-    payments.reduce((s, p) => s + Number(p.calculated_amount ?? p.amount ?? 0), 0) * 100
+    payments
+      .filter((p) => p.status === "received")
+      .reduce((s, p) => s + Number(p.calculated_amount ?? p.amount ?? 0), 0) * 100
   ) / 100;
   const outstanding = Math.max(
     0,
@@ -200,7 +208,7 @@ export async function createPayment(
 
   const { data: order } = await supabase
     .from("orders")
-    .select("order_id, stage")
+    .select("order_id, stage, company_id")
     .eq("id", orderUuid)
     .single();
 
@@ -223,9 +231,9 @@ export async function createPayment(
 
   if (error) throw new Error(error.message);
 
-  await supabase.from("order_activity").insert({
+  await insertOrderActivity(supabase, {
     order_id: order?.order_id || orderUuid,
-    activity_type: "timeline",
+    company_id: order?.company_id,
     actor_name: "System",
     actor_role: "System",
     content: received
@@ -233,6 +241,17 @@ export async function createPayment(
       : `Payment expected: "${input.payment_name}" (₹${calculated.toLocaleString("en-IN")}).`,
     metadata: { action: received ? "payment_received" : "payment_expected", payment_id: data.id },
   });
+
+  if (received && order?.company_id) {
+    await syncSalesReceiptFromOrderPayment(supabase, {
+      companyId: order.company_id,
+      orderUuid,
+      paymentId: data.id,
+      amount: calculated,
+      paymentName: input.payment_name.trim(),
+      paidAt: now,
+    });
+  }
 
   await revalidatePaymentPaths(orderId);
   return mapPayment(data);
@@ -265,20 +284,41 @@ export async function markPaymentReceived(paymentId: string): Promise<Payment> {
 
   const { data: order } = await supabase
     .from("orders")
-    .select("order_id")
+    .select("order_id, company_id")
     .eq("id", current.order_id)
     .single();
 
-  await supabase.from("order_activity").insert({
+  await insertOrderActivity(supabase, {
     order_id: order?.order_id || current.order_id,
-    activity_type: "timeline",
+    company_id: order?.company_id,
     actor_name: "Staff",
     actor_role: "Staff",
     content: `Payment received: "${current.payment_name}".`,
     metadata: { action: "payment_received", payment_id: paymentId },
   });
 
+  if (order?.company_id) {
+    await syncSalesReceiptFromOrderPayment(supabase, {
+      companyId: order.company_id,
+      orderUuid: current.order_id,
+      paymentId: paymentId,
+      amount: Number(current.calculated_amount) || 0,
+      paymentName: current.payment_name,
+      paidAt: data.paid_at,
+    });
+  }
+
   await revalidatePaymentPaths(current.order_id);
+
+  // Notify admins about payment received
+  if (order?.company_id) {
+    await dispatchAdminNotification(order.company_id, {
+      title: `Payment Received`,
+      message: `Payment "${current.payment_name}" (₹${(Number(current.calculated_amount) || 0).toLocaleString("en-IN")}) received for Order ${order.order_id || current.order_id}.`,
+      type: "success",
+      link: `/admin/payments`,
+    });
+  }
   return mapPayment(data);
 }
 
@@ -396,6 +436,9 @@ export type OrderPaymentSummary = {
   lastPaymentName: string | null;
   lastPaidAt: string | null;
   dateCreated: string;
+  agingDays: number;
+  invoiceId: string | null;
+  invoiceStatus: string | null;
 };
 
 export type RecentReceipt = {
@@ -463,7 +506,8 @@ export async function getCompanyCollectionsData(): Promise<CompanyCollectionsDat
       stage,
       date_created,
       quotations(grand_total, status),
-      payments(id, payment_name, amount, calculated_amount, status, paid_at, created_at, updated_at)
+      payments(id, payment_name, amount, calculated_amount, status, paid_at, created_at, updated_at),
+      invoices(id, status)
     `
     )
     .order("date_created", { ascending: false });
@@ -530,6 +574,15 @@ export async function getCompanyCollectionsData(): Promise<CompanyCollectionsDat
       payStatus = "unpaid";
     }
 
+    const now = Date.now();
+    const mostRecentDate = lastPaidAt || o.date_created || "";
+    const agingDays = mostRecentDate
+      ? Math.max(0, Math.floor((now - new Date(mostRecentDate).getTime()) / 86_400_000))
+      : 0;
+
+    const invoicesList = Array.isArray(o.invoices) ? o.invoices : o.invoices ? [o.invoices] : [];
+    const invoice = invoicesList[0] as { id: string; status: string } | undefined;
+
     collected += receivedTotal;
     outstandingSum += outstanding;
     expectedSum += expectedTotal;
@@ -550,6 +603,9 @@ export async function getCompanyCollectionsData(): Promise<CompanyCollectionsDat
       lastPaymentName,
       lastPaidAt,
       dateCreated: o.date_created || "",
+      agingDays,
+      invoiceId: invoice?.id ?? null,
+      invoiceStatus: invoice?.status ?? null,
     });
   }
 

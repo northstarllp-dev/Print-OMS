@@ -7,12 +7,15 @@ import { ensureRealtimeAuth } from "@/utils/supabase/ensureRealtimeAuth";
 
 interface OrderCommunicationCenterProps {
   orderId: string;
+  /** Required for tenant isolation — friendly order_id collides across companies. */
+  companyId: string;
   onClose?: () => void;
 }
 
 interface TimelineEvent {
   id: string;
   order_id: string;
+  company_id?: string;
   activity_type: string;
   actor_name: string;
   actor_role: string;
@@ -23,6 +26,7 @@ interface TimelineEvent {
 /** Order activity timeline (read-only). Chat tabs removed. */
 export function OrderCommunicationCenter({
   orderId,
+  companyId,
   onClose,
 }: OrderCommunicationCenterProps) {
   const supabase = createClient();
@@ -32,13 +36,19 @@ export function OrderCommunicationCenter({
   const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (!companyId) {
+      setEvents([]);
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     async function load() {
       setLoading(true);
       const { data, error } = await supabase
         .from("order_activity")
-        .select("id, order_id, activity_type, actor_name, actor_role, content, created_at")
+        .select("id, order_id, company_id, activity_type, actor_name, actor_role, content, created_at")
         .eq("order_id", orderId)
+        .eq("company_id", companyId)
         .eq("activity_type", "timeline")
         .order("created_at", { ascending: true });
       if (cancelled) return;
@@ -50,9 +60,10 @@ export function OrderCommunicationCenter({
     return () => {
       cancelled = true;
     };
-  }, [orderId, supabase]);
+  }, [orderId, companyId, supabase]);
 
   useEffect(() => {
+    if (!companyId) return;
     let cancelled = false;
     let channel: ReturnType<typeof supabase.channel> | null = null;
 
@@ -61,7 +72,7 @@ export function OrderCommunicationCenter({
       if (cancelled) return;
 
       channel = supabase
-        .channel(`order-timeline-${orderId}:${Math.random().toString(36).slice(2, 8)}`)
+        .channel(`order-timeline-${companyId}-${orderId}:${Math.random().toString(36).slice(2, 8)}`)
         .on(
           "postgres_changes",
           {
@@ -73,6 +84,7 @@ export function OrderCommunicationCenter({
           (payload) => {
             const row = payload.new as TimelineEvent;
             if (row.activity_type !== "timeline") return;
+            if (row.company_id && row.company_id !== companyId) return;
             setEvents((prev) => (prev.some((e) => e.id === row.id) ? prev : [...prev, row]));
           }
         )
@@ -86,7 +98,7 @@ export function OrderCommunicationCenter({
         supabase.removeChannel(channel);
       }
     };
-  }, [orderId, supabase]);
+  }, [orderId, companyId, supabase]);
 
   useEffect(() => {
     const el = listRef.current;

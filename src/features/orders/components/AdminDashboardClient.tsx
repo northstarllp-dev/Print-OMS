@@ -23,6 +23,7 @@ import {
 import { AddEnquiryModal, EnquiryFormData } from "@/features/enquiries/components/AddEnquiryModal";
 import { createEnquiry } from "@/features/enquiries/actions/enquiryActions";
 import { CreateServiceTicketModal } from "@/features/service-tickets/components/CreateServiceTicketModal";
+import { CustomerMessageModal, CustomerMessageInfo } from "@/features/notifications/customer-message/CustomerMessageModal";
 
 /* ─── helpers ──────────────────────────────────────────────────── */
 const STAGE_LABEL: Record<string, { label: string; dot: string }> = {
@@ -105,6 +106,7 @@ export function AdminDashboardClient({
   const router = useRouter();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isTicketModalOpen, setIsTicketModalOpen] = useState(false);
+  const [enquiryMsgInfo, setEnquiryMsgInfo] = useState<CustomerMessageInfo | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [selectedPipelineStage, setSelectedPipelineStage] = useState<string | null>(null);
   const [selectedKpi, setSelectedKpi] = useState<string | null>(null);
@@ -146,10 +148,12 @@ export function AdminDashboardClient({
   const newEnquiries = enquiries.filter((e) => e.status !== "Converted").length;
   
   const pendingApprovals = orders.filter((o) => needsAdminApproval(o.stageStatus)).length;
+  const needsAttentionOrders = orders.filter((o) => o.health === "Needs Attention").length;
   const lostOrders = orders.filter((o) => o.health === "Lost").length;
 
   let revenue = 0;
   let outstandingAmount = 0;
+  let collectedAmount = 0;
 
   orders.forEach((o) => {
     let orderRevenue = 0;
@@ -169,6 +173,7 @@ export function AdminDashboardClient({
     });
 
     revenue += orderRevenue;
+    collectedAmount += orderReceived;
     outstandingAmount += Math.max(0, orderRevenue - orderReceived);
   });
 
@@ -220,17 +225,37 @@ export function AdminDashboardClient({
       iconColor: "#D97706",
     },
     {
+      label: "Needs Attention",
+      value: needsAttentionOrders,
+      sub: "Stalled — no stage progress",
+      filterKey: "needsAttention",
+      icon: AlertCircle,
+      iconBg: "#FFFBEB",
+      iconColor: "#B45309",
+    },
+    {
       label: "Revenue",
       value: `₹${revenue.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`,
       sub: "Total booked",
+      filterKey: "revenue",
       icon: DollarSign,
       iconBg: "#EEF2FF",
       iconColor: "#4F46E5",
     },
     {
+      label: "Collected",
+      value: `₹${collectedAmount.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`,
+      sub: "Payments received",
+      filterKey: "collected",
+      icon: CheckCircle2,
+      iconBg: "#ECFDF5",
+      iconColor: "#059669",
+    },
+    {
       label: "Outstanding",
       value: `₹${outstandingAmount.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`,
       sub: "Pending collection",
+      filterKey: "outstanding",
       icon: AlertCircle,
       iconBg: "#FEF2F2",
       iconColor: "#DC2626",
@@ -281,6 +306,10 @@ export function AdminDashboardClient({
       const quotes = Array.isArray(o.quotations) ? o.quotations : (o.quotations ? [o.quotations] : []);
       return quotes.some((q: any) => q.status === "Approved");
     }) };
+    if (selectedKpi === "collected") return { type: "orders" as const, data: orders.filter(o => {
+      const payments = Array.isArray(o.payments) ? o.payments : (o.payments ? [o.payments] : []);
+      return payments.some((p: any) => p.status === "received" && Number(p.calculated_amount ?? p.amount ?? 0) > 0);
+    }) };
     if (selectedKpi === "outstanding") return { type: "orders" as const, data: orders.filter(o => {
       let orderRev = 0;
       let orderRec = 0;
@@ -294,6 +323,7 @@ export function AdminDashboardClient({
       return (orderRev - orderRec) > 0;
     }) };
     if (selectedKpi === "lost")       return { type: "orders" as const, data: orders.filter(o => o.health === "Lost") };
+    if (selectedKpi === "needsAttention") return { type: "orders" as const, data: orders.filter(o => o.health === "Needs Attention") };
     return { type: "orders" as const, data: orders.slice(0, 5) };
   };
 
@@ -425,7 +455,7 @@ export function AdminDashboardClient({
       </div>
 
       {/* Desktop/tablet: Stat Cards */}
-      <div className="hidden lg:grid grid-cols-2 xl:grid-cols-4 gap-4 mb-7">
+      <div className="hidden lg:grid grid-cols-2 xl:grid-cols-5 gap-4 mb-7">
         {STATS.map((stat, i) => {
           const Icon = stat.icon;
           const isActive = stat.filterKey ? selectedKpi === stat.filterKey : false;
@@ -696,6 +726,14 @@ export function AdminDashboardClient({
                               >
                                 <Eye size={13} /> View Order
                               </button>
+                              <button
+                                onClick={() => { setOpenMenuId(null); setIsTicketModalOpen(true); }}
+                                style={{ width: "100%", padding: "9px 14px", display: "flex", alignItems: "center", gap: "8px", background: "none", border: "none", fontSize: "12px", fontWeight: "600", color: "#0F172A", cursor: "pointer", textAlign: "left" }}
+                                onMouseEnter={e => e.currentTarget.style.background = "#F8FAFC"}
+                                onMouseLeave={e => e.currentTarget.style.background = "none"}
+                              >
+                                <Wrench size={13} /> Add Service Ticket
+                              </button>
                             </div>
                           </>
                         )}
@@ -852,15 +890,33 @@ export function AdminDashboardClient({
               location: data.location,
               status: "Pending"
             };
-            await createEnquiry(newEnq);
+            const result = await createEnquiry(newEnq);
             setIsAddModalOpen(false);
             router.refresh();
+            const row = result?.[0];
+            if (row) {
+              setEnquiryMsgInfo({
+                businessName: row.business_name || row.lead_name || "Customer",
+                phone: row.whatsapp || row.phone || "",
+                email: row.email || "",
+                enquiryNo: row.enquire_id || "",
+              });
+            }
           } catch (error) {
             console.error("Error adding enquiry:", error);
             alert("Failed to add enquiry.");
           }
         }}
       />
+
+      {enquiryMsgInfo && (
+        <CustomerMessageModal
+          isOpen
+          templateKey="enquiry_received"
+          info={enquiryMsgInfo}
+          onClose={() => setEnquiryMsgInfo(null)}
+        />
+      )}
 
       {/* ── Add Service Ticket Modal ── */}
       {isTicketModalOpen && (

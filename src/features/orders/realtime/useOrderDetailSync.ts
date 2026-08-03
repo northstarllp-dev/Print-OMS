@@ -19,6 +19,8 @@ import {
 export interface UseOrderDetailSyncOptions {
   orderId: string;
   businessOrderId?: string;
+  /** Tenant scope for order_activity (friendly order_id is not globally unique). */
+  companyId?: string | null;
   siteVisitId?: string | null;
   enabled?: boolean;
   /** Current order snapshot — used to merge site-visit locations. */
@@ -48,6 +50,7 @@ type Row = Record<string, unknown>;
 export function useOrderDetailSync({
   orderId,
   businessOrderId,
+  companyId,
   siteVisitId,
   enabled = true,
   getOrderSnapshot,
@@ -263,6 +266,13 @@ export function useOrderDetailSync({
             const { eventType, newRow, oldRow } = asRow(
               payload as RealtimePostgresChangesPayload<Row>
             );
+            if (
+              companyId &&
+              newRow?.company_id &&
+              newRow.company_id !== companyId
+            ) {
+              return;
+            }
             onActivityRef.current?.({
               eventType,
               new: newRow,
@@ -287,7 +297,7 @@ export function useOrderDetailSync({
       cancelled = true;
       if (channel) supabase.removeChannel(channel);
     };
-  }, [orderId, businessOrderId, enabled]);
+  }, [orderId, businessOrderId, companyId, enabled]);
 
   // Measurements — separate channel so siteVisitId resolution doesn't drop schedule events.
   useEffect(() => {

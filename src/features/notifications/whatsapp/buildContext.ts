@@ -110,11 +110,8 @@ export async function buildNotificationContext(
   supabase: SupabaseClient,
   input: BuildContextInput
 ): Promise<NotificationContext | null> {
-  const baseUrl =
-    input.baseUrl ||
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    process.env.WHATSAPP_PORTAL_URL_BASE?.replace(/\/(?:printoms\/)?portal\?token=$/, "") ||
-    undefined;
+  const { getRequestBaseUrl } = await import("./requestBaseUrl");
+  const baseUrl = input.baseUrl || (await getRequestBaseUrl());
 
   let companyId = input.enquiryRow?.company_id;
   let companyName = input.companyName;
@@ -166,12 +163,16 @@ export async function buildNotificationContext(
 
   let portalToken = "";
   const portalCustomerId = customer?.id || input.customerUuid || friendlyCustomerId;
+  const portalOrderId =
+    (order?.id as string | undefined) ||
+    input.orderUuid ||
+    friendlyOrderId;
   if (portalCustomerId) {
     try {
       const { token } = await generateAndStorePortalToken(
         supabase,
         portalCustomerId as string,
-        friendlyOrderId,
+        portalOrderId,
         {
           expiresInDays: 30,
           createdBy: `whatsapp:${input.templateKey}`,

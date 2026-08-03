@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/features/auth/actions/authActions";
 import { resolveTicketPermission } from "@/features/service-tickets/ticketGrants";
 import { assertAdminOnly } from "@/features/orders/workspace/shared/serverPermissions";
+import { dispatchAdminNotification } from "@/features/notifications/lib/dispatchNotification";
 
 export type TicketPhoto = {
   url: string;
@@ -198,7 +199,7 @@ export async function lookupOrdersByPhone(phone: string) {
     orders: (orders ?? []).map((o) => ({
       id: o.id,
       orderId: o.order_id,
-      label: `${o.order_id} - ${o.client_name || o.business_name || "Order"}`,
+      label: [o.order_id, o.business_name, o.client_name].filter(Boolean).join(" - ") || o.order_id || "Order",
       stage: o.stage,
       createdAt: o.date_created,
     })),
@@ -237,6 +238,14 @@ export async function createServiceTicketAction(input: {
     .single();
 
   if (error) throw new Error(error.message);
+
+  // Notify all admins of new service ticket
+  await dispatchAdminNotification(profile.company_id, {
+    title: `New Service Ticket`,
+    message: `A service ticket has been raised: "${input.description.slice(0, 80)}".`,
+    type: "warning",
+    link: `/admin/service-tickets`,
+  });
 
   revalidatePath("/admin/service-tickets");
   revalidatePath("/staff/service-tickets");
@@ -324,6 +333,15 @@ export async function sendToServiceManagerAction(ticketId: string) {
     .single();
 
   if (error) throw new Error(error.message);
+
+  // Notify admins about escalation
+  await dispatchAdminNotification(profile.company_id, {
+    title: `Service Ticket Escalated`,
+    message: `A service ticket has been sent to the Service Manager for review.`,
+    type: "info",
+    link: `/admin/service-tickets`,
+  });
+
   revalidatePath("/admin/service-tickets");
   revalidatePath("/staff/service-tickets");
   return data;
@@ -376,8 +394,16 @@ export async function completeTicketAction(ticketId: string) {
     .single();
 
   if (error) throw new Error(error.message);
+
+  // Notify admins that a ticket was closed
+  await dispatchAdminNotification(profile.company_id, {
+    title: `Service Ticket Closed`,
+    message: `A service ticket has been resolved and closed by ${profile.name || "Staff"}.`,
+    type: "success",
+    link: `/admin/service-tickets`,
+  });
+
   revalidatePath("/admin/service-tickets");
   revalidatePath("/staff/service-tickets");
   return data;
 }
-

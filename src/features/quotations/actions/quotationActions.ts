@@ -12,7 +12,6 @@ import {
 } from "@/features/orders/actions/revalidateOrderPaths";
 import {
   assertStageEditPermission,
-  assertValidPortalSessionForOrder,
 } from "@/features/orders/workspace/shared/serverPermissions";
 import { computeQuotationTotals } from "@/features/quotations/utils/lineAmount";
 import {
@@ -22,6 +21,7 @@ import {
   sanitizeSignageOptions,
 } from "@/features/quotations/utils/quotationSecurity";
 import { createAdminClient } from "@/utils/supabase/admin";
+import { insertOrderActivity } from "@/features/orders/activity/logOrderActivity";
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -59,12 +59,13 @@ async function resolveOrderId(
   customerId?: string;
   customerName?: string;
   companyId?: string;
+  health?: string;
 }> {
   const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   if (!uuidPattern.test(orderId)) {
     const { data: o } = await supabase
       .from("orders")
-      .select("id, order_id, customer_id, business_name, company_id")
+      .select("id, order_id, customer_id, business_name, company_id, health")
       .eq("order_id", orderId)
       .maybeSingle();
     if (o) {
@@ -74,13 +75,14 @@ async function resolveOrderId(
         customerId: o.customer_id,
         customerName: o.business_name,
         companyId: o.company_id,
+        health: o.health,
       };
     }
     return { uuid: orderId, friendly: orderId };
   }
   const { data: o } = await supabase
     .from("orders")
-    .select("order_id, customer_id, business_name, company_id")
+    .select("order_id, customer_id, business_name, company_id, health")
     .eq("id", orderId)
     .maybeSingle();
   return {
@@ -89,6 +91,7 @@ async function resolveOrderId(
     customerId: o?.customer_id,
     customerName: o?.business_name,
     companyId: o?.company_id,
+    health: o?.health,
   };
 }
 
@@ -96,44 +99,14 @@ async function assertPortalOrderOwnership(
   orderUuid: string,
   portalToken?: string
 ): Promise<void> {
-  // Primary check: session cookie
-  try {
-    await assertValidPortalSessionForOrder(orderUuid, "approve_quote");
-    return; // cookie auth succeeded
-  } catch {
-    // Fall through to token-based auth below
-  }
-
-  // Fallback: verify raw portal token directly (handles missing/expired session cookies)
-  if (portalToken) {
-    const { verifyPortalToken } = await import("@/utils/portal-tokens");
-    const payload = verifyPortalToken(portalToken);
-    if (!payload) throw new Error("Unauthorized");
-    if (!payload.scopes.includes("approve_quote")) throw new Error("Unauthorized");
-
-    const admin = requireAdminClient();
-    const { data: order } = await admin
-      .from("orders")
-      .select("id, order_id, customer_id")
-      .eq("id", orderUuid)
-      .maybeSingle();
-    if (!order) throw new Error("Unauthorized");
-
-    // Verify token orderId or customerId matches
-    if (payload.orderId && (payload.orderId === order.id || payload.orderId === order.order_id)) {
-      return;
-    }
-    if (payload.customerId) {
-      const { data: customer } = await admin
-        .from("customers")
-        .select("id")
-        .eq("customer_id", payload.customerId)
-        .maybeSingle();
-      if (customer && order.customer_id === customer.id) return;
-    }
-  }
-
-  throw new Error("Unauthorized");
+  const { assertPortalTenantAccess } = await import(
+    "@/utils/portal/portalTenantAuth"
+  );
+  await assertPortalTenantAccess({
+    orderId: orderUuid,
+    portalToken,
+    requiredScope: "approve_quote",
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -297,20 +270,30 @@ export async function upsertQuotation(orderId: string, payload: QuotationPayload
 // WRITE — Quotation Status Actions (Admin)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Admin approves quotation — marks it Sent and moves order stage to Quotation Sent */
-export async function sendQuotationToCustomer(quotationId: string, adminName: string) {
+/** Admin sends quotation to customer — marks Sent and moves order to Quotation Sent.
+ *  Returns whether this was a resend after customer revision (for the message popup).
+ */
+export async function sendQuotationToCustomer(
+  quotationId: string,
+  adminName: string
+): Promise<{ isRevisionResend: boolean }> {
   await assertStageEditPermission("quotation");
   const supabase = await getSupabase();
   const { data: qt, error: qErr } = await supabase
     .from("quotations")
-    .select("order_id, quotation_id, status")
+    .select("order_id, quotation_id, status, rejection_reason, customer_response")
     .eq("id", quotationId)
     .single();
   if (qErr || !qt) throw new Error("Quotation not found");
 
   assertCanSendQuotationToCustomer(qt.status);
 
-  const isRevisionResend = qt.status === "Rejected";
+  // After customer "request changes", status may still be Rejected — or admin may
+  // have saved a Draft while rejection_reason / customer_response remain set.
+  const isRevisionResend =
+    qt.status === "Rejected" ||
+    qt.customer_response === "Revision" ||
+    !!(typeof qt.rejection_reason === "string" && qt.rejection_reason.trim());
 
   const { error } = await supabase
     .from("quotations")
@@ -324,18 +307,29 @@ export async function sendQuotationToCustomer(quotationId: string, adminName: st
 
   const { data: orderRow } = await supabase
     .from("orders")
-    .select("order_id")
+    .select("order_id, company_id, health")
     .eq("id", qt.order_id)
     .maybeSingle();
 
-  await supabase.from("orders").update({ stage: "Quotation Sent" }).eq("id", qt.order_id);
-  await supabase.from("order_activity").insert({
-    order_id: orderRow?.order_id || qt.order_id,
-    activity_type: "timeline",
+  const { stageProgressPatch } = await import("@/features/orders/lib/orderHealth");
+  await supabase
+    .from("orders")
+    .update({ stage: "Quotation Sent", ...stageProgressPatch(orderRow?.health) })
+    .eq("id", qt.order_id);
+  if (!orderRow?.company_id) {
+    throw new Error("company_id is required to log quotation activity");
+  }
+  await insertOrderActivity(supabase, {
+    order_id: orderRow.order_id || qt.order_id,
+    company_id: orderRow.company_id,
     actor_name: "System",
     actor_role: "System",
     content: `Quotation ${qt.quotation_id} approved by ${adminName} and sent to the customer.`,
-    metadata: { action: "quotation_sent", quotation_id: qt.quotation_id },
+    metadata: {
+      action: "quotation_sent",
+      quotation_id: qt.quotation_id,
+      revision: isRevisionResend,
+    },
   });
 
   const baseUrl = await getRequestBaseUrl();
@@ -347,6 +341,7 @@ export async function sendQuotationToCustomer(quotationId: string, adminName: st
   });
 
   revalidateQuotationPaths(orderRow?.order_id || qt.order_id);
+  return { isRevisionResend };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -356,7 +351,8 @@ export async function sendQuotationToCustomer(quotationId: string, adminName: st
 export async function adminMarkQuotationApprovedAction(orderId: string) {
   await assertStageEditPermission("quotation");
   const supabase = await getSupabase();
-  const { uuid, friendly } = await resolveOrderId(supabase, orderId);
+  const { uuid, friendly, companyId, health } = await resolveOrderId(supabase, orderId);
+  if (!companyId) throw new Error("company_id is required to log quotation activity");
 
   const { error: qErr } = await supabase
     .from("quotations")
@@ -364,20 +360,26 @@ export async function adminMarkQuotationApprovedAction(orderId: string) {
     .eq("order_id", uuid);
   if (qErr) throw new Error(qErr.message);
 
+  const { stageProgressPatch } = await import("@/features/orders/lib/orderHealth");
   const { error: oErr } = await supabase
     .from("orders")
-    .update({ stage: "Quotation Approved", stage_status: "Normal" })
+    .update({ stage: "Quotation Approved", stage_status: "Normal", ...stageProgressPatch(health) })
     .eq("id", uuid);
   if (oErr) throw new Error(oErr.message);
 
-  await supabase.from("order_activity").insert({
+  await insertOrderActivity(supabase, {
     order_id: friendly,
-    activity_type: "timeline",
+    company_id: companyId,
     actor_name: "System",
     actor_role: "System",
     content: "Admin marked the quotation as approved and ready to advance.",
     metadata: { action: "quotation_approved_by_admin" },
   });
+
+  const { ensureDraftInvoiceFromQuotation } = await import(
+    "@/features/invoices/lib/ensureDraftInvoice"
+  );
+  await ensureDraftInvoiceFromQuotation(uuid, supabase);
 
   revalidateQuotationPaths(friendly, "staff");
 }
@@ -389,10 +391,13 @@ export async function customerApproveQuotation(
   portalToken?: string
 ) {
   const supabase = await getSupabase();
-  const { uuid, friendly } = await resolveOrderId(supabase, orderId);
-  await assertPortalOrderOwnership(uuid, portalToken);
+  const { uuid: portalOrderUuid } = await resolveOrderId(supabase, orderId);
+  await assertPortalOrderOwnership(portalOrderUuid, portalToken);
 
+  // Portal/anon RLS cannot read company_id — resolve via service role after ownership check.
   const admin = requireAdminClient();
+  const { uuid, friendly, companyId, health } = await resolveOrderId(admin, portalOrderUuid);
+  if (!companyId) throw new Error("company_id is required to log quotation activity");
 
   const { data: qt } = await admin
     .from("quotations")
@@ -410,20 +415,26 @@ export async function customerApproveQuotation(
     .eq("status", "Sent");
   if (qErr) throw new Error(qErr.message);
 
+  const { stageProgressPatch } = await import("@/features/orders/lib/orderHealth");
   const { error: oErr } = await admin
     .from("orders")
-    .update({ stage: "Quotation Approved" })
+    .update({ stage: "Quotation Approved", ...stageProgressPatch(health) })
     .eq("id", uuid);
   if (oErr) throw new Error(oErr.message);
 
-  await admin.from("order_activity").insert({
+  await insertOrderActivity(admin, {
     order_id: friendly,
-    activity_type: "timeline",
+    company_id: companyId,
     actor_name: "System",
     actor_role: "System",
     content: `${customerName} has approved the quotation. Order is ready for advance payment.`,
     metadata: { action: "quotation_approved_by_customer" },
   });
+
+  const { ensureDraftInvoiceFromQuotation } = await import(
+    "@/features/invoices/lib/ensureDraftInvoice"
+  );
+  await ensureDraftInvoiceFromQuotation(uuid, admin);
 
   revalidateQuotationPaths(friendly);
 }
@@ -439,10 +450,13 @@ export async function customerRequestRevision(
   if (!trimmed) throw new Error("Feedback is required");
 
   const supabase = await getSupabase();
-  const { uuid, friendly } = await resolveOrderId(supabase, orderId);
-  await assertPortalOrderOwnership(uuid, portalToken);
+  const { uuid: portalOrderUuid } = await resolveOrderId(supabase, orderId);
+  await assertPortalOrderOwnership(portalOrderUuid, portalToken);
 
+  // Portal/anon RLS cannot read company_id — resolve via service role after ownership check.
   const admin = requireAdminClient();
+  const { uuid, friendly, companyId, health } = await resolveOrderId(admin, portalOrderUuid);
+  if (!companyId) throw new Error("company_id is required to log quotation activity");
 
   const { data: qt } = await admin
     .from("quotations")
@@ -464,15 +478,16 @@ export async function customerRequestRevision(
     .eq("status", "Sent");
   if (qErr) throw new Error(qErr.message);
 
+  const { stageProgressPatch } = await import("@/features/orders/lib/orderHealth");
   const { error: oErr } = await admin
     .from("orders")
-    .update({ stage: "Quotation Negotiation" })
+    .update({ stage: "Quotation Negotiation", ...stageProgressPatch(health) })
     .eq("id", uuid);
   if (oErr) throw new Error(oErr.message);
 
-  await admin.from("order_activity").insert({
+  await insertOrderActivity(admin, {
     order_id: friendly,
-    activity_type: "timeline",
+    company_id: companyId,
     actor_name: customerName,
     actor_role: "Customer",
     content: `Quotation Declined. Feedback: ${trimmed}`,

@@ -1,9 +1,10 @@
-export type CalendarEventType = "site_visit" | "installation" | "deadline";
+export type CalendarEventType = "site_visit" | "installation" | "deadline" | "task";
 
 export interface CalendarEvent {
   id: string;
-  orderId: string;
-  orderCode: string;
+  orderId?: string;
+  orderCode?: string;
+  taskId?: string;
   type: CalendarEventType;
   /** Local calendar day key YYYY-MM-DD */
   dateKey: string;
@@ -12,9 +13,17 @@ export interface CalendarEvent {
   clientName: string;
   clientPhone?: string;
   address?: string;
+  /** Google Maps link for the event location */
+  gmapLink?: string | null;
+  /** Outstanding payment amount for this order (₹) */
+  outstandingAmount?: number;
   assigneeIds: string[];
   stage: string;
+  metaLabel?: string;
 }
+
+/** Map of order UUID → outstanding payment amount */
+export type PaymentOutstandingMap = Record<string, number>;
 
 export interface CalendarOrderInput {
   id: string;
@@ -31,6 +40,7 @@ export interface CalendarOrderInput {
     auditDate?: string | null;
     auditTime?: string | null;
     customerAddress?: string | null;
+    gpsLocation?: string | null;
   } | null;
   installationDetails?: {
     scheduledDate?: string | null;
@@ -54,4 +64,15 @@ export interface CalendarCustomerInput {
 export interface CalendarEmployeeInput {
   id: string;
   name: string;
+}
+
+export interface CalendarTaskInput {
+  id: string;
+  taskId?: string;
+  title: string;
+  status: string;
+  assignedAt?: string | null;
+  dueDate?: string | null;
+  assigneeId: string;
+  orderCode?: string | null;
 }

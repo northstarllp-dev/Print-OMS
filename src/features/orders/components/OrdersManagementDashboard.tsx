@@ -13,24 +13,45 @@ import {
   Eye,
   Trash2,
   X,
-  Briefcase,
   AlertTriangle,
   CheckCircle,
   Calendar,
   ChevronLeft,
-  ChevronRight,
   RefreshCw,
+  MoreHorizontal,
+  Wrench,
+  CirclePlay,
+  Pause,
+  Ban,
 } from "lucide-react";
-import { updateOrder, assignTeamToOrder } from "@/features/orders/actions/orderActions";
+import { assignTeamToOrder, updateOrderHealthAction } from "@/features/orders/actions/orderActions";
 import { loadClientConfig } from "@/config/loadClientConfig";
 import { parseOrderStage } from "@/features/orders/workspace/shared/stageGrants";
 import {
   countQueueViews,
+  countMyOrdersTabs,
   partitionQueueOrdersByView,
+  partitionMyOrdersByTab,
   queueHasIncomingTab,
+  PIPELINE_QUEUE_STAGES,
+  type MyOrdersTab,
+  type MyOrdersTabCounts,
 } from "@/features/orders/workspace/shared/staffQueueStages";
 import { QueueViewToggle } from "./QueueViewToggle";
+import { MyOrdersStageTabs } from "./MyOrdersStageTabs";
 import type { QueueView } from "@/features/orders/workspace/shared/staffQueueStages";
+import type { OrderStage } from "@/features/orders/workspace/shared/types";
+import { CreateServiceTicketModal } from "@/features/service-tickets/components/CreateServiceTicketModal";
+import type { OrderHealth } from "@/features/orders/lib/orderHealth";
+import {
+  buildServiceTicketPreset,
+  computeOrderKpis,
+  countActiveOrderFilters,
+  filterOrders,
+  healthMenuActions as healthMenuActionLabels,
+  needsAdminApproval,
+  resolveOrderDetailHref,
+} from "@/features/orders/orderListLogic";
 
 const getStatusColor = (status: string) => {
   const colors: Record<string, { bg: string; text: string; label: string }> = {
@@ -55,16 +76,37 @@ const getStatusColor = (status: string) => {
 const getHealthBadgeColor = (health: string) => {
   const colors: Record<string, string> = {
     "Active": "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
-    "On Hold": "bg-amber-500/10 text-amber-600 border-amber-500/20",
+    "Needs Attention": "bg-amber-500/10 text-amber-700 border-amber-500/20",
+    "On Hold": "bg-slate-500/10 text-slate-600 border-slate-500/20",
     "Lost": "bg-rose-500/10 text-rose-600 border-rose-500/20",
-    "Cancelled": "bg-slate-500/10 text-slate-600 border-slate-500/20",
-    "Completed": "bg-indigo-500/10 text-indigo-600 border-indigo-500/20",
   };
   return colors[health] || "bg-slate-100 text-slate-600 border-slate-200";
 };
 
-function needsAdminApproval(stageStatus?: string | null) {
-  return !!stageStatus && stageStatus !== "Normal" && stageStatus.startsWith("Pending Admin Approval");
+/** Quick health transitions available from the row ⋯ menu (admin). */
+function healthMenuActions(health: string): Array<{
+  health: OrderHealth;
+  label: string;
+  icon: typeof CirclePlay;
+  className: string;
+}> {
+  const colors: Record<OrderHealth, string> = {
+    Active: "text-emerald-600 hover:bg-emerald-50",
+    "Needs Attention": "text-amber-700 hover:bg-amber-50",
+    "On Hold": "text-slate-600 hover:bg-slate-50",
+    Lost: "text-rose-600 hover:bg-rose-50",
+  };
+  const icons: Record<OrderHealth, typeof CirclePlay> = {
+    Active: CirclePlay,
+    "Needs Attention": AlertTriangle,
+    "On Hold": Pause,
+    Lost: Ban,
+  };
+  return healthMenuActionLabels(health).map((a) => ({
+    ...a,
+    icon: icons[a.health],
+    className: colors[a.health],
+  }));
 }
 
 export function OrdersManagementDashboard({ 
@@ -80,6 +122,10 @@ export function OrdersManagementDashboard({
   hideTitle,
   title,
   subtitle,
+  mode,
+  allowedStages,
+  initialTab,
+  initialStage,
 }: { 
   initialOrders: any[];
   initialCustomers: any[];
@@ -99,6 +145,14 @@ export function OrdersManagementDashboard({
   title?: string;
   /** Custom override for the subtitle */
   subtitle?: string;
+  /** Unified My Orders mode: stage tabs instead of Incoming/Current/Completed. */
+  mode?: "my_orders";
+  /** Stages shown as My Orders tabs (must be editable pipeline stages). */
+  allowedStages?: OrderStage[];
+  /** Initial My Orders tab (incoming | stage | completed). */
+  initialTab?: MyOrdersTab;
+  /** @deprecated Use initialTab */
+  initialStage?: OrderStage;
 }) {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
@@ -110,8 +164,25 @@ export function OrdersManagementDashboard({
   const [adminAssignedFilter, setAdminAssignedFilter] = useState<"ALL" | "MINE">("ALL");
   const [selectedKpi, setSelectedKpi] = useState<string | null>(null);
   const clientConfig = loadClientConfig();
-  const parsedEntryStage = parseOrderStage(entryStage);
+  const isMyOrders = mode === "my_orders";
+  const myOrdersStages = allowedStages ?? [];
+  const parsedEntryStage = isMyOrders ? undefined : parseOrderStage(entryStage);
   const [queueView, setQueueView] = useState<QueueView>("current");
+  const pipelineInitial =
+    initialStage &&
+    (PIPELINE_QUEUE_STAGES as readonly OrderStage[]).includes(initialStage)
+      ? (initialStage as MyOrdersTab)
+      : undefined;
+  const resolvedInitialTab: MyOrdersTab | undefined =
+    initialTab ?? pipelineInitial ?? (myOrdersStages[0] as MyOrdersTab | undefined);
+  const [myOrdersTab, setMyOrdersTab] = useState<MyOrdersTab | undefined>(resolvedInitialTab);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [ticketPreset, setTicketPreset] = useState<{
+    phone?: string;
+    customerId?: string;
+    orderId?: string;
+    orderLabel?: string;
+  } | null>(null);
   
   // Custom Date Range Filter
   const [dateFilterType, setDateFilterType] = useState<"all" | "range">("range");
@@ -128,6 +199,28 @@ export function OrdersManagementDashboard({
     setOrders(initialOrders);
   }, [initialOrders]);
 
+  useEffect(() => {
+    if (!isMyOrders) return;
+    if (initialTab) {
+      setMyOrdersTab(initialTab);
+      return;
+    }
+    if (
+      initialStage &&
+      (PIPELINE_QUEUE_STAGES as readonly OrderStage[]).includes(initialStage)
+    ) {
+      setMyOrdersTab(initialStage as MyOrdersTab);
+    }
+  }, [isMyOrders, initialTab, initialStage, myOrdersStages]);
+
+  const handleMyOrdersTabChange = useCallback(
+    (tab: MyOrdersTab) => {
+      setMyOrdersTab(tab);
+      router.replace(`/staff/my-orders?stage=${tab}`, { scroll: false });
+    },
+    [router]
+  );
+
   const handleRefresh = useCallback(() => {
     setIsRefreshing(true);
     router.refresh();
@@ -137,15 +230,78 @@ export function OrdersManagementDashboard({
   const currentUserRole = userRole;
 
   const resolveOrderHref = useCallback(
-    (order: { orderId?: string; id: string }) => {
-      const basePath =
-        orderDetailBasePath ??
-        (currentUserRole === "Admin" ? "/admin/orders" : "/staff/orders");
-      const base = `${basePath}/${order.orderId || order.id}`;
-      return entryStage ? `${base}?entryStage=${entryStage}` : base;
-    },
-    [orderDetailBasePath, entryStage, currentUserRole]
+    (order: { orderId?: string; id: string }) =>
+      resolveOrderDetailHref({
+        orderId: order.orderId,
+        id: order.id,
+        userRole: currentUserRole,
+        orderDetailBasePath,
+        // My Orders: omit entryStage so Gate C does not lock other stages.
+        entryStage: isMyOrders ? null : entryStage,
+      }),
+    [orderDetailBasePath, entryStage, currentUserRole, isMyOrders]
   );
+
+  const openServiceTicketForOrder = useCallback(
+    (order: {
+      id: string;
+      orderId?: string;
+      orderCode?: string;
+      customerId?: string;
+      clientName?: string;
+      businessName?: string;
+    }) => {
+      const customer = initialCustomers.find((c) => c.id === order.customerId);
+      setOpenMenuId(null);
+      setTicketPreset(
+        buildServiceTicketPreset({
+          order,
+          customerPhone: customer?.phone || "",
+        })
+      );
+    },
+    [initialCustomers]
+  );
+
+  const applyOrderHealth = useCallback(
+    async (orderId: string, health: OrderHealth) => {
+      setOpenMenuId(null);
+      let lostReason: string | undefined;
+      if (health === "Lost") {
+        const entered = window.prompt("Reason for marking this order as Lost:");
+        if (entered === null) return;
+        lostReason = entered.trim();
+        if (!lostReason) {
+          alert("A reason is required when marking an order as Lost.");
+          return;
+        }
+      }
+      const prev = orders.find((o) => o.id === orderId);
+      setOrders((list) =>
+        list.map((o) =>
+          o.id === orderId
+            ? { ...o, health, lost_reason: health === "Lost" ? lostReason : null }
+            : o
+        )
+      );
+      try {
+        await updateOrderHealthAction(orderId, health, lostReason);
+      } catch (err: any) {
+        if (prev) {
+          setOrders((list) =>
+            list.map((o) =>
+              o.id === orderId
+                ? { ...o, health: prev.health, lost_reason: prev.lost_reason }
+                : o
+            )
+          );
+        }
+        alert(err?.message || "Failed to update order health.");
+      }
+    },
+    [orders]
+  );
+
   const employeeName = currentEmployeeName;
   const currentEmployeeObj = initialEmployees.find(e => e.name === employeeName || e.email === employeeName || e.id === employeeName);
   const currentEmployeeId = currentEmployeeObj?.id || employeeName;
@@ -158,10 +314,18 @@ export function OrdersManagementDashboard({
     return countQueueViews(orders, parsedEntryStage);
   }, [orders, parsedEntryStage]);
 
+  const myOrdersTabCounts: MyOrdersTabCounts = useMemo(() => {
+    if (!isMyOrders) return { incoming: 0, completed: 0 };
+    return countMyOrdersTabs(orders, myOrdersStages);
+  }, [isMyOrders, orders, myOrdersStages]);
+
   const queueScopedOrders = useMemo(() => {
+    if (isMyOrders && myOrdersTab) {
+      return partitionMyOrdersByTab(orders, myOrdersTab, myOrdersStages);
+    }
     if (!parsedEntryStage) return orders;
     return partitionQueueOrdersByView(orders, parsedEntryStage, queueView);
-  }, [orders, parsedEntryStage, queueView]);
+  }, [orders, parsedEntryStage, queueView, isMyOrders, myOrdersTab, myOrdersStages]);
   
   // State for right assignment panel
   const [assignPanelOrderId, setAssignPanelOrderId] = useState<string | null>(null);
@@ -183,97 +347,47 @@ export function OrdersManagementDashboard({
   };
 
   /** Shared toolbar filters (search / dates / stage / health / assignment) — used by KPIs + list */
-  const matchesToolbarFilters = useCallback((order: any) => {
-    if (debouncedSearch) {
-      const q = debouncedSearch;
-      const cust = customers.find((c: any) => c.id === order.customerId);
-      const custName = (cust?.name || order.customerName || "").toLowerCase();
-      const matches =
-        (order.clientName || "").toLowerCase().includes(q) ||
-        (order.businessName || "").toLowerCase().includes(q) ||
-        (order.orderCode || order.id || "").toLowerCase().includes(q) ||
-        custName.includes(q);
-      if (!matches) return false;
-    }
-
-    if (dateFilterType === "range") {
-      const orderDate = order.dateCreated
-        ? new Date(order.dateCreated).toISOString().split("T")[0]
-        : null;
-      if (!orderDate) return false;
-      if (startDate && orderDate < startDate) return false;
-      if (endDate && orderDate > endDate) return false;
-    }
-
-    if (stageFilter !== "ALL") {
-      const s = order.stage || "";
-      if (stageFilter === "Site Visit" && !s.includes("Site Visit")) return false;
-      if (stageFilter === "Quotation" && !s.includes("Quotation")) return false;
-      if (stageFilter === "Designing" && !s.includes("Design")) return false;
-      if (stageFilter === "Production" && s !== "Production") return false;
-      if (stageFilter === "Installation" && !s.includes("Installation")) return false;
-      if (stageFilter === "Completed" && !["Completed", "Closed"].includes(s)) return false;
-    }
-
-    if (healthFilter !== "ALL" && (order.health || "Active") !== healthFilter) return false;
-
-    if (currentUserRole === "Employee") {
-      return order.assignedEmployees?.includes(employeeName) || order.assignedEmployees?.includes(currentEmployeeId);
-    }
-
-    if (currentUserRole === "Admin" && adminAssignedFilter === "MINE") {
-      if (!currentUserId) return false;
-      return order.assignedAdmins?.includes(currentUserId);
-    }
-
-    return true;
-  }, [
-    debouncedSearch,
-    customers,
-    dateFilterType,
-    startDate,
-    endDate,
-    stageFilter,
-    healthFilter,
-    currentUserRole,
-    employeeName,
-    currentEmployeeId,
-    adminAssignedFilter,
-    currentUserId,
-  ]);
-
   const toolbarFilteredOrders = useMemo(
-    () => queueScopedOrders.filter(matchesToolbarFilters),
-    [queueScopedOrders, matchesToolbarFilters]
+    () =>
+      filterOrders(queueScopedOrders, {
+        search: debouncedSearch,
+        stageFilter,
+        healthFilter,
+        dateFilterType,
+        startDate,
+        endDate,
+        userRole: currentUserRole,
+        employeeId: currentEmployeeId,
+        employeeName,
+        adminAssignedFilter,
+        currentUserId,
+        customers,
+      }),
+    [
+      queueScopedOrders,
+      debouncedSearch,
+      stageFilter,
+      healthFilter,
+      dateFilterType,
+      startDate,
+      endDate,
+      currentUserRole,
+      currentEmployeeId,
+      employeeName,
+      adminAssignedFilter,
+      currentUserId,
+      customers,
+    ]
   );
 
-  // KPI counts reflect the same toolbar filters as the list
-  const activeOrders = toolbarFilteredOrders.filter(o => o.stage !== "Completed" && o.stage !== "Closed").length;
-  const unassignedOrders = toolbarFilteredOrders.filter(o => o.stage !== "Completed" && o.stage !== "Closed" && (!o.assignedEmployees || o.assignedEmployees.length === 0)).length;
-  const pendingApprovals = toolbarFilteredOrders.filter(o => needsAdminApproval(o.stageStatus)).length;
-  const completedOrders = toolbarFilteredOrders.filter(o => o.stage === "Completed" || o.stage === "Closed").length;
+  // KPI counts reflect the same toolbar filters as the list (admin only)
+  const kpis = computeOrderKpis(toolbarFilteredOrders);
+  const activeOrders = kpis.active;
+  const unassignedOrders = kpis.unassigned;
+  const pendingApprovals = kpis.approvals;
+  const completedOrders = kpis.completed;
 
-  const myActiveOrders = toolbarFilteredOrders.filter(o => o.stage !== "Completed" && o.stage !== "Closed" && (o.assignedEmployees.includes(employeeName) || o.assignedEmployees.includes(currentEmployeeId))).length;
-  const myCompletedOrders = toolbarFilteredOrders.filter(o => (o.stage === "Completed" || o.stage === "Closed") && (o.assignedEmployees.includes(employeeName) || o.assignedEmployees.includes(currentEmployeeId))).length;
-
-  const stats = currentUserRole === "Employee" ? [
-    {
-      label: "ASSIGNED TO ME",
-      value: myActiveOrders.toString(),
-      change: "Active projects in your queue",
-      filterKey: "myactive",
-      icon: Briefcase,
-      color: "var(--color-secondary)",
-    },
-    {
-      label: "MY COMPLETED",
-      value: myCompletedOrders.toString(),
-      change: "All-time completed orders",
-      filterKey: "mycompleted",
-      icon: CheckCircle,
-      color: "#22c55e",
-    },
-  ] : [
+  const stats = currentUserRole === "Employee" ? [] : [
     {
       label: "TOTAL ACTIVE",
       value: activeOrders.toString(),
@@ -308,23 +422,14 @@ export function OrdersManagementDashboard({
     },
   ];
 
-  const filteredOrders = useMemo(() => {
-    let list = toolbarFilteredOrders;
-    if (selectedKpi === "active") {
-      list = list.filter(o => o.stage !== "Completed" && o.stage !== "Closed");
-    } else if (selectedKpi === "unassigned") {
-      list = list.filter(o => o.stage !== "Completed" && o.stage !== "Closed" && (!o.assignedEmployees || o.assignedEmployees.length === 0));
-    } else if (selectedKpi === "approvals") {
-      list = list.filter(o => needsAdminApproval(o.stageStatus));
-    } else if (selectedKpi === "completed") {
-      list = list.filter(o => o.stage === "Completed" || o.stage === "Closed");
-    } else if (selectedKpi === "myactive") {
-      list = list.filter(o => o.stage !== "Completed" && o.stage !== "Closed" && (o.assignedEmployees?.includes(employeeName) || o.assignedEmployees?.includes(currentEmployeeId)));
-    } else if (selectedKpi === "mycompleted") {
-      list = list.filter(o => (o.stage === "Completed" || o.stage === "Closed") && (o.assignedEmployees?.includes(employeeName) || o.assignedEmployees?.includes(currentEmployeeId)));
-    }
-    return list;
-  }, [toolbarFilteredOrders, selectedKpi, employeeName, currentEmployeeId]);
+  const filteredOrders = useMemo(
+    () =>
+      filterOrders(toolbarFilteredOrders, {
+        selectedKpi,
+        dateFilterType: "all",
+      }),
+    [toolbarFilteredOrders, selectedKpi]
+  );
 
   const resetFilters = () => {
     setDateFilterType("range");
@@ -337,15 +442,15 @@ export function OrdersManagementDashboard({
     setSelectedKpi(null);
   };
 
-  const activeFilterCount = [
-    stageFilter !== "ALL",
-    healthFilter !== "ALL",
-    Boolean(startDate || endDate),
-    currentUserRole === "Admin" &&
-      clientConfig.features.enableAdminAssignment &&
-      adminAssignedFilter !== "ALL",
-    Boolean(selectedKpi),
-  ].filter(Boolean).length;
+  const activeFilterCount = countActiveOrderFilters({
+    stageFilter: isMyOrders ? "ALL" : stageFilter,
+    healthFilter,
+    startDate,
+    endDate,
+    adminAssignedFilter,
+    enableAdminAssignment: clientConfig.features.enableAdminAssignment,
+    selectedKpi,
+  });
 
   const showAdminAssignFilter =
     currentUserRole === "Admin" && clientConfig.features.enableAdminAssignment;
@@ -380,7 +485,18 @@ export function OrdersManagementDashboard({
           </button>
         </div>
 
-        {parsedEntryStage && (
+        {isMyOrders && myOrdersTab && myOrdersStages.length > 0 && (
+          <div className="mb-4 md:mb-5 -mx-1 px-1 overflow-x-auto">
+            <MyOrdersStageTabs
+              stages={myOrdersStages}
+              value={myOrdersTab}
+              onChange={handleMyOrdersTabChange}
+              counts={myOrdersTabCounts}
+            />
+          </div>
+        )}
+
+        {parsedEntryStage && !isMyOrders && (
           <div className="mb-4 md:mb-5 -mx-1 px-1 overflow-x-auto">
             <QueueViewToggle
               value={queueView}
@@ -426,7 +542,8 @@ export function OrdersManagementDashboard({
           </div>
         )}
 
-        {/* Desktop/tablet: Stats Cards */}
+        {/* Desktop/tablet: Stats Cards (admin only) */}
+        {currentUserRole !== "Employee" && (
         <div className="hidden lg:grid grid-cols-2 xl:grid-cols-4 gap-4">
           {stats.map((stat: any, idx) => {
             const Icon = stat.icon;
@@ -473,6 +590,7 @@ export function OrdersManagementDashboard({
             );
           })}
         </div>
+        )}
       </div>
 
       {/* Main Content Area */}
@@ -551,6 +669,7 @@ export function OrdersManagementDashboard({
                   </button>
                 </div>
                 <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 space-y-4">
+                  {!isMyOrders && (
                   <div>
                     <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Stage</label>
                     <select
@@ -567,6 +686,7 @@ export function OrdersManagementDashboard({
                       <option value="Completed">Completed</option>
                     </select>
                   </div>
+                  )}
                   <div>
                     <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Health</label>
                     <select
@@ -576,10 +696,9 @@ export function OrdersManagementDashboard({
                     >
                       <option value="ALL">All Health States</option>
                       <option value="Active">Active</option>
+                      <option value="Needs Attention">Needs Attention</option>
                       <option value="On Hold">On Hold</option>
                       <option value="Lost">Lost</option>
-                      <option value="Cancelled">Cancelled</option>
-                      <option value="Completed">Completed</option>
                     </select>
                   </div>
                   {showAdminAssignFilter && (
@@ -665,6 +784,7 @@ export function OrdersManagementDashboard({
               )}
             </div>
 
+            {!isMyOrders && (
             <select
               value={stageFilter}
               onChange={(e) => setStageFilter(e.target.value)}
@@ -678,6 +798,7 @@ export function OrdersManagementDashboard({
               <option value="Installation">Installation</option>
               <option value="Completed">Completed</option>
             </select>
+            )}
 
             {showAdminAssignFilter && (
               <select
@@ -733,10 +854,9 @@ export function OrdersManagementDashboard({
             >
               <option value="ALL">All Health States</option>
               <option value="Active">Active</option>
+              <option value="Needs Attention">Needs Attention</option>
               <option value="On Hold">On Hold</option>
               <option value="Lost">Lost</option>
-              <option value="Cancelled">Cancelled</option>
-              <option value="Completed">Completed</option>
             </select>
 
             <button
@@ -773,11 +893,9 @@ export function OrdersManagementDashboard({
               const title = order.businessName || order.clientName || "Order";
 
               return (
-                <button
+                <div
                   key={order.id}
-                  type="button"
-                  onClick={() => router.push(resolveOrderHref(order))}
-                  className="w-full text-left rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden active:scale-[0.99] transition-transform"
+                  className="w-full text-left rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden"
                 >
                   <div className="flex">
                     <div
@@ -787,7 +905,11 @@ export function OrdersManagementDashboard({
                     />
                     <div className="flex-1 min-w-0 p-3">
                       <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
+                        <button
+                          type="button"
+                          onClick={() => router.push(resolveOrderHref(order))}
+                          className="min-w-0 text-left flex-1 active:opacity-80"
+                        >
                           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                             <span className="text-[13px] font-extrabold text-slate-900">
                               {order.orderCode || order.id}
@@ -805,53 +927,95 @@ export function OrdersManagementDashboard({
                           {order.businessName && order.clientName ? (
                             <div className="text-[11px] text-slate-500 truncate">{order.clientName}</div>
                           ) : null}
-                        </div>
-                        <ChevronRight size={18} className="shrink-0 text-slate-300 mt-0.5" />
-                      </div>
-
-                      <div className="mt-2 flex items-center justify-between gap-2 min-w-0">
-                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500 min-w-0">
-                          <span className="font-medium">{dateStr}</span>
-                          <span
-                            className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border ${getHealthBadgeColor(order.health || "Active")}`}
+                        </button>
+                        <div className="relative shrink-0">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenMenuId(openMenuId === order.id ? null : order.id);
+                            }}
+                            className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+                            aria-label="Order actions"
                           >
-                            {order.health || "Active"}
-                          </span>
-                        </div>
-                        <div className="flex items-center shrink-0">
-                          {order.assignedEmployees?.slice(0, 4).map((empId: string, i: number) => {
-                            const staff = employees.find(e => e.id === empId);
-                            const name = staff ? staff.name : "Un";
-                            return (
+                            <MoreHorizontal size={18} />
+                          </button>
+                          {openMenuId === order.id && (
+                            <>
                               <div
-                                key={i}
-                                title={name}
-                                className="w-6 h-6 rounded-full bg-[var(--color-primary)] text-white flex items-center justify-center text-[9px] font-bold border-2 border-white"
-                                style={{ marginLeft: i > 0 ? "-6px" : "0" }}
-                              >
-                                {name.substring(0, 2).toUpperCase()}
+                                className="fixed inset-0 z-40"
+                                onClick={() => setOpenMenuId(null)}
+                              />
+                              <div className="absolute right-0 top-full mt-1 z-50 min-w-[160px] rounded-lg border border-slate-200 bg-white shadow-lg overflow-hidden">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenMenuId(null);
+                                    router.push(resolveOrderHref(order));
+                                  }}
+                                  className="w-full px-3.5 py-2.5 flex items-center gap-2 text-left text-xs font-semibold text-slate-800 hover:bg-slate-50"
+                                >
+                                  <Eye size={13} /> View Order
+                                </button>
+                                {currentUserRole === "Admin" &&
+                                  healthMenuActions(order.health || "Active").map((action) => {
+                                    const Icon = action.icon;
+                                    return (
+                                      <button
+                                        key={action.health}
+                                        type="button"
+                                        onClick={() => applyOrderHealth(order.id, action.health)}
+                                        className={`w-full px-3.5 py-2.5 flex items-center gap-2 text-left text-xs font-semibold ${action.className}`}
+                                      >
+                                        <Icon size={13} /> {action.label}
+                                      </button>
+                                    );
+                                  })}
+                                {currentUserRole === "Admin" && (
+                                  <button
+                                    type="button"
+                                    onClick={() => openServiceTicketForOrder(order)}
+                                    className="w-full px-3.5 py-2.5 flex items-center gap-2 text-left text-xs font-semibold text-slate-800 hover:bg-slate-50 border-t border-slate-100"
+                                  >
+                                    <Wrench size={13} /> Add Service Ticket
+                                  </button>
+                                )}
                               </div>
-                            );
-                          })}
-                          {(!order.assignedEmployees || order.assignedEmployees.length === 0) && (
-                            <span className="text-[11px] text-slate-400 italic">Unassigned</span>
+                            </>
                           )}
                         </div>
                       </div>
 
-                      {(visitDate && visitTime) ? (
-                        <div className="mt-2 rounded-lg bg-slate-50 border border-slate-100 px-2.5 py-1.5">
-                          <div className="text-[11px] font-bold text-slate-800">{visitDate} • {visitTime}</div>
-                          {mapAddress ? (
-                            <div className="text-[10px] text-slate-500 mt-0.5 truncate" title={mapAddress}>
-                              {mapAddress}
-                            </div>
-                          ) : null}
+                      <button
+                        type="button"
+                        onClick={() => router.push(resolveOrderHref(order))}
+                        className="w-full text-left mt-2"
+                      >
+                        <div className="flex items-center justify-between gap-2 min-w-0">
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500 min-w-0">
+                            <span className="font-medium">{dateStr}</span>
+                            <span
+                              className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border ${getHealthBadgeColor(order.health || "Active")}`}
+                            >
+                              {order.health || "Active"}
+                            </span>
+                          </div>
                         </div>
-                      ) : null}
+
+                        {(visitDate && visitTime) ? (
+                          <div className="mt-2 rounded-lg bg-slate-50 border border-slate-100 px-2.5 py-1.5">
+                            <div className="text-[11px] font-bold text-slate-800">{visitDate} • {visitTime}</div>
+                            {mapAddress ? (
+                              <div className="text-[10px] text-slate-500 mt-0.5 truncate" title={mapAddress}>
+                                {mapAddress}
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </button>
                     </div>
                   </div>
-                </button>
+                </div>
               );
             })
           )}
@@ -882,9 +1046,6 @@ export function OrdersManagementDashboard({
                 </th>
                 <th style={{ padding: "14px 20px", textAlign: "center", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                   HEALTH
-                </th>
-                <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                  TEAM
                 </th>
                 <th style={{ padding: "14px 20px", textAlign: "center", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                   ACTIONS
@@ -1017,78 +1178,82 @@ export function OrdersManagementDashboard({
                         {order.health || "Active"}
                       </span>
                     </td>
-                    <td 
-                      style={{ 
-                        padding: "16px 20px", 
-                        cursor: currentUserRole === "Admin" ? "pointer" : "default",
-                        transition: "background 0.2s"
-                      }}
-                      onClick={() => {
-                        if (currentUserRole === "Admin") {
-                          setAssignPanelOrderId(order.id);
-                        }
-                      }}
-                      title={currentUserRole === "Admin" ? "Click to assign team" : ""}
-                      onMouseEnter={(e) => {
-                        if (currentUserRole === "Admin") {
-                          e.currentTarget.style.background = "#eff6ff";
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (currentUserRole === "Admin") {
-                          e.currentTarget.style.background = "transparent";
-                        }
-                      }}
-                    >
-                      <div className="flex items-center gap-1 relative">
-                        {order.assignedEmployees && order.assignedEmployees.map((empId: string, i: number) => {
-                          const staff = employees.find(e => e.id === empId);
-                          const name = staff ? staff.name : "Un";
-                          return (
-                            <div
-                              key={i}
-                              title={name}
-                              className="w-7 h-7 rounded-full bg-[var(--color-primary)] text-white flex items-center justify-center text-[10px] font-bold border-2 border-white"
-                              style={{ marginLeft: i > 0 ? "-8px" : "0" }}
+                    <td style={{ padding: "16px 20px", textAlign: "center" }}>
+                      <div className="relative inline-flex items-center gap-1.5">
+                        <button
+                          onClick={() => {
+                            router.push(resolveOrderHref(order));
+                          }}
+                          style={{
+                            padding: "6px 12px",
+                            background: "var(--color-primary)",
+                            border: "none",
+                            borderRadius: "6px",
+                            color: "white",
+                            fontSize: "12px",
+                            fontWeight: "700",
+                            cursor: "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            transition: "all 0.2s",
+                            whiteSpace: "nowrap",
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = "var(--color-primary-container)";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = "var(--color-primary)";
+                          }}
+                        >
+                          <Eye size={14} /> View Order
+                        </button>
+                        {currentUserRole === "Admin" && (
+                          <div className="relative">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenMenuId(openMenuId === order.id ? null : order.id);
+                              }}
+                              className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+                              aria-label="More actions"
                             >
-                              {name.substring(0, 2).toUpperCase()}
-                            </div>
-                          );
-                        })}
-                        {(!order.assignedEmployees || order.assignedEmployees.length === 0) && (
-                          <span className="text-xs text-slate-400 italic">Unassigned</span>
+                              <MoreHorizontal size={16} />
+                            </button>
+                            {openMenuId === order.id && (
+                              <>
+                                <div
+                                  className="fixed inset-0 z-40"
+                                  onClick={() => setOpenMenuId(null)}
+                                />
+                                <div className="absolute right-0 top-full mt-1 z-50 min-w-[170px] rounded-lg border border-slate-200 bg-white shadow-lg overflow-hidden">
+                                  {healthMenuActions(order.health || "Active").map((action) => {
+                                    const Icon = action.icon;
+                                    return (
+                                      <button
+                                        key={action.health}
+                                        type="button"
+                                        onClick={() => applyOrderHealth(order.id, action.health)}
+                                        className={`w-full px-3.5 py-2.5 flex items-center gap-2 text-left text-xs font-semibold ${action.className}`}
+                                      >
+                                        <Icon size={13} /> {action.label}
+                                      </button>
+                                    );
+                                  })}
+                                  <button
+                                    type="button"
+                                    onClick={() => openServiceTicketForOrder(order)}
+                                    className="w-full px-3.5 py-2.5 flex items-center gap-2 text-left text-xs font-semibold text-slate-800 hover:bg-slate-50 border-t border-slate-100"
+                                  >
+                                    <Wrench size={13} /> Add Service Ticket
+                                  </button>
+                                </div>
+                              </>
+                            )}
+                          </div>
                         )}
                       </div>
-                    </td>
-                    <td style={{ padding: "16px 20px", textAlign: "center" }}>
-                      <button
-                        onClick={() => {
-                          router.push(resolveOrderHref(order));
-                        }}
-                        style={{
-                          padding: "6px 12px",
-                          background: "var(--color-primary)",
-                          border: "none",
-                          borderRadius: "6px",
-                          color: "white",
-                          fontSize: "12px",
-                          fontWeight: "700",
-                          cursor: "pointer",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "6px",
-                          transition: "all 0.2s",
-                          whiteSpace: "nowrap",
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = "var(--color-primary-container)";
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = "var(--color-primary)";
-                        }}
-                      >
-                        <Eye size={14} /> View Order
-                      </button>
                     </td>
                   </tr>
                 );
@@ -1193,6 +1358,16 @@ export function OrdersManagementDashboard({
       </div>
       
 
+      {ticketPreset && (
+        <CreateServiceTicketModal
+          preset={ticketPreset}
+          onClose={() => setTicketPreset(null)}
+          onCreated={() => {
+            setTicketPreset(null);
+            router.refresh();
+          }}
+        />
+      )}
     </div>
   );
 }

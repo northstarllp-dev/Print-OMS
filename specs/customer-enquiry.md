@@ -27,7 +27,8 @@
 ## Business Rules
 
 * Every new order must be associated with a `company_id` for multi-tenant data isolation.
-* `health` status defaults to "Active" upon creation.
+* `health` status defaults to "Active" upon creation. Allowed values: Active, Needs Attention, On Hold, Lost.
+* Active orders with no stage progress for `needsAttentionAfterDays` (client config, default 6) auto-move to Needs Attention on admin list/dashboard load.
 * System logs an automated timeline event ("Order created manually by Admin") upon creation.
 
 ## User Roles
@@ -35,11 +36,27 @@
 ### Admin
 
 Permissions:
+* Full enquiry access (view + edit) via `adminGrantMap`.
 * Create new orders manually.
 * Reassign employees to orders.
 * Update pipeline stages.
 
-### Sales Representative (Staff)
+### Staff (stage grant: `enquiry`)
+
+Grant key: `enquiry` with `{ canView, canEdit }` in client `stageGrantsByRole` (same shape as invoice).
+
+| Grant | Allowed |
+| ----- | ------- |
+| `canView` only | Open Enquiries list/detail at `/staff/enquiries`; no Add, Convert, or status updates |
+| `canEdit` | Add enquiry, update enquiry, convert to order |
+| neither | No Enquiries nav item; redirect away from `/staff/enquiries` |
+
+* Staff sidebar shows **Enquiries** when `canView` or `canEdit` for `enquiry` (view-only roles still see the tab).
+* Default / Marketer grants include `edit("enquiry")` where Marketer exists.
+* Public `/quote` create remains open without a staff session.
+* Server: `createEnquiry` (authenticated), `updateEnquiry`, `convertEnquiryToOrderAction` assert `assertStageEditPermission("enquiry")`.
+
+### Sales Representative (Staff) — order pipeline
 
 Permissions:
 * View orders assigned to them.
@@ -61,8 +78,9 @@ Permissions:
 | project_name | text | Name of the project |
 | customer_id | text | Reference to customer record/phone |
 | stage | text | Current pipeline stage (e.g., "Enquiry") |
-| health | text | Status indicator (Active, Needs Attention, Lost) |
+| health | text | Status indicator (Active, Needs Attention, On Hold, Lost) |
 | lost_reason | text | Reason if the order is marked lost |
+| stage_changed_at | timestamptz | Last pipeline stage change (stall clock) |
 | workflow_type | text | "quote_first" or "design_first" |
 
 #### order_activity

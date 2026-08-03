@@ -1,7 +1,8 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Logo } from "@/components/ui/Logo";
+import { loadClientConfig } from "@/config/loadClientConfig";
 
 interface LoadingLinesProps {
   className?: string;
@@ -9,13 +10,26 @@ interface LoadingLinesProps {
   logoHeight?: number;
 }
 
-/** Canonical branded loader — logo + spinner ring. Use via PrintomsLoading for layout. */
+function resolveLoadingLabel(): string {
+  try {
+    return loadClientConfig().loadingText?.trim() || "Loading…";
+  } catch {
+    return "Loading…";
+  }
+}
+
+/** Canonical branded loader — centered logo + spinner ring. Use via PrintomsLoading for layout. */
 export default function LoadingLines({
   className = "",
   logoWidth = 160,
   logoHeight = 48,
 }: LoadingLinesProps) {
-  const ringSize = Math.max(logoWidth, logoHeight) + 36;
+  const ringSize = Math.max(logoWidth, logoHeight) + 48;
+  const [label, setLabel] = useState(() => resolveLoadingLabel());
+
+  useEffect(() => {
+    setLabel(resolveLoadingLabel());
+  }, []);
 
   return (
     <div
@@ -31,7 +45,7 @@ export default function LoadingLines({
           className="absolute inset-0 rounded-full border-2 border-slate-200 border-t-[var(--color-primary,#1E40AF)] animate-spin"
           aria-hidden
         />
-        <div className="animate-pulse flex items-center justify-center">
+        <div className="relative z-[1] flex items-center justify-center animate-pulse">
           <Logo
             width={logoWidth}
             height={logoHeight}
@@ -40,8 +54,8 @@ export default function LoadingLines({
           />
         </div>
       </div>
-      <span className="text-xs font-semibold tracking-wide text-slate-400 uppercase">
-        Loading…
+      <span className="text-xs font-semibold tracking-wide text-slate-400 uppercase text-center">
+        {label}
       </span>
     </div>
   );

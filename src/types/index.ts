@@ -14,7 +14,7 @@ export interface Customer {
 
 export interface Employee {
   id: string;
-  employeeId?: string;
+  employeeId?: string | null;
   name: string;
   role: string;
   phone: string;

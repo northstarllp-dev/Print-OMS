@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { X, Users, CheckCircle2, ChevronRight, User } from "lucide-react";
 import { fetchEmployeeStats, assignTeamToOrder } from "@/features/orders/actions/orderActions";
+import {
+  canStartAssignSubmit,
+  isAssignSubmitDisabled,
+  selectionSummaryLabel,
+  toggleEmployeeSelection,
+} from "@/features/enquiries/enquiryAssignLogic";
 
 interface AssignTeamModalProps {
   isOpen: boolean;
@@ -13,11 +19,12 @@ export function AssignTeamModal({ isOpen, onClose, orderId, onSuccess }: AssignT
   const [employees, setEmployees] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   useEffect(() => {
     if (isOpen) {
       setLoading(true);
+      setSelectedIds([]);
       fetchEmployeeStats()
         .then(data => {
           setEmployees(data);
@@ -33,18 +40,15 @@ export function AssignTeamModal({ isOpen, onClose, orderId, onSuccess }: AssignT
   if (!isOpen) return null;
 
   const toggleEmployee = (id: string) => {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    setSelectedIds((prev) => toggleEmployeeSelection(prev, id));
   };
 
   const handleSubmit = async () => {
+    if (!canStartAssignSubmit(saving)) return;
+    if (isAssignSubmitDisabled(selectedIds.length, saving)) return;
     try {
       setSaving(true);
-      await assignTeamToOrder(orderId, Array.from(selectedIds));
+      await assignTeamToOrder(orderId, selectedIds);
       setSaving(false);
       onSuccess();
     } catch (err) {
@@ -129,7 +133,7 @@ export function AssignTeamModal({ isOpen, onClose, orderId, onSuccess }: AssignT
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
               {visibleEmployees.map(emp => {
-                const isSelected = selectedIds.has(emp.id);
+                const isSelected = selectedIds.includes(emp.id);
                 return (
                   <div
                     key={emp.id}
@@ -205,15 +209,13 @@ export function AssignTeamModal({ isOpen, onClose, orderId, onSuccess }: AssignT
           alignItems: "center"
         }}>
           <div style={{ fontSize: "13px", color: "#64748b", fontWeight: "500" }}>
-            {selectedIds.size > 0 ? (
-              <span style={{ color: "#3b82f6", fontWeight: "600" }}>{selectedIds.size} employee{selectedIds.size > 1 ? "s" : ""} selected</span>
-            ) : (
-              "Select employees above"
-            )}
+            <span style={{ color: selectedIds.length > 0 ? "#3b82f6" : undefined, fontWeight: selectedIds.length > 0 ? "600" : "500" }}>
+              {selectionSummaryLabel(selectedIds.length)}
+            </span>
           </div>
           <button
             onClick={handleSubmit}
-            disabled={saving || selectedIds.size === 0}
+            disabled={isAssignSubmitDisabled(selectedIds.length, saving)}
             style={{
               padding: "11px 22px",
               background: "#1E40AF",
@@ -222,16 +224,16 @@ export function AssignTeamModal({ isOpen, onClose, orderId, onSuccess }: AssignT
               color: "white",
               fontSize: "14px",
               fontWeight: "700",
-              cursor: (saving || selectedIds.size === 0) ? "not-allowed" : "pointer",
+              cursor: isAssignSubmitDisabled(selectedIds.length, saving) ? "not-allowed" : "pointer",
               display: "flex",
               alignItems: "center",
               gap: "8px",
-              opacity: (saving || selectedIds.size === 0) ? 0.6 : 1,
+              opacity: isAssignSubmitDisabled(selectedIds.length, saving) ? 0.6 : 1,
               transition: "all 0.2s ease",
               boxShadow: "0 4px 6px -1px rgba(30, 64, 175, 0.2)"
             }}
-            onMouseEnter={(e) => { if (!saving && selectedIds.size > 0) { e.currentTarget.style.background = "#1e3a8a"; e.currentTarget.style.transform = "translateY(-1px)"; } }}
-            onMouseLeave={(e) => { if (!saving && selectedIds.size > 0) { e.currentTarget.style.background = "#1E40AF"; e.currentTarget.style.transform = "translateY(0)"; } }}
+            onMouseEnter={(e) => { if (!isAssignSubmitDisabled(selectedIds.length, saving)) { e.currentTarget.style.background = "#1e3a8a"; e.currentTarget.style.transform = "translateY(-1px)"; } }}
+            onMouseLeave={(e) => { if (!isAssignSubmitDisabled(selectedIds.length, saving)) { e.currentTarget.style.background = "#1E40AF"; e.currentTarget.style.transform = "translateY(0)"; } }}
           >
             {saving ? "Saving..." : "Save Assignments"}
             {!saving && <ChevronRight size={16} />}

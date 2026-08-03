@@ -8,6 +8,11 @@ import {
   normalizeInvoiceProfile,
   type InvoiceProfile,
 } from "@/features/quotations/types/invoiceProfile";
+import {
+  EMPTY_INVOICE_NUMBERING,
+  normalizeInvoiceNumbering,
+  type InvoiceNumberingConfig,
+} from "@/features/invoices/types/invoiceNumbering";
 import { createAdminClient } from "@/utils/supabase/admin";
 import {
   DEFAULT_PRODUCTION_CHECKLIST_ITEMS,
@@ -19,23 +24,26 @@ import type { AppSettings, CompanyDetails } from "@/features/settings/settingsTy
 const DEFAULT_SETTINGS: AppSettings = {
   siteVisitSchedulingEnabled: true,
   installationSchedulingEnabled: true,
-  enableFinalProduct: false,
+  googleReviewLink: "",
   invoiceProfile: EMPTY_INVOICE_PROFILE,
+  invoiceNumbering: EMPTY_INVOICE_NUMBERING,
   productionChecklistItems: DEFAULT_PRODUCTION_CHECKLIST_ITEMS,
 };
 
 function mapRow(data: {
   site_visit_scheduling_enabled?: boolean;
   installation_scheduling_enabled?: boolean;
-  enable_final_product?: boolean;
+  google_review_link?: string | null;
   invoice_profile?: unknown;
+  invoice_numbering?: unknown;
   production_checklist_items?: unknown;
 }): AppSettings {
   return {
     siteVisitSchedulingEnabled: data.site_visit_scheduling_enabled ?? true,
     installationSchedulingEnabled: data.installation_scheduling_enabled ?? true,
-    enableFinalProduct: data.enable_final_product ?? false,
+    googleReviewLink: (data.google_review_link ?? "").trim(),
     invoiceProfile: normalizeInvoiceProfile(data.invoice_profile),
+    invoiceNumbering: normalizeInvoiceNumbering(data.invoice_numbering),
     productionChecklistItems: normalizeProductionChecklistItems(
       data.production_checklist_items
     ),
@@ -72,7 +80,7 @@ export async function getAppSettingsForCompany(
   const { data, error } = await supabase
     .from("app_settings")
     .select(
-      "site_visit_scheduling_enabled, installation_scheduling_enabled, enable_final_product, invoice_profile, production_checklist_items"
+      "site_visit_scheduling_enabled, installation_scheduling_enabled, google_review_link, invoice_profile, invoice_numbering, production_checklist_items"
     )
     .eq("company_id", companyId)
     .maybeSingle();
@@ -89,12 +97,13 @@ export async function getAppSettingsForCompany(
       site_visit_scheduling_enabled: DEFAULT_SETTINGS.siteVisitSchedulingEnabled,
       installation_scheduling_enabled:
         DEFAULT_SETTINGS.installationSchedulingEnabled,
-      enable_final_product: DEFAULT_SETTINGS.enableFinalProduct,
+      google_review_link: DEFAULT_SETTINGS.googleReviewLink,
       invoice_profile: EMPTY_INVOICE_PROFILE,
+      invoice_numbering: EMPTY_INVOICE_NUMBERING,
       production_checklist_items: DEFAULT_PRODUCTION_CHECKLIST_ITEMS,
     })
     .select(
-      "site_visit_scheduling_enabled, installation_scheduling_enabled, enable_final_product, invoice_profile, production_checklist_items"
+      "site_visit_scheduling_enabled, installation_scheduling_enabled, google_review_link, invoice_profile, invoice_numbering, production_checklist_items"
     )
     .single();
 
@@ -129,8 +138,10 @@ export async function updateAppSettings(
   const newInstallation =
     settings.installationSchedulingEnabled ??
     current.installationSchedulingEnabled;
-  const newEnableFinalProduct =
-    settings.enableFinalProduct ?? current.enableFinalProduct;
+  const newGoogleReviewLink =
+    settings.googleReviewLink !== undefined
+      ? settings.googleReviewLink.trim()
+      : current.googleReviewLink;
   const newInvoiceProfile = normalizeInvoiceProfile(
     settings.invoiceProfile !== undefined
       ? { ...current.invoiceProfile, ...settings.invoiceProfile, bank: {
@@ -138,6 +149,11 @@ export async function updateAppSettings(
           ...settings.invoiceProfile?.bank,
         } }
       : current.invoiceProfile
+  );
+  const newInvoiceNumbering = normalizeInvoiceNumbering(
+    settings.invoiceNumbering !== undefined
+      ? { ...current.invoiceNumbering, ...settings.invoiceNumbering }
+      : current.invoiceNumbering
   );
   const newProductionChecklistItems = normalizeProductionChecklistItems(
     settings.productionChecklistItems !== undefined
@@ -150,8 +166,9 @@ export async function updateAppSettings(
       company_id: userProfile.company_id,
       site_visit_scheduling_enabled: newSiteVisit,
       installation_scheduling_enabled: newInstallation,
-      enable_final_product: newEnableFinalProduct,
+      google_review_link: newGoogleReviewLink,
       invoice_profile: newInvoiceProfile,
+      invoice_numbering: newInvoiceNumbering,
       production_checklist_items: newProductionChecklistItems,
     },
     { onConflict: "company_id" }
@@ -173,6 +190,14 @@ export async function updateInvoiceProfile(
   profile: InvoiceProfile
 ): Promise<void> {
   await updateAppSettings({ invoiceProfile: normalizeInvoiceProfile(profile) });
+}
+
+export async function updateInvoiceNumbering(
+  numbering: InvoiceNumberingConfig
+): Promise<void> {
+  await updateAppSettings({
+    invoiceNumbering: normalizeInvoiceNumbering(numbering),
+  });
 }
 
 export async function getCompanyDetails(): Promise<CompanyDetails | null> {

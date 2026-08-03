@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyPortalToken } from "@/utils/portal-tokens";
+import { resolvePortalToken } from "@/utils/portal-tokens";
 import { checkRateLimit } from "@/utils/rate-limiter";
 import { cookies } from "next/headers";
-import { createClient } from "@/utils/supabase/server";
-import { isTokenRevoked } from "@/utils/portal-tokens";
 
 const COOKIE_NAME = "portal_session";
 
@@ -15,33 +13,27 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing or invalid token" }, { status: 400 });
   }
 
-  // Rate limit
   const rate = checkRateLimit(`portal-session-${token.slice(0, 16)}`);
   if (!rate.allowed) {
     return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   }
 
-  // Verify HMAC + expiry
-  const payload = verifyPortalToken(token);
+  const payload = await resolvePortalToken(token);
   if (!payload) {
     return NextResponse.json({ error: "Invalid or expired token" }, { status: 401 });
   }
 
-  // Check revocation in DB
-  const cookieStore = await cookies();
-  const supabase = createClient(cookieStore);
-  let isRevoked: boolean;
   try {
-    isRevoked = await isTokenRevoked(supabase, payload.jti);
-  } catch {
-    isRevoked = true;
+    const { assertCustomerTenantAccess } = await import(
+      "@/utils/portal/portalTenantAuth"
+    );
+    await assertCustomerTenantAccess(payload.customerId);
+  } catch (err: any) {
+    const msg = err?.message || "Unauthorized";
+    const status = msg.includes("different client workspace") ? 403 : 401;
+    return NextResponse.json({ error: msg }, { status });
   }
 
-  if (isRevoked) {
-    return NextResponse.json({ error: "Token revoked" }, { status: 403 });
-  }
-
-  // Set session cookie with HttpOnly, Secure, SameSite strict
   const cookieValue = JSON.stringify({
     customerId: payload.customerId,
     orderId: payload.orderId,
@@ -57,7 +49,7 @@ export async function POST(req: NextRequest) {
   res.cookies.set(COOKIE_NAME, cookieValue, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: "lax", // Better for email links
+    sameSite: "lax",
     maxAge: maxAgeSeconds,
     path: "/",
   });
@@ -65,7 +57,6 @@ export async function POST(req: NextRequest) {
   return res;
 }
 
-// GET — validate session cookie and return payload (for client-side checks)
 export async function GET(req: NextRequest) {
   const cookieStore = await cookies();
   const sessionCookie = cookieStore.get(COOKIE_NAME)?.value;
@@ -81,7 +72,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Invalid session" }, { status: 401 });
   }
 
-  // Check expiry
   const now = Math.floor(Date.now() / 1000);
   if (!session.exp || session.exp < now) {
     return NextResponse.json({ error: "Session expired" }, { status: 401 });

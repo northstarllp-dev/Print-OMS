@@ -14,6 +14,7 @@ import {
   type ProductionChecklistItem,
 } from "@/features/settings/productionChecklist";
 import { resolveSiteVisitInstallationAddress } from "@/features/orders/actions/siteVisitMapper";
+import { ProductionMaterialsPanel } from "@/features/inventory/components/ProductionMaterialsPanel";
 
 interface LocationMeasurement {
   id: string;
@@ -169,8 +170,7 @@ export function ProductionModule({
   const mockImage = order.imageMockup || dd.proofUrl;
 
   const handleCheckboxChange = async (key: string) => {
-    if (!canEdit) return;
-    setSaving(true);
+    if (!canEdit || saving) return;
     setAlert(null);
 
     const nextProgress = {
@@ -182,11 +182,12 @@ export function ProductionModule({
       ...buildProductionChecklistUpdate(nextProgress, checklistItems),
     };
 
-    // Optimistically update local state
+    // Optimistically update local state immediately
     setOrder((prev: any) => ({
       ...prev,
       productionDetails: updatedPd
     }));
+    setSaving(true);
 
     try {
       await updateProductionDetails(
@@ -573,6 +574,9 @@ export function ProductionModule({
             )}
           </div>
 
+          {/* MATERIALS CONSUMED + FINAL YIELD */}
+          <ProductionMaterialsPanel orderId={order.id} canEdit={!!canEdit} />
+
         </div>
 
         {/* RIGHT COLUMN: Interactive Fabrication Checklist & Customer Info (1/3 width) */}
@@ -597,8 +601,8 @@ export function ProductionModule({
                 return (
                   <div
                     key={step.id}
-                    onClick={() => canEdit && !saving && handleCheckboxChange(step.id)}
-                    className={`p-4 border rounded-xl flex items-start gap-3 select-none transition-all duration-200 ${
+                    onClick={() => canEdit && handleCheckboxChange(step.id)}
+                    className={`p-4 border rounded-xl flex items-start gap-3 select-none transition-all duration-200 touch-manipulation ${
                       canEdit ? "cursor-pointer" : "cursor-not-allowed opacity-70"
                     } ${
                       isChecked

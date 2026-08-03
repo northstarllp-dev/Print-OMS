@@ -2,20 +2,18 @@
 
 import React from "react";
 import { Link2 } from "lucide-react";
+import { withBasePath } from "@/lib/appBasePath";
+import { copyTextToClipboard } from "@/lib/clipboard";
 
-interface CopyLinkButtonProps {
-  companyId: string;
-}
-
-export function CopyLinkButton({ companyId }: CopyLinkButtonProps) {
+export function CopyLinkButton() {
   const [copied, setCopied] = React.useState(false);
 
   const handleCopy = async () => {
     const base =
       typeof window !== "undefined" ? window.location.origin : "";
-    const shareLink = `${base}/printoms/service-ticket/${companyId}`;
+    const shareLink = `${base}${withBasePath("/service-ticket")}`;
     try {
-      await navigator.clipboard.writeText(shareLink);
+      await copyTextToClipboard(shareLink);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1500);
     } catch {

@@ -1,0 +1,64 @@
+import { notFound } from "next/navigation";
+import { getInvoiceById } from "@/features/invoices/actions/invoiceActions";
+import { InvoiceBuilder } from "@/features/invoices/components/InvoiceBuilder";
+import { getAppSettings } from "@/features/settings/actions/settingsActions";
+import { normalizeInvoiceProfile } from "@/features/quotations/types/invoiceProfile";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
+
+export const metadata = {
+  title: "Invoice | Admin",
+};
+
+async function getActiveProducts() {
+  const cookieStore = await cookies();
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll() {},
+      },
+    }
+  );
+  const { data } = await supabase
+    .from("products")
+    .select("id, product_id, name, category, pricing_type, price_per_sqft, price_per_unit, is_active")
+    .eq("is_active", true)
+    .order("name");
+  return data || [];
+}
+
+export default async function AdminInvoiceDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  const invoice = await getInvoiceById(id);
+  if (!invoice) notFound();
+
+  const [products, settings] = await Promise.all([
+    getActiveProducts(),
+    getAppSettings(),
+  ]);
+  const invoiceProfile = normalizeInvoiceProfile(
+    settings?.invoiceProfile
+  );
+
+  return (
+    <div className="flex-1 bg-slate-50 min-h-screen">
+      <InvoiceBuilder
+        invoice={invoice}
+        products={products}
+        invoiceProfile={invoiceProfile}
+        basePath="/admin/invoices"
+        orderBasePath="/admin/orders"
+        canEdit
+      />
+    </div>
+  );
+}

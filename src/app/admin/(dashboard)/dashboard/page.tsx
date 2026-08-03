@@ -1,9 +1,15 @@
-import { getOrders } from "@/features/orders/actions/orderActions";
-import { getEnquiries, getAdmins } from "@/features/enquiries/actions/enquiryActions";
+// trigger reload
+import { getOrders, flagStalledOrdersAction } from "@/features/orders/actions/orderActions";
+import { getEnquiries, getAdmins, flagStalledEnquiriesAction } from "@/features/enquiries/actions/enquiryActions";
 import { getServiceTickets } from "@/features/service-tickets/actions/serviceTicketActions";
 import { AdminDashboardClient } from "@/features/orders/components/AdminDashboardClient";
 
 export default async function AdminDashboardPage() {
+  await Promise.all([
+    flagStalledOrdersAction().catch(() => ({ flagged: 0 })),
+    flagStalledEnquiriesAction().catch(() => ({ flagged: 0 }))
+  ]);
+
   const [ordersData, enquiriesData, ticketsData, adminsData] = await Promise.all([
     getOrders().catch(() => []),
     getEnquiries().catch(() => []),

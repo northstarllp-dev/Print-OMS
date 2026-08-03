@@ -2,16 +2,13 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   basePath: "/printoms",
-  async headers() {
+  async redirects() {
     return [
       {
-        source: "/sw.js",
-        headers: [
-          {
-            key: "Service-Worker-Allowed",
-            value: "/",
-          },
-        ],
+        source: "/",
+        destination: "/printoms",
+        basePath: false,
+        permanent: true,
       },
     ];
   },

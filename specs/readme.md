@@ -34,12 +34,17 @@ Feature-level specs (same folder):
 | ---- | ---- |
 | Payment milestones | [`specs/payments.md`](./payments.md) |
 | Quotation | [`specs/quotation.md`](./quotation.md) |
+| Invoice | [`specs/invoice.md`](./invoice.md) |
 | Designer workflow | [`specs/designer-workflow.md`](./designer-workflow.md) |
 | Customer approval | [`specs/customer-approval.md`](./customer-approval.md) |
 | Customer portal | [`specs/customer-portal.md`](./customer-portal.md) |
 | Admin dashboard | [`specs/admin-dashboard.md`](./admin-dashboard.md) |
 | Product catalog | [`specs/product-catalog.md`](./product-catalog.md) |
 | Site visit | [`specs/site-visit.md`](./site-visit.md) |
+| Tasks | [`specs/tasks.md`](./tasks.md) |
+| Inventory & warehouse | [`specs/inventory.md`](./inventory.md) |
+| Purchase orders | [`specs/purchase-orders.md`](./purchase-orders.md) |
+| Finance | [`specs/finance.md`](./finance.md) |
 
 ---
 

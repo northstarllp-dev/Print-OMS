@@ -19,14 +19,5 @@ export function createClient(): SupabaseClient {
   if (!browserClient) {
     browserClient = createBrowserClient(supabaseUrl, supabaseKey);
   }
-  if (!authListenerAttached) {
-    authListenerAttached = true;
-    browserClient.auth.onAuthStateChange((_event, session) => {
-      const token = session?.access_token;
-      if (token) {
-        void browserClient!.realtime.setAuth(token);
-      }
-    });
-  }
   return browserClient;
 }

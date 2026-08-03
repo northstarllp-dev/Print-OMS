@@ -1,12 +1,6 @@
-import React from "react";
-import ServiceTicketPublicClient from "./ServiceTicketPublicClient";
+import { redirect } from "next/navigation";
 
-export default async function PublicServiceTicketPage({
-  params,
-}: {
-  params: Promise<{ companyId: string }>;
-}) {
-  const { companyId } = await params;
-  return <ServiceTicketPublicClient companyId={companyId} />;
+/** Old links included a company id; portal is now deploy-scoped. */
+export default async function LegacyPublicServiceTicketPage() {
+  redirect("/service-ticket");
 }
-

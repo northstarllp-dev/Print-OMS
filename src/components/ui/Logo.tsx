@@ -14,16 +14,36 @@ interface LogoProps {
   applyScale?: boolean;
 }
 
-export function Logo({ className = "", forceText = false, width = 200, height = 48, align = "center", applyScale = true }: LogoProps) {
-  const [client, setClient] = useState<ClientConfig | null>(null);
+function tryLoadClientConfig(): ClientConfig | null {
+  try {
+    return loadClientConfig();
+  } catch {
+    return null;
+  }
+}
+
+function logoSrc(logoUrl: string): string {
+  return `/printoms${logoUrl}`;
+}
+
+export function Logo({
+  className = "",
+  forceText = false,
+  width = 200,
+  height = 48,
+  align = "center",
+  applyScale = true,
+}: LogoProps) {
+  // Resolve sync when NEXT_PUBLIC_CLIENT_SLUG is available so loaders show the logo immediately.
+  const [client, setClient] = useState<ClientConfig | null>(() => tryLoadClientConfig());
 
   useEffect(() => {
-    // Only resolve the active client on the client-side to prevent hydration mismatches
-    setClient(loadClientConfig());
-  }, []);
+    if (!client) {
+      setClient(tryLoadClientConfig());
+    }
+  }, [client]);
 
   if (!client) {
-    // Return empty placeholder during SSR to prevent hydration mismatch
     return <div className={`flex items-center ${className}`} style={{ height, width }} />;
   }
 
@@ -31,28 +51,30 @@ export function Logo({ className = "", forceText = false, width = 200, height = 
     const scale = applyScale ? (client.logoScale || 1) : 1;
     const finalWidth = width * scale;
     const finalHeight = height * scale;
+    const src = logoSrc(client.logoUrl);
 
     return (
-      <div 
-        className={`flex items-center ${className}`} 
-        style={{ 
-          width: finalWidth, 
+      <div
+        className={`flex items-center ${className}`}
+        style={{
+          width: finalWidth,
+          height: finalHeight,
           justifyContent: align === "center" ? "center" : align === "right" ? "flex-end" : "flex-start",
-          transition: "all 0.25s cubic-bezier(0.4,0,0.2,1)" 
+          transition: "all 0.25s cubic-bezier(0.4,0,0.2,1)",
         }}
       >
         <img
-          src={`/printoms${client.logoUrl}`}
+          src={src}
           alt={`${client.name} Logo`}
           width={finalWidth}
           height={finalHeight}
           className="object-contain"
           style={{
             maxHeight: finalHeight,
-            maxWidth: "100%",
-            width: "auto",
-            height: "auto",
-            objectPosition: align,
+            maxWidth: finalWidth,
+            width: "100%",
+            height: "100%",
+            objectPosition: align === "center" ? "center" : align,
             transition: "all 0.25s cubic-bezier(0.4,0,0.2,1)",
           }}
         />

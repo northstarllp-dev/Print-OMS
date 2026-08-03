@@ -1,20 +1,15 @@
 import type { OrderStage, StageActor, StagePermission } from "./types";
+import type { RoleStageGrantMapConfig } from "@/config/schema";
+import { clientRegistry } from "@/config/registry";
+import { mergeConfig } from "@/config/mergeConfig";
+import { loadClientConfig } from "@/config/loadClientConfig";
+import { PIPELINE_QUEUE_STAGES, type PipelineQueueStage } from "./staffQueueStages";
+export { PIPELINE_QUEUE_STAGES };
+export type { PipelineQueueStage };
 
-export const PRINTOMS_COMPANY_ID = "11111111-1111-1111-1111-111111111111";
-export const BOARD_COMPANY_ID = "22222222-2222-2222-2222-222222222222";
-
-/**
- * Tenants that use dedicated /production and /installation floor/kiosk portals.
- * All other staff (including production/installation grant holders) use /staff/login.
- */
-export const TENANT_USES_FLOOR_PORTALS: Record<string, boolean> = {
-  [PRINTOMS_COMPANY_ID]: true,
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Grant matrix — per stage { canView, canEdit }.
-// Sidebar queues derive from canEdit; order-timeline navigation uses canView.
-// ─────────────────────────────────────────────────────────────────────────────
+function isPipelineNavStage(s: OrderStage): s is PipelineQueueStage {
+  return (PIPELINE_QUEUE_STAGES as readonly string[]).includes(s);
+}
 
 export type RoleStageGrantMap = Partial<Record<OrderStage, StagePermission>>;
 
@@ -25,51 +20,69 @@ function edit(...stages: OrderStage[]): RoleStageGrantMap {
   return map;
 }
 
-/** Sugar for "view-only on these stages". */
-function view(...stages: OrderStage[]): RoleStageGrantMap {
-  const map: RoleStageGrantMap = {};
-  for (const s of stages) map[s] = { canView: true, canEdit: false };
-  return map;
-}
-
-/** Combine multiple partial maps (later ones override earlier). */
-function merge(...maps: RoleStageGrantMap[]): RoleStageGrantMap {
-  return Object.assign({}, ...maps);
-}
-
 /**
  * Default stage grants by staff_role. Used when no tenant-specific override
- * exists in TENANT_ROLE_STAGE_GRANTS for the actor's company_id.
+ * exists for the actor's company_id.
  */
 export const DEFAULT_STAGE_GRANTS_BY_ROLE: Record<string, RoleStageGrantMap> = {
   Production: edit("production", "service_tickets"),
   Installation: edit("site_visit", "installation"),
   Designer: edit("site_visit", "design"),
-  Marketer: edit("site_visit", "quotation"),
+  Marketer: edit("enquiry", "site_visit", "quotation", "invoice"),
 };
 
-/**
- * Per-tenant stage grant overrides, keyed by company_id → staff_role → matrix.
- */
-export const TENANT_ROLE_STAGE_GRANTS: Record<string, Record<string, RoleStageGrantMap>> = {
-  [PRINTOMS_COMPANY_ID]: {
-    Designer: merge(view("site_visit"), edit("design", "quotation")),
-    Production: merge(view("site_visit"), edit("production", "service_tickets")),
-    Installation: edit("installation"),
-  },
-  [BOARD_COMPANY_ID]: {
-    Designer: merge(view("site_visit"), edit("design", "quotation")),
-    "Production & Service": merge(view("site_visit"), edit("production", "service_tickets")),
-    "Recce & Installation": edit("site_visit", "installation"),
-  },
-};
+function toRoleMap(
+  cfg?: RoleStageGrantMapConfig
+): RoleStageGrantMap | undefined {
+  if (!cfg) return undefined;
+  return cfg as RoleStageGrantMap;
+}
+
+/** company_id → staff_role → grant map, built from all registered clients */
+function buildTenantRoleGrants(): Record<string, Record<string, RoleStageGrantMap>> {
+  const out: Record<string, Record<string, RoleStageGrantMap>> = {};
+  for (const partial of Object.values(clientRegistry)) {
+    const full = mergeConfig(partial);
+    if (!full.companyId || !full.stageGrantsByRole) continue;
+    const roleMap: Record<string, RoleStageGrantMap> = {};
+    for (const [role, grants] of Object.entries(full.stageGrantsByRole)) {
+      const mapped = toRoleMap(grants);
+      if (mapped) roleMap[role] = mapped;
+    }
+    out[full.companyId] = roleMap;
+  }
+  return out;
+}
+
+/** company_id → uses floor portals */
+function buildFloorPortalMap(): Record<string, boolean> {
+  const out: Record<string, boolean> = {};
+  for (const partial of Object.values(clientRegistry)) {
+    const full = mergeConfig(partial);
+    if (!full.companyId) continue;
+    out[full.companyId] = full.usesFloorPortals === true;
+  }
+  return out;
+}
+
+const TENANT_ROLE_STAGE_GRANTS = buildTenantRoleGrants();
+const TENANT_USES_FLOOR_PORTALS = buildFloorPortalMap();
 
 export function tenantUsesFloorPortals(actor: StageActor): boolean {
   if (!actor.company_id) return false;
   return TENANT_USES_FLOOR_PORTALS[actor.company_id] === true;
 }
 
-const ALL_STAGES: OrderStage[] = ["site_visit", "quotation", "design", "production", "installation", "service_tickets"];
+const ALL_STAGES: OrderStage[] = [
+  "enquiry",
+  "site_visit",
+  "quotation",
+  "invoice",
+  "design",
+  "production",
+  "installation",
+  "service_tickets",
+];
 
 function adminGrantMap(): RoleStageGrantMap {
   const map: RoleStageGrantMap = {};
@@ -82,12 +95,17 @@ export function resolveRoleGrantMap(actor: StageActor): RoleStageGrantMap {
   if (actor.role === "admin") return adminGrantMap();
   if (actor.role !== "staff") return {};
   const staffRole = actor.staff_role ?? "";
-  const tenantGrants = actor.company_id ? TENANT_ROLE_STAGE_GRANTS[actor.company_id] : undefined;
+  const tenantGrants = actor.company_id
+    ? TENANT_ROLE_STAGE_GRANTS[actor.company_id]
+    : undefined;
   return tenantGrants?.[staffRole] ?? DEFAULT_STAGE_GRANTS_BY_ROLE[staffRole] ?? {};
 }
 
 /** Resolve the grant for a single stage (defaults to no access when omitted). */
-export function resolveStageGrant(actor: StageActor, stage: OrderStage): StagePermission {
+export function resolveStageGrant(
+  actor: StageActor,
+  stage: OrderStage
+): StagePermission {
   const map = resolveRoleGrantMap(actor);
   return map[stage] ?? { canView: false, canEdit: false };
 }
@@ -108,7 +126,18 @@ export function getViewableStages(actor: StageActor): OrderStage[] {
 export function getStaffRolesForTenant(companyId?: string | null): string[] {
   if (companyId) {
     const tenantMap = TENANT_ROLE_STAGE_GRANTS[companyId];
-    if (tenantMap) return Object.keys(tenantMap);
+    if (tenantMap && Object.keys(tenantMap).length > 0) {
+      return Object.keys(tenantMap);
+    }
+  }
+  // Fall back to deploy client's roles, then defaults
+  try {
+    const deploy = loadClientConfig();
+    if (deploy.stageGrantsByRole && Object.keys(deploy.stageGrantsByRole).length > 0) {
+      return Object.keys(deploy.stageGrantsByRole);
+    }
+  } catch {
+    /* ignore */
   }
   return Object.keys(DEFAULT_STAGE_GRANTS_BY_ROLE);
 }
@@ -141,21 +170,43 @@ export function canAccessInstallationPortal(actor: StageActor): boolean {
   return false;
 }
 
+/** Pipeline stages collapsed into a single My Orders nav item. */
+export const MY_ORDERS_NAV: StaffNavItem = {
+  href: "/staff/my-orders",
+  label: "My Orders",
+  icon: "orders",
+};
+
+/** Editable pipeline stages for My Orders tabs (subset of grants). */
+export function getMyOrdersStages(actor: StageActor): PipelineQueueStage[] {
+  return getEditableStages(actor).filter(isPipelineNavStage);
+}
+
 /** Post-login redirect for staff — first grant-based queue tab. */
 export function getStaffHomePath(actor: StageActor): string {
   if (actor.role === "admin") return "/admin/dashboard";
   const items = getNavItemsForActor(actor);
-  const firstQueue = items.find((item) => item.href !== "/staff/settings");
-  return firstQueue?.href ?? "/staff/orders";
+  const myOrders = items.find((item) => item.href === MY_ORDERS_NAV.href);
+  if (myOrders) return myOrders.href;
+  const firstQueue = items.find(
+    (item) =>
+      item.href !== "/staff/settings" &&
+      item.href !== "/staff/tasks" &&
+      item.href !== "/staff/calendar"
+  );
+  return firstQueue?.href ?? "/staff/my-orders";
 }
 
 export type StaffNavIcon =
   | "orders"
+  | "invoice"
+  | "enquiry"
   | "site_visit"
   | "design"
   | "production"
   | "installation"
   | "support"
+  | "tasks"
   | "calendar"
   | "settings";
 
@@ -168,6 +219,11 @@ export interface StaffNavItem {
 }
 
 const STAGE_NAV: Record<OrderStage, StaffNavItem> = {
+  enquiry: {
+    href: "/staff/enquiries",
+    label: "Enquiries",
+    icon: "enquiry",
+  },
   site_visit: {
     href: "/staff/site-visit",
     label: "Site Visit",
@@ -179,6 +235,11 @@ const STAGE_NAV: Record<OrderStage, StaffNavItem> = {
     label: "Quotations",
     icon: "orders",
     orderDetailEntryStage: "quotation",
+  },
+  invoice: {
+    href: "/staff/invoices",
+    label: "Invoices",
+    icon: "invoice",
   },
   design: {
     href: "/staff/design",
@@ -207,40 +268,60 @@ const STAGE_NAV: Record<OrderStage, StaffNavItem> = {
 };
 
 const NAV_STAGE_ORDER: OrderStage[] = [
+  "enquiry",
   "site_visit",
   "quotation",
+  "invoice",
   "design",
   "production",
   "installation",
   "service_tickets",
 ];
 
-/** Sidebar tabs derived from tenant stage grants (canEdit stages only). */
+/** Sidebar tabs derived from tenant stage grants (canEdit stages only; enquiry also shows for canView). */
 export function getNavItemsForActor(actor: StageActor): StaffNavItem[] {
-  const stages = getEditableStages(actor);
+  const editable = getEditableStages(actor);
+  const viewable = getViewableStages(actor);
   const items: StaffNavItem[] = [];
+  const hasMyOrders = editable.some(isPipelineNavStage);
+  let myOrdersInserted = false;
 
   for (const stage of NAV_STAGE_ORDER) {
-    if (stages.includes(stage)) {
+    if (isPipelineNavStage(stage)) {
+      if (hasMyOrders && !myOrdersInserted) {
+        items.push({ ...MY_ORDERS_NAV });
+        myOrdersInserted = true;
+      }
+      continue;
+    }
+
+    const show =
+      stage === "enquiry"
+        ? viewable.includes(stage) || editable.includes(stage)
+        : editable.includes(stage);
+    if (show) {
       items.push({ ...STAGE_NAV[stage] });
     }
   }
 
   if (items.length === 0) {
-    items.push({ ...STAGE_NAV.quotation });
+    items.push({ ...MY_ORDERS_NAV });
   }
 
+  items.push({ href: "/staff/tasks", label: "My Tasks", icon: "tasks" });
   items.push({ href: "/staff/calendar", label: "Calendar", icon: "calendar" });
   items.push({ href: "/staff/settings", label: "Settings", icon: "settings" });
   return items;
 }
 
 const BACK_HREF_BY_STAGE: Record<OrderStage, string> = {
-  site_visit: "/staff/site-visit",
-  quotation: "/staff/orders",
-  design: "/staff/design",
-  production: "/staff/production",
-  installation: "/staff/installation",
+  enquiry: "/staff/enquiries",
+  site_visit: "/staff/my-orders?stage=site_visit",
+  quotation: "/staff/my-orders?stage=quotation",
+  invoice: "/staff/invoices",
+  design: "/staff/my-orders?stage=design",
+  production: "/staff/my-orders?stage=production",
+  installation: "/staff/my-orders?stage=installation",
   service_tickets: "/staff/service-tickets",
 };
 
@@ -248,8 +329,17 @@ export function getStaffOrderBackHref(entryStage?: OrderStage | null): string {
   if (entryStage && BACK_HREF_BY_STAGE[entryStage]) {
     return BACK_HREF_BY_STAGE[entryStage];
   }
-  return "/staff/orders";
+  return "/staff/my-orders";
 }
+
+/** Map legacy queue URL slug → My Orders stage query. */
+export const QUEUE_SLUG_TO_STAGE: Record<string, OrderStage> = {
+  orders: "quotation",
+  "site-visit": "site_visit",
+  design: "design",
+  production: "production",
+  installation: "installation",
+};
 
 export function parseOrderStage(value?: string | null): OrderStage | undefined {
   if (!value) return undefined;

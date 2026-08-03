@@ -6,7 +6,7 @@ import { OverlayPortal } from "@/components/ui/OverlayPortal";
 import {
   Plus, Trash2, Search, Check, ChevronDown, Info, X,
   ClipboardList, IndianRupee, Loader2, AlertCircle, Package, Save, Sparkles, Shield,
-  Eye, ArrowLeft
+  Eye, ArrowLeft, MessageSquare
 } from "lucide-react";
 import {
   upsertQuotation,
@@ -20,6 +20,10 @@ import {
   normalizePricingType,
   type PricingType,
 } from "@/features/quotations/utils/lineAmount";
+import {
+  getProductPriceForType,
+  resolvePricingForMeasurement,
+} from "@/features/quotations/utils/conditionalProductPricing";
 import { createClient } from "@/utils/supabase/client";
 import { ensureRealtimeAuth } from "@/utils/supabase/ensureRealtimeAuth";
 import type { StagePermission } from "@/features/orders/workspace/shared/types";
@@ -41,6 +45,7 @@ interface Product {
   is_active: boolean;
   price_per_sqft?: number | null;
   price_per_unit?: number | null;
+  unit_price_max_sqft?: number | null;
   images?: string[];
 }
 
@@ -115,6 +120,14 @@ interface QuotationModuleProps {
   currentUserRole?: string;
   currentUserName?: string;
   onRequestAdvance?: () => void;
+  /** Opens the admin customer-update message popup (copy / wa.me / mailto). */
+  onCustomerMessage?: (
+    key:
+      | "quotation_ready"
+      | "revised_quotation_ready"
+      | "quotation_follow_up"
+      | "final_quotation_shared"
+  ) => void;
   /** DB-shaped quotation row from parent realtime (when externalRealtime). */
   realtimeQuotation?: Record<string, unknown> | null;
   /** Parent (OrderWorksheetModal) owns the quotations realtime channel. */
@@ -145,30 +158,6 @@ function newItem(gstRate: number = 18): LineItem {
   };
 }
 
-function resolveInitialPricing(p: Product): { pricingType: PricingType; price: number } {
-  const ut = (p.pricing_type || "").toLowerCase().trim();
-
-  if (ut === "per sq.ft" || ut === "per sqft" || ut === "sqft" || ut === "per_sqft") {
-    return { pricingType: "per_sqft", price: p.price_per_sqft ?? 0 };
-  }
-  if (ut === "per unit" || ut === "per_unit" || ut === "unit" || ut === "nos") {
-    return { pricingType: "per_unit", price: p.price_per_unit ?? 0 };
-  }
-  // Legacy running-ft products fall back to unit pricing
-  if (p.price_per_sqft != null && p.price_per_sqft > 0) {
-    return { pricingType: "per_sqft", price: p.price_per_sqft };
-  }
-  if (p.price_per_unit != null && p.price_per_unit > 0) {
-    return { pricingType: "per_unit", price: p.price_per_unit };
-  }
-  return { pricingType: "per_unit", price: 0 };
-}
-
-function getProductPriceForType(p: Product, type: PricingType): number {
-  if (type === "per_sqft") return p.price_per_sqft ?? 0;
-  return p.price_per_unit ?? 0;
-}
-
 function normalizeSection(section: SignageSection): SignageSection {
   return {
     ...section,
@@ -186,12 +175,15 @@ function ProductSearch({
   onSelect,
   onChange,
   disabled,
+  measurement = 1,
 }: {
   value: string;
   products: Product[];
   onSelect: (p: Product) => void;
   onChange: (val: string) => void;
   disabled?: boolean;
+  /** Current line/site measurement — drives dual-price preview (≤10 unit, >10 sqft). */
+  measurement?: number;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState(value);
@@ -265,7 +257,7 @@ function ProductSearch({
           }}
         >
           {visibleResults.map((p) => {
-            const resolved = resolveInitialPricing(p);
+            const resolved = resolvePricingForMeasurement(p, measurement);
             return (
               <button
                 key={p.id}
@@ -389,6 +381,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
   initialQuotation,
   siteVisitItems = [],
   onRequestAdvance,
+  onCustomerMessage,
   externalRealtime = false,
   realtimeQuotation = null,
   adminOverrideUnlocked,
@@ -681,18 +674,18 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
   }
 
   function selectProduct(sectionId: string, lineId: string, p: Product) {
-    const resolved = resolveInitialPricing(p);
     const siteVisitItem = siteVisitItems.find((sv) => sv.id === sectionId);
     const defaultMeasurement =
       siteVisitItem?.width && siteVisitItem?.height
         ? siteVisitItem.width * siteVisitItem.height
         : 1;
+    const resolved = resolvePricingForMeasurement(p, defaultMeasurement);
 
     updateLine(sectionId, lineId, {
       productId: p.id,
       description: p.name,
       pricingType: resolved.pricingType,
-      unit: resolved.pricingType === "per_sqft" ? "sqft" : "nos",
+      unit: resolved.unit,
       unitPrice: resolved.price,
       quantity: defaultMeasurement,
       totalSqFt: defaultMeasurement,
@@ -701,10 +694,26 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
 
   function setLineMeasurement(sectionId: string, lineId: string, value: number) {
     const measurement = value > 0 ? value : 0;
-    updateLine(sectionId, lineId, {
-      quantity: measurement,
-      totalSqFt: measurement,
-    });
+    updateSection(sectionId, (sec) => ({
+      ...sec,
+      lines: sec.lines.map((l) => {
+        if (l.id !== lineId) return l;
+        const patch: Partial<LineItem> = {
+          quantity: measurement,
+          totalSqFt: measurement,
+        };
+        if (l.productId) {
+          const p = products.find((prod) => prod.id === l.productId);
+          if (p) {
+            const resolved = resolvePricingForMeasurement(p, measurement);
+            patch.pricingType = resolved.pricingType;
+            patch.unit = resolved.unit;
+            patch.unitPrice = resolved.price;
+          }
+        }
+        return { ...l, ...patch };
+      }),
+    }));
   }
 
   // ── Save/Send Actions ──
@@ -746,11 +755,14 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
         shipping,
       });
       if (saved.quotation_id) setQuotationId(saved.quotation_id);
-      await sendQuotationToCustomer(saved.id, actorName);
+      const { isRevisionResend } = await sendQuotationToCustomer(saved.id, actorName);
       setStatus("Sent");
       isDirtyRef.current = false;
       setSaveMsg({ text: "Quotation sent to customer successfully!", ok: true });
       setTimeout(() => setSaveMsg(null), 4000);
+      onCustomerMessage?.(
+        isRevisionResend ? "revised_quotation_ready" : "quotation_ready"
+      );
     } catch (err: any) {
       setSaveMsg({ text: err.message || "Send failed", ok: false });
     } finally {
@@ -819,11 +831,33 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
             Preview / Print
           </button>
 
-          <span className={`text-[10px] px-2.5 py-1 rounded-full font-black uppercase border ${status === "Approved" ? "bg-emerald-50 border-emerald-200 text-emerald-700" :
-              status === "Sent" ? "bg-blue-50 border-blue-200 text-blue-700" :
-                status === "Rejected" ? "bg-rose-50 border-rose-200 text-rose-700" :
-                  "bg-slate-100 border-slate-200 text-slate-600"
-            }`}>
+          {onCustomerMessage && status !== "Draft" && (
+            <>
+              <button
+                type="button"
+                onClick={() => onCustomerMessage("quotation_follow_up")}
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-bold text-amber-700 hover:bg-amber-100 shadow-sm w-full sm:w-auto"
+              >
+                <MessageSquare size={13} />
+                Follow-Up Msg
+              </button>
+              <button
+                type="button"
+                onClick={() => onCustomerMessage("final_quotation_shared")}
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] font-bold text-emerald-700 hover:bg-emerald-100 shadow-sm w-full sm:w-auto"
+              >
+                <MessageSquare size={13} />
+                Final Quote Msg
+              </button>
+            </>
+          )}
+
+          <span className={`text-xs px-3 py-1.5 rounded-md font-black uppercase shadow-sm ${
+            status === "Approved" ? "bg-emerald-600 text-white" :
+            status === "Sent" ? "bg-blue-600 text-white" :
+            status === "Rejected" ? "bg-rose-600 text-white" :
+            "bg-slate-600 text-white"
+          }`}>
             {status}
           </span>
         </div>
@@ -953,6 +987,17 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                             value={line.description}
                             products={products}
                             disabled={isLocked}
+                            measurement={
+                              getLineMeasurement(line) ||
+                              (() => {
+                                const sv = siteVisitItems.find(
+                                  (item) => item.id === section.siteVisitItemId
+                                );
+                                return sv?.width && sv?.height
+                                  ? sv.width * sv.height
+                                  : 1;
+                              })()
+                            }
                             onSelect={(p) => selectProduct(section.siteVisitItemId, line.id, p)}
                             onChange={(val) =>
                               updateLine(section.siteVisitItemId, line.id, {
@@ -1183,9 +1228,9 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
               value={terms}
               disabled={isLocked}
               onChange={(e) => { markDirty(); setTerms(e.target.value); }}
-              rows={10}
+              rows={4}
               placeholder="Terms and conditions - late fees, payment methods, delivery schedule"
-              className={`${inputCls} w-full min-h-[280px] px-3.5 py-2.5 resize-y bg-white font-medium`}
+              className={`${inputCls} w-full px-3.5 py-2.5 resize-none bg-white font-medium`}
             />
           </div>
         </div>
@@ -1553,6 +1598,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
       {showSendConfirm && (
         <QuotationConfirmModal
           status={status}
+          isRevisionResend={status === "Rejected" || !!rejectionReason.trim()}
           subtotal={subtotal}
           discount={effectiveDiscount}
           tax={tax}
@@ -1728,8 +1774,8 @@ function ProductInfoModal({ product, onClose }: { product: Product; onClose: () 
 // ─────────────────────────────────────────────────────────────────────────────
 // Quotation Confirm Modal Component
 // ─────────────────────────────────────────────────────────────────────────────
-function getSendConfirmSubtitle(status: string): string {
-  if (status === "Rejected") {
+function getSendConfirmSubtitle(status: string, isRevisionResend: boolean): string {
+  if (isRevisionResend || status === "Rejected") {
     return "Review revised totals before resending to the customer.";
   }
   if (status === "Sent") {
@@ -1740,6 +1786,7 @@ function getSendConfirmSubtitle(status: string): string {
 
 function QuotationConfirmModal({
   status,
+  isRevisionResend = false,
   subtotal,
   discount,
   tax,
@@ -1751,6 +1798,7 @@ function QuotationConfirmModal({
   onClose,
 }: {
   status: string;
+  isRevisionResend?: boolean;
   subtotal: number;
   discount: number;
   tax: number;
@@ -1767,7 +1815,10 @@ function QuotationConfirmModal({
   onConfirm: () => void;
   onClose: () => void;
 }) {
-  const confirmLabel = status === "Rejected" ? "Resend to Customer" : "Send to Customer";
+  const confirmLabel =
+    isRevisionResend || status === "Rejected"
+      ? "Resend to Customer"
+      : "Send to Customer";
 
   return (
     <OverlayPortal>
@@ -1801,7 +1852,7 @@ function QuotationConfirmModal({
               Confirm Quotation
             </h4>
             <span style={{ fontSize: "10px", color: "#64748b", fontWeight: 600, display: "block", marginTop: "2px" }}>
-              {getSendConfirmSubtitle(status)}
+              {getSendConfirmSubtitle(status, isRevisionResend)}
             </span>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 shrink-0 p-1" aria-label="Close">

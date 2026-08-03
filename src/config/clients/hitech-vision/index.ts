@@ -1,10 +1,17 @@
 import { PrintOMSClientConfig } from "../../schema";
 
+const edit = (...stages: Array<"enquiry" | "site_visit" | "quotation" | "invoice" | "design" | "production" | "installation" | "service_tickets">) => {
+  const map: NonNullable<PrintOMSClientConfig["stageGrantsByRole"]>[string] = {};
+  for (const s of stages) map[s] = { canView: true, canEdit: true };
+  return map;
+};
+
 export const hitechVisionConfig: Partial<PrintOMSClientConfig> = {
   id: "hitech-vision",
   name: "Hitech Vision",
+  companyId: "44444444-4444-4444-4444-444444444444",
   colors: {
-    primary: "#0ea5e9", // Typical tech blue
+    primary: "#0ea5e9",
     onPrimary: "#ffffff",
     primaryContainer: "#e0f2fe",
     onPrimaryContainer: "#0369a1",
@@ -20,10 +27,19 @@ export const hitechVisionConfig: Partial<PrintOMSClientConfig> = {
     sidebarActiveText: "#ffffff",
     sidebarAccent: "#38bdf8",
   },
-  logoUrl: null, // Update to actual logo if available
+  logoUrl: null,
   faviconUrl: null,
   loadingText: "HITECH VISION",
   features: {
     enableAdminAssignment: false,
+    needsAttentionAfterDays: 6,
   },
+  usesFloorPortals: false,
+  stageGrantsByRole: {
+    Production: edit("production", "service_tickets"),
+    Installation: edit("site_visit", "installation"),
+    Designer: edit("site_visit", "design"),
+    Marketer: edit("enquiry", "site_visit", "quotation", "invoice"),
+  },
+  whatsappTemplatePrefix: "hitech_",
 };

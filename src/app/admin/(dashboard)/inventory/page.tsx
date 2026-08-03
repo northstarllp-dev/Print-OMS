@@ -1,4 +1,4 @@
-import { Boxes } from "lucide-react";
+import { Package } from "lucide-react";
 import { ComingSoonPage } from "@/features/admin/components/ComingSoonPage";
 
 export const metadata = {
@@ -8,9 +8,9 @@ export const metadata = {
 export default function AdminInventoryPage() {
   return (
     <ComingSoonPage
-      title="Inventory & Vendors"
-      description="Manage materials, stock levels, and supplier status tied to production jobs."
-      icon={Boxes}
+      title="Inventory"
+      description="This section is under development and is not available for use yet. Stock balances, warehouses, and movements will open here once the module is ready."
+      icon={Package}
     />
   );
 }

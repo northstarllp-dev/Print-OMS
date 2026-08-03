@@ -39,7 +39,6 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // Authenticate caller (must be staff/admin)
   const supabase = await getSupabase();
   const {
     data: { user },
@@ -49,22 +48,60 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const host = request.headers.get("host") || "localhost:3000";
-  const protocol = request.headers.get("x-forwarded-proto") || (host.includes("localhost") ? "http" : "https");
-  const requestBaseUrl = `${protocol}://${host}`;
+  // Resolve to UUIDs so portal tokens never store ambiguous friendly IDs (A004, etc.)
+  let resolvedCustomerUuid: string;
+  let resolvedOrderUuid: string | undefined;
 
-  let resolvedCustomerId = customerId;
-  let resolvedOrderId = orderId;
+  try {
+    const { assertCustomerTenantAccess, assertOrderTenantAccess } = await import(
+      "@/utils/portal/portalTenantAuth"
+    );
+    const { getCurrentUser } = await import(
+      "@/features/auth/actions/authActions"
+    );
+    const { loadClientConfig } = await import("@/config/loadClientConfig");
+    const profile = await getCurrentUser();
+    if (!profile) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const config = loadClientConfig();
+    if (profile.company_id && profile.company_id !== config.companyId) {
+      return NextResponse.json(
+        { error: "Unauthorized access. This account belongs to a different client workspace." },
+        { status: 403 }
+      );
+    }
 
-  // We intentionally use UUIDs for resolvedCustomerId and resolvedOrderId if provided,
-  // to prevent ambiguous multi-tenant collisions on friendly IDs like 'A002'.
+    const customer = await assertCustomerTenantAccess(customerId);
+    resolvedCustomerUuid = customer.id;
 
-  // Generate a new HMAC-signed portal token and store it for revocation tracking
+    if (orderId) {
+      const order = await assertOrderTenantAccess(orderId);
+      if (order.customer_id && order.customer_id !== customer.id) {
+        return NextResponse.json(
+          { error: "Order does not belong to this customer." },
+          { status: 403 }
+        );
+      }
+      resolvedOrderUuid = order.id;
+    }
+  } catch (err: any) {
+    return NextResponse.json(
+      { error: err?.message || "Unauthorized" },
+      { status: 403 }
+    );
+  }
+
+  const { getRequestBaseUrl } = await import(
+    "@/features/notifications/whatsapp/requestBaseUrl"
+  );
+  const requestBaseUrl = await getRequestBaseUrl();
+
   try {
     const { token, url } = await generateAndStorePortalToken(
       supabase,
-      resolvedCustomerId,
-      resolvedOrderId || undefined,
+      resolvedCustomerUuid,
+      resolvedOrderUuid,
       { expiresInDays: 30, createdBy: "api", baseUrl: requestBaseUrl }
     );
     return NextResponse.json({ token, url });

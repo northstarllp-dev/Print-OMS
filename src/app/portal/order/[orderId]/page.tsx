@@ -1,11 +1,7 @@
-import { cookies } from "next/headers";
-import { createClient } from "@/utils/supabase/server";
+import { headers } from "next/headers";
 import { createAdminClient } from "@/utils/supabase/admin";
-import {
-  verifyPortalToken,
-  isTokenRevoked,
-} from "@/utils/portal-tokens";
-import { checkRateLimit } from "@/utils/rate-limiter";
+import { resolvePortalToken } from "@/utils/portal-tokens";
+import { checkRateLimit, clientIpFromHeaders } from "@/utils/rate-limiter";
 import { Info, Clock, CheckCircle, Check, Loader2, PlayCircle, MapPin, Search } from "lucide-react";
 import { mapSiteVisitFromDb, mapSiteVisitMeasurementFromDb } from "@/features/orders/actions/siteVisitMapper";
 import { mapDesignFromDb } from "@/features/designs/actions/designMapper";
@@ -13,6 +9,7 @@ import { toCustomerVisibleQuotation } from "@/features/quotations/utils/quotatio
 import { toCustomerVisibleDesign } from "@/features/designs/utils/customerVisibleDesign";
 import { OrderDetailClient } from "./OrderDetailClient";
 import { normalizeInvoiceProfile } from "@/features/quotations/types/invoiceProfile";
+import { loadClientConfig } from "@/config/loadClientConfig";
 import React from "react";
 
 export const dynamic = "force-dynamic";
@@ -37,20 +34,21 @@ export default async function OrderDetailPage({
     );
   }
 
-  // ── Rate limiting ──
-  const clientIp = "anonymous";
-  const rate = checkRateLimit(`portal-order-${clientIp}`);
+  // ── Rate limiting (per IP + token — never a shared "anonymous" bucket) ──
+  const headersList = await headers();
+  const clientIp = clientIpFromHeaders(headersList);
+  const rate = checkRateLimit(`portal-order-${clientIp}-${tokenParam.slice(0, 16)}`);
   if (!rate.allowed) {
     return (
       <PortalError
         title="Too Many Requests"
-        message="Please wait a few minutes and try again."
+        message={`Please wait ${rate.retryAfter ?? 30} seconds and try again.`}
       />
     );
   }
 
-  // ── Verify HMAC + expiry ──
-  const payload = verifyPortalToken(tokenParam);
+  // ── Resolve short opaque token (or legacy HMAC) + expiry / revocation ──
+  const payload = await resolvePortalToken(tokenParam);
   if (!payload) {
     return (
       <PortalError
@@ -60,9 +58,6 @@ export default async function OrderDetailPage({
     );
   }
 
-  // ── DB Revocation check ──
-  const cookieStore = await cookies();
-  const supabase = createClient(cookieStore);
   const admin = createAdminClient();
 
   if (!admin) {
@@ -74,50 +69,81 @@ export default async function OrderDetailPage({
     );
   }
 
-  let isRevoked: boolean;
+  // ── Fetch customer (friendly IDs collide across tenants) ──
+  let customerData: any = null;
   try {
-    isRevoked = await isTokenRevoked(admin, payload.jti);
+    const { assertCustomerTenantAccess } = await import(
+      "@/utils/portal/portalTenantAuth"
+    );
+    const tenantCustomer = await assertCustomerTenantAccess(payload.customerId);
+    const { data, error } = await admin
+      .from("customers")
+      .select("*")
+      .eq("id", tenantCustomer.id)
+      .single();
+    if (error || !data) {
+      return (
+        <PortalError
+          title="Customer Not Found"
+          message={`Could not locate a customer profile for ID ${payload.customerId}.`}
+        />
+      );
+    }
+    customerData = data;
   } catch {
-    isRevoked = true;
-  }
-
-  if (isRevoked) {
     return (
       <PortalError
-        title="Access Revoked"
-        message="This portal link has been revoked. Please contact Printoms support for a new link."
+        title="Wrong Workspace"
+        message="Unauthorized access. This portal link belongs to a different client workspace."
       />
     );
   }
 
-  // ── Fetch data ──
-  const { data: customerData, error: customerError } = await admin
-    .from("customers")
-    .select("*")
-    .eq("customer_id", payload.customerId)
-    .single();
-
-  if (customerError || !customerData) {
-    return (
-      <PortalError
-        title="Customer Not Found"
-        message={`Could not locate customer profile for ID ${payload.customerId}.`}
-      />
-    );
-  }
-
-  // Fetch the specific order
-  const { data: orderData, error: orderError } = await admin
-    .from("orders")
-    .select("*, site_visits(*, site_visit_measurements(*)), installations(*), productions(*), designs(*)")
-    .eq("id", payload.orderId)
-    .single();
-
-  if (orderError || !orderData) {
+  // Fetch the specific order — prefer route param, then token orderId; scope by tenant
+  const orderRef = orderId || payload.orderId;
+  if (!orderRef) {
     return (
       <PortalError
         title="Order Not Found"
-        message={`Could not locate order with ID ${orderId}.`}
+        message="This portal link is missing an order reference."
+      />
+    );
+  }
+
+  let orderData: Record<string, any> | null = null;
+  try {
+    const { assertOrderTenantAccess } = await import(
+      "@/utils/portal/portalTenantAuth"
+    );
+    const tenantOrder = await assertOrderTenantAccess(orderRef);
+    const { data, error } = await admin
+      .from("orders")
+      .select("*, site_visits(*, site_visit_measurements(*)), installations(*), productions(*), designs(*)")
+      .eq("id", tenantOrder.id)
+      .single();
+    if (error || !data) {
+      return (
+        <PortalError
+          title="Order Not Found"
+          message={`Could not locate order with ID ${orderId}.`}
+        />
+      );
+    }
+    orderData = data;
+  } catch {
+    return (
+      <PortalError
+        title="Wrong Workspace"
+        message="Unauthorized access. This portal link belongs to a different client workspace."
+      />
+    );
+  }
+
+  if (!customerData || !orderData) {
+    return (
+      <PortalError
+        title="Access Denied"
+        message="Unable to load this portal order."
       />
     );
   }
@@ -156,6 +182,28 @@ export default async function OrderDetailPage({
     createdAt: quotationData.created_at as string | undefined,
     updatedAt: quotationData.updated_at as string | undefined,
   } : null;
+
+  const { data: invoiceRow } = await admin
+    .from("invoices")
+    .select("*")
+    .eq("order_id", orderData.id)
+    .maybeSingle();
+  const invoiceDetails = invoiceRow
+    ? {
+        invoiceId: invoiceRow.invoice_id as string,
+        status: invoiceRow.status as string,
+        invoiceDate: invoiceRow.invoice_date as string | null,
+        dueDate: invoiceRow.due_date as string | null,
+        signageOptions: invoiceRow.signage_options || [],
+        discount: Number(invoiceRow.discount || 0),
+        shipping: Number(invoiceRow.shipping || 0),
+        subtotal: Number(invoiceRow.subtotal || 0),
+        tax: Number(invoiceRow.tax || 0),
+        grandTotal: Number(invoiceRow.grand_total || 0),
+        notes: invoiceRow.notes as string | null,
+        terms: invoiceRow.terms as string | null,
+      }
+    : null;
 
   // Find the site visit for this order
   const { data: sv } = await admin
@@ -210,6 +258,7 @@ export default async function OrderDetailPage({
         : (orderData.site_visits || null)
     ),
     quoteDetails,
+    invoiceDetails,
     design: toCustomerVisibleDesign(
       Array.isArray(orderData.designs) && orderData.designs.length > 0
         ? mapDesignFromDb(orderData.designs[0])
@@ -304,7 +353,7 @@ function PortalError({ title, message }: { title: string; message: string }) {
         </p>
         <div style={{ marginTop: 32 }}>
           <p style={{ fontSize: 12, color: "#737780", margin: 0, fontWeight: 700 }}>
-            PRINTOMS Signage Solutions
+            {loadClientConfig().name} Signage Solutions
           </p>
         </div>
       </div>

@@ -10,6 +10,7 @@ import {
   type ServiceTicketRecord,
   type TicketPhoto,
 } from "@/features/service-tickets/actions/serviceTicketActions";
+import { CustomerMessageModal } from "@/features/notifications/customer-message/CustomerMessageModal";
 
 interface ServiceTicketDetailModalProps {
   ticket: ServiceTicketRecord | null;
@@ -31,6 +32,8 @@ export function ServiceTicketDetailModal({
     ticket?.resolution_photos ?? []
   );
   const [showCompleteConfirm, setShowCompleteConfirm] = React.useState(false);
+  // Ticket resolved — show the customer message popup before closing
+  const [showResolvedMsg, setShowResolvedMsg] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [uploadingResolution, setUploadingResolution] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -105,7 +108,8 @@ export function ServiceTicketDetailModal({
       });
       await completeTicketAction(ticket.id);
       onUpdated();
-      onClose();
+      // Show the customer message popup first; onClose fires when it closes.
+      setShowResolvedMsg(true);
     } finally {
       setSaving(false);
       setShowCompleteConfirm(false);
@@ -399,6 +403,29 @@ export function ServiceTicketDetailModal({
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {showResolvedMsg && (
+        // Stop propagation so popup clicks don't hit the backdrop's onClose
+        <div onClick={(e) => e.stopPropagation()}>
+          <CustomerMessageModal
+            isOpen
+            templateKey="service_ticket_resolved"
+            info={{
+              customerId: ticket.customer_id,
+              orderId: ticket.order_id,
+              orderNo: ticket.order_code || undefined,
+              businessName:
+                ticket.customer_business_name || ticket.customer_name || "Customer",
+              phone: ticket.phone,
+              ticketNo: ticket.ticket_id,
+            }}
+            onClose={() => {
+              setShowResolvedMsg(false);
+              onClose();
+            }}
+          />
         </div>
       )}
     </div>

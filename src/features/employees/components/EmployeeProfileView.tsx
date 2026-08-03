@@ -44,7 +44,7 @@ export const EmployeeProfileView: React.FC<EmployeeProfileViewProps> = ({ curren
           <div className="w-full space-y-2 border-t border-[var(--border)] pt-4 text-xs font-medium text-slate-600">
             <div className="flex items-center space-x-2">
               <Mail size={14} className="text-slate-400" />
-              <span>{currentEmployee?.email || "staff@printoms.com"}</span>
+              <span>{currentEmployee?.email || "staff@company.com"}</span>
             </div>
             <div className="flex items-center space-x-2">
               <Phone size={14} className="text-slate-400" />

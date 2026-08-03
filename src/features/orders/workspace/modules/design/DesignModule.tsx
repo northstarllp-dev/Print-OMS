@@ -463,11 +463,11 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
             </div>
             
             {activeVersion && (
-              <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase border ${
-                activeVersion.status === "Approved" ? "bg-emerald-50 text-emerald-700 border-emerald-255" :
-                activeVersion.status === "Sent to Customer" ? "bg-blue-50 text-blue-600 border-blue-200" :
-                activeVersion.status === "Changes Requested" ? "bg-red-50 text-red-600 border-red-200" :
-                "bg-slate-55/60 text-slate-600 border-slate-200"
+              <span className={`px-2.5 py-1 rounded-md text-[11px] font-black uppercase shadow-sm ${
+                activeVersion.status === "Approved" ? "bg-emerald-600 text-white" :
+                activeVersion.status === "Sent to Customer" ? "bg-blue-600 text-white" :
+                activeVersion.status === "Changes Requested" ? "bg-rose-600 text-white" :
+                "bg-slate-600 text-white"
               }`}>
                 {activeVersion.status}
               </span>

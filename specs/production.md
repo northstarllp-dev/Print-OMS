@@ -123,14 +123,24 @@ Checkbox Toggled
 * Checkboxes are disabled for customers (they don't see this module).
 * Role-based checks ensure only authorized staff can toggle production flags.
 
+## Inventory Integration
+
+* **Materials & Yield panel** (`ProductionMaterialsPanel`) sits in the Production module below Production Notes.
+* **Consume Materials**: search or barcode-scan a catalog product, set quantity + usage kind (`normal` | `wastage` | `damaged` | `returned` | `scrap`). Deducts stock via the ledger (`production_consumption`) and accumulates `orders.material_cost`.
+* **Record Final Yield**: for Final Products (`final_prdt`), adds finished quantity into a warehouse via the ledger (`production_yield`).
+* Both actions write order timeline notes. See `specs/inventory.md`.
+
 ## Future Enhancements
 
 * **QR Code Tracking**: Generate a QR code per item. Workshop staff scans it at each station (Cutting, Wiring, QC) to auto-update the milestone.
 * **Photo Proof**: Require staff to upload a photo of the completed sign at the "Quality Check" stage before it can be marked done.
-* **Inventory Integration**: Automatically deduct materials from an inventory database when "Procurement of Materials" is checked.
 
 ## Change Log
 
 Version: 1.0
 Date: 2026-07-03
 Summary: Initial specification for the Production Workflow.
+
+Version: 1.1
+Date: 2026-07-30
+Summary: Added inventory integration — material consumption with usage kinds and final yield into stock; order material cost accumulation.

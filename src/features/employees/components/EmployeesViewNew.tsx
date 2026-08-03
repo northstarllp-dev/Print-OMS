@@ -7,17 +7,31 @@ import { EmployeeModal } from "./EmployeeModal";
 import {
   createEmployee as createEmployeeAction,
   updateEmployee as updateEmployeeAction,
-  deleteEmployee as deleteEmployeeAction,
+  archiveEmployee as archiveEmployeeAction,
+  restoreEmployee as restoreEmployeeAction,
   setEmployeeStatus as setEmployeeStatusAction,
 } from "@/features/employees/actions/employeeActions";
 import { adminResetUserPassword } from "@/features/auth/actions/authActions";
 import { useRouter } from "next/navigation";
+import {
+  canArchiveEmployeeWithJobs,
+  computeEmployeeKpis,
+  employeeStatusLabel,
+  filterEmployeesCatalog,
+  isEmployeeArchived,
+  isEmployeeFrozen,
+  resetEmployeeFilters,
+  validatePasswordPolicy,
+} from "@/features/employees/employeeLogic";
 
 interface EmployeesViewNewProps {
   initialEmployees: Employee[];
   /** Tenant id — drives the available staff_role options in EmployeeModal. */
   companyId?: string | null;
-  /** Admin-only: show Directory / Roles tabs inside Employees. */
+  /**
+   * Roles & permissions UI — keep false until the Roles editor ships.
+   * @deprecated placeholder tab only
+   */
   showRolesTab?: boolean;
   initialTab?: "directory" | "roles";
 }
@@ -41,27 +55,33 @@ export function EmployeesViewNew({
 
   const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"ALL" | "Active" | "Inactive">("ALL");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | "Active" | "Inactive" | "Archived">("ALL");
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | undefined>(undefined);
   const [actionDropdownId, setActionDropdownId] = useState<string | null>(null);
 
-  // Password reset state
   const [resetModalEmpId, setResetModalEmpId] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState("");
   const [resetStatus, setResetStatus] = useState<"idle" | "saving" | "error" | "success">("idle");
   const [resetErrorMsg, setResetErrorMsg] = useState("");
 
+  const closeResetModal = () => {
+    setResetModalEmpId(null);
+    setNewPassword("");
+    setResetStatus("idle");
+    setResetErrorMsg("");
+  };
+
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!resetModalEmpId) return;
-    if (newPassword.length < 6) {
+    const passwordErr = validatePasswordPolicy(newPassword);
+    if (passwordErr) {
       setResetStatus("error");
-      setResetErrorMsg("Password must be at least 6 characters");
+      setResetErrorMsg(passwordErr);
       return;
     }
-    
     setResetStatus("saving");
     try {
       const res = await adminResetUserPassword(resetModalEmpId, newPassword);
@@ -70,39 +90,75 @@ export function EmployeesViewNew({
         setResetErrorMsg(res.error);
       } else {
         setResetStatus("success");
-        setTimeout(() => {
-          setResetModalEmpId(null);
-          setNewPassword("");
-          setResetStatus("idle");
-        }, 1500);
+        setTimeout(closeResetModal, 1500);
       }
     } catch (err: any) {
       setResetStatus("error");
       setResetErrorMsg(err.message || "An error occurred");
     }
   };
+
   const handleEditEmployee = (emp: Employee) => {
     setEditingEmployee(emp);
     setIsModalOpen(true);
     setActionDropdownId(null);
   };
 
-  const handleDeleteEmployee = async (id: string) => {
-    if (confirm("Are you sure you want to delete this employee?")) {
-      try {
-        await deleteEmployeeAction(id);
-        setEmployees(prev => prev.filter(e => e.id !== id));
-      } catch (err) {
-        console.error(err);
-        alert("Failed to delete employee.");
-      }
+  const handleArchiveEmployee = async (emp: Employee) => {
+    const gate = canArchiveEmployeeWithJobs(emp.jobsAssigned || 0);
+    if (!gate.ok) {
+      alert(gate.reason);
+      setActionDropdownId(null);
+      return;
+    }
+    if (
+      !confirm(
+        `Archive ${emp.name}? They will lose login access. This does not permanently delete their history.`
+      )
+    ) {
+      setActionDropdownId(null);
+      return;
+    }
+    try {
+      const result = await archiveEmployeeAction(emp.id);
+      setEmployees((prev) =>
+        prev.map((e) =>
+          e.id === emp.id ? { ...e, status: result.status || "Archived" } : e
+        )
+      );
+    } catch (err: any) {
+      console.error(err);
+      alert(err?.message || "Failed to archive employee.");
+    }
+    setActionDropdownId(null);
+  };
+
+  const handleRestoreEmployee = async (emp: Employee) => {
+    if (!confirm(`Restore ${emp.name} to Active?`)) {
+      setActionDropdownId(null);
+      return;
+    }
+    try {
+      const result = await restoreEmployeeAction(emp.id);
+      setEmployees((prev) =>
+        prev.map((e) =>
+          e.id === emp.id ? { ...e, status: result.status || "Active" } : e
+        )
+      );
+    } catch (err: any) {
+      console.error(err);
+      alert(err?.message || "Failed to restore employee.");
     }
     setActionDropdownId(null);
   };
 
   const handleToggleFreeze = async (emp: Employee) => {
-    const nextStatus = emp.status === "Inactive" ? "Active" : "Inactive";
-    const label = nextStatus === "Inactive" ? "freeze" : "reactivate";
+    if (isEmployeeArchived(emp.status)) {
+      setActionDropdownId(null);
+      return;
+    }
+    const nextStatus = isEmployeeFrozen(emp.status) ? "Active" : "Inactive";
+    const label = nextStatus === "Inactive" ? "freeze" : "unfreeze";
     if (!confirm(`Are you sure you want to ${label} ${emp.name}?`)) {
       setActionDropdownId(null);
       return;
@@ -177,17 +233,20 @@ export function EmployeesViewNew({
     setIsModalOpen(false);
   };
 
-  const totalEmployees = employees.length;
-  const activeEmployees = employees.length;
-  const activePercentage = totalEmployees > 0 ? Math.round((activeEmployees / totalEmployees) * 100) : 0;
-  const totalJobsAssigned = employees.reduce((sum, emp) => sum + (emp.jobsAssigned || 0), 0);
-  const avgJobsPerEmployee = totalEmployees > 0 ? (totalJobsAssigned / totalEmployees).toFixed(1) : "0";
+  const directoryForKpis = employees.filter((e) => !isEmployeeArchived(e.status));
+  const {
+    total: totalEmployees,
+    active: activeEmployees,
+    activePercentage,
+    totalJobsAssigned,
+    avgJobsPerEmployee,
+  } = computeEmployeeKpis(directoryForKpis);
 
   const stats = [
     {
       label: "TOTAL EMPLOYEES",
       value: totalEmployees.toString(),
-      change: "All time",
+      change: "Excludes archived",
       icon: Users,
       color: "#3b82f6",
     },
@@ -207,29 +266,22 @@ export function EmployeesViewNew({
     },
     {
       label: "AVG JOBS / EMP",
-      value: avgJobsPerEmployee,
+      value: String(avgJobsPerEmployee),
       change: "Workload distribution",
       icon: BarChart2,
       color: "#06b6d4",
     },
   ];
 
-  const filteredEmployees = employees.filter((emp) => {
-    const status = emp.status || "Active";
-    if (statusFilter !== "ALL" && status !== statusFilter) return false;
-    const q = searchTerm.toLowerCase();
-    if (!q) return true;
-    return (
-      emp.name.toLowerCase().includes(q) ||
-      emp.role.toLowerCase().includes(q) ||
-      emp.id.toLowerCase().includes(q) ||
-      (!!emp.employeeId && emp.employeeId.toLowerCase().includes(q))
-    );
+  const filteredEmployees = filterEmployeesCatalog(employees, {
+    search: searchTerm,
+    statusFilter,
   });
 
   const resetFilters = () => {
-    setSearchTerm("");
-    setStatusFilter("ALL");
+    const defaults = resetEmployeeFilters();
+    setSearchTerm(defaults.search);
+    setStatusFilter(defaults.statusFilter as "ALL" | "Active" | "Inactive" | "Archived");
   };
 
   const activeFilterCount = [statusFilter !== "ALL"].filter(Boolean).length;
@@ -436,12 +488,13 @@ export function EmployeesViewNew({
                     <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Status</label>
                     <select
                       value={statusFilter}
-                      onChange={(e) => setStatusFilter(e.target.value as "ALL" | "Active" | "Inactive")}
+                      onChange={(e) => setStatusFilter(e.target.value as "ALL" | "Active" | "Inactive" | "Archived")}
                       className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[13px] font-medium text-slate-700"
                     >
-                      <option value="ALL">All statuses</option>
+                      <option value="ALL">All (hide archived)</option>
                       <option value="Active">Active</option>
-                      <option value="Inactive">Inactive</option>
+                      <option value="Inactive">Frozen</option>
+                      <option value="Archived">Archived</option>
                     </select>
                   </div>
                 </div>
@@ -479,13 +532,14 @@ export function EmployeesViewNew({
             </div>
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as "ALL" | "Active" | "Inactive")}
+              onChange={(e) => setStatusFilter(e.target.value as "ALL" | "Active" | "Inactive" | "Archived")}
               className="shrink-0 px-3 py-2.5 bg-white border border-slate-200 rounded-lg text-[13px] font-semibold text-slate-600"
               aria-label="Filter by status"
             >
-              <option value="ALL">All statuses</option>
+              <option value="ALL">All (hide archived)</option>
               <option value="Active">Active</option>
-              <option value="Inactive">Inactive</option>
+              <option value="Inactive">Frozen</option>
+              <option value="Archived">Archived</option>
             </select>
             <button
               title="Reset Filters"
@@ -506,17 +560,20 @@ export function EmployeesViewNew({
               No employees found.
             </div>
           ) : (
-            filteredEmployees.map((emp) => (
+            filteredEmployees.map((emp) => {
+              const frozen = isEmployeeFrozen(emp.status);
+              const archived = isEmployeeArchived(emp.status);
+              return (
               <div
                 key={emp.id}
                 className={`rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden ${
-                  emp.status === "Inactive" ? "opacity-75" : ""
+                  frozen || archived ? "opacity-75" : ""
                 }`}
               >
                 <div className="flex">
                   <div
                     className={`w-1 shrink-0 self-stretch ${
-                      emp.status === "Inactive" ? "bg-slate-400" : "bg-[var(--color-primary)]"
+                      frozen || archived ? "bg-slate-400" : "bg-[var(--color-primary)]"
                     }`}
                     aria-hidden
                   />
@@ -528,22 +585,33 @@ export function EmployeesViewNew({
                         </div>
                         <div className="flex items-center gap-2 mt-0.5 min-w-0">
                           <div className="text-[14px] font-extrabold text-slate-900 truncate">{emp.name}</div>
-                          {emp.status === "Inactive" && (
+                          {(frozen || archived) && (
                             <span className="shrink-0 text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
-                              Frozen
+                              {employeeStatusLabel(emp.status)}
                             </span>
                           )}
                         </div>
                         <div className="text-[12px] text-slate-500 mt-0.5">{emp.role}</div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteEmployee(emp.id)}
-                        className="p-1.5 text-slate-400 hover:text-red-500 shrink-0"
-                        title="Delete"
-                      >
-                        <Trash2 size={15} />
-                      </button>
+                      {archived ? (
+                        <button
+                          type="button"
+                          onClick={() => handleRestoreEmployee(emp)}
+                          className="p-1.5 text-slate-400 hover:text-emerald-600 shrink-0"
+                          title="Restore"
+                        >
+                          <CircleCheck size={15} />
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleArchiveEmployee(emp)}
+                          className="p-1.5 text-slate-400 hover:text-red-500 shrink-0"
+                          title="Archive"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      )}
                     </div>
 
                     <div className="mt-3 flex gap-2">
@@ -554,28 +622,37 @@ export function EmployeesViewNew({
                       >
                         <Edit size={13} className="shrink-0" /> Edit
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => setResetModalEmpId(emp.id)}
-                        className="flex-1 min-w-0 inline-flex items-center justify-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2 py-2 text-[12px] font-bold text-amber-600"
-                      >
-                        <Key size={13} className="shrink-0" /> Reset
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleToggleFreeze(emp)}
-                        className={`flex-1 min-w-0 inline-flex items-center justify-center gap-1.5 rounded-lg border px-2 py-2 text-[12px] font-bold ${
-                          emp.status === "Inactive"
-                            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                            : "border-slate-300 bg-slate-50 text-slate-700"
-                        }`}
-                      >
-                        {emp.status === "Inactive" ? (
-                          <><CircleCheck size={13} className="shrink-0" /> Activate</>
-                        ) : (
-                          <><Ban size={13} className="shrink-0" /> Freeze</>
-                        )}
-                      </button>
+                      {!archived && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setResetModalEmpId(emp.id);
+                            setNewPassword("");
+                            setResetStatus("idle");
+                            setResetErrorMsg("");
+                          }}
+                          className="flex-1 min-w-0 inline-flex items-center justify-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2 py-2 text-[12px] font-bold text-amber-600"
+                        >
+                          <Key size={13} className="shrink-0" /> Reset
+                        </button>
+                      )}
+                      {!archived && (
+                        <button
+                          type="button"
+                          onClick={() => handleToggleFreeze(emp)}
+                          className={`flex-1 min-w-0 inline-flex items-center justify-center gap-1.5 rounded-lg border px-2 py-2 text-[12px] font-bold ${
+                            frozen
+                              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                              : "border-slate-300 bg-slate-50 text-slate-700"
+                          }`}
+                        >
+                          {frozen ? (
+                            <><CircleCheck size={13} className="shrink-0" /> Unfreeze</>
+                          ) : (
+                            <><Ban size={13} className="shrink-0" /> Freeze</>
+                          )}
+                        </button>
+                      )}
                     </div>
 
                     <div className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-500">
@@ -587,7 +664,8 @@ export function EmployeesViewNew({
                   </div>
                 </div>
               </div>
-            ))
+              );
+            })
           )}
         </div>
 
@@ -607,14 +685,15 @@ export function EmployeesViewNew({
             </thead>
             <tbody>
               {filteredEmployees.map((emp) => {
-                const isInactive = emp.status === "Inactive";
+                const frozen = isEmployeeFrozen(emp.status);
+                const archived = isEmployeeArchived(emp.status);
                 return (
                   <tr
                     key={emp.id}
                     style={{
                       borderBottom: "1px solid #e2e8f0",
                       transition: "background 0.2s",
-                      opacity: isInactive ? 0.72 : 1,
+                      opacity: frozen || archived ? 0.72 : 1,
                     }}
                     onMouseEnter={(e) => { e.currentTarget.style.background = "#f8fafc"; }}
                     onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
@@ -623,9 +702,9 @@ export function EmployeesViewNew({
                     <td style={{ padding: "16px 20px", fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                         <span>{emp.name}</span>
-                        {isInactive && (
+                        {(frozen || archived) && (
                           <span style={{ fontSize: "9px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.04em", padding: "2px 6px", borderRadius: "999px", background: "#f1f5f9", color: "#475569", border: "1px solid #e2e8f0" }}>
-                            Frozen
+                            {employeeStatusLabel(emp.status)}
                           </span>
                         )}
                       </div>
@@ -659,42 +738,58 @@ export function EmployeesViewNew({
                             >
                               <Edit size={14} className="shrink-0" /> Edit
                             </button>
-                            <button 
-                              onClick={() => {
-                                setResetModalEmpId(emp.id);
-                                setActionDropdownId(null);
-                              }}
-                              style={{ display: "flex", alignItems: "center", gap: "8px", width: "100%", padding: "10px 16px", background: "none", border: "none", borderBottom: "1px solid #f1f5f9", cursor: "pointer", fontSize: "13px", color: "#f59e0b", textAlign: "left", whiteSpace: "nowrap" }}
-                            >
-                              <Key size={14} className="shrink-0" /> Reset Password
-                            </button>
-                            <button
-                              onClick={() => handleToggleFreeze(emp)}
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "8px",
-                                width: "100%",
-                                padding: "10px 16px",
-                                background: "none",
-                                border: "none",
-                                borderBottom: "1px solid #f1f5f9",
-                                cursor: "pointer",
-                                fontSize: "13px",
-                                color: isInactive ? "#059669" : "#475569",
-                                textAlign: "left",
-                                whiteSpace: "nowrap",
-                              }}
-                            >
-                              {isInactive ? <CircleCheck size={14} className="shrink-0" /> : <Ban size={14} className="shrink-0" />}
-                              {isInactive ? "Reactivate" : "Freeze"}
-                            </button>
-                            <button 
-                              onClick={() => handleDeleteEmployee(emp.id)}
-                              style={{ display: "flex", alignItems: "center", gap: "8px", width: "100%", padding: "10px 16px", background: "none", border: "none", cursor: "pointer", fontSize: "13px", color: "#ef4444", textAlign: "left", whiteSpace: "nowrap" }}
-                            >
-                              <Trash2 size={14} className="shrink-0" /> Delete
-                            </button>
+                            {!archived && (
+                              <button 
+                                onClick={() => {
+                                  setResetModalEmpId(emp.id);
+                                  setNewPassword("");
+                                  setResetStatus("idle");
+                                  setResetErrorMsg("");
+                                  setActionDropdownId(null);
+                                }}
+                                style={{ display: "flex", alignItems: "center", gap: "8px", width: "100%", padding: "10px 16px", background: "none", border: "none", borderBottom: "1px solid #f1f5f9", cursor: "pointer", fontSize: "13px", color: "#f59e0b", textAlign: "left", whiteSpace: "nowrap" }}
+                              >
+                                <Key size={14} className="shrink-0" /> Reset Password
+                              </button>
+                            )}
+                            {!archived && (
+                              <button
+                                onClick={() => handleToggleFreeze(emp)}
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "8px",
+                                  width: "100%",
+                                  padding: "10px 16px",
+                                  background: "none",
+                                  border: "none",
+                                  borderBottom: "1px solid #f1f5f9",
+                                  cursor: "pointer",
+                                  fontSize: "13px",
+                                  color: frozen ? "#059669" : "#475569",
+                                  textAlign: "left",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                {frozen ? <CircleCheck size={14} className="shrink-0" /> : <Ban size={14} className="shrink-0" />}
+                                {frozen ? "Unfreeze" : "Freeze"}
+                              </button>
+                            )}
+                            {archived ? (
+                              <button 
+                                onClick={() => handleRestoreEmployee(emp)}
+                                style={{ display: "flex", alignItems: "center", gap: "8px", width: "100%", padding: "10px 16px", background: "none", border: "none", cursor: "pointer", fontSize: "13px", color: "#059669", textAlign: "left", whiteSpace: "nowrap" }}
+                              >
+                                <CircleCheck size={14} className="shrink-0" /> Restore
+                              </button>
+                            ) : (
+                              <button 
+                                onClick={() => handleArchiveEmployee(emp)}
+                                style={{ display: "flex", alignItems: "center", gap: "8px", width: "100%", padding: "10px 16px", background: "none", border: "none", cursor: "pointer", fontSize: "13px", color: "#ef4444", textAlign: "left", whiteSpace: "nowrap" }}
+                              >
+                                <Trash2 size={14} className="shrink-0" /> Archive
+                              </button>
+                            )}
                           </div>
                         </>
                       )}
@@ -730,22 +825,22 @@ export function EmployeesViewNew({
           }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px" }}>
               <h2 style={{ fontSize: "18px", fontWeight: "700", margin: 0 }}>Reset Password</h2>
-              <button onClick={() => setResetModalEmpId(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#64748b" }}>
+              <button onClick={closeResetModal} style={{ background: "none", border: "none", cursor: "pointer", color: "#64748b" }}>
                 <X size={20} />
               </button>
             </div>
             <p style={{ fontSize: "13px", color: "#64748b", marginBottom: "16px" }}>
-              You are manually setting a new password for this user.
+              Set a new password for this employee.
             </p>
             <form onSubmit={handleResetPassword} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
               <div>
                 <label style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a", marginBottom: "6px", display: "block" }}>New Password</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   style={{
-                    width: "100%", padding: "10px 12px", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "14px"
+                    width: "100%", padding: "10px 12px", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "14px", boxSizing: "border-box"
                   }}
                   required
                 />
@@ -762,8 +857,8 @@ export function EmployeesViewNew({
                 </div>
               )}
 
-              <button 
-                type="submit" 
+              <button
+                type="submit"
                 disabled={resetStatus === "saving" || resetStatus === "success"}
                 style={{
                   width: "100%", padding: "12px", background: "#f59e0b", color: "white", border: "none",
@@ -771,7 +866,7 @@ export function EmployeesViewNew({
                   opacity: (resetStatus === "saving" || resetStatus === "success") ? 0.7 : 1
                 }}
               >
-                {resetStatus === "saving" ? "Updating..." : "Force Reset Password"}
+                {resetStatus === "saving" ? "Updating..." : "Reset Password"}
               </button>
             </form>
           </div>

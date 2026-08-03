@@ -2,7 +2,6 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { getCurrentUser } from "@/features/auth/actions/authActions";
-import { createAdminClient } from "@/utils/supabase/admin";
 import { resolveStagePermission } from "./permissions";
 import type { OrderStage } from "./types";
 
@@ -95,83 +94,13 @@ export async function assertValidPortalSessionForOrder(
   orderId: string,
   requiredScope?: string
 ): Promise<void> {
-  const cookieStore = await cookies();
-  const sessionCookie = cookieStore.get("portal_session")?.value;
-  if (!sessionCookie) {
-    throw new Error("Unauthorized");
-  }
-
-  let session: {
-    customerId?: string;
-    orderId?: string;
-    scopes?: string[];
-    exp?: number;
-  };
-  try {
-    session = JSON.parse(sessionCookie);
-  } catch {
-    throw new Error("Unauthorized");
-  }
-
-  const now = Math.floor(Date.now() / 1000);
-  if (!session.exp || session.exp < now) {
-    throw new Error("Unauthorized");
-  }
-  if (requiredScope && (!session.scopes || !session.scopes.includes(requiredScope))) {
-    throw new Error(`Forbidden: missing portal scope "${requiredScope}"`);
-  }
-
-  // Direct match on uuid or friendly order code in the session.
-  if (session.orderId && session.orderId === orderId) {
-    return;
-  }
-
-  // Portal users have no Supabase Auth session — use service role for ID
-  // resolution only (cookie was already validated for presence/expiry/scope).
-  const admin = createAdminClient();
-  if (!admin) {
-    throw new Error("Unauthorized");
-  }
-
-  let order: { id: string; order_id: string | null; customer_id: string | null } | null = null;
-
-  if (uuidPattern.test(orderId)) {
-    const { data } = await admin
-      .from("orders")
-      .select("id, order_id, customer_id")
-      .eq("id", orderId)
-      .maybeSingle();
-    order = data;
-  } else {
-    const { data } = await admin
-      .from("orders")
-      .select("id, order_id, customer_id")
-      .eq("order_id", orderId)
-      .maybeSingle();
-    order = data;
-  }
-
-  if (!order) {
-    throw new Error("Unauthorized");
-  }
-
-  if (session.orderId && (session.orderId === order.id || session.orderId === order.order_id)) {
-    return;
-  }
-
-  // Customer-scoped portal tokens (friendly customer_id) may access any of their orders.
-  if (session.customerId) {
-    const { data: customer } = await admin
-      .from("customers")
-      .select("id")
-      .eq("customer_id", session.customerId)
-      .maybeSingle();
-    if (customer && order.customer_id === customer.id) {
-      return;
-    }
-  }
-
-  throw new Error("Unauthorized");
+  const { assertPortalTenantAccess } = await import(
+    "@/utils/portal/portalTenantAuth"
+  );
+  await assertPortalTenantAccess({
+    orderId,
+    requiredScope,
+  });
 }
 
 /**
@@ -220,4 +149,56 @@ export async function assertAdminOnly(): Promise<void> {
   if (profile.role !== "admin") {
     throw new Error("Forbidden: admin access required");
   }
+}
+
+/** Authenticated admin or staff (blocks portal / anon callers). */
+export async function assertStaffOrAdmin(): Promise<void> {
+  const profile = await getCurrentUser();
+  if (!profile) {
+    throw new Error("Unauthorized");
+  }
+  if (profile.role !== "admin" && profile.role !== "staff") {
+    throw new Error("Forbidden: staff or admin access required");
+  }
+}
+
+/**
+ * Team assignment: admins always; staff only with enquiry edit
+ * (post-convert AssignTeamModal).
+ */
+export async function assertCanAssignOrderTeam(): Promise<void> {
+  const profile = await getCurrentUser();
+  if (!profile) {
+    throw new Error("Unauthorized");
+  }
+  if (profile.role === "admin") return;
+
+  if (profile.role === "staff") {
+    const { canEdit } = resolveStagePermission("enquiry", {
+      role: profile.role,
+      staff_role: profile.staff_role ?? null,
+      company_id: profile.company_id ?? null,
+    });
+    if (canEdit) return;
+  }
+
+  throw new Error("Forbidden: you do not have permission to assign employees to orders");
+}
+
+/**
+ * Generic order patch gate. Status-only patches (stage advancement requests)
+ * require staff/admin; any other column requires admin.
+ */
+export async function assertOrderUpdateAccess(
+  updates: Record<string, unknown>
+): Promise<void> {
+  const keys = Object.keys(updates);
+  const statusOnly =
+    keys.length > 0 &&
+    keys.every((k) => k === "stage_status" || k === "stage_admin_notes");
+  if (statusOnly) {
+    await assertStaffOrAdmin();
+    return;
+  }
+  await assertAdminOnly();
 }

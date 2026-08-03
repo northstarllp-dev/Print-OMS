@@ -10,15 +10,14 @@ import { dispatchWhatsAppNotification } from "@/features/notifications/actions/d
 import { getRequestBaseUrl } from "@/features/notifications/whatsapp/requestBaseUrl";
 import { getCurrentUser } from "@/features/auth/actions/authActions";
 import { createAdminClient } from "@/utils/supabase/admin";
-import { verifyPortalToken } from "@/utils/portal-tokens";
 import {
   assertStageEditPermission,
-  assertValidPortalSessionForOrder,
 } from "@/features/orders/workspace/shared/serverPermissions";
 import { resolveStagePermission } from "@/features/orders/workspace/shared/permissions";
 import {
   revalidateOrderDetailPaths,
 } from "@/features/orders/actions/revalidateOrderPaths";
+import { insertOrderActivity } from "@/features/orders/activity/logOrderActivity";
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -72,40 +71,14 @@ async function assertPortalDesignAccess(
   orderUuid: string,
   portalToken?: string
 ): Promise<void> {
-  try {
-    await assertValidPortalSessionForOrder(orderUuid, "approve_design");
-    return;
-  } catch {
-    // Fall through to raw token auth when the HttpOnly cookie is not ready yet.
-  }
-
-  if (portalToken) {
-    const payload = verifyPortalToken(portalToken);
-    if (!payload) throw new Error("Unauthorized");
-    if (!payload.scopes.includes("approve_design")) throw new Error("Unauthorized");
-
-    const admin = requireAdminClient();
-    const { data: order } = await admin
-      .from("orders")
-      .select("id, order_id, customer_id")
-      .eq("id", orderUuid)
-      .maybeSingle();
-    if (!order) throw new Error("Unauthorized");
-
-    if (payload.orderId && (payload.orderId === order.id || payload.orderId === order.order_id)) {
-      return;
-    }
-    if (payload.customerId) {
-      const { data: customer } = await admin
-        .from("customers")
-        .select("id")
-        .eq("customer_id", payload.customerId)
-        .maybeSingle();
-      if (customer && order.customer_id === customer.id) return;
-    }
-  }
-
-  throw new Error("Unauthorized");
+  const { assertPortalTenantAccess } = await import(
+    "@/utils/portal/portalTenantAuth"
+  );
+  await assertPortalTenantAccess({
+    orderId: orderUuid,
+    portalToken,
+    requiredScope: "approve_design",
+  });
 }
 
 async function assertDesignStageUnlockedForOrder(
@@ -167,22 +140,23 @@ async function revalidateDesignPaths(orderId: string, fromPortal = false) {
 async function updateOrderStage(supabase: SupabaseClient, orderUuid: string, stage: string) {
   const { data: o, error } = await supabase
     .from("orders")
-    .select("stage, order_id")
+    .select("stage, health, order_id, company_id")
     .eq("id", orderUuid)
     .single();
   if (error) throw new Error(error.message);
 
   const isChanged = stage !== o.stage;
   if (isChanged) {
+    const { stageProgressPatch } = await import("@/features/orders/lib/orderHealth");
     const { error: updateError } = await supabase
       .from("orders")
-      .update({ stage })
+      .update({ stage, ...stageProgressPatch(o.health) })
       .eq("id", orderUuid);
     if (updateError) throw new Error(updateError.message);
 
-    await supabase.from("order_activity").insert({
+    await insertOrderActivity(supabase, {
       order_id: o.order_id || orderUuid,
-      activity_type: "timeline",
+      company_id: o.company_id,
       actor_name: "System",
       actor_role: "System",
       content: `Order stage changed from "${o.stage}" to "${stage}".`,

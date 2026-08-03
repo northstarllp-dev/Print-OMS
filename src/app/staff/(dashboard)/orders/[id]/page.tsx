@@ -32,7 +32,7 @@ export default async function StaffOrderDetailPage({
 
   const order = await getOrderById(id);
   if (!order) {
-    redirect("/staff/orders");
+    redirect("/staff/my-orders");
   }
 
   const [

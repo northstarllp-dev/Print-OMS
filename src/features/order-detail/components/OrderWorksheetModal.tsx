@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, startTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import { OrderCommunicationCenter } from "@/components/communication/OrderCommunicationCenter";
@@ -10,7 +10,7 @@ import {
   MapPin, FileText, LayoutDashboard, CheckSquare,
   ArrowLeft, MoreVertical, Lock, Save,
   BarChart3, Palette, Package, Wrench, User, CreditCard,
-  AlertTriangle, History,
+  AlertTriangle, History, MessageSquare,
 } from "lucide-react";
 import {
   Order, PipelineStage, SiteVisitDetails,
@@ -20,7 +20,6 @@ import { SiteVisitModule } from "@/features/orders/workspace/modules/site-visit/
 import { SiteVisitReviewModal } from "@/features/orders/workspace/modules/site-visit/SiteVisitReviewModal";
 import { QuotationModule } from "@/features/orders/workspace/modules/quotation/QuotationModule";
 import { DesignModule } from "@/features/orders/workspace/modules/design/DesignModule";
-import { Logo } from "@/components/ui/Logo";
 import { AdminControlModule } from "./admin/AdminControlModule";
 import { PaymentsModule } from "./payments/PaymentsModule";
 import { CustomerDetailsDrawer } from "./CustomerDetailsDrawer";
@@ -29,6 +28,7 @@ import { ProductionModule } from "@/features/orders/workspace/modules/production
 import { InstallationModule } from "@/features/orders/workspace/modules/installation/InstallationModule";
 import { InstallationPaymentApprovalModal } from "./InstallationPaymentApprovalModal";
 import { withBasePath } from "@/lib/appBasePath";
+import { copyTextToClipboard } from "@/lib/clipboard";
 
 import {
   isTimelineStageAccessible,
@@ -69,6 +69,19 @@ import {
   useOrderDetailSync,
 } from "@/features/orders/realtime/useOrderDetailSync";
 import { areAllDesignItemsApproved } from "@/features/designs/utils/designApproval";
+import { CustomerMessageModal } from "@/features/notifications/customer-message/CustomerMessageModal";
+import { CustomerMessageTemplatePicker } from "@/features/notifications/customer-message/CustomerMessageTemplatePicker";
+import { getScheduleExtrasForTemplate } from "@/features/notifications/customer-message/stageTemplates";
+import { listCustomerMessageShares } from "@/features/notifications/customer-message/shareActions";
+import type { CustomerMessageKey } from "@/features/notifications/customer-message/templates";
+
+/** Pipeline stage → customer update template shown after the stage change. */
+const STAGE_MESSAGE_TEMPLATES: Partial<Record<string, CustomerMessageKey>> = {
+  "Design In Progress": "design_resources_required",
+  "Production": "production_started",
+  "Ready For Installation": "ready_for_installation",
+  "Completed": "installation_completed",
+};
 
 /* ─── helpers ──────────────────────────────────────────────────── */
 const STAGE_LABEL: Record<string, { label: string; color: string }> = {
@@ -307,6 +320,17 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   const [orderTab, setOrderTab] = useState<"all" | "active" | "pending">("all");
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  // Customer update popup (copy / wa.me / mailto) — admin only
+  const [customerMsg, setCustomerMsg] = useState<{
+    key: CustomerMessageKey;
+    date?: string;
+    time?: string;
+    followUpKey?: CustomerMessageKey;
+  } | null>(null);
+  // Catch-up template picker (FAB) — when admin skipped the auto popup
+  const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
+  const [sentMessageKeys, setSentMessageKeys] = useState<CustomerMessageKey[]>([]);
+
   const [messages, setMessages] = useState<any[]>([]);
   const orderRef = useRef(order);
   orderRef.current = order;
@@ -331,11 +355,14 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
       const [freshOrder, freshQuotation, activityRes] = await Promise.all([
         getOrderById(orderRef.current.id),
         getQuotationByOrderId(orderRef.current.id).catch(() => null),
-        createClient()
-          .from("order_activity")
-          .select("*")
-          .eq("order_id", orderRef.current.orderId || orderRef.current.id)
-          .eq("activity_type", "timeline"),
+        companyId
+          ? createClient()
+              .from("order_activity")
+              .select("*")
+              .eq("order_id", orderRef.current.orderId || orderRef.current.id)
+              .eq("company_id", companyId)
+              .eq("activity_type", "timeline")
+          : Promise.resolve({ data: null }),
       ]);
 
       if (freshOrder) {
@@ -359,7 +386,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
       const wait = Math.max(0, 650 - (Date.now() - started));
       window.setTimeout(() => setIsRefreshing(false), wait);
     }
-  }, [isRefreshing, router, triggerLocalAlert]);
+  }, [isRefreshing, router, triggerLocalAlert, companyId]);
 
   const entryStageRef = useRef(entryStage);
   entryStageRef.current = entryStage;
@@ -381,22 +408,37 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   }, [activeStepTab]);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || !companyId) return;
     const supabase = createClient();
     async function loadMessages() {
       const { data } = await supabase
         .from("order_activity")
         .select("*")
         .eq("order_id", order.orderId || order.id)
+        .eq("company_id", companyId)
         .eq("activity_type", "timeline");
       if (data) setMessages(data);
     }
     loadMessages();
-  }, [isOpen, order.id, order.orderId]);
+  }, [isOpen, order.id, order.orderId, companyId]);
+
+  // Load which customer message templates were already shared for this order.
+  useEffect(() => {
+    if (!isOpen || currentUserRole !== "Admin") return;
+    let cancelled = false;
+    void listCustomerMessageShares(order.id, order.orderId).then((res) => {
+      if (cancelled || "error" in res) return;
+      setSentMessageKeys(res.keys);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, order.id, order.orderId, currentUserRole, templatePickerOpen]);
 
   useOrderDetailSync({
     orderId: order.id,
     businessOrderId: order.orderId || order.id,
+    companyId: companyId ?? null,
     siteVisitId: order.siteVisitDetails?.id ?? null,
     enabled: isOpen,
     getOrderSnapshot: () => orderRef.current as unknown as Record<string, unknown>,
@@ -438,12 +480,26 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     onActivityChange: (payload) => {
       if (payload.eventType === "INSERT" && payload.new) {
         if (payload.new.activity_type && payload.new.activity_type !== "timeline") return;
+        if (
+          companyId &&
+          payload.new.company_id &&
+          payload.new.company_id !== companyId
+        ) {
+          return;
+        }
         setMessages((prev) => {
           if (prev.some((m) => m.id === payload.new!.id)) return prev;
           return [...prev, payload.new];
         });
       } else if (payload.eventType === "UPDATE" && payload.new) {
         if (payload.new.activity_type && payload.new.activity_type !== "timeline") return;
+        if (
+          companyId &&
+          payload.new.company_id &&
+          payload.new.company_id !== companyId
+        ) {
+          return;
+        }
         setMessages((prev) =>
           prev.map((m) => (m.id === payload.new!.id ? payload.new : m))
         );
@@ -461,6 +517,23 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   /* ── Data ── */
   const client = customers.find((c) => c.id === order.customerId);
   const isEmployee = currentUserRole === "Employee";
+
+  /* Customer message popup — admin portal only */
+  const openCustomerMessage = (
+    key: CustomerMessageKey,
+    extra?: { date?: string; time?: string }
+  ) => {
+    if (currentUserRole !== "Admin") return;
+    setCustomerMsg({
+      key,
+      ...extra,
+      followUpKey: key === "installation_completed" ? "feedback_request" : undefined,
+    });
+  };
+  const openStageCustomerMessage = (stage?: string) => {
+    const key = stage ? STAGE_MESSAGE_TEMPLATES[stage] : undefined;
+    if (key) openCustomerMessage(key);
+  };
   const isStaffOrAdmin = currentUserRole === "Employee" || currentUserRole === "Admin";
   const currentStageIndex = stageToTabIndex(order.stage, order.workflow_type);
   const actor = {
@@ -578,6 +651,12 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   const executeAdminApprove = async () => {
     const wasJobDonePending = order.stageStatus === "Pending Admin Approval: Job Done";
     const fromStage = order.stage;
+    // Optimistic clear of pending status so mobile UI responds immediately.
+    setOrder((prev) => ({
+      ...prev,
+      stageStatus: "Normal",
+      stageAdminNotes: "",
+    }));
     const result = await adminApproveStageAction(order.id);
     const resultRow = Array.isArray(result) ? result[0] : (result as any);
     const nextStage =
@@ -592,7 +671,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     if (nextStage) {
       setActiveStepTab(stageToTabIndex(nextStage, order.workflow_type || "quote_first"));
     }
-    router.refresh();
+    startTransition(() => router.refresh());
     triggerLocalAlert(
       wasJobDonePending
         ? "Order marked as completed."
@@ -601,6 +680,9 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           : "Stage approved and advanced.",
       "success"
     );
+    if (nextStage && nextStage !== fromStage) {
+      openStageCustomerMessage(nextStage);
+    }
   };
 
   const handleAdminApprove = async () => {
@@ -608,8 +690,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     try {
       // Don't draft-save Admin/Payments tabs — they aren't stage worksheets.
       if (activeStepTab !== ADMIN_TAB && activeStepTab !== PAYMENTS_TAB) {
-        await handleSaveDraft();
-        setIsProcessing(true);
+        await handleSaveDraft({ suppressCustomerPopup: true, silent: true });
       }
       // On Site Visit tab with normal status, open review modal first.
       if (activeStepTab === 0 && order.stageStatus === "Normal") {
@@ -628,11 +709,12 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
         setIsProcessing(false);
         return;
       }
-      // Installation completion always goes through payment review — admin can complete without a staff push.
+      // Completing installation always goes through payment review — including Admin Controls
+      // (not only when the Installation stage tab is active).
       if (
-        activeStepTab === 4 &&
         order.stage === "Installation Scheduled" &&
-        (order.stageStatus === "Pending Admin Approval: Job Done" || order.stageStatus === "Normal")
+        (order.stageStatus === "Pending Admin Approval: Job Done" ||
+          order.stageStatus === "Normal")
       ) {
         setIsInstallationPaymentModalOpen(true);
         setIsProcessing(false);
@@ -651,8 +733,9 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     try {
       await updateOrderStageAction(orderId, stage);
       setOrder(prev => ({ ...prev, stage: stage as PipelineStage }));
-      router.refresh();
+      startTransition(() => router.refresh());
       triggerLocalAlert(`Stage changed to ${stage}`, "success");
+      openStageCustomerMessage(stage);
     } catch (err: any) {
       console.error(err);
       triggerLocalAlert(err?.message || "Failed to change stage", "error");
@@ -684,7 +767,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     setIsProcessing(true);
     try {
       if (activeStepTab !== designTabIndex) {
-        await handleSaveDraft();
+        await handleSaveDraft({ silent: true });
       }
       // Site Visit: show summary confirmation first (push only — no lock).
       if (activeStepTab === 0) {
@@ -718,11 +801,20 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
         return;
       }
 
-      await requestStageAdvancementAction(order.id);
       const nextStatus = computePendingStageStatus(order.stage, workflowType);
+      const previousStatus = order.stageStatus;
       setOrder((prev) => ({ ...prev, stageStatus: nextStatus, stageAdminNotes: "" }));
-      await addChatMessageAction(order.id, "System", `${currentEmployee?.name || "Staff"} requested stage advancement.`);
-      router.refresh();
+      try {
+        await requestStageAdvancementAction(order.id);
+      } catch (err) {
+        setOrder((prev) => ({ ...prev, stageStatus: previousStatus }));
+        throw err;
+      }
+      void addChatMessageAction(
+        order.id,
+        "System",
+        `${currentEmployee?.name || "Staff"} requested stage advancement.`
+      );
       triggerLocalAlert("Stage advancement requested.", "success");
     } catch (err: any) {
       triggerLocalAlert(err?.message || "Failed to submit.", "error");
@@ -733,13 +825,14 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
 
   const handleAdminReject = async (notes: string) => {
     setIsProcessing(true);
+    const previousStatus = order.stageStatus;
+    setOrder((prev) => ({ ...prev, stageStatus: "Normal", stageAdminNotes: notes }));
     try {
       await adminRejectStageAction(order.id, notes);
-      setOrder((prev) => ({ ...prev, stageStatus: "Normal", stageAdminNotes: notes }));
       setAdminOverrideUnlocked(false);
-      router.refresh();
       triggerLocalAlert("Changes requested. Staff can now revise.", "success");
     } catch (err: any) {
+      setOrder((prev) => ({ ...prev, stageStatus: previousStatus }));
       triggerLocalAlert(err?.message || "Failed to request changes.", "error");
     } finally {
       setIsProcessing(false);
@@ -775,16 +868,16 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
       setIsProcessing(false);
     }
   };
-  const handleUpdateHealth = async (health: string, reason?: string) => {
+  const handleUpdateHealth = async (health: string, reason?: string, callRemarks?: string) => {
     setIsProcessing(true);
     try {
-      const res = await updateOrderHealthAction(order.id, health, reason);
+      const res = await updateOrderHealthAction(order.id, health, reason, callRemarks);
       if (res && res.length > 0) {
         setOrder((prev) => ({ ...prev, health: res[0].health, lost_reason: res[0].lost_reason, chatHistory: res[0].chat_history }));
         triggerLocalAlert(`Order health set to ${health}.`, "success");
         router.refresh();
       }
-    } catch (err) { triggerLocalAlert("Failed to update health.", "error"); }
+    } catch (err: any) { triggerLocalAlert(err?.message || "Failed to update health.", "error"); }
     finally { setIsProcessing(false); }
   };
   const handleReopen = async () => {
@@ -805,19 +898,25 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   const handleCopyMagicLink = async () => {
     if (!client) return;
     try {
-      const res = await fetch(withBasePath(`/api/portal-token?customer_id=${client.customerId || client.id}&order_id=${order.orderId || order.id}`));
+      const res = await fetch(withBasePath(`/api/portal-token?customer_id=${client.id}&order_id=${order.id}`));
       const data = await res.json();
-      if (data.url) {
-        await navigator.clipboard.writeText(data.url);
-        setCopiedLink(true);
-        setTimeout(() => setCopiedLink(false), 2000);
-        triggerLocalAlert("Magic portal link copied!", "success");
+      if (!res.ok || !data.url) {
+        throw new Error(data.error || "Failed to generate portal link");
       }
-    } catch (err) { triggerLocalAlert("Failed to copy portal link.", "error"); }
+      await copyTextToClipboard(data.url);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
+      triggerLocalAlert("Magic portal link copied!", "success");
+    } catch (err) {
+      triggerLocalAlert(
+        err instanceof Error ? err.message : "Failed to copy portal link.",
+        "error"
+      );
+    }
   };
 
-  const handleSaveDraft = async () => {
-    setIsProcessing(true);
+  const handleSaveDraft = async (opts?: { suppressCustomerPopup?: boolean; silent?: boolean }) => {
+    if (!opts?.silent) setIsProcessing(true);
     const workflowType = order.workflow_type || "quote_first";
     // Tab indices depend on workflow:
     // quote_first:  0=SiteVisit, 1=Quote, 2=Design, 3=Production, 4=Installation
@@ -847,8 +946,19 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           break;
         case designTab: // Design
           if (order.design) {
+            // Same revision detection as the server action: any version that
+            // had customer changes requested means this send is a revision.
+            const hadChangesRequested = ((order.design as DesignRecord)?.items || []).some(
+              (item: any) =>
+                (item.versions || []).some((v: any) => v.status === "Changes Requested")
+            );
             const updated = await sendDesignToCustomerAction(order.id);
             setOrder(prev => ({ ...prev, design: updated }));
+            if (!opts?.suppressCustomerPopup) {
+              openCustomerMessage(
+                hadChangesRequested ? "design_revision_uploaded" : "design_ready_for_review"
+              );
+            }
           }
           break;
         case 3: // Production
@@ -862,13 +972,16 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           }
           break;
       }
-      triggerLocalAlert("Draft saved successfully!", "success");
-      router.refresh();
+      if (!opts?.silent) {
+        triggerLocalAlert("Draft saved successfully!", "success");
+        startTransition(() => router.refresh());
+      }
     } catch (err) {
       triggerLocalAlert("Failed to save draft.", "error");
       console.error(err);
+      if (opts?.silent) throw err;
     } finally {
-      setIsProcessing(false);
+      if (!opts?.silent) setIsProcessing(false);
     }
   };
 
@@ -1019,6 +1132,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           onClose={onClose} onUpdate={(d) => updateSiteVisitDetails(order.id, d)}
           onSubmitForApproval={handleRequestAdvancement}
           onAdminApprove={async (): Promise<void> => { await handleAdminApprove(); }}
+          onCustomerMessage={currentUserRole === "Admin" ? openCustomerMessage : undefined}
           onSkipSiteVisit={async () => {
             if (!getStagePermissionInContext("site_visit", actor, entryStage).canEdit) return;
             const now = new Date().toISOString();
@@ -1058,6 +1172,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           initialQuotation={initialQuotation}
           siteVisitItems={siteVisitItems}
           onRequestAdvance={handleQuotationAdvance}
+          onCustomerMessage={currentUserRole === "Admin" ? openCustomerMessage : undefined}
           externalRealtime
           realtimeQuotation={quotationRealtimeRow}
           adminOverrideUnlocked={effectiveAdminOverrideUnlocked}
@@ -1130,6 +1245,10 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
               setActiveStepTab(4);
               router.refresh();
               triggerLocalAlert("Installation scheduled — stage advanced.", "success");
+              openCustomerMessage("installation_scheduled", {
+                date: scheduledDate,
+                time: scheduledTime,
+              });
             },
           }}
           adminOverrideUnlocked={effectiveAdminOverrideUnlocked}
@@ -1158,6 +1277,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                   stageStatus: "Pending Admin Approval: Site Visit Completed",
                   siteVisitDetails: { ...prev.siteVisitDetails, completed: true } as any,
                 }));
+                openCustomerMessage("site_visit_completed");
               } catch (err: any) {
                 triggerLocalAlert(err?.message || "Failed to lock site visit.", "error");
                 setIsProcessing(false);
@@ -1169,6 +1289,8 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           }}
           updateSiteVisitDetails={updateSiteVisitDetails}
           updateOrderStage={handleUpdateOrderStage}
+          onUpdateHealth={handleUpdateHealth}
+          onReopen={handleReopen}
         />
       );
     }
@@ -1237,10 +1359,9 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   return (
     <div style={{ position: "relative", display: "flex", flexDirection: "column", flex: 1, height: "100%", maxHeight: "100%", overflow: "hidden", background: "#F8FAFC" }}>
       {isProcessing && (
-        <div className="absolute inset-0 z-[9999] flex items-center justify-center bg-white/80 backdrop-blur-sm">
-          <div className="animate-pulse flex items-center justify-center drop-shadow-xl px-6">
-            <Logo width={240} height={60} align="center" className="md:hidden" />
-            <Logo width={400} height={100} align="center" className="hidden md:block" />
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-[9999] flex justify-center pt-3">
+          <div className="rounded-full bg-slate-900/80 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-white shadow-lg">
+            Working…
           </div>
         </div>
       )}
@@ -1691,7 +1812,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           </PullToRefresh>
 
           {/* Sticky footer actions — hidden entirely when the active stage is inaccessible */}
-          <div className="px-3 sm:px-5 py-3 flex flex-row flex-wrap items-stretch sm:items-center justify-end gap-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]" style={{ background: "#F8FAFC", borderTop: "1px solid #E2E8F0", flexShrink: 0, boxShadow: "0 -2px 10px rgba(0,0,0,0.05)" }}>
+          <div className="px-3 sm:px-5 py-3 flex flex-row flex-wrap items-stretch sm:items-center justify-end gap-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] touch-manipulation" style={{ background: "#F8FAFC", borderTop: "1px solid #E2E8F0", flexShrink: 0, boxShadow: "0 -2px 10px rgba(0,0,0,0.05)" }}>
             {isActiveStageInaccessible ? (
               <span style={{ fontSize: "12px", fontWeight: "700", color: "#94A3B8", display: "flex", alignItems: "center", gap: "6px" }}>
                 <Lock size={13} /> No actions available for this stage
@@ -1738,7 +1859,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                           return (
                             <>
                               <button
-                                onClick={handleSaveDraft}
+                                onClick={() => handleSaveDraft()}
                                 className="flex-1 sm:flex-none min-w-0 justify-center"
                                 style={
                                   activeStepTab === designTab
@@ -1903,16 +2024,21 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
             try {
               if (siteVisitReviewMode === "staff_push") {
                 const workflowType = order.workflow_type || "quote_first";
-                await requestStageAdvancementAction(order.id);
                 const nextStatus = computePendingStageStatus(order.stage, workflowType);
+                const previousStatus = order.stageStatus;
                 setOrder((prev) => ({ ...prev, stageStatus: nextStatus, stageAdminNotes: "" }));
-                await addChatMessageAction(
+                setIsReviewModalOpen(false);
+                try {
+                  await requestStageAdvancementAction(order.id);
+                } catch (err) {
+                  setOrder((prev) => ({ ...prev, stageStatus: previousStatus }));
+                  throw err;
+                }
+                void addChatMessageAction(
                   order.id,
                   "System",
                   `${currentEmployee?.name || "Staff"} requested stage advancement.`
                 );
-                setIsReviewModalOpen(false);
-                router.refresh();
                 triggerLocalAlert("Site visit submitted for admin approval.", "success");
                 return;
               }
@@ -1923,6 +2049,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                 stageStatus: "Pending Admin Approval: Site Visit Completed",
                 siteVisitDetails: { ...prev.siteVisitDetails, completed: true } as any,
               }));
+              openCustomerMessage("site_visit_completed");
               setIsReviewModalOpen(false);
               router.refresh();
               setIsWorkflowChoiceOpen(true);
@@ -1972,6 +2099,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           >
             <OrderCommunicationCenter
               orderId={order.orderId || order.id}
+              companyId={companyId || ""}
               onClose={() => setActiveRightPanel(null)}
             />
           </div>
@@ -1999,6 +2127,76 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           onClose={() => setShowCustomerPanel(false)}
           customer={client}
           orderId={initialOrder.id}
+        />
+      )}
+
+      {/* Catch-up WhatsApp FAB — admin only, when auto popup was skipped */}
+      {currentUserRole === "Admin" && !customerMsg && !templatePickerOpen && (
+        <button
+          type="button"
+          onClick={() => setTemplatePickerOpen(true)}
+          title="Send customer WhatsApp message"
+          aria-label="Send customer WhatsApp message"
+          style={{
+            position: "fixed",
+            right: "max(20px, env(safe-area-inset-right))",
+            bottom: "max(88px, calc(env(safe-area-inset-bottom) + 72px))",
+            zIndex: 1050,
+            width: 56,
+            height: 56,
+            borderRadius: "50%",
+            border: "none",
+            background: "#25D366",
+            color: "white",
+            boxShadow: "0 8px 20px rgba(37, 211, 102, 0.45)",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <MessageSquare size={26} />
+        </button>
+      )}
+
+      {currentUserRole === "Admin" && (
+        <CustomerMessageTemplatePicker
+          isOpen={templatePickerOpen}
+          onClose={() => setTemplatePickerOpen(false)}
+          stage={order.stage}
+          workflowType={order.workflow_type || "quote_first"}
+          orderNo={order.orderId || order.orderCode || order.id}
+          sentKeys={sentMessageKeys}
+          onSelect={(key) => {
+            openCustomerMessage(key, getScheduleExtrasForTemplate(key, order));
+          }}
+        />
+      )}
+
+      {/* Customer update message popup (copy / WhatsApp / email) */}
+      {customerMsg && (
+        <CustomerMessageModal
+          isOpen
+          templateKey={customerMsg.key}
+          info={{
+            customerId: client?.id || order.customerId,
+            orderId: order.id,
+            orderNo: order.orderId || order.id,
+            businessName: order.businessName || client?.name || "Customer",
+            phone: client?.whatsapp || client?.phone || "",
+            email: client?.email || "",
+            date: customerMsg.date,
+            time: customerMsg.time,
+          }}
+          onShared={(key) => {
+            setSentMessageKeys((prev) =>
+              prev.includes(key) ? prev : [...prev, key]
+            );
+          }}
+          onClose={() => {
+            const followUpKey = customerMsg.followUpKey;
+            setCustomerMsg(followUpKey ? { key: followUpKey } : null);
+          }}
         />
       )}
     </div>

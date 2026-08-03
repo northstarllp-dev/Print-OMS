@@ -122,6 +122,42 @@ Stage advance: never checks payments
 * Verify / waive / UTR / mark-as-paid customer flow
 * `Pending Payment Verification` locks and banners
 
+## Admin Collections Dashboard (`/admin/payments`)
+
+Company-wide payments overview powered by `getCompanyCollectionsData`.
+
+### KPIs
+
+| Chip | Value | Click action |
+| ---- | ----- | ------------ |
+| Collected | Sum of received amounts | Filter → paid |
+| Outstanding | Sum of (quoted − received) where > 0 | Filter → outstanding |
+| Expected | Sum of expected-status amounts | Filter → outstanding |
+| Fully Paid | Count of orders with zero balance | Filter → paid |
+
+### Aging buckets
+
+Outstanding orders are bucketed by days since last activity (last payment `paid_at` or `order.created_at`, whichever is newer):
+
+| Bucket | Filter chip |
+| ------ | ----------- |
+| 0–30 days | Current |
+| 31–60 days | Overdue |
+| 61–90 days | At risk |
+| 90+ days | Critical |
+
+### Inline Record Receipt
+
+Admin can record a receipt directly from the collections row without navigating to the order. Modal fields: installment name (auto-numbered), amount type (fixed / % / rest), amount, notes. Calls `createPayment` with `status = received`.
+
+### Invoice badge
+
+When an invoice exists for an order, its status badge (Draft / Sent / Paid / Void) appears on the collections row with a link to `/admin/invoices/[id]`.
+
+### CSV export
+
+Download the filtered list as CSV: Order Code, Client, Stage, Quoted Total, Received, Outstanding, Aging Days, Last Paid Date.
+
 ## Future enhancements
 
 * Optional payment gateway (out of scope)
@@ -132,9 +168,10 @@ Stage advance: never checks payments
 ```
 src/features/payments/actions/paymentActions.ts
 src/features/payments/utils/installmentName.ts
+src/features/payments/components/PaymentsCollectionsClient.tsx
 src/features/order-detail/components/payments/PaymentsModule.tsx
+src/app/admin/(dashboard)/payments/page.tsx
 src/app/portal/components/PaymentsTab.tsx
-src/types/index.ts
 specs/payments.md
 ```
 
@@ -144,3 +181,4 @@ specs/payments.md
 | ------- | ---- | ------- |
 | 1.0–1.4 | 2026-07-04 | Gate-based payment workflow (superseded) |
 | 2.0 | 2026-07-04 | Simplified to financial tracking only: expected / received, no gates or verification |
+| 2.1 | 2026-07-29 | Admin collections dashboard: aging buckets, inline record receipt, CSV export, invoice badge |

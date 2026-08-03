@@ -3,6 +3,12 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
+import {
+  extractProductImageStoragePaths,
+  generateFinalProductId,
+  generateProductId,
+  PRODUCT_IMAGE_BUCKET,
+} from "../productLogic";
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -37,10 +43,25 @@ export type Product = {
   // New pricing fields
   price_per_sqft?: number | null;
   price_per_unit?: number | null;
+  /** ≤ this sqft → unit price; above → sqft (Multiple / dual-price products). */
+  unit_price_max_sqft?: number | null;
   images?: string[];
   is_active: boolean;
   final_prdt?: boolean;
   created_at?: string;
+  // Inventory attributes
+  unit?: string | null;
+  brand?: string | null;
+  supplier_name?: string | null;
+  purchase_price?: number | null;
+  min_stock?: number | null;
+  max_stock?: number | null;
+  hsn_code?: string | null;
+  gst_rate?: number | null;
+  barcode?: string | null;
+  qr_code?: string | null;
+  default_warehouse_id?: string | null;
+  track_inventory?: boolean;
 };
 
 export type CreateProductPayload = {
@@ -52,9 +73,23 @@ export type CreateProductPayload = {
   // New
   price_per_sqft?: number | null;
   price_per_unit?: number | null;
+  unit_price_max_sqft?: number | null;
   images?: string[];
   is_active?: boolean;
   final_prdt?: boolean;
+  // Inventory attributes
+  unit?: string | null;
+  brand?: string | null;
+  supplier_name?: string | null;
+  purchase_price?: number | null;
+  min_stock?: number | null;
+  max_stock?: number | null;
+  hsn_code?: string | null;
+  gst_rate?: number | null;
+  barcode?: string | null;
+  qr_code?: string | null;
+  default_warehouse_id?: string | null;
+  track_inventory?: boolean;
 };
 
 export async function getProducts(): Promise<Product[]> {
@@ -86,14 +121,8 @@ export async function getActiveProducts(): Promise<Product[]> {
 
 export async function createProduct(formData: CreateProductPayload) {
   const supabase = await getSupabase();
-  const { data: { user } } = await supabase.auth.getUser();
-  let companyId = "11111111-1111-1111-1111-111111111111"; // default fallback
-  if (user) {
-    const { data: profile } = await supabase.from("users").select("company_id").eq("id", user.id).single();
-    if (profile && profile.company_id) {
-      companyId = profile.company_id;
-    }
-  }
+  const { resolveWriteCompanyId } = await import("@/lib/resolveWriteCompanyId");
+  const companyId = await resolveWriteCompanyId();
   const payload = {
     company_id: companyId,
     is_active: true,
@@ -118,19 +147,9 @@ export async function createProduct(formData: CreateProductPayload) {
       .select("product_id")
       .eq("company_id", companyId);
     if (payload.final_prdt) {
-      const maxNum = (existing || []).reduce((max, p) => {
-        const match = p.product_id?.match(/^FP(\d+)$/);
-        if (match) return Math.max(max, parseInt(match[1], 10));
-        return max;
-      }, 0);
-      payload.product_id = `FP${String(maxNum + 1).padStart(3, "0")}`;
+      payload.product_id = generateFinalProductId(existing || [], companyId);
     } else {
-      const maxNum = (existing || []).reduce((max, p) => {
-        const match = p.product_id?.match(/^PRD-(\d+)$/);
-        if (match) return Math.max(max, parseInt(match[1], 10));
-        return max;
-      }, 0);
-      payload.product_id = `PRD-${String(maxNum + 1).padStart(3, "0")}`;
+      payload.product_id = generateProductId(existing || [], companyId);
     }
     
     const retry = await supabase.from("products").insert([payload]).select();
@@ -183,14 +202,10 @@ export async function deleteImagesFromStorage(urls: string[]) {
   if (!urls || urls.length === 0) return;
   const supabase = await getSupabase();
   
-  const paths = urls.map(url => {
-    // Extract path after /product-images/
-    const parts = url.split("/product-images/");
-    return parts.length > 1 ? parts[1] : null;
-  }).filter(Boolean) as string[];
+  const paths = extractProductImageStoragePaths(urls);
 
   if (paths.length > 0) {
-    await supabase.storage.from("product-images").remove(paths);
+    await supabase.storage.from(PRODUCT_IMAGE_BUCKET).remove(paths);
   }
 }
 
@@ -215,14 +230,8 @@ export async function createProductCategory(name: string): Promise<ProductCatego
   if (!name || !name.trim()) throw new Error("Category name is required.");
   
   const supabase = await getSupabase();
-  const { data: { user } } = await supabase.auth.getUser();
-  let companyId = "11111111-1111-1111-1111-111111111111"; // default fallback
-  if (user) {
-    const { data: profile } = await supabase.from("users").select("company_id").eq("id", user.id).single();
-    if (profile && profile.company_id) {
-      companyId = profile.company_id;
-    }
-  }
+  const { resolveWriteCompanyId } = await import("@/lib/resolveWriteCompanyId");
+  const companyId = await resolveWriteCompanyId();
   const payload = {
     company_id: companyId,
     name: name.trim(),

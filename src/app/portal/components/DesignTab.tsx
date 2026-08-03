@@ -26,6 +26,7 @@ import { toCustomerVisibleDesign } from "@/features/designs/utils/customerVisibl
 import { uploadFileViaPortalApi } from "@/utils/supabase/uploadStorageFile";
 import { getServerActionErrorMessage } from "@/lib/serverActionError";
 import { OverlayPortal } from "@/components/ui/OverlayPortal";
+import { insertOrderActivity } from "@/features/orders/activity/logOrderActivity";
 
 interface Customer {
   id: string;
@@ -44,6 +45,8 @@ interface Customer {
 interface Order {
   id: string;
   orderId?: string;
+  companyId?: string;
+  company_id?: string;
   stage?: string;
   stageStatus?: string;
   stageAdminNotes?: string;
@@ -64,6 +67,24 @@ function friendlyPortalError(error: unknown): string {
     return "Your session has expired. Please refresh the page and try again.";
   }
   return message;
+}
+
+async function resolveOrderCompanyId(
+  supabase: ReturnType<typeof createClient>,
+  order: Order
+): Promise<string> {
+  const fromProps = order.companyId ?? order.company_id;
+  if (fromProps) return fromProps;
+
+  const { data, error } = await supabase
+    .from("orders")
+    .select("company_id")
+    .eq("id", order.id)
+    .single();
+  if (error || !data?.company_id) {
+    throw new Error("Order company_id is required for activity log");
+  }
+  return data.company_id;
 }
 
 export function DesignTab({ order, customer, siteVisitItems = [], portalToken }: DesignTabProps) {
@@ -294,24 +315,26 @@ export function DesignTab({ order, customer, siteVisitItems = [], portalToken }:
     const nextStage = allApproved ? "Design Approved" : undefined;
     
     await handleUpdateItemVersions(updatedVersions, nextStage);
-    
-    await supabase.from("order_activity").insert({ 
-      order_id: order.orderId || order.id, 
-      activity_type: "timeline", 
-      actor_name: "System", 
-      actor_role: "System", 
-      content: `Client approved the design proof for ${activeItem?.name || 'an item'}.`, 
-      metadata: { action: "design_approved_by_customer", itemId: selectedItemId } 
+
+    const companyId = await resolveOrderCompanyId(supabase, order);
+
+    await insertOrderActivity(supabase, {
+      order_id: order.orderId || order.id,
+      company_id: companyId,
+      actor_name: "System",
+      actor_role: "System",
+      content: `Client approved the design proof for ${activeItem?.name || 'an item'}.`,
+      metadata: { action: "design_approved_by_customer", itemId: selectedItemId }
     });
 
     if (allApproved) {
-      await supabase.from("order_activity").insert({ 
-        order_id: order.orderId || order.id, 
-        activity_type: "timeline", 
-        actor_name: "System", 
-        actor_role: "System", 
-        content: "All design proofs approved by client.", 
-        metadata: { action: "all_designs_approved" } 
+      await insertOrderActivity(supabase, {
+        order_id: order.orderId || order.id,
+        company_id: companyId,
+        actor_name: "System",
+        actor_role: "System",
+        content: "All design proofs approved by client.",
+        metadata: { action: "all_designs_approved" }
       });
     }
   };
@@ -335,19 +358,19 @@ export function DesignTab({ order, customer, siteVisitItems = [], portalToken }:
         </div>
       )}
 
-      <div className="bg-white rounded-xl border border-gray-200 p-8 shadow-sm">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-extrabold text-gray-900">Design Preview</h2>
+      <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-8 shadow-sm">
+        <div className="flex justify-between items-center mb-4 sm:mb-6">
+          <h2 className="text-xl sm:text-2xl font-extrabold text-gray-900">Design Preview</h2>
         </div>
         
         {/* Resources Upload */}
         {!isLocked && (
-        <div className="mb-6 p-4 border border-gray-200 rounded-xl bg-gray-50 flex items-center justify-between">
+        <div className="mb-6 p-4 border border-gray-200 rounded-xl bg-gray-50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h4 className="text-sm font-bold text-gray-800">Add Inspiration & Logos</h4>
             <p className="text-xs text-gray-500 mt-1">Upload your brand assets or reference designs to help us.</p>
           </div>
-          <label className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-xs font-bold cursor-pointer hover:bg-gray-100 flex items-center gap-2">
+          <label className="w-full sm:w-auto px-4 py-2.5 sm:py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-xs font-bold cursor-pointer hover:bg-gray-100 flex items-center justify-center gap-2">
             {uploading ? <Loader2 size={14} className="animate-spin" /> : <UploadCloud size={14} />}
             {uploading ? "Uploading..." : "Upload File"}
             <input type="file" multiple onChange={handleResourceUpload} accept="image/*,.pdf,.png,.jpg,.jpeg,.heic,.heif,.cdr,.ai,.psd,.svg" className="hidden" disabled={uploading} />
@@ -358,13 +381,13 @@ export function DesignTab({ order, customer, siteVisitItems = [], portalToken }:
         {dd.resources && dd.resources.length > 0 && (
           <div className="mb-6 flex gap-3 flex-wrap">
             {dd.resources.map((res: any) => (
-              <div key={res.id} className="flex items-center gap-2 p-2 bg-blue-50 border border-blue-100 rounded-lg text-blue-700">
-                <a href={res.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:underline">
-                  <FileCheck size={14} />
-                  <span className="text-xs font-medium truncate max-w-[150px]">{res.name}</span>
+              <div key={res.id} className="flex items-center gap-2 p-2 bg-blue-50 border border-blue-100 rounded-lg text-blue-700 max-w-full">
+                <a href={res.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:underline min-w-0">
+                  <FileCheck size={14} className="shrink-0" />
+                  <span className="text-xs font-medium truncate max-w-[120px] sm:max-w-[150px]">{res.name}</span>
                 </a>
                 {!isLocked && (
-                  <button onClick={() => handleDeleteResource(res.id, res.url)} className="p-1 hover:bg-blue-200 rounded text-red-500 ml-1 transition-colors" title="Delete file">
+                  <button onClick={() => handleDeleteResource(res.id, res.url)} className="p-1 hover:bg-blue-200 rounded text-red-500 ml-1 transition-colors shrink-0" title="Delete file">
                     <Trash size={12} />
                   </button>
                 )}
@@ -373,9 +396,10 @@ export function DesignTab({ order, customer, siteVisitItems = [], portalToken }:
           </div>
         )}
 
+
         {/* Item Selector */}
         {itemsList.length > 1 && (
-          <div className="flex flex-wrap gap-2 mb-4 p-1 bg-gray-100 rounded-xl w-fit">
+          <div className="flex flex-wrap gap-2 mb-4 p-1 bg-gray-100 rounded-xl overflow-x-auto">
             {itemsList.map(item => {
               const isApproved = item.versions.length > 0 && item.versions[item.versions.length - 1].status === "Approved";
               return (
@@ -406,7 +430,7 @@ export function DesignTab({ order, customer, siteVisitItems = [], portalToken }:
         {/* Version Selector */}
         {localVersions.length > 0 ? (
           <>
-            <div className="flex gap-2 mb-4">
+            <div className="flex flex-wrap gap-2 mb-4">
               {localVersions.map((v: any) => (
                 <button
                   key={v.id}
@@ -420,7 +444,7 @@ export function DesignTab({ order, customer, siteVisitItems = [], portalToken }:
               ))}
               
               {activeVersion && (
-                <span className={`ml-auto px-3 py-1 rounded-full text-xs font-bold border ${
+                <span className={`mt-1 sm:mt-0 sm:ml-auto px-3 py-1 rounded-full text-xs font-bold border ${
                   activeVersion.status === "Approved" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
                   activeVersion.status === "Sent to Customer" ? "bg-blue-50 text-blue-700 border-blue-200" :
                   activeVersion.status === "Changes Requested" ? "bg-amber-50 text-amber-700 border-amber-200" :
@@ -431,7 +455,7 @@ export function DesignTab({ order, customer, siteVisitItems = [], portalToken }:
               )}
             </div>
 
-            <div className={`bg-[#0b1c30] rounded-xl flex items-center justify-center mb-6 relative overflow-hidden group border border-gray-200 shadow-inner p-4 min-h-[40vh] ${
+            <div className={`bg-[#0b1c30] rounded-xl flex items-center justify-center mb-6 relative overflow-hidden group border border-gray-200 shadow-inner p-2 sm:p-4 min-h-[30vh] sm:min-h-[40vh] ${
               activeVersion.status === "Approved" ? "ring-2 ring-emerald-500/50" : ""
             }`}>
               
@@ -508,7 +532,7 @@ export function DesignTab({ order, customer, siteVisitItems = [], portalToken }:
                 )}
               </div>
 
-              <div className="absolute bottom-4 right-4 bg-white/90 backdrop-blur border border-slate-200 rounded-lg p-1.5 flex items-center gap-2 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="absolute bottom-2 sm:bottom-4 right-2 sm:right-4 bg-white/90 backdrop-blur border border-slate-200 rounded-lg p-1.5 flex items-center gap-2 shadow-sm sm:opacity-0 sm:group-hover:opacity-100 opacity-100 transition-opacity">
                 <button onClick={() => setZoomLevel(v => Math.max(v - 20, 50))} className="p-1 text-slate-500 hover:text-slate-800 bg-gray-100 rounded"><ZoomOut size={14} /></button>
                 <span className="text-[10px] font-mono font-black select-none w-8 text-center">{zoomLevel}%</span>
                 <button onClick={() => setZoomLevel(v => Math.min(v + 20, 200))} className="p-1 text-slate-500 hover:text-slate-800 bg-gray-100 rounded"><ZoomIn size={14} /></button>
