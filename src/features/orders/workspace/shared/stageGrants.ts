@@ -3,11 +3,11 @@ import type { RoleStageGrantMapConfig } from "@/config/schema";
 import { clientRegistry } from "@/config/registry";
 import { mergeConfig } from "@/config/mergeConfig";
 import { loadClientConfig } from "@/config/loadClientConfig";
-import { PIPELINE_QUEUE_STAGES } from "./staffQueueStages";
-
+import { PIPELINE_QUEUE_STAGES, type PipelineQueueStage } from "./staffQueueStages";
 export { PIPELINE_QUEUE_STAGES };
+export type { PipelineQueueStage };
 
-function isPipelineNavStage(s: OrderStage): boolean {
+function isPipelineNavStage(s: OrderStage): s is PipelineQueueStage {
   return (PIPELINE_QUEUE_STAGES as readonly string[]).includes(s);
 }
 
@@ -178,7 +178,7 @@ export const MY_ORDERS_NAV: StaffNavItem = {
 };
 
 /** Editable pipeline stages for My Orders tabs (subset of grants). */
-export function getMyOrdersStages(actor: StageActor): OrderStage[] {
+export function getMyOrdersStages(actor: StageActor): PipelineQueueStage[] {
   return getEditableStages(actor).filter(isPipelineNavStage);
 }
 
