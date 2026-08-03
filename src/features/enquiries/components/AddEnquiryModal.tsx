@@ -2,6 +2,14 @@
 
 import React, { useState } from "react";
 import { X, Send, Loader } from "lucide-react";
+import {
+  EMPTY_ENQUIRY_FORM,
+  formatPhoneNumber,
+  validateEnquiryForm,
+  type EnquiryFormData,
+} from "@/features/enquiries/enquiryFormLogic";
+
+export type { EnquiryFormData };
 
 interface AddEnquiryModalProps {
   isOpen: boolean;
@@ -9,57 +17,13 @@ interface AddEnquiryModalProps {
   onSubmit: (data: EnquiryFormData) => void | Promise<void>;
 }
 
-export interface EnquiryFormData {
-  businessName: string;
-  leadName: string;
-  phone: string;
-  whatsappNumber: string;
-  email: string;
-  primaryMode: "email" | "whatsapp";
-  source: "Meta Ads" | "Referrals" | "Walk-ins" | "Google Enquiry (Ph Call)" | "Website";
-  notes: string;
-  location: string;
-}
-
-const formatPhoneNumber = (value: string): string => {
-  let digits = value.replace(/\D/g, "");
-  // Only strip +91 / leading 0 when a full local number was pasted with the prefix
-  // (e.g. 919876543210). Do NOT strip while typing — "91…" is a valid start of a 10-digit mobile.
-  if (digits.length > 10 && digits.startsWith("91")) digits = digits.slice(2);
-  if (digits.length === 11 && digits.startsWith("0")) digits = digits.slice(1);
-  digits = digits.slice(0, 10);
-  if (digits.length === 10) {
-    return `+91 ${digits.slice(0, 5)} ${digits.slice(5)}`;
-  }
-  return digits;
-};
-
-const validatePhoneNumber = (phone: string): boolean => {
-  const digits = phone.replace(/\D/g, "");
-  return digits.length === 12 && digits.startsWith("91");
-};
-
-const validateEmail = (email: string): boolean => {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-};
-
 const fieldClass =
   "w-full px-3.5 py-2.5 rounded-lg border border-slate-300 bg-slate-50 text-[14px] font-medium text-slate-800 outline-none transition-colors focus:border-[var(--color-primary)] focus:bg-white";
 const labelClass =
   "block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1.5";
 
 export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalProps) {
-  const [formData, setFormData] = useState<EnquiryFormData>({
-    businessName: "",
-    leadName: "",
-    phone: "",
-    whatsappNumber: "",
-    email: "",
-    primaryMode: "whatsapp",
-    source: "Website",
-    notes: "",
-    location: "",
-  });
+  const [formData, setFormData] = useState<EnquiryFormData>({ ...EMPTY_ENQUIRY_FORM });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [syncWhatsapp, setSyncWhatsapp] = useState(false);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
@@ -96,13 +60,7 @@ export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalPr
     e.preventDefault();
     if (isSubmitting) return;
 
-    const newErrors: { [key: string]: string } = {};
-    if (!formData.businessName.trim()) newErrors.businessName = "Business name is required";
-    if (!formData.leadName.trim()) newErrors.leadName = "Lead name is required";
-    if (!validatePhoneNumber(formData.phone)) {
-      newErrors.phone = "Please enter a valid 10-digit phone number";
-    }
-    if (!validateEmail(formData.email)) newErrors.email = "Please enter a valid email address";
+    const newErrors = validateEnquiryForm(formData);
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
@@ -111,17 +69,7 @@ export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalPr
     setIsSubmitting(true);
     await onSubmit(formData);
     setIsSubmitting(false);
-    setFormData({
-      businessName: "",
-      leadName: "",
-      phone: "",
-      whatsappNumber: "",
-      email: "",
-      primaryMode: "whatsapp",
-      source: "Website",
-      notes: "",
-      location: "",
-    });
+    setFormData({ ...EMPTY_ENQUIRY_FORM });
     setSyncWhatsapp(false);
     setErrors({});
   };
@@ -255,7 +203,7 @@ export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalPr
 
               <div>
                 <label className={labelClass} htmlFor="enquiry-email">
-                  Email Address *
+                  Email Address
                 </label>
                 <input
                   id="enquiry-email"
@@ -263,8 +211,7 @@ export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalPr
                   name="email"
                   value={formData.email}
                   onChange={handleChange}
-                  required
-                  placeholder="client@company.com"
+                  placeholder="client@company.com (optional)"
                   className={fieldClass}
                   inputMode="email"
                 />

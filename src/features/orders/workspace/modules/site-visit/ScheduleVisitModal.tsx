@@ -1,9 +1,11 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { X, MapPin } from "lucide-react";
-import { GoogleMap, useJsApiLoader, Autocomplete } from "@react-google-maps/api";
+import { GoogleMap, useJsApiLoader } from "@react-google-maps/api";
 import { AdvancedMapMarker } from "@/components/maps/AdvancedMapMarker";
+import { PlaceAutocompleteInput } from "@/components/maps/PlaceAutocompleteInput";
 import {
+  GOOGLE_MAPS_API_VERSION,
   GOOGLE_MAPS_DEFAULT_OPTIONS,
   GOOGLE_MAPS_LIBRARIES,
   GOOGLE_MAPS_SCRIPT_ID,
@@ -49,30 +51,17 @@ export const ScheduleVisitModal: React.FC<ScheduleVisitModalProps> = ({ isOpen, 
     id: GOOGLE_MAPS_SCRIPT_ID,
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
     libraries: GOOGLE_MAPS_LIBRARIES,
+    version: GOOGLE_MAPS_API_VERSION,
   });
 
-  const autocompleteRef = useRef<any>(null);
-
   const applyLocation = useCallback((lat: number, lng: number, address?: string) => {
-    setMarkerPosition({ lat, lng });
-    setMapCenter({ lat, lng });
+    const pos = { lat, lng };
+    setMarkerPosition(pos);
+    setMapCenter(pos);
     setGpsCoords(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
     if (address && !isGoogleMapsUrl(address)) setSiteAddress(address);
-  }, []);
-
-  const onPlaceChanged = () => {
-    try {
-      const place = autocompleteRef.current?.getPlace?.();
-      const location = place?.geometry?.location;
-      if (!location) return;
-      const lat = typeof location.lat === "function" ? location.lat() : location.lat;
-      const lng = typeof location.lng === "function" ? location.lng() : location.lng;
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
-      applyLocation(lat, lng, place.formatted_address || place.name || undefined);
-    } catch (err) {
-      console.warn("[ScheduleVisit] onPlaceChanged ignored incomplete place:", err);
-    }
-  };
+    map?.panTo(pos);
+  }, [map]);
 
   const geocoder = useRef<any>(null);
 
@@ -280,30 +269,16 @@ export const ScheduleVisitModal: React.FC<ScheduleVisitModalProps> = ({ isOpen, 
                 Location
               </label>
               {isLoaded ? (
-                <Autocomplete
-                  onLoad={autocomplete => (autocompleteRef.current = autocomplete)}
-                  onPlaceChanged={onPlaceChanged}
-                >
-                  <input
-                    type="text"
-                    required
-                    value={siteAddress}
-                    onChange={e => setSiteAddress(e.target.value)}
-                    onPaste={(e) => {
-                      const pasted = e.clipboardData.getData("text");
-                      if (isGoogleMapsUrl(pasted)) {
-                        e.preventDefault();
-                        setSiteAddress(pasted.trim());
-                        void tryResolveMapsLink(pasted);
-                      }
-                    }}
-                    onBlur={() => {
-                      void tryResolveMapsLink(siteAddress);
-                    }}
-                    placeholder="Search address or paste a Google Maps link..."
-                    className="w-full p-3 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none bg-slate-50 focus:bg-white transition-all"
-                  />
-                </Autocomplete>
+                <PlaceAutocompleteInput
+                  isLoaded={isLoaded}
+                  required
+                  value={siteAddress}
+                  onChange={setSiteAddress}
+                  onPlaceSelect={({ address, lat, lng }) => applyLocation(lat, lng, address)}
+                  onMapsUrl={(url) => void tryResolveMapsLink(url)}
+                  placeholder="Search address or paste a Google Maps link..."
+                  className="w-full p-3 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none bg-slate-50 focus:bg-white transition-all"
+                />
               ) : (
                 <input
                   type="text"

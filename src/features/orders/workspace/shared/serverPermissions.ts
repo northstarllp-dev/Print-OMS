@@ -150,3 +150,55 @@ export async function assertAdminOnly(): Promise<void> {
     throw new Error("Forbidden: admin access required");
   }
 }
+
+/** Authenticated admin or staff (blocks portal / anon callers). */
+export async function assertStaffOrAdmin(): Promise<void> {
+  const profile = await getCurrentUser();
+  if (!profile) {
+    throw new Error("Unauthorized");
+  }
+  if (profile.role !== "admin" && profile.role !== "staff") {
+    throw new Error("Forbidden: staff or admin access required");
+  }
+}
+
+/**
+ * Team assignment: admins always; staff only with enquiry edit
+ * (post-convert AssignTeamModal).
+ */
+export async function assertCanAssignOrderTeam(): Promise<void> {
+  const profile = await getCurrentUser();
+  if (!profile) {
+    throw new Error("Unauthorized");
+  }
+  if (profile.role === "admin") return;
+
+  if (profile.role === "staff") {
+    const { canEdit } = resolveStagePermission("enquiry", {
+      role: profile.role,
+      staff_role: profile.staff_role ?? null,
+      company_id: profile.company_id ?? null,
+    });
+    if (canEdit) return;
+  }
+
+  throw new Error("Forbidden: you do not have permission to assign employees to orders");
+}
+
+/**
+ * Generic order patch gate. Status-only patches (stage advancement requests)
+ * require staff/admin; any other column requires admin.
+ */
+export async function assertOrderUpdateAccess(
+  updates: Record<string, unknown>
+): Promise<void> {
+  const keys = Object.keys(updates);
+  const statusOnly =
+    keys.length > 0 &&
+    keys.every((k) => k === "stage_status" || k === "stage_admin_notes");
+  if (statusOnly) {
+    await assertStaffOrAdmin();
+    return;
+  }
+  await assertAdminOnly();
+}

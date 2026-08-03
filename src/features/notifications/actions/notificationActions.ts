@@ -197,3 +197,24 @@ export async function clearAllNotifications() {
   if (error) throw error;
   return { success: true };
 }
+
+/**
+ * Delete a specific notification for the current user
+ */
+export async function deleteNotification(id: string) {
+  const cookieStore = await cookies();
+  const supabase = createClient(cookieStore);
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized");
+
+  const admin = createAdminClient();
+  if (!admin) throw new Error("Admin client not available");
+
+  const { error } = await admin
+    .from("notifications")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", user.id);
+  if (error) throw error;
+  return { success: true };
+}

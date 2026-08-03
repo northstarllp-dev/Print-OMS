@@ -3,13 +3,8 @@ import { EmployeesViewNew } from "@/features/employees/components/EmployeesViewN
 import { getEmployees } from "@/features/employees/actions/employeeActions";
 import { getCurrentUser } from "@/features/auth/actions/authActions";
 
-export default async function EmployeesPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ tab?: string }>;
-}) {
-  const [{ tab }, employeesData, profile] = await Promise.all([
-    searchParams,
+export default async function EmployeesPage() {
+  const [employeesData, profile] = await Promise.all([
     getEmployees(),
     getCurrentUser(),
   ]);
@@ -31,8 +26,6 @@ export default async function EmployeesPage({
     <EmployeesViewNew
       initialEmployees={mappedEmployees}
       companyId={profile?.company_id ?? null}
-      showRolesTab
-      initialTab={tab === "roles" ? "roles" : "directory"}
     />
   );
 }

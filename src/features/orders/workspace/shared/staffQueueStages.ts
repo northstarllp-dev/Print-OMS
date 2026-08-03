@@ -170,3 +170,191 @@ export function countQueueViews<T extends { stage?: string | null, workflow_type
     completed: partitionQueueOrdersByView(orders, entryStage, "completed").length,
   };
 }
+
+/** Pipeline stages that collapse into the unified My Orders queue. */
+export const PIPELINE_QUEUE_STAGES = [
+  "site_visit",
+  "quotation",
+  "design",
+  "production",
+  "installation",
+] as const satisfies readonly OrderStage[];
+
+export type PipelineQueueStage = (typeof PIPELINE_QUEUE_STAGES)[number];
+
+export const MY_ORDERS_STAGE_LABELS: Record<PipelineQueueStage, string> = {
+  site_visit: "Site Visit",
+  quotation: "Quotation",
+  design: "Design",
+  production: "Production",
+  installation: "Installation",
+};
+
+function isPipelineQueueStage(s: OrderStage): s is PipelineQueueStage {
+  return (PIPELINE_QUEUE_STAGES as readonly string[]).includes(s);
+}
+
+/** Granted pipeline stages in pipeline order (RBAC-filtered). */
+export function orderedMyOrdersStages(
+  allowedStages: readonly OrderStage[]
+): PipelineQueueStage[] {
+  return PIPELINE_QUEUE_STAGES.filter((s) => allowedStages.includes(s));
+}
+
+/** Incoming tab only when the earliest editable stage is not site_visit. */
+export function myOrdersHasIncomingTab(allowedStages: readonly OrderStage[]): boolean {
+  const ordered = orderedMyOrdersStages(allowedStages);
+  return ordered.length > 0 && queueHasIncomingTab(ordered[0]);
+}
+
+export type MyOrdersTab = "incoming" | PipelineQueueStage | "completed";
+
+export function parseMyOrdersTab(
+  value: string | null | undefined,
+  allowedStages: readonly OrderStage[]
+): MyOrdersTab | undefined {
+  if (!value) return undefined;
+  if (value === "incoming") {
+    return myOrdersHasIncomingTab(allowedStages) ? "incoming" : undefined;
+  }
+  if (value === "completed") return "completed";
+  if (isPipelineQueueStage(value as OrderStage) && allowedStages.includes(value as OrderStage)) {
+    return value as PipelineQueueStage;
+  }
+  return undefined;
+}
+
+/** Approaching work: before earliest editable stage, not already in a current band. */
+export function isMyOrdersIncoming(
+  stage: string,
+  allowedStages: readonly OrderStage[],
+  workflowType?: WorkflowType
+): boolean {
+  const ordered = orderedMyOrdersStages(allowedStages);
+  if (ordered.length === 0 || !queueHasIncomingTab(ordered[0])) return false;
+  if (ordered.some((s) => isStaffQueueCurrent(stage, s))) return false;
+  return isStaffQueueIncoming(stage, ordered[0], workflowType);
+}
+
+/** Past work: after latest editable stage, not already in a current band. */
+export function isMyOrdersCompleted(
+  stage: string,
+  allowedStages: readonly OrderStage[],
+  workflowType?: WorkflowType
+): boolean {
+  const ordered = orderedMyOrdersStages(allowedStages);
+  if (ordered.length === 0) return false;
+  if (ordered.some((s) => isStaffQueueCurrent(stage, s))) return false;
+  return isStaffQueueCompleted(stage, ordered[ordered.length - 1], workflowType);
+}
+
+export function isMyOrdersRelevant(
+  stage: string,
+  allowedStages: readonly OrderStage[],
+  workflowType?: WorkflowType
+): boolean {
+  const ordered = orderedMyOrdersStages(allowedStages);
+  if (ordered.length === 0) return false;
+  return (
+    ordered.some((s) => isStaffQueueCurrent(stage, s)) ||
+    isMyOrdersIncoming(stage, ordered, workflowType) ||
+    isMyOrdersCompleted(stage, ordered, workflowType)
+  );
+}
+
+/** Assigned orders in Incoming / Current bands / Completed for the actor's grants. */
+export function filterMyOrdersAssigned<T extends StaffQueueOrder>(
+  orders: T[] | null | undefined,
+  userId: string | undefined,
+  allowedStages: readonly OrderStage[]
+): T[] {
+  const stages = orderedMyOrdersStages(allowedStages);
+  return (orders ?? []).filter((o) => {
+    if (userId && !o.assigned_employees?.includes(userId)) return false;
+    return isMyOrdersRelevant(
+      o.stage ?? "",
+      stages,
+      o.workflow_type as WorkflowType
+    );
+  });
+}
+
+/** Orders currently in the given module stage band. */
+export function partitionMyOrdersByStage<T extends { stage?: string | null }>(
+  orders: T[],
+  stage: OrderStage
+): T[] {
+  return orders.filter((o) => isStaffQueueCurrent(o.stage ?? "", stage));
+}
+
+export function partitionMyOrdersByTab<
+  T extends { stage?: string | null; workflow_type?: WorkflowType | null },
+>(orders: T[], tab: MyOrdersTab, allowedStages: readonly OrderStage[]): T[] {
+  if (tab === "incoming") {
+    return orders.filter((o) =>
+      isMyOrdersIncoming(o.stage ?? "", allowedStages, o.workflow_type as WorkflowType)
+    );
+  }
+  if (tab === "completed") {
+    return orders.filter((o) =>
+      isMyOrdersCompleted(o.stage ?? "", allowedStages, o.workflow_type as WorkflowType)
+    );
+  }
+  return partitionMyOrdersByStage(orders, tab);
+}
+
+export type MyOrdersTabCounts = {
+  incoming: number;
+  completed: number;
+} & Partial<Record<OrderStage, number>>;
+
+export function countMyOrdersTabs<
+  T extends { stage?: string | null; workflow_type?: WorkflowType | null },
+>(orders: T[], allowedStages: readonly OrderStage[]): MyOrdersTabCounts {
+  const stages = orderedMyOrdersStages(allowedStages);
+  const counts: MyOrdersTabCounts = {
+    incoming: partitionMyOrdersByTab(orders, "incoming", stages).length,
+    completed: partitionMyOrdersByTab(orders, "completed", stages).length,
+  };
+  for (const s of stages) {
+    counts[s] = partitionMyOrdersByStage(orders, s).length;
+  }
+  return counts;
+}
+
+/** @deprecated Prefer countMyOrdersTabs */
+export function countMyOrdersByStage<T extends { stage?: string | null }>(
+  orders: T[],
+  stages: readonly OrderStage[]
+): Partial<Record<OrderStage, number>> {
+  const counts: Partial<Record<OrderStage, number>> = {};
+  for (const s of stages) {
+    counts[s] = partitionMyOrdersByStage(orders, s).length;
+  }
+  return counts;
+}
+
+/** Default tab: first current-band with orders, else Incoming if any, else Completed, else first stage. */
+export function defaultMyOrdersTab(
+  allowedStages: readonly OrderStage[],
+  counts: MyOrdersTabCounts
+): MyOrdersTab | undefined {
+  const stages = orderedMyOrdersStages(allowedStages);
+  if (stages.length === 0) return undefined;
+  const withOrders = stages.find((s) => (counts[s] ?? 0) > 0);
+  if (withOrders) return withOrders;
+  if (myOrdersHasIncomingTab(stages) && counts.incoming > 0) return "incoming";
+  if (counts.completed > 0) return "completed";
+  return stages[0];
+}
+
+/** @deprecated Prefer defaultMyOrdersTab */
+export function defaultMyOrdersStage(
+  allowedStages: readonly OrderStage[],
+  counts: Partial<Record<OrderStage, number>>
+): OrderStage | undefined {
+  const stages = orderedMyOrdersStages(allowedStages);
+  if (stages.length === 0) return undefined;
+  const withOrders = stages.find((s) => (counts[s] ?? 0) > 0);
+  return withOrders ?? stages[0];
+}

@@ -3,11 +3,17 @@ import { X, Search } from "lucide-react";
 import { loadClientConfig } from "@/config/loadClientConfig";
 import { getActiveProducts } from "@/features/products/actions/productActions";
 import { getAdmins } from "@/features/enquiries/actions/enquiryActions";
+import {
+  canStartConvertSubmit,
+  canSubmitConvertForm,
+  filterProductsByName,
+  isConvertSubmitDisabled,
+} from "@/features/enquiries/enquiryConvertLogic";
 
 interface ConvertEnquiryModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (clientName: string, businessName: string, productType: string, requirements: string, assignedAdmins: string[]) => void;
+  onSubmit: (clientName: string, businessName: string, productType: string, requirements: string, assignedAdmins: string[]) => void | Promise<void>;
   defaultClientName: string;
   defaultBusinessName: string;
   defaultRequirements?: string;
@@ -51,7 +57,7 @@ export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultClientNa
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const filteredProducts = products.filter(p => p.name.toLowerCase().includes(productType.toLowerCase()));
+  const filteredProducts = filterProductsByName(products, productType);
 
   if (!isOpen) return null;
 
@@ -347,7 +353,8 @@ export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultClientNa
           </button>
           <button 
             onClick={async () => {
-              if (isSubmitting) return;
+              if (!canStartConvertSubmit(isSubmitting)) return;
+              if (!canSubmitConvertForm({ clientName, businessName })) return;
               setIsSubmitting(true);
               try {
                 await onSubmit(clientName, businessName, productType, requirements, selectedAdmins);
@@ -355,7 +362,7 @@ export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultClientNa
                 setIsSubmitting(false);
               }
             }}
-            disabled={!clientName.trim() || !businessName.trim() || isSubmitting}
+            disabled={isConvertSubmitDisabled(clientName, businessName, isSubmitting)}
             style={{
               padding: "10px 16px",
               background: "var(--color-primary)",
@@ -364,8 +371,8 @@ export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultClientNa
               color: "white",
               fontSize: "14px",
               fontWeight: "600",
-              cursor: (!clientName.trim() || !businessName.trim() || isSubmitting) ? "not-allowed" : "pointer",
-              opacity: (!clientName.trim() || !businessName.trim() || isSubmitting) ? 0.6 : 1,
+              cursor: isConvertSubmitDisabled(clientName, businessName, isSubmitting) ? "not-allowed" : "pointer",
+              opacity: isConvertSubmitDisabled(clientName, businessName, isSubmitting) ? 0.6 : 1,
               transition: "all 0.2s"
             }}
           >

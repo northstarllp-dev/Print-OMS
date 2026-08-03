@@ -7,34 +7,16 @@ import { Search, Filter, MapPin, Mail, Phone, X, ShoppingBag, ExternalLink, Shar
 import { useRouter } from "next/navigation";
 import { updateCustomer } from "@/features/customers/actions/customerActions";
 import { withBasePath } from "@/lib/appBasePath";
-
-const getStatusColor = (status: string | undefined) => {
-  const colors: Record<string, { bg: string; text: string; label: string }> = {
-    "Active": { bg: "#dcfce7", text: "#16a34a", label: "ACTIVE" },
-    "Inactive": { bg: "#fee2e2", text: "#dc2626", label: "INACTIVE" },
-    "Pending": { bg: "#fef3c7", text: "#ea580c", label: "PENDING" },
-  };
-  return colors[status || "Active"] || colors["Active"];
-};
-
-const getHealthBadgeColor = (health: string) => {
-  const colors: Record<string, string> = {
-    "Active": "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
-    "Needs Attention": "bg-amber-500/10 text-amber-700 border-amber-500/20",
-    "On Hold": "bg-slate-500/10 text-slate-600 border-slate-500/20",
-    "Lost": "bg-rose-500/10 text-rose-600 border-rose-500/20",
-  };
-  return colors[health] || "bg-slate-100 text-slate-600 border-slate-200";
-};
-
-const isClosedOrderStage = (stage: string | undefined) =>
-  stage === "Completed" || stage === "Closed";
-
-/** Portal access ends once every linked order is completed/closed. */
-const isCustomerPortalExpired = (customerId: string, orders: any[]) => {
-  const linked = orders.filter((o) => o.customerId === customerId);
-  return linked.length > 0 && linked.every((o) => isClosedOrderStage(o.stage));
-};
+import {
+  computeCustomerKpis,
+  computeCustomerTotalSpend,
+  filterCustomersCatalog,
+  getCustomerStatusColor,
+  getOrderHealthBadgeClass,
+  isCustomerPortalExpired,
+  linkedOrdersForCustomer,
+  resetCustomerFilters,
+} from "@/features/customers/customerLogic";
 
 export function CustomersViewNew({ 
   initialCustomers, 
@@ -95,8 +77,12 @@ export function CustomersViewNew({
   };
 
   const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
-  const customerOrders = selectedCustomer ? initialOrders.filter(o => o.customerId === selectedCustomer.id) : [];
-  const totalSpend = 0;
+  const customerOrders = selectedCustomer
+    ? linkedOrdersForCustomer(selectedCustomer.id, initialOrders)
+    : [];
+  const totalSpend = selectedCustomer
+    ? computeCustomerTotalSpend(selectedCustomer.id, initialOrders)
+    : 0;
 
   const handleCopyLink = async (customerId: string, e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent row selection when copying portal link
@@ -132,10 +118,12 @@ export function CustomersViewNew({
     }
   };
 
-  const totalCustomers = customers.length;
-  const activeCustomers = customers.filter(c => c.status === "Active").length;
-  const pendingCustomers = customers.filter(c => c.status === "Pending").length;
-  const activePercentage = totalCustomers > 0 ? Math.round((activeCustomers / totalCustomers) * 100) : 0;
+  const {
+    total: totalCustomers,
+    active: activeCustomers,
+    pending: pendingCustomers,
+    activePercentage,
+  } = computeCustomerKpis(customers);
 
   const stats = [
     {
@@ -168,19 +156,15 @@ export function CustomersViewNew({
     },
   ];
 
-  const filteredCustomers = customers.filter((c) => {
-    const matchesSearch =
-      c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.phone.includes(searchTerm) ||
-      c.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.customerCode.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === "ALL" || (c.status || "Active") === statusFilter;
-    return matchesSearch && matchesStatus;
+  const filteredCustomers = filterCustomersCatalog(customers, initialOrders, {
+    search: searchTerm,
+    statusFilter,
   });
 
   const resetFilters = () => {
-    setSearchTerm("");
-    setStatusFilter("ALL");
+    const defaults = resetCustomerFilters();
+    setSearchTerm(defaults.search);
+    setStatusFilter(defaults.statusFilter);
   };
 
   const activeFilterCount = [statusFilter !== "ALL"].filter(Boolean).length;
@@ -412,7 +396,7 @@ export function CustomersViewNew({
               </div>
             ) : (
               filteredCustomers.map((cust) => {
-                const statusColor = getStatusColor(cust.status);
+                const statusColor = getCustomerStatusColor(cust.status);
                 const count = initialOrders.filter(o => o.customerId === cust.id).length;
                 return (
                   <div
@@ -492,7 +476,7 @@ export function CustomersViewNew({
               </thead>
               <tbody>
                 {filteredCustomers.map((cust) => {
-                  const statusColor = getStatusColor(cust.status);
+                  const statusColor = getCustomerStatusColor(cust.status);
                   const isSelected = selectedCustomerId === cust.id;
                   const count = initialOrders.filter(o => o.customerId === cust.id).length;
                   return (
@@ -684,7 +668,7 @@ export function CustomersViewNew({
                           <span className="text-[10px] font-bold px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full border border-slate-200 max-w-[100px] truncate">
                             {o.stage}
                           </span>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${getHealthBadgeColor(o.health)}`}>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${getOrderHealthBadgeClass(o.health)}`}>
                             {o.health}
                           </span>
                         </div>

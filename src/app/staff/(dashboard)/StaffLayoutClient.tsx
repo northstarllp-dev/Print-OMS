@@ -22,6 +22,7 @@ import {
   clearAllNotifications,
   savePushSubscription,
   togglePushEnabled,
+  deleteNotification,
 } from "@/features/notifications/actions/notificationActions";
 
 /** Convert a Base64URL string to a Uint8Array */
@@ -173,6 +174,37 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
 
   // Layout-scoped in-memory activities
   const [activities, setActivities] = useState<any[]>([]);
+  const [activitiesLoading, setActivitiesLoading] = useState(false);
+
+  useEffect(() => {
+    if (!isHistoryOpen) return;
+    const supabase = createClient();
+    setActivitiesLoading(true);
+    
+    supabase
+      .from("order_assignments")
+      .select("order_id")
+      .eq("employee_id", profile.id)
+      .then(({ data: assignmentData }) => {
+        if (!assignmentData || assignmentData.length === 0) {
+           setActivities([]);
+           setActivitiesLoading(false);
+           return;
+        }
+        const orderIds = assignmentData.map(a => a.order_id);
+        
+        supabase
+          .from("order_activity")
+          .select("id, order_id, actor_name, actor_role, content, created_at, orders(status)")
+          .in("order_id", orderIds)
+          .order("created_at", { ascending: false })
+          .limit(50)
+          .then(({ data }) => {
+            setActivities(data || []);
+            setActivitiesLoading(false);
+          });
+      });
+  }, [isHistoryOpen, profile.id]);
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
@@ -184,6 +216,12 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
   const handleClearNotifications = async () => {
     await clearAllNotifications();
     setNotifications([]);
+  };
+
+  const handleDeleteNotification = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    await deleteNotification(id);
+    setNotifications((prev) => prev.filter(n => n.id !== id));
   };
 
   const handleMarkRead = async (id: string, link?: string) => {
@@ -258,17 +296,18 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
       pathname.startsWith("/staff/orders/") && pathname.replace(/\/$/, "") !== "/staff/orders";
 
     if (isOrderDetail) {
-      if ('orderDetailEntryStage' in item && item.orderDetailEntryStage) {
-        return entryStage === item.orderDetailEntryStage;
+      // My Orders opens worksheets without entryStage — highlight My Orders.
+      if (item.href === "/staff/my-orders") {
+        return !entryStage;
       }
-      if (item.href === "/staff/orders") {
-        return !entryStage || entryStage === "quotation";
+      if ("orderDetailEntryStage" in item && item.orderDetailEntryStage) {
+        return entryStage === item.orderDetailEntryStage;
       }
       return false;
     }
 
-    if (item.href === "/staff/orders") {
-      return pathname === "/staff/orders" || pathname === "/staff";
+    if (item.href === "/staff/my-orders") {
+      return pathname === "/staff/my-orders" || pathname === "/staff";
     }
 
     return pathname === item.href || pathname.startsWith(`${item.href}/`);
@@ -546,32 +585,48 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
                 </button>
                 {isHistoryOpen && (
                   <>
-                    <div style={{ position: "fixed", inset: 0, zIndex: 49 }} onClick={() => setIsHistoryOpen(false)} />
-                    <div className="prt-animate-in" style={{ position: "absolute", right: 0, top: "calc(100% + 8px)", width: "min(340px, calc(100vw - 24px))", background: "white", border: "1px solid #E2E8F0", borderRadius: "12px", boxShadow: "0 8px 24px rgba(0,0,0,0.12)", zIndex: 50, overflow: "hidden" }}>
+                    <div style={{ position: "fixed", inset: 0, zIndex: 55 }} onClick={() => setIsHistoryOpen(false)} />
+                    <div className="prt-animate-in fixed right-4 top-[64px] max-h-[min(85vh,420px)] w-[min(calc(100vw-2rem),380px)] bg-white border border-slate-200 rounded-xl shadow-2xl z-[60] flex flex-col overflow-hidden">
                       <div style={{ padding: "10px 16px", background: "#F8FAFC", borderBottom: "1px solid #E2E8F0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.08em" }}>Operation History</span>
-                        <span style={{ fontSize: 10, color: "#94A3B8" }}>Rollback enabled</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.08em" }}>My Orders Timeline</span>
+                        <span style={{ fontSize: 10, color: "#94A3B8" }}>Assigned Orders</span>
                       </div>
-                      <div style={{ maxHeight: 280, overflowY: "auto" }}>
-                        {activities.length === 0 ? (
-                          <div style={{ padding: 24, textAlign: "center", fontSize: 12, color: "#94A3B8" }}>No actions recorded yet.</div>
-                        ) : activities.map((act: any) => (
-                          <div key={act.id} style={{ padding: "10px 16px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, borderBottom: "1px solid #F8FAFC" }}>
-                            <div style={{ flex: 1 }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
-                                <span style={{ fontSize: 10, fontWeight: 700, color: "#0F172A", background: "#F1F5F9", padding: "1px 6px", borderRadius: 4 }}>{act.user}</span>
-                                <span style={{ fontSize: 10, color: "#94A3B8", fontFamily: "monospace" }}>{act.timestamp}</span>
-                              </div>
-                              <span style={{ fontSize: 12, color: "#64748B" }}>{act.description}</span>
-                            </div>
-                            <button
-                              onClick={() => undoActivity(act.id)}
-                              style={{ fontSize: 11, color: "var(--color-secondary)", background: "var(--secondary-container)", border: "1px solid rgba(79,70,229,0.2)", padding: "3px 8px", borderRadius: "6px", cursor: "pointer", fontWeight: 700, display: "flex", alignItems: "center", gap: 4, flexShrink: 0, whiteSpace: "nowrap" }}
+                      <div style={{ maxHeight: 360, overflowY: "auto" }}>
+                        {activitiesLoading ? (
+                          <div style={{ padding: 24, textAlign: "center", fontSize: 12, color: "#94A3B8" }}>Loading...</div>
+                        ) : activities.length === 0 ? (
+                          <div style={{ padding: 24, textAlign: "center", fontSize: 12, color: "#94A3B8" }}>No activity recorded yet for your orders.</div>
+                        ) : activities.map((act: any) => {
+                          const ts = new Date(act.created_at);
+                          const timeStr = ts.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
+                          const dateStr = ts.toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
+                          return (
+                            <div
+                              key={act.id}
+                              onClick={() => { if (act.order_id) { router.push(`/staff/orders/${act.order_id}`); setIsHistoryOpen(false); } }}
+                              style={{ padding: "10px 16px", display: "flex", alignItems: "flex-start", gap: 10, borderBottom: "1px solid #F8FAFC", cursor: act.order_id ? "pointer" : "default", transition: "background 0.12s" }}
+                              onMouseEnter={(e) => { if (act.order_id) (e.currentTarget as HTMLElement).style.background = "#F8FAFC"; }}
+                              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "white"; }}
                             >
-                              <RotateCcw size={10} /> Undo
-                            </button>
-                          </div>
-                        ))}
+                              <div style={{ flexShrink: 0, marginTop: 3, width: 8, height: 8, borderRadius: "50%", background: act.actor_role === "System" ? "#94A3B8" : "var(--color-secondary)", border: "2px solid white", boxShadow: "0 0 0 1px #E2E8F0" }} />
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2, flexWrap: "wrap" }}>
+                                  <span style={{ fontSize: 10, fontWeight: 700, color: "#0F172A", background: "#F1F5F9", padding: "1px 6px", borderRadius: 4, flexShrink: 0 }}>
+                                    {act.order_id || "—"}
+                                  </span>
+                                  {act.orders?.status && (
+                                    <span style={{ fontSize: 10, fontWeight: 700, color: "#2563eb", background: "#dbeafe", padding: "1px 6px", borderRadius: 4, flexShrink: 0, textTransform: "uppercase" }}>
+                                      {act.orders.status.replace(/_/g, ' ')}
+                                    </span>
+                                  )}
+                                  <span style={{ fontSize: 10, color: "#64748B", fontWeight: 600 }}>{act.actor_name}</span>
+                                  <span style={{ fontSize: 10, color: "#94A3B8", marginLeft: "auto", flexShrink: 0 }}>{dateStr} · {timeStr}</span>
+                                </div>
+                                <span style={{ fontSize: 12, color: "#475569", lineHeight: 1.4, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{act.content}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   </>
@@ -592,8 +647,8 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
                 </button>
                 {isNotifOpen && (
                   <>
-                    <div style={{ position: "fixed", inset: 0, zIndex: 49 }} onClick={() => setIsNotifOpen(false)} />
-                    <div className="prt-animate-in" style={{ position: "absolute", right: 0, top: "calc(100% + 8px)", width: "min(300px, calc(100vw - 24px))", background: "white", border: "1px solid #E2E8F0", borderRadius: "12px", boxShadow: "0 8px 24px rgba(0,0,0,0.12)", zIndex: 50, overflow: "hidden" }}>
+                    <div style={{ position: "fixed", inset: 0, zIndex: 55 }} onClick={() => setIsNotifOpen(false)} />
+                    <div className="prt-animate-in fixed right-4 top-[64px] max-h-[min(85vh,400px)] w-[min(calc(100vw-2rem),320px)] bg-white border border-slate-200 rounded-xl shadow-2xl z-[60] flex flex-col overflow-hidden">
                       <div style={{ padding: "10px 16px", background: "#F8FAFC", borderBottom: "1px solid #E2E8F0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                         <span style={{ fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.08em" }}>Notifications</span>
                         <div style={{ display: "flex", gap: 10 }}>
@@ -618,20 +673,36 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
                           <div 
                             key={notif.id} 
                             onClick={() => handleMarkRead(notif.id, notif.link)}
-                            style={{ padding: "10px 16px", display: "flex", alignItems: "flex-start", gap: 10, borderBottom: "1px solid #F8FAFC", background: notif.read ? "white" : "#EFF6FF", cursor: notif.link ? "pointer" : "default" }}
+                            style={{ position: "relative", padding: "10px 16px", display: "flex", alignItems: "flex-start", gap: 10, borderBottom: "1px solid #F8FAFC", background: notif.read ? "white" : "#EFF6FF", cursor: notif.link ? "pointer" : "default" }}
                           >
                             <span style={{ marginTop: 1 }}>
                               {notif.type === "success" ? <CheckCircle size={13} color="#22C55E" /> :
                                notif.type === "error" || notif.type === "warning" ? <AlertCircle size={13} color="#EF4444" /> :
                                <Info size={13} color="#94A3B8" />}
                             </span>
-                            <div style={{ flex: 1 }}>
+                            <div style={{ flex: 1, paddingRight: 20 }}>
                               <div style={{ fontSize: 12, fontWeight: 700, color: "#0F172A", lineHeight: 1.3 }}>{notif.title}</div>
                               <div style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>{notif.message}</div>
                               <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 3, fontFamily: "monospace" }}>
                                 {new Date(notif.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                               </div>
                             </div>
+                            <button
+                              onClick={(e) => handleDeleteNotification(notif.id, e)}
+                              title="Delete notification"
+                              style={{
+                                position: "absolute",
+                                top: 10,
+                                right: 12,
+                                background: "none",
+                                border: "none",
+                                color: "#94A3B8",
+                                cursor: "pointer",
+                                padding: 2
+                              }}
+                            >
+                              <X size={14} />
+                            </button>
                           </div>
                         ))}
                       </div>
@@ -670,22 +741,28 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
                     <p style={{ margin: 0, fontSize: "10px", color: "#64748B", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.04em" }}>
                       {profile.staff_role || "Field Agent"}
                     </p>
-                  </div>
+</div>
                 </button>
                 {isProfileOpen && (
                   <>
-                    <div style={{ position: "fixed", inset: 0, zIndex: 49 }} onClick={() => setIsProfileOpen(false)} />
-                    <div className="prt-animate-in" style={{ position: "absolute", right: 0, top: "calc(100% + 8px)", width: 180, background: "white", border: "1px solid #E2E8F0", borderRadius: "12px", boxShadow: "0 8px 24px rgba(0,0,0,0.12)", zIndex: 50, overflow: "hidden", padding: 4 }}>
+                    <div style={{ position: "fixed", inset: 0, zIndex: 55 }} onClick={() => setIsProfileOpen(false)} />
+                    <div className="prt-animate-in fixed right-4 top-[64px] w-[min(calc(100vw-2rem),240px)] bg-white border border-slate-200 rounded-xl shadow-2xl z-[60] flex flex-col overflow-hidden">
+                      <div style={{ padding: "12px 16px", borderBottom: "1px solid #E2E8F0", background: "#F8FAFC" }}>
+                        <p style={{ margin: 0, fontSize: "13px", fontWeight: "800", color: "#0F172A" }}>{profile.name}</p>
+                        <p style={{ margin: 0, fontSize: "11px", color: "#64748B" }}>{profile.email}</p>
+                      </div>
                       <button
+                        type="button"
                         onClick={() => { setIsChangePasswordModalOpen(true); setIsProfileOpen(false); setPasswordError(""); setPasswordSuccess(""); setNewPassword(""); setConfirmPassword(""); }}
-                        style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: "8px", fontSize: 13, fontWeight: 600, color: "#64748B", background: "none", border: "none", cursor: "pointer", transition: "background 0.15s", textAlign: "left" }}
+                        style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", fontSize: 13, fontWeight: 600, color: "#64748B", background: "none", border: "none", cursor: "pointer", textAlign: "left" }}
                       >
                         <Key size={14} /> Change Password
                       </button>
-                      <div style={{ height: 1, background: "#E2E8F0", margin: "4px 0" }} />
+                      <div style={{ height: 1, background: "#E2E8F0" }} />
                       <button
+                        type="button"
                         onClick={handleLogout}
-                        style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: "8px", fontSize: 13, fontWeight: 600, color: "#EF4444", background: "none", border: "none", cursor: "pointer", transition: "background 0.15s", textAlign: "left" }}
+                        style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", fontSize: 13, fontWeight: 600, color: "#EF4444", background: "none", border: "none", cursor: "pointer", textAlign: "left" }}
                         onMouseEnter={(e) => { e.currentTarget.style.background = "#FEF2F2"; }}
                         onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
                       >

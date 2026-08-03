@@ -46,6 +46,7 @@ import {
   clearAllNotifications,
   savePushSubscription,
   togglePushEnabled,
+  deleteNotification,
 } from "@/features/notifications/actions/notificationActions";
 
 /** Convert a Base64URL string to a Uint8Array */
@@ -228,6 +229,12 @@ export function AdminLayoutClient({
   const handleClearNotifications = async () => {
     await clearAllNotifications();
     setNotifications([]);
+  };
+
+  const handleDeleteNotification = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    await deleteNotification(id);
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
   };
 
   const handleMarkRead = async (id: string, link?: string) => {
@@ -595,7 +602,7 @@ export function AdminLayoutClient({
                 {isHistoryOpen && (
                   <>
                     <div style={{ position: "fixed", inset: 0, zIndex: 49 }} onClick={() => setIsHistoryOpen(false)} />
-                    <div className="prt-animate-in" style={{ position: "absolute", right: 0, top: "calc(100% + 8px)", width: "min(380px, calc(100vw - 24px))", background: "white", border: "1px solid #E2E8F0", borderRadius: "12px", boxShadow: "0 8px 24px rgba(0,0,0,0.12)", zIndex: 50, overflow: "hidden" }}>
+                    <div className="prt-animate-in fixed inset-x-4 top-[64px] sm:inset-x-auto sm:absolute sm:-right-2 sm:top-[calc(100%+8px)] w-auto sm:w-[380px] bg-white border border-slate-200 rounded-xl shadow-lg z-50 overflow-hidden">
                       <div style={{ padding: "10px 16px", background: "#F8FAFC", borderBottom: "1px solid #E2E8F0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                         <span style={{ fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.08em" }}>Order Activity Timeline</span>
                         <span style={{ fontSize: 10, color: "#94A3B8" }}>Latest 50 events</span>
@@ -653,7 +660,7 @@ export function AdminLayoutClient({
                 {isNotifOpen && (
                   <>
                     <div style={{ position: "fixed", inset: 0, zIndex: 49 }} onClick={() => setIsNotifOpen(false)} />
-                    <div className="prt-animate-in" style={{ position: "absolute", right: 0, top: "calc(100% + 8px)", width: "min(300px, calc(100vw - 24px))", background: "white", border: "1px solid #E2E8F0", borderRadius: "12px", boxShadow: "0 8px 24px rgba(0,0,0,0.12)", zIndex: 50, overflow: "hidden" }}>
+                    <div className="prt-animate-in fixed inset-x-4 top-[64px] sm:inset-x-auto sm:absolute sm:-right-2 sm:top-[calc(100%+8px)] w-auto sm:w-[320px] bg-white border border-slate-200 rounded-xl shadow-lg z-50 overflow-hidden">
                       <div style={{ padding: "10px 16px", background: "#F8FAFC", borderBottom: "1px solid #E2E8F0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                         <span style={{ fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.08em" }}>Notifications</span>
                         <div style={{ display: "flex", gap: 10 }}>
@@ -678,20 +685,36 @@ export function AdminLayoutClient({
                           <div 
                             key={notif.id} 
                             onClick={() => handleMarkRead(notif.id, notif.link)}
-                            style={{ padding: "10px 16px", display: "flex", alignItems: "flex-start", gap: 10, borderBottom: "1px solid #F8FAFC", background: notif.read ? "white" : "#EFF6FF", cursor: notif.link ? "pointer" : "default" }}
+                            style={{ position: "relative", padding: "10px 16px", display: "flex", alignItems: "flex-start", gap: 10, borderBottom: "1px solid #F8FAFC", background: notif.read ? "white" : "#EFF6FF", cursor: notif.link ? "pointer" : "default" }}
                           >
                             <span style={{ marginTop: 1 }}>
                               {notif.type === "success" ? <CheckCircle size={13} color="#22C55E" /> :
                                notif.type === "error" || notif.type === "warning" ? <AlertCircle size={13} color="#EF4444" /> :
                                <Info size={13} color="#94A3B8" />}
                             </span>
-                            <div style={{ flex: 1 }}>
+                            <div style={{ flex: 1, paddingRight: 20 }}>
                               <div style={{ fontSize: 12, fontWeight: 700, color: "#0F172A", lineHeight: 1.3 }}>{notif.title}</div>
                               <div style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>{notif.message}</div>
                               <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 3, fontFamily: "monospace" }}>
                                 {new Date(notif.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                               </div>
                             </div>
+                            <button
+                              onClick={(e) => handleDeleteNotification(notif.id, e)}
+                              title="Delete notification"
+                              style={{
+                                position: "absolute",
+                                top: 10,
+                                right: 12,
+                                background: "none",
+                                border: "none",
+                                color: "#94A3B8",
+                                cursor: "pointer",
+                                padding: 2
+                              }}
+                            >
+                              <X size={14} />
+                            </button>
                           </div>
                         ))}
                       </div>
@@ -734,8 +757,12 @@ export function AdminLayoutClient({
                 </button>
                 {isProfileOpen && (
                   <>
-                    <div style={{ position: "fixed", inset: 0, zIndex: 49 }} onClick={() => setIsProfileOpen(false)} />
-                    <div className="prt-animate-in" style={{ position: "absolute", right: 0, top: "calc(100% + 8px)", width: 180, background: "white", border: "1px solid #E2E8F0", borderRadius: "12px", boxShadow: "0 8px 24px rgba(0,0,0,0.12)", zIndex: 50, overflow: "hidden", padding: 4 }}>
+                    <div style={{ position: "fixed", inset: 0, zIndex: 55 }} onClick={() => setIsProfileOpen(false)} />
+                    <div className="prt-animate-in fixed right-4 top-[64px] w-[min(calc(100vw-2rem),240px)] bg-white border border-slate-200 rounded-xl shadow-lg z-[60] overflow-hidden p-1">
+                      <div style={{ padding: "12px 16px", borderBottom: "1px solid #E2E8F0", background: "#F8FAFC" }}>
+                        <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "#0F172A" }}>{profile.name}</p>
+                        <p style={{ margin: "2px 0 0", fontSize: 11, color: "#64748B" }}>{profile.email}</p>
+                      </div>
                       <button
                         onClick={handleLogout}
                         style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: "8px", fontSize: 13, fontWeight: 600, color: "#EF4444", background: "none", border: "none", cursor: "pointer", transition: "background 0.15s", textAlign: "left" }}

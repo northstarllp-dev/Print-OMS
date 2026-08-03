@@ -22,6 +22,8 @@ import {
 import { getRequestBaseUrl } from "@/features/notifications/whatsapp/requestBaseUrl";
 import {
   assertAdminOnly,
+  assertCanAssignOrderTeam,
+  assertOrderUpdateAccess,
   assertStageEditPermission,
 } from "@/features/orders/workspace/shared/serverPermissions";
 import {
@@ -196,6 +198,7 @@ export async function getOrderById(id: string) {
 }
 
 export async function createOrder(formData: any) {
+  await assertAdminOnly();
   const supabase = await getSupabase();
   
   const { resolveWriteCompanyId } = await import("@/lib/resolveWriteCompanyId");
@@ -252,6 +255,7 @@ async function resolveOrderUuid(supabase: any, idOrOrderId: string): Promise<str
 }
 
 export async function updateOrder(id: string, updates: any) {
+  await assertOrderUpdateAccess(updates ?? {});
   const supabase = await getSupabase();
   // Resolve UUID in case a friendly order_id was passed
   const orderUuid = await resolveOrderUuid(supabase, id);
@@ -295,6 +299,7 @@ export async function updateOrder(id: string, updates: any) {
 }
 
 export async function deleteOrder(id: string) {
+  await assertAdminOnly();
   const supabase = await getSupabase();
   const { data: o } = await supabase.from("orders").select("order_id").eq("id", id).single();
   const { error } = await supabase.from("orders").delete().eq("id", id);
@@ -543,6 +548,18 @@ export async function requestStageAdvancementAction(orderId: string) {
     .eq("id", orderUuid)
     .single();
   if (reqOrder?.company_id) {
+    await insertOrderActivity(supabase, {
+      order_id: reqOrder.order_id || orderId,
+      company_id: reqOrder.company_id,
+      actor_name: "System",
+      actor_role: "System",
+      content: `Stage advancement requested from "${current.stage}" (${nextStatus}).`,
+      metadata: {
+        action: "stage_advancement_requested",
+        from_stage: current.stage,
+        stage_status: nextStatus,
+      },
+    });
     await dispatchAdminNotification(reqOrder.company_id, {
       title: `Stage Approval Requested`,
       message: `Order ${reqOrder.order_id} needs your approval to advance from "${current.stage}".`,
@@ -736,36 +753,51 @@ export async function setWorkflowTypeAction(
   workflowType: "quote_first" | "design_first"
 ) {
   await assertAdminOnly();
+  const {
+    buildWorkflowChoiceActivity,
+    buildWorkflowChoiceUpdate,
+    isValidWorkflowType,
+    resolveConcurrentWorkflowChoice,
+  } = await import("@/features/orders/workflowSelectionLogic");
+
+  if (!isValidWorkflowType(workflowType)) {
+    throw new Error("Invalid workflow type.");
+  }
+
   const supabase = await getSupabase();
   const orderUuid = await resolveOrderUuid(supabase, orderId);
   const { data: o, error: fetchError } = await supabase
     .from("orders")
-    .select("order_id, stage, company_id")
+    .select("order_id, stage, company_id, workflow_type")
     .eq("id", orderUuid)
     .single();
   if (fetchError) throw new Error(fetchError.message);
 
-  const firstStage = workflowType === "design_first"
-    ? "Design In Progress"
-    : "Quotation In Progress";
+  // Orders default to quote_first in DB — only treat as conflict once stage has left Site Visit.
+  if (!(o.stage || "").startsWith("Site Visit")) {
+    const conflict = resolveConcurrentWorkflowChoice({
+      attempted: workflowType,
+      existing: o.workflow_type,
+    });
+    throw new Error(
+      conflict.reason || "Workflow already selected for this order."
+    );
+  }
 
-  const result = await updateOrder(orderUuid, {
-    workflow_type: workflowType,
-    stage: firstStage,
-    stage_status: "Normal",
-    stage_admin_notes: "",
-  });
+  const updates = buildWorkflowChoiceUpdate(workflowType);
+  const result = await updateOrder(orderUuid, updates);
 
+  const activity = buildWorkflowChoiceActivity(workflowType);
   await insertOrderActivity(supabase, {
     order_id: o.order_id || orderId,
     company_id: o.company_id,
     actor_name: "System",
     actor_role: "System",
-    content: `Workflow path set to "${workflowType === "design_first" ? "Design First" : "Quote First"}". Order advanced to ${firstStage}.`,
-    metadata: { action: "workflow_type_set", workflow_type: workflowType, stage: firstStage }
+    content: activity.content,
+    metadata: activity.metadata,
   });
 
-  await dispatchWhatsAppForPipelineStage(supabase, orderUuid, firstStage);
+  await dispatchWhatsAppForPipelineStage(supabase, orderUuid, updates.stage);
 
   return result;
 }
@@ -856,6 +888,7 @@ export async function revalidateOrderPathsAction(orderId?: string) {
 export async function revalidateStaffQueuePaths() {
   revalidatePath("/admin/orders");
   revalidatePath("/admin/dashboard");
+  revalidatePath("/staff/my-orders");
   revalidatePath("/staff/orders");
   revalidatePath("/staff/site-visit");
   revalidatePath("/staff/design");
@@ -903,6 +936,7 @@ export async function fetchEmployeeStats() {
 }
 
 export async function assignTeamToOrder(orderId: string, employeeIds: string[]) {
+  await assertCanAssignOrderTeam();
   const supabase = await getSupabase();
 
   // Resolve UUID in case a friendly order_id was passed
@@ -965,6 +999,7 @@ export async function updateOrderHealthAction(
   lostReason?: string,
   callRemarks?: string
 ) {
+  await assertAdminOnly();
   const { isOrderHealth } = await import("@/features/orders/lib/orderHealth");
   if (!isOrderHealth(health)) {
     throw new Error("Invalid health. Use Active, Needs Attention, On Hold, or Lost.");
@@ -1066,6 +1101,7 @@ export async function flagStalledOrdersAction(): Promise<{ flagged: number }> {
 }
 
 export async function reopenOrderAction(orderId: string) {
+  await assertAdminOnly();
   const supabase = await getSupabase();
   const { data: o, error: fetchError } = await supabase
     .from("orders")

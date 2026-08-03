@@ -10,33 +10,15 @@ import {
   createProduct, updateProduct, deleteProduct, deleteImagesFromStorage, 
   createProductCategory, deleteProductCategory, type Product, type CreateProductPayload, type ProductCategory,
 } from "../actions/productActions";
+import {
+  generateFinalProductId,
+  generateProductId,
+  filterProductsCatalog,
+  isPricingFieldDisabled,
+  MAX_PRODUCT_IMAGES,
+} from "../productLogic";
 
 const PRICING_TYPES = ["Per Sq.Ft", "Per Unit", "Multiple"];
-
-function productsForTenant(existing: Product[], companyId?: string | null): Product[] {
-  if (!companyId) return existing;
-  return existing.filter((p) => p.company_id === companyId);
-}
-
-function generateProductId(existing: Product[], companyId?: string | null): string {
-  const scoped = productsForTenant(existing, companyId);
-  const maxNum = scoped.reduce((max, p) => {
-    const match = p.product_id?.match(/^PRD-(\d+)$/);
-    if (match) return Math.max(max, parseInt(match[1], 10));
-    return max;
-  }, 0);
-  return `PRD-${String(maxNum + 1).padStart(3, "0")}`;
-}
-
-function generateFinalProductId(existing: Product[], companyId?: string | null): string {
-  const scoped = productsForTenant(existing, companyId);
-  const maxNum = scoped.reduce((max, p) => {
-    const match = p.product_id?.match(/^FP(\d+)$/);
-    if (match) return Math.max(max, parseInt(match[1], 10));
-    return max;
-  }, 0);
-  return `FP${String(maxNum + 1).padStart(3, "0")}`;
-}
 
 const inputStyle: React.CSSProperties = {
   width: "100%", padding: "9px 12px", border: "1px solid #e2e8f0",
@@ -118,7 +100,7 @@ function ProductImageUpload({
             </button>
           </div>
         ))}
-        {images.length < 5 && (
+        {images.length < MAX_PRODUCT_IMAGES && (
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
@@ -145,17 +127,10 @@ function ProductImageUpload({
         capture={undefined}
       />
       <p style={{ fontSize: 10, color: "#94a3b8", margin: 0 }}>
-        Upload from gallery or camera · Max 5 images · JPEG / PNG / WebP
+        Upload from gallery or camera · Max {MAX_PRODUCT_IMAGES} images · JPEG / PNG / WebP
       </p>
     </div>
   );
-}
-
-function isFieldDisabled(key: string, pricingType?: string | null): boolean {
-  if (!pricingType || pricingType === "Multiple") return false;
-  if (pricingType === "Per Sq.Ft" && key === "price_per_sqft") return false;
-  if (pricingType === "Per Unit" && key === "price_per_unit") return false;
-  return true;
 }
 
 // ── Pricing Section ──────────────────────────────────────────────────────────
@@ -169,13 +144,14 @@ function PricingSection({
     { key: "price_per_sqft", label: "Price / Sq.Ft", placeholder: "e.g. 120" },
     { key: "price_per_unit", label: "Price / Unit", placeholder: "e.g. 500" },
   ] as const;
+  const showThreshold = form.pricing_type === "Multiple";
 
   return (
     <div>
       <label style={labelStyle}>Pricing (fill whichever apply)</label>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
         {pricingFields.map(({ key, label, placeholder }) => {
-          const disabled = isFieldDisabled(key, form.pricing_type);
+          const disabled = isPricingFieldDisabled(key, form.pricing_type);
           return (
             <div key={key}>
               <label style={{ ...labelStyle, fontSize: 10, textTransform: "none" }}>{label}</label>
@@ -203,6 +179,32 @@ function PricingSection({
           );
         })}
       </div>
+      {showThreshold && (
+        <div className="mb-1">
+          <label style={{ ...labelStyle, fontSize: 10, textTransform: "none" }}>
+            Unit price up to (sq.ft) *
+          </label>
+          <input
+            type="number"
+            min={0}
+            step="any"
+            required
+            placeholder="e.g. 10"
+            value={form.unit_price_max_sqft ?? ""}
+            onChange={(e) =>
+              setForm((f) => ({
+                ...f,
+                unit_price_max_sqft:
+                  e.target.value === "" ? null : parseFloat(e.target.value),
+              }))
+            }
+            style={inputStyle}
+          />
+          <p style={{ margin: "6px 0 0", fontSize: 10, color: "#64748b", fontWeight: 600, lineHeight: 1.4 }}>
+            ≤ this area uses unit price; above uses sq.ft price.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -244,6 +246,7 @@ function ProductFormModal({
       ) : "",
       price_per_sqft: product?.price_per_sqft ?? null,
       price_per_unit: product?.price_per_unit ?? null,
+      unit_price_max_sqft: product?.unit_price_max_sqft ?? (product?.pricing_type === "Multiple" ? 10 : null),
       images: product?.images ?? [],
       is_active: product?.is_active ?? true,
       final_prdt,
@@ -269,6 +272,15 @@ function ProductFormModal({
         const payloadToSave = { ...form };
         if (payloadToSave.pricing_type === "Per Unit") payloadToSave.pricing_type = "per_unit";
         else if (payloadToSave.pricing_type === "Per Sq.Ft") payloadToSave.pricing_type = "per_sqft";
+        if (payloadToSave.pricing_type !== "Multiple") {
+          payloadToSave.unit_price_max_sqft = null;
+        } else if (
+          payloadToSave.unit_price_max_sqft == null ||
+          Number.isNaN(Number(payloadToSave.unit_price_max_sqft))
+        ) {
+          setError("Set the sq.ft threshold for unit vs sq.ft pricing.");
+          return;
+        }
 
         if (isEdit) {
           const res = await updateProduct(product!.id, payloadToSave);
@@ -372,11 +384,16 @@ function ProductFormModal({
                       const next = { ...f, pricing_type: nextPricingType };
                       if (nextPricingType === "Per Sq.Ft") {
                         next.price_per_unit = null;
+                        next.unit_price_max_sqft = null;
                       } else if (nextPricingType === "Per Unit") {
                         next.price_per_sqft = null;
+                        next.unit_price_max_sqft = null;
+                      } else if (nextPricingType === "Multiple") {
+                        if (next.unit_price_max_sqft == null) next.unit_price_max_sqft = 10;
                       } else if (!nextPricingType) {
                         next.price_per_sqft = null;
                         next.price_per_unit = null;
+                        next.unit_price_max_sqft = null;
                       }
                       return next;
                     });
@@ -624,6 +641,11 @@ function ProductCard({
           <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 8px", marginTop: 2 }}>
             {product.price_per_sqft && <span style={{ fontSize: 11, fontWeight: 700, color: "#0f172a" }}>₹{Number(product.price_per_sqft).toLocaleString("en-IN")}<span style={{ fontWeight: 500, color: "#64748b", fontSize: 9 }}>/sqft</span></span>}
             {product.price_per_unit && <span style={{ fontSize: 11, fontWeight: 700, color: "#0f172a" }}>₹{Number(product.price_per_unit).toLocaleString("en-IN")}<span style={{ fontWeight: 500, color: "#64748b", fontSize: 9 }}>/unit</span></span>}
+            {product.pricing_type === "Multiple" && product.unit_price_max_sqft != null && (
+              <span style={{ fontSize: 10, fontWeight: 600, color: "#64748b" }}>
+                unit ≤{Number(product.unit_price_max_sqft)} sqft
+              </span>
+            )}
           </div>
         )}
 
@@ -678,12 +700,11 @@ export function ProductsView({
 
   const uniqueCategories = ["All", ...categories.map(c => c.name)];
 
-  const filtered = products.filter(p => {
-    const matchSearch = !search.trim() || p.name.toLowerCase().includes(search.toLowerCase()) || p.product_id?.toLowerCase().includes(search.toLowerCase()) || (p.category || "").toLowerCase().includes(search.toLowerCase());
-    const matchCategory = categoryFilter === "All" || p.category === categoryFilter;
-    const matchStatus = statusFilter === "All" || (statusFilter === "Active" ? p.is_active : !p.is_active);
-    const matchFinal = finalFilter === "All" || (finalFilter === "Final" ? p.final_prdt === true : !p.final_prdt);
-    return matchSearch && matchCategory && matchStatus && matchFinal;
+  const filtered = filterProductsCatalog(products, {
+    search,
+    categoryFilter,
+    statusFilter,
+    finalFilter,
   });
 
   const handleOpenAdd = () => { setEditingProduct(null); setShowForm(true); setPageError(""); };

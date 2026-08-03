@@ -59,9 +59,8 @@ async function reverseGeocode(
 /**
  * Resolve a Google Maps share/search URL to coordinates + a human address.
  *
- * Uses the share-link map center (`@lat,lng`) — what you see when opening the link —
- * not unbound place-name geocoding (which often jumps to the wrong business).
- * Never returns the pasted Maps URL as the address.
+ * Prefers the place pin (`!3d/!4d`) over camera center (`@lat,lng`), which is often
+ * slightly offset from the shared pin. Never returns the pasted Maps URL as the address.
  */
 export async function resolveMapsUrlToLocation(
   url: string
@@ -78,8 +77,8 @@ export async function resolveMapsUrlToLocation(
   const viewport = parseViewportCoordsFromMapsUrl(finalUrl);
   const pin = parsePlacePinCoordsFromMapsUrl(finalUrl);
 
-  // Prefer @ map center (matches opened share link). Fall back to !3d/!4d pin.
-  const coords: MapsLatLng | null = viewport || pin;
+  // Prefer place pin (!3d/!4d) — exact drop pin. @lat,lng is camera center and often nearby-only.
+  const coords: MapsLatLng | null = pin || viewport;
   if (!coords) return null;
 
   const street = await reverseGeocode(coords.lat, coords.lng);

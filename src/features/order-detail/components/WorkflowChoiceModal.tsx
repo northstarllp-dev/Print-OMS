@@ -3,35 +3,27 @@
 import React, { useState } from "react";
 import { FileText, Palette, X, ArrowRight } from "lucide-react";
 import { OverlayPortal } from "@/components/ui/OverlayPortal";
+import {
+  PATH_DESIGN_FIRST,
+  PATH_QUOTE_FIRST,
+  WORKFLOW_CHOICE_DESCRIPTION,
+  WORKFLOW_CHOICE_TITLE,
+  type WorkflowType,
+} from "@/features/orders/workflowSelectionLogic";
 
 interface WorkflowChoiceModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onChoose: (workflowType: "quote_first" | "design_first") => Promise<void>;
+  onChoose: (workflowType: WorkflowType) => Promise<void>;
 }
 
-const PATH_QUOTE_FIRST = [
-  { icon: "📍", label: "Site Visit" },
-  { icon: "📄", label: "Quote" },
-  { icon: "🎨", label: "Design" },
-  { icon: "🏭", label: "Production" },
-  { icon: "🔧", label: "Installation" },
-];
-
-const PATH_DESIGN_FIRST = [
-  { icon: "📍", label: "Site Visit" },
-  { icon: "🎨", label: "Design" },
-  { icon: "📄", label: "Quote" },
-  { icon: "🏭", label: "Production" },
-  { icon: "🔧", label: "Installation" },
-];
-
 export function WorkflowChoiceModal({ isOpen, onClose, onChoose }: WorkflowChoiceModalProps) {
-  const [loading, setLoading] = useState<"quote_first" | "design_first" | null>(null);
+  const [loading, setLoading] = useState<WorkflowType | null>(null);
 
   if (!isOpen) return null;
 
-  const handleChoose = async (type: "quote_first" | "design_first") => {
+  const handleChoose = async (type: WorkflowType) => {
+    if (loading) return;
     setLoading(type);
     try {
       await onChoose(type);
@@ -44,14 +36,13 @@ export function WorkflowChoiceModal({ isOpen, onClose, onChoose }: WorkflowChoic
     <OverlayPortal>
     <div className="fixed inset-0 z-[100000] flex items-end md:items-center justify-center bg-slate-900/50 backdrop-blur-sm p-0 md:p-5">
       <div className="bg-white rounded-t-2xl md:rounded-2xl w-full max-w-[680px] max-h-[92dvh] md:max-h-[90vh] shadow-2xl overflow-hidden flex flex-col animate-[slideUp_0.3s_cubic-bezier(0.16,1,0.3,1)]">
-        {/* Header */}
         <div className="px-4 py-4 md:px-6 border-b border-slate-200 flex justify-between items-start gap-3 bg-slate-50 shrink-0">
           <div className="min-w-0">
             <h2 className="m-0 text-[16px] md:text-[17px] font-extrabold text-slate-900">
-              Choose Workflow Path
+              {WORKFLOW_CHOICE_TITLE}
             </h2>
             <p className="mt-1 mb-0 text-[12px] md:text-[13px] text-slate-500 leading-snug">
-              Site visit is approved. How do you want to proceed for this order?
+              {WORKFLOW_CHOICE_DESCRIPTION}
             </p>
           </div>
           <button
@@ -64,9 +55,7 @@ export function WorkflowChoiceModal({ isOpen, onClose, onChoose }: WorkflowChoic
           </button>
         </div>
 
-        {/* Cards — stack on mobile, side-by-side on sm+ */}
         <div className="p-4 md:p-6 overflow-y-auto flex-1 grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-          {/* Quote First */}
           <button
             type="button"
             onClick={() => handleChoose("quote_first")}
@@ -108,7 +97,6 @@ export function WorkflowChoiceModal({ isOpen, onClose, onChoose }: WorkflowChoic
             </div>
           </button>
 
-          {/* Design First */}
           <button
             type="button"
             onClick={() => handleChoose("design_first")}

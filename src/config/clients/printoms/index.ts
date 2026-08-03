@@ -40,13 +40,14 @@ export const defaultConfig: PrintOMSClientConfig = {
   features: {
     enableAdminAssignment: false,
     needsAttentionAfterDays: 6,
+    enquiryNeedsAttentionAfterDays: 5,
   },
   usesFloorPortals: true,
   stageGrantsByRole: {
     Designer: { ...view("site_visit"), ...edit("design", "quotation", "invoice") },
     Production: { ...view("site_visit"), ...edit("production", "service_tickets") },
     Installation: edit("installation"),
-    Marketer: edit("enquiry", "site_visit", "quotation", "invoice"),
+    Marketer: { ...view("enquiry"), ...edit("site_visit", "quotation", "invoice") },
   },
   whatsappTemplatePrefix: "printoms_",
 };

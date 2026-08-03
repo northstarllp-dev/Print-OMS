@@ -40,6 +40,10 @@ import {
   normalizePricingType,
   type PricingType,
 } from "@/features/quotations/utils/lineAmount";
+import {
+  getProductPriceForType,
+  resolvePricingForMeasurement,
+} from "@/features/quotations/utils/conditionalProductPricing";
 import { InvoiceDocument } from "@/features/invoices/components/InvoiceDocument";
 import type { InvoiceProfile } from "@/features/quotations/types/invoiceProfile";
 import { EMPTY_INVOICE_PROFILE } from "@/features/quotations/types/invoiceProfile";
@@ -52,6 +56,7 @@ interface Product {
   pricing_type?: string | null;
   price_per_sqft?: number | null;
   price_per_unit?: number | null;
+  unit_price_max_sqft?: number | null;
   is_active?: boolean;
   images?: string[];
 }
@@ -95,31 +100,6 @@ function newLine(): LineItem {
   };
 }
 
-function resolveInitialPricing(p: Product): {
-  pricingType: PricingType;
-  price: number;
-} {
-  const ut = (p.pricing_type || "").toLowerCase().trim();
-  if (ut === "per sq.ft" || ut === "per sqft" || ut === "sqft" || ut === "per_sqft") {
-    return { pricingType: "per_sqft", price: p.price_per_sqft ?? 0 };
-  }
-  if (ut === "per unit" || ut === "per_unit" || ut === "unit" || ut === "nos") {
-    return { pricingType: "per_unit", price: p.price_per_unit ?? 0 };
-  }
-  if (p.price_per_sqft != null && p.price_per_sqft > 0) {
-    return { pricingType: "per_sqft", price: p.price_per_sqft };
-  }
-  if (p.price_per_unit != null && p.price_per_unit > 0) {
-    return { pricingType: "per_unit", price: p.price_per_unit };
-  }
-  return { pricingType: "per_unit", price: 0 };
-}
-
-function getProductPriceForType(p: Product, type: PricingType): number {
-  if (type === "per_sqft") return p.price_per_sqft ?? 0;
-  return p.price_per_unit ?? 0;
-}
-
 function mapSections(raw: unknown): SignageSection[] {
   if (!Array.isArray(raw) || raw.length === 0) {
     return [
@@ -151,12 +131,14 @@ function ProductSearch({
   onSelect,
   onChange,
   disabled,
+  measurement = 1,
 }: {
   value: string;
   products: Product[];
   onSelect: (p: Product) => void;
   onChange: (val: string) => void;
   disabled?: boolean;
+  measurement?: number;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState(value);
@@ -230,7 +212,7 @@ function ProductSearch({
             }}
           >
             {visibleResults.map((p) => {
-              const resolved = resolveInitialPricing(p);
+              const resolved = resolvePricingForMeasurement(p, measurement);
               return (
                 <button
                   key={p.id}
@@ -417,13 +399,19 @@ export function InvoiceBuilder({
     lineId: string,
     p: Product
   ) => {
-    const resolved = resolveInitialPricing(p);
+    const line = sections
+      .find((s) => s.siteVisitItemId === sectionId)
+      ?.lines.find((l) => l.id === lineId);
+    const measurement = getLineMeasurement(line || { quantity: 1 }) || 1;
+    const resolved = resolvePricingForMeasurement(p, measurement);
     updateLine(sectionId, lineId, {
       productId: p.id,
       description: p.name,
       pricingType: resolved.pricingType,
-      unit: resolved.pricingType === "per_sqft" ? "sqft" : "nos",
+      unit: resolved.unit,
       unitPrice: resolved.price,
+      quantity: measurement,
+      totalSqFt: measurement,
     });
   };
 
@@ -763,6 +751,7 @@ export function InvoiceBuilder({
                             value={line.description}
                             products={products}
                             disabled={locked}
+                            measurement={getLineMeasurement(line) || 1}
                             onSelect={(p) =>
                               selectProduct(
                                 section.siteVisitItemId,
@@ -851,10 +840,22 @@ export function InvoiceBuilder({
                           value={measurement || ""}
                           onChange={(e) => {
                             const v = Number(e.target.value) || 0;
-                            updateLine(section.siteVisitItemId, line.id, {
+                            const patch: Partial<LineItem> = {
                               quantity: v,
                               totalSqFt: v,
-                            });
+                            };
+                            if (line.productId) {
+                              const p = products.find(
+                                (prod) => prod.id === line.productId
+                              );
+                              if (p) {
+                                const resolved = resolvePricingForMeasurement(p, v);
+                                patch.pricingType = resolved.pricingType;
+                                patch.unit = resolved.unit;
+                                patch.unitPrice = resolved.price;
+                              }
+                            }
+                            updateLine(section.siteVisitItemId, line.id, patch);
                           }}
                           className={`${inputCls} w-full py-1.5 text-center font-mono`}
                         />

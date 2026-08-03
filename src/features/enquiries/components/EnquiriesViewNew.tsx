@@ -7,9 +7,19 @@ import { Search, Filter, Plus, AlertCircle, CheckCircle, Clock, Phone, X, Check,
 import { AddEnquiryModal, EnquiryFormData } from "./AddEnquiryModal";
 import { ConvertEnquiryModal } from "./ConvertEnquiryModal";
 import { AssignTeamModal } from "./AssignTeamModal";
-import { createEnquiry, convertEnquiryToOrderAction } from "@/features/enquiries/actions/enquiryActions";
-import { createOrder } from "@/features/orders/actions/orderActions";
-import { createCustomer } from "@/features/customers/actions/customerActions";
+import { mapEnquiryFormToInsert } from "@/features/enquiries/enquiryFormLogic";
+import {
+  computeEnquiryKpis,
+  countActiveEnquiryFilters,
+  filterEnquiries,
+  healthMenuActions,
+  requiresLostReasonPrompt,
+} from "@/features/enquiries/enquiryListLogic";
+import {
+  canConvertEnquiry,
+} from "@/features/enquiries/enquiryConvertLogic";
+import { shouldOpenAssignTeamAfterConvert } from "@/features/enquiries/enquiryAssignLogic";
+import { createEnquiry, convertEnquiryToOrderAction, updateEnquiryHealthAction } from "@/features/enquiries/actions/enquiryActions";
 import { CustomerMessageModal, CustomerMessageInfo } from "@/features/notifications/customer-message/CustomerMessageModal";
 import type { CustomerMessageKey } from "@/features/notifications/customer-message/templates";
 
@@ -86,15 +96,46 @@ function SuccessModal({ title, message, onClose }: { title: string; message: str
   );
 }
 
+function LostReasonModal({ isOpen, onClose, onSubmit }: { isOpen: boolean; onClose: () => void; onSubmit: (reason: string) => void }) {
+  const [reason, setReason] = useState("");
+  
+  if (!isOpen) return null;
+  
+  return createPortal(
+    <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.4)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2000, padding: 20 }}>
+      <div style={{ background: "white", borderRadius: 16, width: "100%", maxWidth: 400, padding: 24, boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)" }}>
+        <h2 style={{ fontSize: 18, fontWeight: 800, color: "#0f172a", margin: "0 0 16px" }}>Mark as Lost</h2>
+        <div style={{ marginBottom: 20 }}>
+          <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#475569", marginBottom: 8 }}>Reason for lost enquiry</label>
+          <textarea 
+            value={reason} 
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="E.g., Price too high, chose competitor..."
+            style={{ width: "100%", padding: "10px 12px", border: "1px solid #cbd5e1", borderRadius: 8, fontSize: 14, outline: "none", minHeight: 80, resize: "vertical" }}
+            autoFocus
+          />
+        </div>
+        <div style={{ display: "flex", gap: 12 }}>
+          <button onClick={onClose} style={{ flex: 1, padding: "10px 16px", background: "#f1f5f9", color: "#475569", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
+          <button onClick={() => { if(reason.trim()) { onSubmit(reason); setReason(""); } else { alert("Reason is required."); } }} style={{ flex: 1, padding: "10px 16px", background: "#ef4444", color: "white", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Mark Lost</button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 export function EnquiriesViewNew({
   initialEnquiries,
   initialCustomers,
   canEdit = true,
+  canViewOrder = true,
   orderBasePath = "/admin/orders",
 }: {
   initialEnquiries: any[];
   initialCustomers: any[];
   canEdit?: boolean;
+  canViewOrder?: boolean;
   orderBasePath?: string;
 }) {
   const [enquiries, setEnquiries] = useState(initialEnquiries);
@@ -109,6 +150,7 @@ export function EnquiriesViewNew({
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [addedByFilter, setAddedByFilter] = useState("All");
+  const [healthFilter, setHealthFilter] = useState("ALL");
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   const availableAddedBy = useMemo(() => {
@@ -148,21 +190,13 @@ export function EnquiriesViewNew({
   // Success modal states
   const [successModalOpen, setSuccessModalOpen] = useState(false);
   const [successModalData, setSuccessModalData] = useState({ title: "", message: "" });
+  
+  // Lost reason modal state
+  const [lostReasonModalData, setLostReasonModalData] = useState<{enquiryId: string} | null>(null);
 
   const handleAddEnquiry = async (data: EnquiryFormData) => {
     try {
-      const newEnq = {
-        lead_name: data.leadName,
-        business_name: data.businessName,
-        phone: data.phone.replace(/\s+/g, ""),
-        whatsapp: data.whatsappNumber.replace(/\s+/g, ""),
-        email: data.email,
-        source: data.source,
-        notes: data.notes,
-        primary_communication_mode: data.primaryMode === "whatsapp" ? "WHATSAPP" : "MAIL",
-        location: data.location,
-        status: "Pending"
-      };
+      const newEnq = mapEnquiryFormToInsert(data);
       const result = await createEnquiry(newEnq);
       if (result && result[0]) {
         const mapped = {
@@ -223,10 +257,41 @@ export function EnquiriesViewNew({
     return null;
   };
 
-  const totalEnquiries = enquiries.length;
-  const pendingResponses = enquiries.filter(e => e.status === "Pending").length;
-  const convertedCount = enquiries.filter(e => e.status === "Converted").length;
-  const conversionRate = totalEnquiries > 0 ? Math.round((convertedCount / totalEnquiries) * 100) : 0;
+  const getHealthBadgeColor = (health: string) => {
+    const colors: Record<string, string> = {
+      Active: "bg-emerald-50 text-emerald-700 border-emerald-200",
+      "Needs Attention": "bg-amber-50 text-amber-700 border-amber-200",
+      "On Hold": "bg-slate-50 text-slate-600 border-slate-200",
+      Lost: "bg-red-50 text-red-700 border-red-200",
+    };
+    return colors[health] || "bg-slate-100 text-slate-600 border-slate-200";
+  };
+
+  const applyEnquiryHealth = async (enquiryId: string, health: string, promptReason?: string) => {
+    try {
+      let lostReason = promptReason || null;
+      if (requiresLostReasonPrompt(health, promptReason)) {
+        setLostReasonModalData({ enquiryId });
+        return;
+      }
+      
+      // Optimistic update
+      setEnquiries((prev) =>
+        prev.map((e) =>
+          e.id === enquiryId
+            ? { ...e, health, lostReason: health === "Lost" ? lostReason : null }
+            : e
+        )
+      );
+      
+      await updateEnquiryHealthAction(enquiryId, health, lostReason);
+    } catch (err: any) {
+      alert(err.message || "Failed to update enquiry health");
+    }
+  };
+
+  const { total: totalEnquiries, pending: pendingResponses, converted: convertedCount, conversionRate } =
+    computeEnquiryKpis(enquiries);
 
   const stats = [
     {
@@ -264,36 +329,17 @@ export function EnquiriesViewNew({
   ];
 
   const filteredEnquiries = useMemo(() => {
-    return enquiries.filter((e) => {
-      const matchesSearch =
-        (e.businessName || "").toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
-        (e.leadName || "").toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
-        (e.phone || "").includes(debouncedSearchTerm);
-      const matchesSource = sourceFilter === "All" || e.source === sourceFilter;
-      const matchesAddedBy = addedByFilter === "All" || (e.addedBy || "Admin") === addedByFilter;
-
-      if (selectedKpi === "pending" && e.status !== "Pending") return false;
-      if (selectedKpi === "converted" && e.status !== "Converted") return false;
-
-      let matchesDate = true;
-      if (e.dateReceived) {
-        try {
-          const enqDate = new Date(e.dateReceived);
-          const enqDateStr = enqDate.toISOString().split("T")[0];
-          if (dateFilterType === "range") {
-            if (startDate && enqDateStr < startDate) matchesDate = false;
-            if (endDate && enqDateStr > endDate) matchesDate = false;
-          }
-        } catch {
-          matchesDate = false;
-        }
-      } else if (dateFilterType !== "all") {
-        matchesDate = false;
-      }
-
-      return matchesSearch && matchesSource && matchesAddedBy && matchesDate;
+    return filterEnquiries(enquiries, {
+      search: debouncedSearchTerm,
+      sourceFilter,
+      addedByFilter,
+      healthFilter,
+      selectedKpi,
+      dateFilterType: dateFilterType as "range" | "all",
+      startDate,
+      endDate,
     });
-  }, [enquiries, debouncedSearchTerm, sourceFilter, addedByFilter, selectedKpi, dateFilterType, startDate, endDate]);
+  }, [enquiries, debouncedSearchTerm, sourceFilter, addedByFilter, healthFilter, selectedKpi, dateFilterType, startDate, endDate]);
 
   const resetFilters = () => {
     setDateFilterType("range");
@@ -301,16 +347,19 @@ export function EnquiriesViewNew({
     setEndDate("");
     setAddedByFilter("All");
     setSourceFilter("All");
+    setHealthFilter("ALL");
     setSearchTerm("");
     setSelectedKpi(null);
   };
 
-  const activeFilterCount = [
-    sourceFilter !== "All",
-    addedByFilter !== "All",
-    Boolean(startDate || endDate),
-    Boolean(selectedKpi),
-  ].filter(Boolean).length;
+  const activeFilterCount = countActiveEnquiryFilters({
+    sourceFilter,
+    addedByFilter,
+    healthFilter,
+    startDate,
+    endDate,
+    selectedKpi,
+  });
 
   const openConvert = (enq: any) => {
     setSelectedEnquiry({
@@ -516,6 +565,20 @@ export function EnquiriesViewNew({
                     </select>
                   </div>
                   <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Health</label>
+                    <select
+                      value={healthFilter}
+                      onChange={(e) => setHealthFilter(e.target.value)}
+                      className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[13px] font-medium text-slate-700"
+                    >
+                      <option value="ALL">All Health States</option>
+                      <option value="Active">Active</option>
+                      <option value="Needs Attention">Needs Attention</option>
+                      <option value="On Hold">On Hold</option>
+                      <option value="Lost">Lost</option>
+                    </select>
+                  </div>
+                  <div>
                     <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Added by</label>
                     <select
                       value={addedByFilter}
@@ -610,6 +673,18 @@ export function EnquiriesViewNew({
             </select>
 
             <select
+              value={healthFilter}
+              onChange={(e) => setHealthFilter(e.target.value)}
+              className="px-3 py-2.5 bg-white border border-slate-200 rounded-lg text-[13px] font-medium text-slate-600"
+            >
+              <option value="ALL">All Health States</option>
+              <option value="Active">Active</option>
+              <option value="Needs Attention">Needs Attention</option>
+              <option value="On Hold">On Hold</option>
+              <option value="Lost">Lost</option>
+            </select>
+
+            <select
               value={addedByFilter}
               onChange={(e) => setAddedByFilter(e.target.value)}
               className="px-3 py-2.5 bg-white border border-slate-200 rounded-lg text-[13px] font-medium text-slate-600"
@@ -700,6 +775,14 @@ export function EnquiriesViewNew({
                             >
                               {statusColor.label}
                             </span>
+                            <span className={`inline-block whitespace-nowrap px-2 py-0.5 rounded-md text-[10px] font-bold border ${getHealthBadgeColor(enq.health || 'Active')}`}>
+                              {enq.health || 'Active'}
+                            </span>
+                            {enq.health === 'Lost' && enq.lostReason && (
+                              <span className="inline-block text-[10px] text-red-600 font-medium truncate max-w-[120px]" title={enq.lostReason}>
+                                ({enq.lostReason})
+                              </span>
+                            )}
                           </div>
                           <div className="text-[13px] font-semibold text-slate-800 truncate mt-1">
                             {enq.businessName || enq.leadName}
@@ -715,15 +798,39 @@ export function EnquiriesViewNew({
                         {enq.source ? <span>· {enq.source}</span> : null}
                       </div>
                       <div className="mt-2.5 flex flex-wrap gap-2">
-                        {enq.status !== "Converted" ? (
+                        {canConvertEnquiry(enq.status) ? (
                           canEdit ? (
-                            <button
-                              type="button"
-                              onClick={() => openConvert(enq)}
-                              className="px-3 py-1.5 rounded-md text-[12px] font-semibold text-white bg-[var(--color-primary)] whitespace-nowrap"
-                            >
-                              Convert to Order
-                            </button>
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={() => openConvert(enq)}
+                                className="px-3 py-1.5 rounded-md text-[12px] font-semibold text-white bg-[var(--color-primary)] whitespace-nowrap"
+                              >
+                                Convert to Order
+                              </button>
+                              <div className="relative group/health-mobile">
+                                <button
+                                  type="button"
+                                  className="px-3 py-1.5 rounded-md text-[12px] font-semibold text-slate-600 bg-slate-100 border border-slate-200 whitespace-nowrap"
+                                >
+                                  Update Health
+                                </button>
+                                <div className="absolute left-0 bottom-full mb-1 w-40 bg-white border border-slate-200 rounded-lg shadow-xl opacity-0 invisible group-hover/health-mobile:opacity-100 group-hover/health-mobile:visible transition-all z-20">
+                                  <div className="py-1">
+                                    {healthMenuActions(enq.health || 'Active').map((action) => (
+                                      <button
+                                        key={action.health}
+                                        type="button"
+                                        onClick={() => applyEnquiryHealth(enq.id, action.health)}
+                                        className="w-full text-left px-3 py-2 text-[12px] font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900"
+                                      >
+                                        {action.label}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
                           ) : (
                             <span
                               className="px-3 py-1.5 rounded-md text-[12px] font-semibold whitespace-nowrap"
@@ -733,12 +840,21 @@ export function EnquiriesViewNew({
                             </span>
                           )
                         ) : enq.orderId ? (
-                          <Link
-                            href={`${orderBasePath}/${enq.orderId}`}
-                            className="px-3 py-1.5 rounded-md text-[12px] font-semibold text-slate-600 bg-slate-100 border border-slate-200 whitespace-nowrap"
-                          >
-                            View Order
-                          </Link>
+                          canViewOrder ? (
+                            <Link
+                              href={`${orderBasePath}/${enq.orderId}`}
+                              className="px-3 py-1.5 rounded-md text-[12px] font-semibold text-slate-600 bg-slate-100 border border-slate-200 whitespace-nowrap"
+                            >
+                              View Order
+                            </Link>
+                          ) : (
+                            <span
+                              title="You do not have access to view orders."
+                              className="px-3 py-1.5 rounded-md text-[12px] font-semibold text-slate-400 bg-slate-100 border border-slate-200 whitespace-nowrap cursor-not-allowed opacity-70"
+                            >
+                              View Order
+                            </span>
+                          )
                         ) : (
                           <span className="text-[12px] font-bold text-emerald-600 whitespace-nowrap">Converted</span>
                         )}
@@ -761,6 +877,7 @@ export function EnquiriesViewNew({
                 <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>BUSINESS / LEAD NAME</th>
                 <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>PHONE</th>
                 <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>SOURCE</th>
+                <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>HEALTH</th>
                 <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>REQ NOTES</th>
                 <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>ADDED BY</th>
                 <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>ORDER ID</th>
@@ -779,6 +896,39 @@ export function EnquiriesViewNew({
                     </td>
                     <td style={{ padding: "16px 20px", fontSize: "13px", color: "#0f172a" }}>{enq.phone}</td>
                     <td style={{ padding: "16px 20px", fontSize: "12px", color: "#64748b" }}>{enq.source}</td>
+                    <td style={{ padding: "16px 20px" }}>
+                      <div className="flex flex-row gap-2 items-center">
+                        <span className={`inline-flex whitespace-nowrap px-2 py-0.5 rounded-md text-[11px] font-bold border ${getHealthBadgeColor(enq.health || 'Active')}`}>
+                          {enq.health || 'Active'}
+                        </span>
+                        {canConvertEnquiry(enq.status) && canEdit && (
+                          <div className="relative group/health">
+                            <button type="button" className="text-[10px] whitespace-nowrap text-slate-400 hover:text-slate-600 font-semibold underline decoration-slate-300 underline-offset-2">
+                              Update
+                            </button>
+                            <div className="absolute left-0 top-full mt-1 w-36 bg-white border border-slate-200 rounded-lg shadow-lg opacity-0 invisible group-hover/health:opacity-100 group-hover/health:visible transition-all z-20">
+                              <div className="py-1">
+                                {healthMenuActions(enq.health || 'Active').map((action) => (
+                                  <button
+                                    key={action.health}
+                                    type="button"
+                                    onClick={() => applyEnquiryHealth(enq.id, action.health)}
+                                    className="w-full text-left px-3 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900"
+                                  >
+                                    {action.label}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        {enq.health === 'Lost' && enq.lostReason && (
+                          <span className="text-[11px] text-red-600 font-medium truncate max-w-[150px]" title={enq.lostReason}>
+                            ({enq.lostReason})
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td style={{ padding: "16px 20px", fontSize: "13px", color: "#0f172a", maxWidth: "200px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={enq.notes || "No notes"}>
                       {enq.notes || <span style={{color: "#94a3b8", fontStyle: "italic"}}>No notes</span>}
                     </td>
@@ -794,7 +944,7 @@ export function EnquiriesViewNew({
                     </td>
                     <td style={{ padding: "16px 20px", textAlign: "right" }}>
                       <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", alignItems: "center" }}>
-                        {enq.status !== "Converted" ? (
+                        {canConvertEnquiry(enq.status) ? (
                           canEdit ? (
                           <button 
                             onClick={() => openConvert(enq)}
@@ -810,34 +960,55 @@ export function EnquiriesViewNew({
                             </span>
                           )
                         ) : enq.orderId ? (
-                          <Link
-                            href={`${orderBasePath}/${enq.orderId}`}
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              padding: "6px 12px",
-                              background: "#f1f5f9",
-                              border: "1px solid #cbd5e1",
-                              borderRadius: "6px",
-                              fontSize: "12px",
-                              fontWeight: "600",
-                              color: "#475569",
-                              textDecoration: "none",
-                              cursor: "pointer",
-                              whiteSpace: "nowrap",
-                              transition: "all 0.15s",
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.background = "#e2e8f0";
-                              e.currentTarget.style.color = "#0f172a";
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.background = "#f1f5f9";
-                              e.currentTarget.style.color = "#475569";
-                            }}
-                          >
-                            View Order
-                          </Link>
+                          canViewOrder ? (
+                            <Link
+                              href={`${orderBasePath}/${enq.orderId}`}
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                padding: "6px 12px",
+                                background: "#f1f5f9",
+                                border: "1px solid #cbd5e1",
+                                borderRadius: "6px",
+                                fontSize: "12px",
+                                fontWeight: "600",
+                                color: "#475569",
+                                textDecoration: "none",
+                                cursor: "pointer",
+                                whiteSpace: "nowrap",
+                                transition: "all 0.15s",
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.background = "#e2e8f0";
+                                e.currentTarget.style.color = "#0f172a";
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background = "#f1f5f9";
+                                e.currentTarget.style.color = "#475569";
+                              }}
+                            >
+                              View Order
+                            </Link>
+                          ) : (
+                            <span
+                              title="You do not have access to view orders."
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                padding: "6px 12px",
+                                background: "#f1f5f9",
+                                border: "1px solid #e2e8f0",
+                                borderRadius: "6px",
+                                fontSize: "12px",
+                                fontWeight: "600",
+                                color: "#94a3b8",
+                                cursor: "not-allowed",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              View Order
+                            </span>
+                          )
                         ) : (
                           <span style={{ fontSize: "12px", fontWeight: "700", color: "#16a34a", whiteSpace: "nowrap" }}>Converted</span>
                         )}
@@ -910,7 +1081,7 @@ export function EnquiriesViewNew({
           onClose={() => {
             const { afterClose, info } = customerMsg;
             setCustomerMsg(null);
-            if (afterClose === "assignTeam") {
+            if (shouldOpenAssignTeamAfterConvert(afterClose)) {
               setAssignedOrderId(info.orderId || "");
               setAssignTeamModalOpen(true);
             }
@@ -954,6 +1125,17 @@ export function EnquiriesViewNew({
           }}
         />
       )}
+
+      <LostReasonModal
+        isOpen={!!lostReasonModalData}
+        onClose={() => setLostReasonModalData(null)}
+        onSubmit={(reason) => {
+          if (lostReasonModalData) {
+            applyEnquiryHealth(lostReasonModalData.enquiryId, "Lost", reason);
+            setLostReasonModalData(null);
+          }
+        }}
+      />
     </div>
   );
 }
