@@ -24,6 +24,7 @@ import { AddEnquiryModal, EnquiryFormData } from "@/features/enquiries/component
 import { createEnquiry } from "@/features/enquiries/actions/enquiryActions";
 import { CreateServiceTicketModal } from "@/features/service-tickets/components/CreateServiceTicketModal";
 import { CustomerMessageModal, CustomerMessageInfo } from "@/features/notifications/customer-message/CustomerMessageModal";
+import { canShowAddServiceTicketForOrder } from "@/features/orders/orderListLogic";
 
 /* ─── helpers ──────────────────────────────────────────────────── */
 const STAGE_LABEL: Record<string, { label: string; dot: string }> = {
@@ -726,6 +727,7 @@ export function AdminDashboardClient({
                               >
                                 <Eye size={13} /> View Order
                               </button>
+                              {canShowAddServiceTicketForOrder(order.stage) && (
                               <button
                                 onClick={() => { setOpenMenuId(null); setIsTicketModalOpen(true); }}
                                 style={{ width: "100%", padding: "9px 14px", display: "flex", alignItems: "center", gap: "8px", background: "none", border: "none", fontSize: "12px", fontWeight: "600", color: "#0F172A", cursor: "pointer", textAlign: "left" }}
@@ -734,6 +736,7 @@ export function AdminDashboardClient({
                               >
                                 <Wrench size={13} /> Add Service Ticket
                               </button>
+                              )}
                             </div>
                           </>
                         )}

@@ -40,6 +40,14 @@ export const theBoardCompanyConfig: Partial<PrintOMSClientConfig> = {
   features: {
     enableAdminAssignment: true,
     needsAttentionAfterDays: 6,
+    siteVisit: {
+      hideDepth: true,
+      hideGroundClearance: true,
+      hideExtraWireRequired: true,
+      hideFabricationReq: true,
+      hideCivilWork: true,
+      defaultMeasurementUnit: "ft",
+    }
   },
   usesFloorPortals: false,
   stageGrantsByRole: {

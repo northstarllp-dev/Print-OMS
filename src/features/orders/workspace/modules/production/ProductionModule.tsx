@@ -102,7 +102,8 @@ export function ProductionModule({
   const isProductionStage = ["Production In Progress", "Production Pending", "Production"].includes(order.stage);
   const baseFrozen = !isProductionStage;
   const canEdit = (permission?.canEdit ?? true) && (!baseFrozen || adminOverrideUnlocked);
-  const canEditDeadline = canEdit;
+  // Installation deadline is admin-only (staff can view, not edit).
+  const canEditDeadline = currentUserRole === "Admin";
 
   const [saving, setSaving] = useState(false);
   const [alert, setAlert] = useState<{ message: string; type: "success" | "error" } | null>(null);
@@ -126,31 +127,37 @@ export function ProductionModule({
     stage3: false,
     stage4: false,
     checklist: {},
-    deadline: null
+    installation_deadline: null,
   };
   const checklistProgress = resolveChecklistProgress(pd, checklistItems);
+  const deadlineIso = pd.installation_deadline ?? pd.deadline ?? null;
 
   const [editingDeadline, setEditingDeadline] = useState(false);
   const [deadlineValue, setDeadlineValue] = useState(
-    pd.deadline ? new Date(pd.deadline).toISOString().split("T")[0] : ""
+    deadlineIso ? new Date(deadlineIso).toISOString().split("T")[0] : ""
   );
 
   const handleDeadlineSave = async () => {
-    if (!canEdit) return;
+    if (!canEditDeadline) return;
     setSaving(true);
     setAlert(null);
     try {
-      const updatedPd = { ...pd, deadline: deadlineValue || null };
-      await updateProductionDetails(order.id, { deadline: deadlineValue || null });
+      const nextDeadline = deadlineValue || null;
+      const updatedPd = {
+        ...pd,
+        installation_deadline: nextDeadline,
+        deadline: nextDeadline,
+      };
+      await updateProductionDetails(order.id, { installation_deadline: nextDeadline });
       setOrder((prev: any) => ({
         ...prev,
         productionDetails: updatedPd
       }));
-      setAlert({ message: "Deadline updated successfully.", type: "success" });
+      setAlert({ message: "Installation deadline updated.", type: "success" });
       setEditingDeadline(false);
     } catch (err: any) {
       console.error(err);
-      setAlert({ message: err.message || "Failed to update deadline.", type: "error" });
+      setAlert({ message: err.message || "Failed to update installation deadline.", type: "error" });
     } finally {
       setSaving(false);
       setTimeout(() => setAlert(null), 3000);
@@ -286,48 +293,50 @@ export function ProductionModule({
               </div>
             )}
             <div className="flex flex-col items-end">
-              <span className="text-[10px] font-black text-rose-500 uppercase tracking-widest mb-1.5 flex items-center gap-1">
-                Production Deadline
-              </span>
               {editingDeadline ? (
                 <div className="flex items-center gap-2">
                   <input
                     type="date"
                     value={deadlineValue}
                     onChange={(e) => setDeadlineValue(e.target.value)}
-                    className="px-2 py-1 text-xs border border-rose-300 rounded text-slate-800"
+                    className="px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
                   />
                   <button
                     onClick={handleDeadlineSave}
                     disabled={saving}
-                    className="p-1.5 bg-emerald-600 text-white rounded hover:bg-emerald-700"
+                    className="p-1.5 bg-slate-800 text-white rounded-lg hover:bg-slate-900 transition-colors"
                   >
                     {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                   </button>
                   <button
                     onClick={() => {
                       setEditingDeadline(false);
-                      setDeadlineValue(pd.deadline ? new Date(pd.deadline).toISOString().split("T")[0] : "");
+                      setDeadlineValue(deadlineIso ? new Date(deadlineIso).toISOString().split("T")[0] : "");
                     }}
-                    className="p-1.5 bg-slate-200 text-slate-700 rounded hover:bg-slate-300"
+                    className="p-1.5 bg-slate-100 text-slate-500 rounded-lg hover:bg-slate-200 transition-colors"
                   >
                     <ArrowLeft size={14} />
                   </button>
                 </div>
               ) : (
                 <div
-                  className={`bg-gradient-to-r from-rose-500 to-rose-600 text-white px-4 py-2 rounded-xl text-xs font-black shadow-md flex items-center gap-2 border-b-2 border-rose-700 ${canEditDeadline ? 'cursor-pointer hover:from-rose-600 hover:to-rose-700' : ''}`}
+                  className={`flex items-center gap-2.5 px-4 py-2 rounded-xl border border-slate-200 bg-white shadow-sm ${canEditDeadline ? 'cursor-pointer hover:border-slate-300 hover:shadow-md transition-all' : ''}`}
                   onClick={() => canEditDeadline && setEditingDeadline(true)}
-                  title={canEditDeadline ? "Click to edit deadline" : ""}
+                  title={canEditDeadline ? "Click to edit installation deadline" : "Admin only"}
                 >
-                  <Timer size={16} className="text-rose-100 animate-pulse" />
-                  {pd.deadline
-                    ? new Date(pd.deadline).toLocaleDateString("en-IN", {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      })
-                    : "Not Set"}
+                  <Timer size={14} className="text-slate-400" />
+                  <div className="flex flex-col">
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider leading-none">Installation Deadline</span>
+                    <span className="text-xs font-black text-slate-700 leading-tight mt-0.5">
+                      {deadlineIso
+                        ? new Date(deadlineIso).toLocaleDateString("en-IN", {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                          })
+                        : "Not Set"}
+                    </span>
+                  </div>
                 </div>
               )}
             </div>
@@ -359,48 +368,50 @@ export function ProductionModule({
               )}
 
             <div className="flex flex-col items-end">
-              <span className="text-[10px] font-black text-rose-500 uppercase tracking-widest mb-1.5 flex items-center gap-1">
-                Production Deadline
-              </span>
               {editingDeadline ? (
                 <div className="flex items-center gap-2">
                   <input
                     type="date"
                     value={deadlineValue}
                     onChange={(e) => setDeadlineValue(e.target.value)}
-                    className="px-2 py-1 text-xs border border-rose-300 rounded text-slate-800"
+                    className="px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
                   />
                   <button
                     onClick={handleDeadlineSave}
                     disabled={saving}
-                    className="p-1.5 bg-emerald-600 text-white rounded hover:bg-emerald-700"
+                    className="p-1.5 bg-slate-800 text-white rounded-lg hover:bg-slate-900 transition-colors"
                   >
                     {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                   </button>
                   <button
                     onClick={() => {
                       setEditingDeadline(false);
-                      setDeadlineValue(pd.deadline ? new Date(pd.deadline).toISOString().split("T")[0] : "");
+                      setDeadlineValue(deadlineIso ? new Date(deadlineIso).toISOString().split("T")[0] : "");
                     }}
-                    className="p-1.5 bg-slate-200 text-slate-700 rounded hover:bg-slate-300"
+                    className="p-1.5 bg-slate-100 text-slate-500 rounded-lg hover:bg-slate-200 transition-colors"
                   >
                     <ArrowLeft size={14} />
                   </button>
                 </div>
               ) : (
                 <div
-                  className={`bg-gradient-to-r from-rose-500 to-rose-600 text-white px-4 py-2 rounded-xl text-xs font-black shadow-md flex items-center gap-2 border-b-2 border-rose-700 ${canEditDeadline ? 'cursor-pointer hover:from-rose-600 hover:to-rose-700' : ''}`}
+                  className={`flex items-center gap-2.5 px-4 py-2 rounded-xl border border-slate-200 bg-white shadow-sm ${canEditDeadline ? 'cursor-pointer hover:border-slate-300 hover:shadow-md transition-all' : ''}`}
                   onClick={() => canEditDeadline && setEditingDeadline(true)}
-                  title={canEditDeadline ? "Click to edit deadline" : ""}
+                  title={canEditDeadline ? "Click to edit installation deadline" : "Admin only"}
                 >
-                  <Timer size={16} className="text-rose-100 animate-pulse" />
-                  {pd.deadline
-                    ? new Date(pd.deadline).toLocaleDateString("en-IN", {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      })
-                    : "Not Set"}
+                  <Timer size={14} className="text-slate-400" />
+                  <div className="flex flex-col">
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider leading-none">Installation Deadline</span>
+                    <span className="text-xs font-black text-slate-700 leading-tight mt-0.5">
+                      {deadlineIso
+                        ? new Date(deadlineIso).toLocaleDateString("en-IN", {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                          })
+                        : "Not Set"}
+                    </span>
+                  </div>
                 </div>
               )}
             </div>

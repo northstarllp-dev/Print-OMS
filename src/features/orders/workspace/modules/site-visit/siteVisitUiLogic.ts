@@ -13,9 +13,22 @@ export function parseGpsMapCenter(gpsLocation?: string | null): GpsLatLng | null
   return { lat, lng };
 }
 
-/** Skip flow stores addresses that start with "Skipped". */
+/** Skip flow historically stored addresses that start with "Skipped". */
 export function isSkippedSiteVisitAddress(address?: string | null): boolean {
   return typeof address === "string" && address.startsWith("Skipped");
+}
+
+/** Landmark marker when site visit is skipped but an installation location was collected. */
+export const SKIPPED_SITE_VISIT_LANDMARK = "SKIPPED_SITE_VISIT";
+
+/** True when the visit was skipped (new landmark flag or legacy "Skipped…" address). */
+export function isSkippedSiteVisit(details?: {
+  landmark?: string | null;
+  customerAddress?: string | null;
+} | null): boolean {
+  if (!details) return false;
+  if (details.landmark === SKIPPED_SITE_VISIT_LANDMARK) return true;
+  return isSkippedSiteVisitAddress(details.customerAddress);
 }
 
 /**

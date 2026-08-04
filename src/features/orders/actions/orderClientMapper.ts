@@ -25,6 +25,8 @@ export function mapDbOrderToWorksheetOrder(o: Record<string, unknown>): Order {
     orderId: (o.order_id as string) || (o.id as string),
     health: (o.health as string) || "Active",
     lost_reason: o.lost_reason as string | undefined,
+    hold_note: (o.hold_note as string | null | undefined) ?? null,
+    reach_out_at: (o.reach_out_at as string | null | undefined) ?? null,
     workflow_type: ((o.workflow_type as Order["workflow_type"]) || "quote_first"),
   };
 }

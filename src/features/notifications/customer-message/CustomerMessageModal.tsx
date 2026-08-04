@@ -139,6 +139,18 @@ export function CustomerMessageModal({
       };
     }
 
+    // Service tickets share the public ticket form link — not the order portal.
+    if (
+      templateKey === "service_ticket_created" ||
+      templateKey === "service_ticket_resolved"
+    ) {
+      const origin =
+        typeof window !== "undefined" ? window.location.origin : "";
+      setPortalUrl(`${origin}${withBasePath("/service-ticket")}`);
+      setLoading(false);
+      return;
+    }
+
     if (!info.customerId) return;
 
     setLoading(true);

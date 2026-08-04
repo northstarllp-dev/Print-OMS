@@ -577,13 +577,13 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
                   <div className="min-w-0">
                     <h3 className="text-base md:text-lg font-bold text-slate-800">Final Production Files for {activeItem.name}</h3>
-                    <p className="text-xs text-slate-500">Upload final production files (.cdr, .dxf, .plt, .pdf, .svg, .png, .jpg) for fabrication.</p>
+                    <p className="text-xs text-slate-500">Upload final production files (.cdr, .ai, .dxf, .plt, .pdf, .svg, .png, .jpg) for fabrication.</p>
                   </div>
                   {isEmployee && !isReadOnly && (
                     <label className="cursor-pointer bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-sm w-full sm:w-auto shrink-0">
                       {uploading ? <RefreshCw size={14} className="animate-spin" /> : <Upload size={14} />}
                       {uploading ? "Uploading..." : "Upload File"}
-                      <input type="file" multiple onChange={handleProductionFileUpload} accept=".cdr,.dxf,.plt,.pdf,.svg,.png,.jpg,.jpeg" className="hidden" disabled={uploading} />
+                      <input type="file" multiple onChange={handleProductionFileUpload} accept=".cdr,.ai,.dxf,.plt,.pdf,.svg,.png,.jpg,.jpeg" className="hidden" disabled={uploading} />
                     </label>
                   )}
                 </div>

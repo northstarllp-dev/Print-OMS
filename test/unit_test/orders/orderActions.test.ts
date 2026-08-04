@@ -106,6 +106,8 @@ describe('orderActions', () => {
     const ssrMock = await import('@supabase/ssr');
     mockSupabase = (ssrMock as any).__mockSupabaseInstance;
     mockFilterBuilder = (ssrMock as any).__mockFilterBuilder;
+    // Reset Once-queue so a failed/short prior test cannot leak mock responses.
+    mockFilterBuilder.then.mockReset();
     mockFilterBuilder.then.mockImplementation((resolve: any) => resolve({ data: [], error: null }));
   });
 
@@ -342,12 +344,14 @@ describe('orderActions', () => {
       const { insertOrderActivity } = await import('@/features/orders/activity/logOrderActivity');
 
       mockFilterBuilder.then
+        // fetch order_id, company_id, stage
         .mockImplementationOnce((resolve: any) =>
-          resolve({ data: { order_id: 'A001-001', company_id: 'company-123' }, error: null })
+          resolve({
+            data: { order_id: 'A001-001', company_id: 'company-123', stage: 'Production' },
+            error: null,
+          })
         )
-        .mockImplementationOnce((resolve: any) =>
-          resolve({ data: { id: 'uuid-1' }, error: null })
-        )
+        // updateOrder().update().select()
         .mockImplementationOnce((resolve: any) =>
           resolve({
             data: [{ id: 'uuid-1', order_id: 'A001-001', health: 'On Hold' }],
@@ -355,7 +359,10 @@ describe('orderActions', () => {
           })
         );
 
-      await orderActions.updateOrderHealthAction('uuid-1', 'On Hold');
+      await orderActions.updateOrderHealthAction('uuid-1', 'On Hold', undefined, undefined, {
+        note: 'Waiting on approval',
+        reachOutAt: '2026-08-20',
+      });
 
       expect(assertAdminOnly).toHaveBeenCalled();
       expect(insertOrderActivity).toHaveBeenCalledWith(

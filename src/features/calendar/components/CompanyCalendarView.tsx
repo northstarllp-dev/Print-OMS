@@ -16,6 +16,8 @@ import {
   CalendarClock,
   AlertCircle,
   Eye,
+  Plus,
+  Mail,
 } from "lucide-react";
 import {
   buildCalendarEvents,
@@ -25,10 +27,12 @@ import {
 import type {
   CalendarCustomerInput,
   CalendarEmployeeInput,
+  CalendarEnquiryInput,
   CalendarEvent,
   CalendarTaskInput,
   CalendarEventType,
   CalendarOrderInput,
+  CalendarReminderInput,
   PaymentOutstandingMap,
 } from "@/features/calendar/types";
 import { getTaskById } from "@/features/tasks/actions/taskActions";
@@ -36,6 +40,9 @@ import type { TaskRecord } from "@/features/tasks/types";
 import { TaskDetailPanel } from "@/features/tasks/components/TaskDetailPanel";
 import { CustomerMessageModal } from "@/features/notifications/customer-message/CustomerMessageModal";
 import type { CustomerMessageKey } from "@/features/notifications/customer-message/templates";
+import { AddReminderModal } from "@/features/calendar/components/AddReminderModal";
+import { deleteCalendarReminderAction } from "@/features/calendar/actions/reminderActions";
+import { useRouter } from "next/navigation";
 
 const TYPE_META: Record<
   CalendarEventType,
@@ -54,7 +61,7 @@ const TYPE_META: Record<
     dot: "bg-cyan-600",
   },
   deadline: {
-    label: "Production Deadline",
+    label: "Installation Deadline",
     short: "Deadline",
     badge: "bg-amber-50 text-amber-800 border-amber-200",
     dot: "bg-amber-500",
@@ -64,6 +71,18 @@ const TYPE_META: Record<
     short: "Task",
     badge: "bg-emerald-50 text-emerald-700 border-emerald-200",
     dot: "bg-emerald-600",
+  },
+  hold_followup: {
+    label: "Hold follow-up",
+    short: "Hold",
+    badge: "bg-slate-100 text-slate-700 border-slate-300",
+    dot: "bg-slate-500",
+  },
+  reminder: {
+    label: "Reminder",
+    short: "Remind",
+    badge: "bg-violet-50 text-violet-700 border-violet-200",
+    dot: "bg-violet-600",
   },
 };
 
@@ -77,9 +96,15 @@ interface CompanyCalendarViewProps {
   employees?: CalendarEmployeeInput[];
   paymentMap?: PaymentOutstandingMap;
   tasks?: CalendarTaskInput[];
+  enquiries?: CalendarEnquiryInput[];
+  reminders?: CalendarReminderInput[];
+  /** When false, hide On Hold reach-out events (staff without enquiry access). */
+  includeHoldFollowups?: boolean;
+  currentUserId?: string;
   title?: string;
   subtitle?: string;
   orderDetailBasePath: string;
+  enquiryDetailBasePath?: string;
   taskDetailBasePath?: string;
   lockedEmployeeId?: string;
   showEmployeeFilter?: boolean;
@@ -164,9 +189,14 @@ export function CompanyCalendarView({
   employees = [],
   paymentMap,
   tasks = [],
+  enquiries = [],
+  reminders = [],
+  includeHoldFollowups = true,
+  currentUserId,
   title = "Company Calendar",
-  subtitle = "Site visits, installations, and production deadlines across the team.",
+  subtitle = "Site visits, installations, and installation deadlines across the team.",
   orderDetailBasePath,
+  enquiryDetailBasePath = "/admin/enquire",
   taskDetailBasePath,
   lockedEmployeeId,
   showEmployeeFilter = true,
@@ -174,6 +204,7 @@ export function CompanyCalendarView({
   onRescheduleSiteVisit,
   onRescheduleInstallation,
 }: CompanyCalendarViewProps) {
+  const router = useRouter();
   const today = todayDateKey();
   const initial = new Date();
   const [viewYear, setViewYear] = useState(initial.getFullYear());
@@ -185,6 +216,7 @@ export function CompanyCalendarView({
   const [employeeFilter, setEmployeeFilter] = useState(lockedEmployeeId || "all");
   const [upcomingOnly, setUpcomingOnly] = useState(false);
   const [showDeadlines, setShowDeadlines] = useState(true);
+  const [addReminderOpen, setAddReminderOpen] = useState(false);
 
   // Reschedule modal state
   const [rescheduleEvent, setRescheduleEvent] = useState<CalendarEvent | null>(null);
@@ -216,8 +248,13 @@ export function CompanyCalendarView({
   }, [employees]);
 
   const allEvents = useMemo(
-    () => buildCalendarEvents(orders, customers, paymentMap, tasks),
-    [orders, customers, paymentMap, tasks]
+    () =>
+      buildCalendarEvents(orders, customers, paymentMap, tasks, {
+        enquiries,
+        reminders,
+        includeHoldFollowups,
+      }),
+    [orders, customers, paymentMap, tasks, enquiries, reminders, includeHoldFollowups]
   );
 
   const filteredEvents = useMemo(() => {
@@ -226,7 +263,13 @@ export function CompanyCalendarView({
       if (typeFilter !== "all" && event.type !== typeFilter) return false;
 
       const empId = lockedEmployeeId || (employeeFilter !== "all" ? employeeFilter : null);
-      if (empId && !event.assigneeIds.includes(empId)) return false;
+      if (empId) {
+        if (event.type === "hold_followup") {
+          // Hold follow-ups are gated by includeHoldFollowups at the page level
+        } else if (!event.assigneeIds.includes(empId)) {
+          return false;
+        }
+      }
 
       if (upcomingOnly) {
         const status = eventStatus(event, today);
@@ -378,7 +421,11 @@ export function CompanyCalendarView({
       const href =
         item.type === "task"
           ? taskDetailBasePath || "#"
-          : `${orderDetailBasePath}/${item.orderCode || item.orderId}`;
+          : item.type === "reminder"
+            ? "#"
+            : item.type === "hold_followup" && item.enquiryId
+              ? enquiryDetailBasePath
+              : `${orderDetailBasePath}/${item.orderCode || item.orderId}`;
       const isOverdue = status === "overdue";
       const isTaskLoading = item.taskId != null && taskLoadingId === item.taskId;
 
@@ -396,6 +443,7 @@ export function CompanyCalendarView({
               className={`prt-badge border uppercase text-[9px] ${meta.badge}`}
             >
               {meta.label}
+              {item.metaLabel ? ` · ${item.metaLabel}` : ""}
             </span>
             <div className="flex items-center gap-1.5">
               {(item.outstandingAmount ?? 0) > 0 && (
@@ -430,6 +478,8 @@ export function CompanyCalendarView({
               >
                 {item.projectName}
               </button>
+            ) : item.type === "reminder" ? (
+              <div className="font-bold text-slate-800 text-sm">{item.projectName}</div>
             ) : (
               <Link
                 href={href}
@@ -443,6 +493,9 @@ export function CompanyCalendarView({
               {item.orderCode ? ` · ${item.orderCode}` : ""}
               {item.metaLabel ? ` · ${item.metaLabel}` : ""}
             </span>
+            {item.note ? (
+              <p className="m-0 mt-1.5 text-xs text-slate-600 whitespace-pre-wrap">{item.note}</p>
+            ) : null}
           </div>
 
           <div className="space-y-1.5 pt-2 border-t border-slate-50 text-xs text-slate-600 font-medium">
@@ -495,6 +548,15 @@ export function CompanyCalendarView({
                 <span>{item.clientPhone}</span>
               </a>
             )}
+            {item.clientEmail && (
+              <a
+                href={`mailto:${item.clientEmail}`}
+                className="flex items-center hover:text-slate-900"
+              >
+                <Mail size={12} className="mr-2 text-slate-400 shrink-0" />
+                <span>{item.clientEmail}</span>
+              </a>
+            )}
             {assignees.length > 0 && (
               <div className="flex items-center">
                 <User size={12} className="mr-2 text-slate-400 shrink-0" />
@@ -529,6 +591,21 @@ export function CompanyCalendarView({
               </button>
             </div>
           )}
+          {item.type === "reminder" && item.reminderId && (isAdmin || item.assigneeIds[0] === currentUserId) ? (
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  void deleteCalendarReminderAction(item.reminderId!).then(() => router.refresh()).catch((err) => {
+                    alert(err?.message || "Failed to delete reminder");
+                  });
+                }}
+                className="text-[11px] font-semibold text-red-600 hover:underline"
+              >
+                Delete reminder
+              </button>
+            </div>
+          ) : null}
         </div>
       );
     },
@@ -536,11 +613,15 @@ export function CompanyCalendarView({
     [
       today,
       orderDetailBasePath,
+      enquiryDetailBasePath,
       employeeNameById,
       onRescheduleSiteVisit,
       onRescheduleInstallation,
       openTaskDetail,
       taskLoadingId,
+      isAdmin,
+      currentUserId,
+      router,
     ]
   );
 
@@ -559,6 +640,14 @@ export function CompanyCalendarView({
         </div>
 
         <div className="flex items-center gap-2 self-start">
+          <button
+            type="button"
+            onClick={() => setAddReminderOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-900 text-white text-xs font-bold hover:bg-slate-800"
+          >
+            <Plus size={14} />
+            Add reminder
+          </button>
           {/* View mode toggle */}
           <div className="flex items-center bg-white border border-[var(--border)] rounded-[var(--radius-lg)] p-0.5">
             {(["month", "week", "today"] as ViewMode[]).map((mode) => (
@@ -663,6 +752,8 @@ export function CompanyCalendarView({
               ["installation", "Installations"],
               ["deadline", "Deadlines"],
               ["task", "Tasks"],
+              ["hold_followup", "Hold follow-ups"],
+              ["reminder", "Reminders"],
             ] as const
           ).map(([value, label]) => (
             <button
@@ -1089,6 +1180,14 @@ export function CompanyCalendarView({
           />
         );
       })()}
+
+      <AddReminderModal
+        isOpen={addReminderOpen}
+        employees={employees}
+        currentUserId={currentUserId}
+        onClose={() => setAddReminderOpen(false)}
+        onCreated={() => router.refresh()}
+      />
     </div>
   );
 }

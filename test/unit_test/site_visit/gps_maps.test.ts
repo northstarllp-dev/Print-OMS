@@ -16,8 +16,10 @@ import {
   isNearScheduledLocation,
 } from "@/features/orders/workspace/modules/site-visit/siteVisitChecklistLogic";
 import {
+  isSkippedSiteVisit,
   isSkippedSiteVisitAddress,
   parseGpsMapCenter,
+  SKIPPED_SITE_VISIT_LANDMARK,
 } from "@/features/orders/workspace/modules/site-visit/siteVisitUiLogic";
 
 describe("site visit GPS & maps", () => {
@@ -38,6 +40,21 @@ describe("site visit GPS & maps", () => {
       expect(isSkippedSiteVisitAddress("Skipped — customer unavailable")).toBe(true);
       expect(isSkippedSiteVisitAddress("skipped elsewhere")).toBe(false);
       expect(isSkippedSiteVisitAddress(null)).toBe(false);
+    });
+
+    it("detects skip via landmark while keeping real installation address", () => {
+      expect(
+        isSkippedSiteVisit({
+          landmark: SKIPPED_SITE_VISIT_LANDMARK,
+          customerAddress: "12 MG Road, Bengaluru",
+        })
+      ).toBe(true);
+      expect(
+        resolveSiteVisitInstallationAddress({
+          landmark: SKIPPED_SITE_VISIT_LANDMARK,
+          customerAddress: "12 MG Road, Bengaluru",
+        })
+      ).toBe("12 MG Road, Bengaluru");
     });
   });
 

@@ -51,6 +51,9 @@ export const printsquirelConfig: Partial<PrintOMSClientConfig> = {
   features: {
     enableAdminAssignment: false,
     needsAttentionAfterDays: 6,
+    siteVisit: {
+      hideElectricalAssessment: true,
+    }
   },
   usesFloorPortals: false,
   stageGrantsByRole: {

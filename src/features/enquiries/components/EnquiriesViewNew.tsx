@@ -14,7 +14,9 @@ import {
   filterEnquiries,
   healthMenuActions,
   requiresLostReasonPrompt,
+  requiresHoldFollowUpPrompt,
 } from "@/features/enquiries/enquiryListLogic";
+import { HoldFollowUpModal } from "@/features/calendar/components/HoldFollowUpModal";
 import {
   canConvertEnquiry,
 } from "@/features/enquiries/enquiryConvertLogic";
@@ -193,6 +195,7 @@ export function EnquiriesViewNew({
   
   // Lost reason modal state
   const [lostReasonModalData, setLostReasonModalData] = useState<{enquiryId: string} | null>(null);
+  const [holdModalEnquiryId, setHoldModalEnquiryId] = useState<string | null>(null);
 
   const handleAddEnquiry = async (data: EnquiryFormData) => {
     try {
@@ -267,8 +270,17 @@ export function EnquiriesViewNew({
     return colors[health] || "bg-slate-100 text-slate-600 border-slate-200";
   };
 
-  const applyEnquiryHealth = async (enquiryId: string, health: string, promptReason?: string) => {
+  const applyEnquiryHealth = async (
+    enquiryId: string,
+    health: string,
+    promptReason?: string,
+    hold?: { note: string; reachOutAt: string } | null
+  ) => {
     try {
+      if (requiresHoldFollowUpPrompt(health) && !hold) {
+        setHoldModalEnquiryId(enquiryId);
+        return;
+      }
       let lostReason = promptReason || null;
       if (requiresLostReasonPrompt(health, promptReason)) {
         setLostReasonModalData({ enquiryId });
@@ -279,12 +291,23 @@ export function EnquiriesViewNew({
       setEnquiries((prev) =>
         prev.map((e) =>
           e.id === enquiryId
-            ? { ...e, health, lostReason: health === "Lost" ? lostReason : null }
+            ? {
+                ...e,
+                health,
+                lostReason: health === "Lost" ? lostReason : null,
+                holdNote: health === "On Hold" ? hold?.note ?? null : null,
+                reachOutAt: health === "On Hold" ? hold?.reachOutAt ?? null : null,
+              }
             : e
         )
       );
       
-      await updateEnquiryHealthAction(enquiryId, health, lostReason);
+      await updateEnquiryHealthAction(
+        enquiryId,
+        health,
+        lostReason,
+        health === "On Hold" ? hold : null
+      );
     } catch (err: any) {
       alert(err.message || "Failed to update enquiry health");
     }
@@ -1134,6 +1157,18 @@ export function EnquiriesViewNew({
             applyEnquiryHealth(lostReasonModalData.enquiryId, "Lost", reason);
             setLostReasonModalData(null);
           }
+        }}
+      />
+
+      <HoldFollowUpModal
+        isOpen={!!holdModalEnquiryId}
+        entityLabel="enquiry"
+        onClose={() => setHoldModalEnquiryId(null)}
+        onSubmit={(payload) => {
+          if (!holdModalEnquiryId) return;
+          const id = holdModalEnquiryId;
+          setHoldModalEnquiryId(null);
+          void applyEnquiryHealth(id, "On Hold", undefined, payload);
         }}
       />
     </div>

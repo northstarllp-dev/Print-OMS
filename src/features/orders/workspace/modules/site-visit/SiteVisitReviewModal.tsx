@@ -18,6 +18,7 @@ import {
   ChevronUp,
 } from "lucide-react";
 import { SiteVisitDetails, SignLocation } from "@/types";
+import { loadClientConfig } from "@/config/loadClientConfig";
 
 interface SiteVisitReviewModalProps {
   siteVisit: SiteVisitDetails;
@@ -85,8 +86,10 @@ function Tag({ text }: { text: string }) {
 }
 
 function LocationReviewCard({ loc, index }: { loc: SignLocation; index: number }) {
+  const config = loadClientConfig();
+  const hiddenFields = config.features.siteVisit || {};
   const [open, setOpen] = useState(true);
-  const hasMeasurements = loc.width || loc.height || loc.depth || loc.groundClearance;
+  const hasMeasurements = loc.width || loc.height || (!hiddenFields.hideDepth && loc.depth) || (!hiddenFields.hideGroundClearance && loc.groundClearance);
   const hasElectrical = loc.powerAvailable !== undefined || loc.distanceToPowerSource || loc.electricalNotes;
   const hasStructural = loc.wallType || loc.mountingMethod || loc.surfaceCondition || (loc.obstacles?.length ?? 0) > 0 || loc.structuralNotes;
 
@@ -126,8 +129,8 @@ function LocationReviewCard({ loc, index }: { loc: SignLocation; index: number }
               <div className="flex flex-wrap gap-2">
                 <StatPill label="Width" value={loc.width ? `${loc.width} ${loc.widthUnit || 'ft'}` : null} />
                 <StatPill label="Height" value={loc.height ? `${loc.height} ${loc.heightUnit || 'ft'}` : null} />
-                <StatPill label="Depth" value={loc.depth ? `${loc.depth} ${loc.depthUnit || 'ft'}` : null} />
-                <StatPill label="Ground Clr." value={loc.groundClearance ? `${loc.groundClearance} ${loc.groundClearanceUnit || 'ft'}` : null} />
+                {!hiddenFields.hideDepth && <StatPill label="Depth" value={loc.depth ? `${loc.depth} ${loc.depthUnit || 'ft'}` : null} />}
+                {!hiddenFields.hideGroundClearance && <StatPill label="Ground Clr." value={loc.groundClearance ? `${loc.groundClearance} ${loc.groundClearanceUnit || 'ft'}` : null} />}
               </div>
             </div>
           )}
@@ -236,22 +239,24 @@ function LocationReviewCard({ loc, index }: { loc: SignLocation; index: number }
   );
 }
 
-export const SiteVisitReviewModal: React.FC<SiteVisitReviewModalProps> = ({
+export function SiteVisitReviewModal({
   siteVisit,
   orderName,
   onConfirm,
   onClose,
-  mode = "admin_lock",
-}) => {
-  const [confirming, setConfirming] = useState(false);
+  mode = "staff_push",
+}: SiteVisitReviewModalProps) {
+  const config = loadClientConfig();
+  const hiddenFields = config.features.siteVisit || {};
+  const [isConfirming, setIsConfirming] = useState(false);
   const isStaffPush = mode === "staff_push";
 
   const handleConfirm = async () => {
-    setConfirming(true);
+    setIsConfirming(true);
     try {
       await onConfirm();
     } finally {
-      setConfirming(false);
+      setIsConfirming(false);
     }
   };
 
@@ -385,7 +390,7 @@ export const SiteVisitReviewModal: React.FC<SiteVisitReviewModalProps> = ({
           )}
 
           {/* ── Fabrication Requirements ── */}
-          {(siteVisit.extraAnglesRequired !== undefined || siteVisit.extraAcpSheetRequired !== undefined || siteVisit.oldBoardRemovalRequired !== undefined || siteVisit.extraWireRequired !== undefined) && (
+          {(siteVisit.extraAnglesRequired !== undefined || siteVisit.extraAcpSheetRequired !== undefined || siteVisit.oldBoardRemovalRequired !== undefined || (!hiddenFields.hideExtraWireRequired && siteVisit.extraWireRequired !== undefined)) && (
             <div>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">
                 Fabrication Requirements
@@ -395,8 +400,8 @@ export const SiteVisitReviewModal: React.FC<SiteVisitReviewModalProps> = ({
                   { label: "Extra Angles Required", value: siteVisit.extraAnglesRequired, extra: siteVisit.extraAnglesRequired && siteVisit.extraAnglesLength ? ` (${siteVisit.extraAnglesLength})` : "" },
                   { label: "Extra ACP Sheet to Cover Gap", value: siteVisit.extraAcpSheetRequired },
                   { label: "Old Board Removal", value: siteVisit.oldBoardRemovalRequired },
-                  { label: "Extra Wire Required", value: siteVisit.extraWireRequired },
-                ].filter(item => item.value !== undefined).map(item => (
+                  !hiddenFields.hideExtraWireRequired ? { label: "Extra Wire Required", value: siteVisit.extraWireRequired } : null,
+                ].filter((item): item is {label: string, value: boolean, extra?: string} => item !== null && item.value !== undefined).map(item => (
                   <div key={item.label} className="flex items-center justify-between text-xs">
                     <span className="font-medium text-orange-800">{item.label}{"extra" in item ? item.extra : ""}</span>
                     <span className={`font-bold px-2 py-0.5 rounded-full border text-[10px] ${item.value ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-500 border-slate-200"}`}>
@@ -409,7 +414,7 @@ export const SiteVisitReviewModal: React.FC<SiteVisitReviewModalProps> = ({
           )}
 
           {/* ── Design Inputs ── */}
-          {(siteVisit.designBriefAvailable || siteVisit.fabricationRequired !== undefined || siteVisit.civilWorkRequired !== undefined) && (
+          {(siteVisit.designBriefAvailable || (!hiddenFields.hideFabricationReq && siteVisit.fabricationRequired !== undefined) || (!hiddenFields.hideCivilWork && siteVisit.civilWorkRequired !== undefined)) && (
             <div>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">
                 Design Inputs
@@ -423,7 +428,7 @@ export const SiteVisitReviewModal: React.FC<SiteVisitReviewModalProps> = ({
                     </span>
                   </div>
                 )}
-                {siteVisit.fabricationRequired !== undefined && (
+                {!hiddenFields.hideFabricationReq && siteVisit.fabricationRequired !== undefined && (
                   <div className="flex items-center justify-between text-xs">
                     <span className="font-medium text-indigo-800">Fabrication Required</span>
                     <span className={`font-bold px-2 py-0.5 rounded-full border text-[10px] ${siteVisit.fabricationRequired ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-500 border-slate-200"}`}>
@@ -431,7 +436,7 @@ export const SiteVisitReviewModal: React.FC<SiteVisitReviewModalProps> = ({
                     </span>
                   </div>
                 )}
-                {siteVisit.civilWorkRequired !== undefined && (
+                {!hiddenFields.hideCivilWork && siteVisit.civilWorkRequired !== undefined && (
                   <div className="flex items-center justify-between text-xs">
                     <span className="font-medium text-indigo-800">Civil Work Required</span>
                     <span className={`font-bold px-2 py-0.5 rounded-full border text-[10px] ${siteVisit.civilWorkRequired ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-500 border-slate-200"}`}>
@@ -459,17 +464,17 @@ export const SiteVisitReviewModal: React.FC<SiteVisitReviewModalProps> = ({
           <div className="flex flex-col-reverse md:flex-row items-stretch md:items-center justify-end gap-2 md:gap-3">
             <button
               onClick={onClose}
-              disabled={confirming}
+              disabled={isConfirming}
               className="px-5 py-2.5 text-sm font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors cursor-pointer disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               onClick={handleConfirm}
-              disabled={confirming}
+              disabled={isConfirming}
               className="flex items-center justify-center gap-2 px-4 md:px-6 py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors cursor-pointer disabled:opacity-60 shadow-sm shadow-emerald-200"
             >
-              {confirming ? (
+              {isConfirming ? (
                 <>
                   <svg className="animate-spin w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />

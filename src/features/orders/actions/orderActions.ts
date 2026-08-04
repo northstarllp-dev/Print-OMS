@@ -10,6 +10,7 @@ import {
   mapSiteVisitToDb,
 } from "./siteVisitMapper";
 import { mapDesignFromDb } from "@/features/designs/actions/designMapper";
+import { mapProductionDetails } from "@/features/orders/actions/productionMapper";
 import {
   dispatchWhatsAppNotification,
   dispatchWhatsAppForPipelineStage,
@@ -120,7 +121,9 @@ export async function getOrders() {
       siteVisitDetails: mapSiteVisitFromDb(sv),
       design: designRow ? mapDesignFromDb(designRow) : null,
       installationDetails: Array.isArray(order.installations) ? order.installations[0] : order.installations,
-      productionDetails: Array.isArray(order.productions) ? order.productions[0] : order.productions,
+      productionDetails: mapProductionDetails(
+        Array.isArray(order.productions) ? order.productions[0] : order.productions
+      ),
       quotations: order.quotations,
       payments: order.payments
     };
@@ -191,7 +194,9 @@ export async function getOrderById(id: string) {
     siteVisitDetails: mapSiteVisitFromDb(sv),
     design: designRow ? mapDesignFromDb(designRow) : null,
     installationDetails: Array.isArray(data.installations) && data.installations.length > 0 ? data.installations[0] : (data.installations || null),
-    productionDetails: Array.isArray(data.productions) && data.productions.length > 0 ? data.productions[0] : (data.productions || null),
+    productionDetails: mapProductionDetails(
+      Array.isArray(data.productions) && data.productions.length > 0 ? data.productions[0] : (data.productions || null)
+    ),
     quotations: data.quotations,
     payments: data.payments
   };
@@ -433,14 +438,30 @@ export async function updateProductionDetailsAction(orderId: string, details: an
   const supabase = await getSupabase();
   const orderUuid = await resolveOrderUuid(supabase, orderId);
 
+  const payload = { ...details };
+  delete payload.deadline;
+  delete payload.installation_deadline;
+
+  const keys = Object.keys(details ?? {});
+  const isDeadlineOnlyUpdate =
+    keys.length > 0 &&
+    keys.every((k) => k === "deadline" || k === "installation_deadline");
+
+  // Installation deadline is admin-only. Staff checklist/draft saves must not touch it.
+  if (isDeadlineOnlyUpdate) {
+    await assertAdminOnly();
+    payload.installation_deadline =
+      details.installation_deadline ?? details.deadline ?? null;
+  }
+
   // Check if a production row exists
   const { data: current, error: fetchError } = await supabase.from("productions").select("*").eq("order_id", orderUuid).maybeSingle();
   
   if (current) {
-    const { error: updateError } = await supabase.from("productions").update(details).eq("order_id", orderUuid);
+    const { error: updateError } = await supabase.from("productions").update(payload).eq("order_id", orderUuid);
     if (updateError) throw new Error(updateError.message);
   } else {
-    const { error: insertError } = await supabase.from("productions").insert({ order_id: orderUuid, ...details });
+    const { error: insertError } = await supabase.from("productions").insert({ order_id: orderUuid, ...payload });
     if (insertError) throw new Error(insertError.message);
   }
   
@@ -997,7 +1018,8 @@ export async function updateOrderHealthAction(
   orderId: string,
   health: string,
   lostReason?: string,
-  callRemarks?: string
+  callRemarks?: string,
+  hold?: { note?: string | null; reachOutAt?: string | null } | null
 ) {
   await assertAdminOnly();
   const { isOrderHealth } = await import("@/features/orders/lib/orderHealth");
@@ -1007,18 +1029,29 @@ export async function updateOrderHealthAction(
   if (health === "Lost" && !lostReason?.trim()) {
     throw new Error("A reason is required when marking an order as Lost.");
   }
+  if (health === "On Hold" && (!hold?.note?.trim() || !hold?.reachOutAt)) {
+    throw new Error("A note and reach-out date are required when putting an order On Hold.");
+  }
 
   const supabase = await getSupabase();
   const { data: o, error: fetchError } = await supabase
     .from("orders")
-    .select("order_id, company_id")
+    .select("order_id, company_id, stage")
     .eq("id", orderId)
     .single();
   if (fetchError) throw new Error(fetchError.message);
+  if (o.stage === "Completed" || o.stage === "Closed") {
+    throw new Error("Health cannot be changed on completed or closed orders.");
+  }
+
+  const holdNote = health === "On Hold" ? hold!.note!.trim() : null;
+  const reachOutAt = health === "On Hold" ? hold!.reachOutAt! : null;
 
   const result = await updateOrder(orderId, {
     health,
     lost_reason: health === "Lost" ? lostReason!.trim() : null,
+    hold_note: holdNote,
+    reach_out_at: reachOutAt,
   });
 
   const remarks = callRemarks?.trim();
@@ -1040,14 +1073,22 @@ export async function updateOrderHealthAction(
     actor_role: "System",
     content: `Order health status updated to "${health}"${
       health === "Lost" && lostReason?.trim() ? ` with reason: "${lostReason.trim()}"` : ""
+    }${
+      health === "On Hold" && reachOutAt
+        ? ` (reach out ${reachOutAt}${holdNote ? `: ${holdNote}` : ""})`
+        : ""
     }.`,
     metadata: {
       action: "health_changed",
       health,
       lost_reason: health === "Lost" ? lostReason!.trim() : null,
+      hold_note: holdNote,
+      reach_out_at: reachOutAt,
     },
   });
 
+  revalidatePath("/admin/calendar");
+  revalidatePath("/staff/calendar");
   return result;
 }
 
@@ -1110,7 +1151,12 @@ export async function reopenOrderAction(orderId: string) {
     .single();
   if (fetchError) throw new Error(fetchError.message);
 
-  const result = await updateOrder(orderId, { health: "Active", lost_reason: null });
+  const result = await updateOrder(orderId, {
+    health: "Active",
+    lost_reason: null,
+    hold_note: null,
+    reach_out_at: null,
+  });
 
   await insertOrderActivity(supabase, {
     order_id: o.order_id || orderId,

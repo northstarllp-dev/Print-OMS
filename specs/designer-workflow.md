@@ -27,6 +27,7 @@ Design can run either after Quotation (`quote_first`, default) or before it (`de
    - "Approve Design" sets the **currently selected/active version** (not necessarily the latest version) to `Approved` and logs `design_approved_by_customer`. If every item's latest version is now `Approved`, it also transitions the stage to `Design Approved` and logs `all_designs_approved`.
 6. Staff uploads final production files per item once that item's latest version is `Approved` (`handleProductionFileUpload`, folder `production`).
 7. Staff/admin advances the order out of Design via the shared worksheet "Request Admin Approval" / "Approve & Advance" buttons (`requestStageAdvancementAction` / `adminApproveStageAction`), gated by `canAdvanceSiteVisit` (all items approved + ≥1 production file) — **but see Business Rules for a workflow-type gating gap**.
+   - **Admin override (admin portal only):** When stage is `Design In Progress` and not all items are customer-approved, Admin sees amber **Approve without Customer & Advance**. This calls `adminMarkDesignApprovedAction` (force-approves each item's latest version, sets stage to `Design Approved`, logs `design_approved_by_admin`) then `adminApproveStageAction` to move to Quotation/Production. Staff never see this control.
 8. `order_activity` timeline rows and WhatsApp notifications are written throughout; realtime `designs`/`orders` changes are broadcast to staff sessions via `useOrderDetailSync`.
 
 ## Workflow States

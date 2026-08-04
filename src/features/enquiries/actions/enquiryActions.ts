@@ -447,17 +447,27 @@ export async function convertEnquiryToOrderAction(enquiryId: string, clientName:
  * Update an enquiry's health manually (e.g. Lost, Active, On Hold).
  * If Lost, a lostReason can be provided. 
  */
-export async function updateEnquiryHealthAction(enquiryId: string, health: string, lostReason?: string | null) {
+export async function updateEnquiryHealthAction(
+  enquiryId: string,
+  health: string,
+  lostReason?: string | null,
+  hold?: { note?: string | null; reachOutAt?: string | null } | null
+) {
   const profile = await getCurrentUser();
   if (!profile || (profile.role !== "admin" && profile.role !== "staff")) {
     throw new Error("Unauthorized");
+  }
+  if (health === "On Hold") {
+    if (!hold?.note?.trim() || !hold?.reachOutAt) {
+      throw new Error("A note and reach-out date are required when putting an enquiry On Hold.");
+    }
   }
   const companyId = profile.company_id ?? null;
 
   const supabase = await getSupabase();
   const { error } = await supabase
     .from("enquiries")
-    .update(buildHealthUpdatePayload(health, lostReason))
+    .update(buildHealthUpdatePayload(health, lostReason, hold))
     .eq("id", enquiryId)
     .eq("company_id", companyId);
 
@@ -467,6 +477,8 @@ export async function updateEnquiryHealthAction(enquiryId: string, health: strin
   }
 
   revalidateEnquiryPaths();
+  revalidatePath("/admin/calendar");
+  revalidatePath("/staff/calendar");
 }
 
 /** Mark Active enquiries stalled past the threshold as Needs Attention. Idempotent. */

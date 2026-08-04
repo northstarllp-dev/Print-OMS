@@ -5,6 +5,7 @@ import { checkRateLimit, clientIpFromHeaders } from "@/utils/rate-limiter";
 import { Info, Clock, CheckCircle, Check, Loader2, PlayCircle, MapPin, Search } from "lucide-react";
 import { mapSiteVisitFromDb, mapSiteVisitMeasurementFromDb } from "@/features/orders/actions/siteVisitMapper";
 import { mapDesignFromDb } from "@/features/designs/actions/designMapper";
+import { mapProductionDetails } from "@/features/orders/actions/productionMapper";
 import { toCustomerVisibleQuotation } from "@/features/quotations/utils/quotationSecurity";
 import { toCustomerVisibleDesign } from "@/features/designs/utils/customerVisibleDesign";
 import { OrderDetailClient } from "./OrderDetailClient";
@@ -266,7 +267,9 @@ export default async function OrderDetailPage({
           ? mapDesignFromDb(orderData.designs)
           : null
     ),
-    productionDetails: Array.isArray(orderData.productions) && orderData.productions.length > 0 ? orderData.productions[0] : (orderData.productions || null),
+    productionDetails: mapProductionDetails(
+      Array.isArray(orderData.productions) && orderData.productions.length > 0 ? orderData.productions[0] : (orderData.productions || null)
+    ),
     installationDetails: Array.isArray(orderData.installations) && orderData.installations.length > 0 ? orderData.installations[0] : (orderData.installations || null),
     stageStatus: orderData.stage_status || null,
     stageAdminNotes: orderData.stage_admin_notes || null,

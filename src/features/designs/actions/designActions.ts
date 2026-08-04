@@ -11,8 +11,10 @@ import { getRequestBaseUrl } from "@/features/notifications/whatsapp/requestBase
 import { getCurrentUser } from "@/features/auth/actions/authActions";
 import { createAdminClient } from "@/utils/supabase/admin";
 import {
+  assertAdminOnly,
   assertStageEditPermission,
 } from "@/features/orders/workspace/shared/serverPermissions";
+import { getDesignItemsWithVersions } from "@/features/designs/utils/designApproval";
 import { resolveStagePermission } from "@/features/orders/workspace/shared/permissions";
 import {
   revalidateOrderDetailPaths,
@@ -281,4 +283,81 @@ export async function transitionDesignOrderStageAction(
   const { supabase, orderUuid, fromPortal } = await getDesignMutationContext(orderId, portalToken);
   await updateOrderStage(supabase, orderUuid, stage);
   await revalidateDesignPaths(orderId, fromPortal);
+}
+
+/**
+ * Admin-only: mark every design item's latest version Approved and move the order
+ * to Design Approved (mirrors adminMarkQuotationApprovedAction). Does not require
+ * portal customer approval or production files.
+ */
+export async function adminMarkDesignApprovedAction(orderId: string): Promise<DesignRecord> {
+  await assertAdminOnly();
+  const supabase = await getSupabase();
+  const orderUuid = await resolveOrderUuid(supabase, orderId);
+
+  const { data: order, error: orderError } = await supabase
+    .from("orders")
+    .select("order_id, company_id, stage, health")
+    .eq("id", orderUuid)
+    .single();
+  if (orderError) throw new Error(orderError.message);
+  if (!order.company_id) throw new Error("company_id is required to log design activity");
+  if (order.stage !== "Design In Progress" && order.stage !== "Design Approved") {
+    throw new Error("Design can only be force-approved while the order is in a Design stage.");
+  }
+
+  const { data: designRow, error: designFetchError } = await supabase
+    .from("designs")
+    .select("*")
+    .eq("order_id", orderUuid)
+    .maybeSingle();
+  if (designFetchError) throw new Error(designFetchError.message);
+  if (!designRow) throw new Error("Design not found");
+
+  const design = mapDesignFromDb(designRow);
+  if (getDesignItemsWithVersions(design.items).length === 0) {
+    throw new Error("Upload at least one design proof before approving without customer.");
+  }
+
+  const items = design.items.map((item) => {
+    if (!Array.isArray(item.versions) || item.versions.length === 0) return item;
+    const versions = item.versions.map((v, idx) =>
+      idx === item.versions.length - 1 ? { ...v, status: "Approved" as const } : v
+    );
+    return { ...item, versions };
+  });
+
+  const { data: updated, error: designUpdateError } = await supabase
+    .from("designs")
+    .update({ items })
+    .eq("order_id", orderUuid)
+    .select()
+    .single();
+  if (designUpdateError) throw new Error(designUpdateError.message);
+  if (!updated) throw new Error("Failed to update design.");
+
+  if (order.stage === "Design In Progress") {
+    const { stageProgressPatch } = await import("@/features/orders/lib/orderHealth");
+    const { error: stageError } = await supabase
+      .from("orders")
+      .update({
+        stage: "Design Approved",
+        stage_status: "Normal",
+        ...stageProgressPatch(order.health),
+      })
+      .eq("id", orderUuid);
+    if (stageError) throw new Error(stageError.message);
+  }
+
+  await insertOrderActivity(supabase, {
+    order_id: order.order_id || orderUuid,
+    company_id: order.company_id,
+    actor_name: "System",
+    actor_role: "System",
+    content: "Admin marked the design as approved without customer portal approval.",
+    metadata: { action: "design_approved_by_admin" },
+  });
+
+  await revalidateDesignPaths(orderId);
+  return mapDesignFromDb(updated);
 }

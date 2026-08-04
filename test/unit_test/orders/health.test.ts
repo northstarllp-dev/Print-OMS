@@ -48,10 +48,25 @@ describe("order health", () => {
       expect(buildHealthUpdatePayload("Lost", "Price")).toEqual({
         health: "Lost",
         lost_reason: "Price",
+        hold_note: null,
+        reach_out_at: null,
       });
       expect(buildHealthUpdatePayload("On Hold", "Price")).toEqual({
         health: "On Hold",
         lost_reason: null,
+        hold_note: null,
+        reach_out_at: null,
+      });
+      expect(
+        buildHealthUpdatePayload("On Hold", null, {
+          note: "Call back",
+          reachOutAt: "2026-08-15",
+        })
+      ).toEqual({
+        health: "On Hold",
+        lost_reason: null,
+        hold_note: "Call back",
+        reach_out_at: "2026-08-15",
       });
     });
 

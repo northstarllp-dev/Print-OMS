@@ -25,6 +25,7 @@ import {
   Ban,
 } from "lucide-react";
 import { assignTeamToOrder, updateOrderHealthAction } from "@/features/orders/actions/orderActions";
+import { HoldFollowUpModal } from "@/features/calendar/components/HoldFollowUpModal";
 import { loadClientConfig } from "@/config/loadClientConfig";
 import { parseOrderStage } from "@/features/orders/workspace/shared/stageGrants";
 import {
@@ -45,6 +46,8 @@ import { CreateServiceTicketModal } from "@/features/service-tickets/components/
 import type { OrderHealth } from "@/features/orders/lib/orderHealth";
 import {
   buildServiceTicketPreset,
+  canChangeOrderHealth,
+  canShowAddServiceTicketForOrder,
   computeOrderKpis,
   countActiveOrderFilters,
   filterOrders,
@@ -177,6 +180,7 @@ export function OrdersManagementDashboard({
     initialTab ?? pipelineInitial ?? (myOrdersStages[0] as MyOrdersTab | undefined);
   const [myOrdersTab, setMyOrdersTab] = useState<MyOrdersTab | undefined>(resolvedInitialTab);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [holdModalOrderId, setHoldModalOrderId] = useState<string | null>(null);
   const [ticketPreset, setTicketPreset] = useState<{
     phone?: string;
     customerId?: string;
@@ -264,8 +268,16 @@ export function OrdersManagementDashboard({
   );
 
   const applyOrderHealth = useCallback(
-    async (orderId: string, health: OrderHealth) => {
+    async (
+      orderId: string,
+      health: OrderHealth,
+      hold?: { note: string; reachOutAt: string } | null
+    ) => {
       setOpenMenuId(null);
+      if (health === "On Hold" && !hold) {
+        setHoldModalOrderId(orderId);
+        return;
+      }
       let lostReason: string | undefined;
       if (health === "Lost") {
         const entered = window.prompt("Reason for marking this order as Lost:");
@@ -280,18 +292,36 @@ export function OrdersManagementDashboard({
       setOrders((list) =>
         list.map((o) =>
           o.id === orderId
-            ? { ...o, health, lost_reason: health === "Lost" ? lostReason : null }
+            ? {
+                ...o,
+                health,
+                lost_reason: health === "Lost" ? lostReason : null,
+                hold_note: health === "On Hold" ? hold?.note ?? null : null,
+                reach_out_at: health === "On Hold" ? hold?.reachOutAt ?? null : null,
+              }
             : o
         )
       );
       try {
-        await updateOrderHealthAction(orderId, health, lostReason);
+        await updateOrderHealthAction(
+          orderId,
+          health,
+          lostReason,
+          undefined,
+          health === "On Hold" ? hold : null
+        );
       } catch (err: any) {
         if (prev) {
           setOrders((list) =>
             list.map((o) =>
               o.id === orderId
-                ? { ...o, health: prev.health, lost_reason: prev.lost_reason }
+                ? {
+                    ...o,
+                    health: prev.health,
+                    lost_reason: prev.lost_reason,
+                    hold_note: prev.hold_note,
+                    reach_out_at: prev.reach_out_at,
+                  }
                 : o
             )
           );
@@ -958,6 +988,7 @@ export function OrdersManagementDashboard({
                                   <Eye size={13} /> View Order
                                 </button>
                                 {currentUserRole === "Admin" &&
+                                  canChangeOrderHealth(order.stage) &&
                                   healthMenuActions(order.health || "Active").map((action) => {
                                     const Icon = action.icon;
                                     return (
@@ -971,7 +1002,8 @@ export function OrdersManagementDashboard({
                                       </button>
                                     );
                                   })}
-                                {currentUserRole === "Admin" && (
+                                {currentUserRole === "Admin" &&
+                                  canShowAddServiceTicketForOrder(order.stage) && (
                                   <button
                                     type="button"
                                     onClick={() => openServiceTicketForOrder(order)}
@@ -1228,7 +1260,8 @@ export function OrdersManagementDashboard({
                                   onClick={() => setOpenMenuId(null)}
                                 />
                                 <div className="absolute right-0 top-full mt-1 z-50 min-w-[170px] rounded-lg border border-slate-200 bg-white shadow-lg overflow-hidden">
-                                  {healthMenuActions(order.health || "Active").map((action) => {
+                                  {canChangeOrderHealth(order.stage) &&
+                                    healthMenuActions(order.health || "Active").map((action) => {
                                     const Icon = action.icon;
                                     return (
                                       <button
@@ -1241,6 +1274,7 @@ export function OrdersManagementDashboard({
                                       </button>
                                     );
                                   })}
+                                  {canShowAddServiceTicketForOrder(order.stage) && (
                                   <button
                                     type="button"
                                     onClick={() => openServiceTicketForOrder(order)}
@@ -1248,6 +1282,7 @@ export function OrdersManagementDashboard({
                                   >
                                     <Wrench size={13} /> Add Service Ticket
                                   </button>
+                                  )}
                                 </div>
                               </>
                             )}
@@ -1368,6 +1403,18 @@ export function OrdersManagementDashboard({
           }}
         />
       )}
+
+      <HoldFollowUpModal
+        isOpen={!!holdModalOrderId}
+        entityLabel="order"
+        onClose={() => setHoldModalOrderId(null)}
+        onSubmit={(payload) => {
+          if (!holdModalOrderId) return;
+          const id = holdModalOrderId;
+          setHoldModalOrderId(null);
+          void applyOrderHealth(id, "On Hold", payload);
+        }}
+      />
     </div>
   );
 }

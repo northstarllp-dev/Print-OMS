@@ -234,10 +234,17 @@ export function CreateServiceTicketModal({
                   <input
                     className="prt-input w-full !pl-[4.5rem] sm:!pl-[4.75rem]"
                     value={phone}
-                    onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))}
+                    onChange={(e) => {
+                      let val = e.target.value.replace(/\D/g, "");
+                      if (val.length === 12 && val.startsWith("91")) val = val.slice(2);
+                      else if (val.length === 11 && val.startsWith("0")) val = val.slice(1);
+                      setPhone(val.slice(0, 10));
+                    }}
                     placeholder="Mobile number"
                     disabled={orders.length > 0}
-                    inputMode="tel"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={10}
                   />
                 </div>
                 {orders.length === 0 ? (

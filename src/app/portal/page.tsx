@@ -5,6 +5,7 @@ import { PortalClient } from "./PortalClient";
 import React from "react";
 import { mapSiteVisitFromDb, mapSiteVisitMeasurementFromDb } from "@/features/orders/actions/siteVisitMapper";
 import { mapDesignFromDb } from "@/features/designs/actions/designMapper";
+import { mapProductionDetails } from "@/features/orders/actions/productionMapper";
 import { toCustomerVisibleDesign } from "@/features/designs/utils/customerVisibleDesign";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { isQuotationVisibleToCustomer } from "@/features/quotations/utils/lineAmount";
@@ -316,7 +317,9 @@ export default async function PortalPage({
             ? mapDesignFromDb(o.designs)
             : null
       ),
-      productionDetails: Array.isArray(o.productions) && o.productions.length > 0 ? o.productions[0] : (o.productions || null),
+      productionDetails: mapProductionDetails(
+        Array.isArray(o.productions) && o.productions.length > 0 ? o.productions[0] : (o.productions || null)
+      ),
       installationDetails: Array.isArray(o.installations) && o.installations.length > 0 ? o.installations[0] : (o.installations || null),
       stageStatus: o.stage_status || null,
       stageAdminNotes: o.stage_admin_notes || null,

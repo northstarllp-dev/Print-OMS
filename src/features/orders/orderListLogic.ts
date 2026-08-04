@@ -87,6 +87,16 @@ export function isTerminalOrderStage(stage?: string | null): boolean {
   return stage === "Completed" || stage === "Closed";
 }
 
+/** Service tickets are only created from finished orders. */
+export function canShowAddServiceTicketForOrder(stage?: string | null): boolean {
+  return isTerminalOrderStage(stage);
+}
+
+/** Health is meaningful only while the order is still in the pipeline. */
+export function canChangeOrderHealth(stage?: string | null): boolean {
+  return !isTerminalOrderStage(stage);
+}
+
 export function isActivePipelineOrder(order: { stage?: string | null }): boolean {
   return !isTerminalOrderStage(order.stage);
 }
@@ -137,12 +147,29 @@ export function isAllowedHealthTransition(
 
 export function buildHealthUpdatePayload(
   health: string,
-  lostReason?: string | null
-): { health: string; lost_reason: string | null } {
+  lostReason?: string | null,
+  hold?: { note?: string | null; reachOutAt?: string | null } | null
+): {
+  health: string;
+  lost_reason: string | null;
+  hold_note: string | null;
+  reach_out_at: string | null;
+} {
+  const isHold = health === "On Hold";
   return {
     health,
     lost_reason: health === "Lost" ? lostReason ?? null : null,
+    hold_note: isHold ? hold?.note?.trim() || null : null,
+    reach_out_at: isHold ? hold?.reachOutAt || null : null,
   };
+}
+
+export function requiresHoldFollowUpPrompt(health: string): boolean {
+  return health === "On Hold";
+}
+
+export function isValidHoldFollowUp(note?: string | null, reachOutAt?: string | null): boolean {
+  return Boolean(note?.trim() && reachOutAt);
 }
 
 export function requiresLostReasonPrompt(

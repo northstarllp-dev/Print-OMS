@@ -184,6 +184,9 @@ export interface ProductionDetails {
   stage4?: boolean;
   /** Dynamic workshop checklist progress keyed by settings item id. */
   checklist?: Record<string, boolean>;
+  /** Admin-set installation deadline (DB: productions.installation_deadline). */
+  installation_deadline?: string | null;
+  /** @deprecated Use installation_deadline */
   deadline?: string | null;
 }
 
@@ -222,6 +225,8 @@ export interface Order {
   orderCode?: string;
   health?: string;
   lost_reason?: string;
+  hold_note?: string | null;
+  reach_out_at?: string | null;
   orderId?: string;
   /** Determines whether Quote or Design comes first after Site Visit */
   workflow_type?: "quote_first" | "design_first";
