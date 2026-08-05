@@ -1,6 +1,6 @@
 import { PrintOMSClientConfig } from "../../schema";
 
-const edit = (...stages: Array<"site_visit" | "quotation" | "invoice" | "design" | "production" | "installation" | "service_tickets">) => {
+const edit = (...stages: Array<"enquiry" | "site_visit" | "quotation" | "invoice" | "design" | "production" | "installation" | "service_tickets">) => {
   const map: NonNullable<PrintOMSClientConfig["stageGrantsByRole"]>[string] = {};
   for (const s of stages) map[s] = { canView: true, canEdit: true };
   return map;
@@ -14,7 +14,7 @@ export const printecConfig: Partial<PrintOMSClientConfig> = {
     primary: "#13b5ea",
     onPrimary: "#ffffff",
     primaryContainer: "#e0f6ff",
-    onPrimaryContainer: "#005a80",
+    onPrimaryContainer: "#13b5ea",
     secondary: "#e41c8a",
     onSecondary: "#ffffff",
     secondaryContainer: "#fdecf5",
@@ -28,6 +28,7 @@ export const printecConfig: Partial<PrintOMSClientConfig> = {
     sidebarAccent: "#fcd900",
   },
   logoUrl: "/clients/printec/logo.png",
+  logoScale: 1.5,
   faviconUrl: "/clients/printec/favicon_io/favicon.ico",
   loadingText: "PRINTEC",
   features: {
@@ -39,7 +40,7 @@ export const printecConfig: Partial<PrintOMSClientConfig> = {
     Production: edit("production", "service_tickets"),
     Installation: edit("site_visit", "installation"),
     Designer: edit("site_visit", "design"),
-    Marketer: edit("site_visit", "quotation", "invoice"),
+    Marketer: edit("enquiry", "site_visit", "quotation", "invoice"),
   },
   // Existing Meta templates were approved under the printec_ prefix
   whatsappTemplatePrefix: "printec_",

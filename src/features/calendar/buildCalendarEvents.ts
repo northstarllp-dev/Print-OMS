@@ -1,10 +1,16 @@
 import type {
   CalendarTaskInput,
   CalendarCustomerInput,
+  CalendarEnquiryInput,
   CalendarEvent,
   CalendarOrderInput,
+  CalendarReminderInput,
   PaymentOutstandingMap,
 } from "./types";
+import {
+  buildGoogleMapsSearchUrl,
+  resolveSiteVisitInstallationAddress,
+} from "@/features/orders/actions/siteVisitMapper";
 
 /** Parse a date string into a local YYYY-MM-DD key. */
 export function toDateKey(value: string | null | undefined): string | null {
@@ -38,11 +44,100 @@ function buildGmapSearch(address: string): string {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
 }
 
+export function buildHoldFollowUpEvents(
+  orders: CalendarOrderInput[],
+  enquiries: CalendarEnquiryInput[] = [],
+  customerById?: Map<string, CalendarCustomerInput>
+): CalendarEvent[] {
+  const events: CalendarEvent[] = [];
+
+  for (const order of orders) {
+    if (order.health !== "On Hold") continue;
+    const dateKey = toDateKey(order.reachOutAt);
+    if (!dateKey) continue;
+    const orderCode = order.orderCode || order.orderId || order.id;
+    const customer = order.customerId && customerById ? customerById.get(order.customerId) : undefined;
+    
+    events.push({
+      id: `${order.id}-hold_followup`,
+      orderId: order.id,
+      orderCode,
+      type: "hold_followup",
+      dateKey,
+      time: null,
+      projectName: order.businessName || order.clientName || "Order",
+      clientName: order.clientName || "Unknown client",
+      clientPhone: customer?.phone || undefined,
+      clientEmail: customer?.email || undefined,
+      assigneeIds: [],
+      stage: order.stage,
+      metaLabel: "Order hold",
+      note: order.holdNote || null,
+    });
+  }
+
+  for (const enq of enquiries) {
+    if (enq.health !== "On Hold") continue;
+    if (enq.status === "Converted") continue;
+    const dateKey = toDateKey(enq.reachOutAt);
+    if (!dateKey) continue;
+    events.push({
+      id: `${enq.id}-hold_followup`,
+      enquiryId: enq.id,
+      enquiryCode: enq.enquireId || enq.id,
+      orderCode: enq.enquireId || undefined,
+      type: "hold_followup",
+      dateKey,
+      time: null,
+      projectName: enq.businessName || enq.leadName || "Enquiry",
+      clientName: enq.leadName || enq.businessName || "Lead",
+      clientPhone: enq.phone || undefined,
+      clientEmail: enq.email || undefined,
+      assigneeIds: [],
+      stage: enq.status || "On Hold",
+      metaLabel: "Enquiry hold",
+      note: enq.holdNote || null,
+    });
+  }
+
+  return events;
+}
+
+export function buildReminderCalendarEvents(
+  reminders: CalendarReminderInput[]
+): CalendarEvent[] {
+  return reminders
+    .map((r) => {
+      const dateKey = toDateKey(r.reminderDate);
+      if (!dateKey) return null;
+      const viewers = Array.from(new Set([r.createdBy, ...(r.viewerIds || [])]));
+      return {
+        id: `${r.id}-reminder`,
+        reminderId: r.id,
+        type: "reminder" as const,
+        dateKey,
+        time: null,
+        projectName: r.title,
+        clientName: "Reminder",
+        assigneeIds: viewers,
+        stage: "Reminder",
+        metaLabel: "Reminder",
+        note: r.note || null,
+      };
+    })
+    .filter(Boolean) as CalendarEvent[];
+}
+
 export function buildCalendarEvents(
   orders: CalendarOrderInput[],
   customers: CalendarCustomerInput[] = [],
   paymentMap?: PaymentOutstandingMap,
-  tasks: CalendarTaskInput[] = []
+  tasks: CalendarTaskInput[] = [],
+  options?: {
+    enquiries?: CalendarEnquiryInput[];
+    reminders?: CalendarReminderInput[];
+    includeHoldFollowups?: boolean;
+  }
 ): CalendarEvent[] {
   const customerById = new Map(customers.map((c) => [c.id, c]));
   const events: CalendarEvent[] = [];
@@ -55,6 +150,7 @@ export function buildCalendarEvents(
     const clientName = order.clientName || "Unknown client";
     const customer = order.customerId ? customerById.get(order.customerId) : undefined;
     const clientPhone = customer?.phone || "";
+    const clientEmail = customer?.email || "";
     const fallbackAddress = customer?.shippingAddress || "";
     const assignees = order.assignedEmployees || [];
     const outstanding = paymentMap?.[order.id] ?? 0;
@@ -80,6 +176,7 @@ export function buildCalendarEvents(
           projectName,
           clientName,
           clientPhone,
+          clientEmail,
           address: svAddress,
           gmapLink: svGmap,
           outstandingAmount: outstanding,
@@ -93,8 +190,14 @@ export function buildCalendarEvents(
     if (inst) {
       const installDate = toDateKey(inst.scheduledDate || inst.scheduled_date || null);
       if (installDate) {
-        const instAddress = fallbackAddress || undefined;
-        const instGmap = inst.gmapLink || (instAddress ? buildGmapSearch(instAddress) : null);
+        const instAddress =
+          resolveSiteVisitInstallationAddress(sv, fallbackAddress) ||
+          fallbackAddress ||
+          undefined;
+        const instGmap =
+          buildGoogleMapsSearchUrl(sv?.gpsLocation) ||
+          inst.gmapLink ||
+          (instAddress ? buildGmapSearch(instAddress) : null);
         events.push({
           id: `${order.id}-installation`,
           orderId: order.id,
@@ -105,6 +208,7 @@ export function buildCalendarEvents(
           projectName,
           clientName,
           clientPhone,
+          clientEmail,
           address: instAddress,
           gmapLink: instGmap,
           outstandingAmount: outstanding,
@@ -114,7 +218,11 @@ export function buildCalendarEvents(
       }
     }
 
-    const deadline = toDateKey(order.productionDetails?.deadline || null);
+    const deadline = toDateKey(
+      order.productionDetails?.installation_deadline ||
+        order.productionDetails?.deadline ||
+        null
+    );
     if (deadline && order.stage !== "Completed") {
       events.push({
         id: `${order.id}-deadline`,
@@ -126,6 +234,7 @@ export function buildCalendarEvents(
         projectName,
         clientName,
         clientPhone,
+        clientEmail,
         address: fallbackAddress || undefined,
         gmapLink: fallbackAddress ? buildGmapSearch(fallbackAddress) : null,
         outstandingAmount: outstanding,
@@ -135,7 +244,17 @@ export function buildCalendarEvents(
     }
   }
 
-  const allEvents = [...events, ...buildTaskCalendarEvents(tasks)];
+  const holdEvents =
+    options?.includeHoldFollowups === false
+      ? []
+      : buildHoldFollowUpEvents(orders, options?.enquiries || [], customerById);
+  const reminderEvents = buildReminderCalendarEvents(options?.reminders || []);
+  const allEvents = [
+    ...events,
+    ...buildTaskCalendarEvents(tasks),
+    ...holdEvents,
+    ...reminderEvents,
+  ];
 
   return allEvents.sort((a, b) => {
     if (a.dateKey !== b.dateKey) return a.dateKey.localeCompare(b.dateKey);

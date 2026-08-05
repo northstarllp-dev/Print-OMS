@@ -24,6 +24,7 @@ import { AddEnquiryModal, EnquiryFormData } from "@/features/enquiries/component
 import { createEnquiry } from "@/features/enquiries/actions/enquiryActions";
 import { CreateServiceTicketModal } from "@/features/service-tickets/components/CreateServiceTicketModal";
 import { CustomerMessageModal, CustomerMessageInfo } from "@/features/notifications/customer-message/CustomerMessageModal";
+import { canShowAddServiceTicketForOrder } from "@/features/orders/orderListLogic";
 
 /* ─── helpers ──────────────────────────────────────────────────── */
 const STAGE_LABEL: Record<string, { label: string; dot: string }> = {
@@ -153,6 +154,7 @@ export function AdminDashboardClient({
 
   let revenue = 0;
   let outstandingAmount = 0;
+  let collectedAmount = 0;
 
   orders.forEach((o) => {
     let orderRevenue = 0;
@@ -172,6 +174,7 @@ export function AdminDashboardClient({
     });
 
     revenue += orderRevenue;
+    collectedAmount += orderReceived;
     outstandingAmount += Math.max(0, orderRevenue - orderReceived);
   });
 
@@ -235,14 +238,25 @@ export function AdminDashboardClient({
       label: "Revenue",
       value: `₹${revenue.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`,
       sub: "Total booked",
+      filterKey: "revenue",
       icon: DollarSign,
       iconBg: "#EEF2FF",
       iconColor: "#4F46E5",
     },
     {
+      label: "Collected",
+      value: `₹${collectedAmount.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`,
+      sub: "Payments received",
+      filterKey: "collected",
+      icon: CheckCircle2,
+      iconBg: "#ECFDF5",
+      iconColor: "#059669",
+    },
+    {
       label: "Outstanding",
       value: `₹${outstandingAmount.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`,
       sub: "Pending collection",
+      filterKey: "outstanding",
       icon: AlertCircle,
       iconBg: "#FEF2F2",
       iconColor: "#DC2626",
@@ -292,6 +306,10 @@ export function AdminDashboardClient({
     if (selectedKpi === "revenue")    return { type: "orders" as const, data: orders.filter(o => {
       const quotes = Array.isArray(o.quotations) ? o.quotations : (o.quotations ? [o.quotations] : []);
       return quotes.some((q: any) => q.status === "Approved");
+    }) };
+    if (selectedKpi === "collected") return { type: "orders" as const, data: orders.filter(o => {
+      const payments = Array.isArray(o.payments) ? o.payments : (o.payments ? [o.payments] : []);
+      return payments.some((p: any) => p.status === "received" && Number(p.calculated_amount ?? p.amount ?? 0) > 0);
     }) };
     if (selectedKpi === "outstanding") return { type: "orders" as const, data: orders.filter(o => {
       let orderRev = 0;
@@ -438,7 +456,7 @@ export function AdminDashboardClient({
       </div>
 
       {/* Desktop/tablet: Stat Cards */}
-      <div className="hidden lg:grid grid-cols-2 xl:grid-cols-4 gap-4 mb-7">
+      <div className="hidden lg:grid grid-cols-2 xl:grid-cols-5 gap-4 mb-7">
         {STATS.map((stat, i) => {
           const Icon = stat.icon;
           const isActive = stat.filterKey ? selectedKpi === stat.filterKey : false;
@@ -709,6 +727,7 @@ export function AdminDashboardClient({
                               >
                                 <Eye size={13} /> View Order
                               </button>
+                              {canShowAddServiceTicketForOrder(order.stage) && (
                               <button
                                 onClick={() => { setOpenMenuId(null); setIsTicketModalOpen(true); }}
                                 style={{ width: "100%", padding: "9px 14px", display: "flex", alignItems: "center", gap: "8px", background: "none", border: "none", fontSize: "12px", fontWeight: "600", color: "#0F172A", cursor: "pointer", textAlign: "left" }}
@@ -717,6 +736,7 @@ export function AdminDashboardClient({
                               >
                                 <Wrench size={13} /> Add Service Ticket
                               </button>
+                              )}
                             </div>
                           </>
                         )}

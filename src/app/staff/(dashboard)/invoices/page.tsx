@@ -18,7 +18,7 @@ export default async function StaffInvoicesPage() {
     company_id: profile.company_id ?? null,
   });
   if (!perm.canView && !perm.canEdit) {
-    redirect("/staff/orders");
+    redirect("/staff/my-orders");
   }
 
   const invoices = await listInvoices();

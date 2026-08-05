@@ -46,10 +46,10 @@ export function TasksDashboard({
   }, [allTasks, search, statusFilter]);
 
   return (
-    <div className="p-4 md:p-8 space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="m-0 text-2xl font-extrabold text-slate-900">Task Dashboard</h1>
+    <div className="p-3 sm:p-4 md:p-8 space-y-4 sm:space-y-5 pb-6">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="m-0 text-xl sm:text-2xl font-extrabold text-slate-900">Task Dashboard</h1>
           <p className="m-0 mt-1 text-sm text-slate-500">
             Assign and track employee tasks across teams.
           </p>
@@ -58,7 +58,7 @@ export function TasksDashboard({
           <button
             type="button"
             onClick={() => setIsCreateOpen(true)}
-            className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
+            className="inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white"
           >
             <Plus size={16} />
             Assign Task
@@ -66,17 +66,17 @@ export function TasksDashboard({
         )}
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-3 flex flex-wrap gap-2">
+      <div className="rounded-xl border border-slate-200 bg-white p-3 flex flex-col sm:flex-row gap-2">
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search task, assignee, ID..."
-          className="min-w-[220px] flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm"
+          className="w-full sm:min-w-[220px] sm:flex-1 rounded-lg border border-slate-200 px-3 py-2.5 text-sm"
         />
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+          className="w-full sm:w-auto rounded-lg border border-slate-200 px-3 py-2.5 text-sm"
         >
           <option value="ALL">All statuses</option>
           {[
@@ -94,12 +94,56 @@ export function TasksDashboard({
         </select>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      {/* Mobile cards */}
+      <div className="md:hidden space-y-3">
+        {filtered.map((task) => (
+          <button
+            key={task.id}
+            type="button"
+            onClick={() => setSelectedTask(task)}
+            className="w-full text-left rounded-xl border border-slate-200 bg-white p-4 shadow-xs"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <div className="text-sm font-bold text-slate-900 truncate">{task.title}</div>
+                <div className="text-[11px] text-slate-500 mt-0.5">{task.task_id}</div>
+              </div>
+              <span
+                className={`shrink-0 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${badgeClass(task.priority)}`}
+              >
+                {task.priority}
+              </span>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600">
+              <span>{task.assignee_name || "Unassigned"}</span>
+              <span className="text-slate-300">·</span>
+              <span>{task.status}</span>
+              {task.due_date ? (
+                <>
+                  <span className="text-slate-300">·</span>
+                  <span>Due {task.due_date}</span>
+                </>
+              ) : null}
+            </div>
+          </button>
+        ))}
+        {filtered.length === 0 ? (
+          <div className="rounded-xl border border-slate-200 bg-white px-4 py-10 text-center text-sm text-slate-500">
+            No tasks found.
+          </div>
+        ) : null}
+      </div>
+
+      {/* Desktop table */}
+      <div className="hidden md:block overflow-x-auto rounded-xl border border-slate-200 bg-white">
         <table className="w-full min-w-[880px]">
           <thead className="bg-slate-50">
             <tr>
               {["Assigned To", "Task", "Priority", "Due Date", "Status", "Actions"].map((h) => (
-                <th key={h} className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                <th
+                  key={h}
+                  className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500"
+                >
                   {h}
                 </th>
               ))}
@@ -114,7 +158,9 @@ export function TasksDashboard({
                   <div className="text-xs text-slate-500">{task.task_id}</div>
                 </td>
                 <td className="px-4 py-3">
-                  <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${badgeClass(task.priority)}`}>
+                  <span
+                    className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${badgeClass(task.priority)}`}
+                  >
                     {task.priority}
                   </span>
                 </td>

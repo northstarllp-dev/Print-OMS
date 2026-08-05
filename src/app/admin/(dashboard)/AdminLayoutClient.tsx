@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Bell,
   CheckCircle,
@@ -39,6 +39,27 @@ import { PullToRefresh } from "@/components/ui/PullToRefresh";
 import { useRouter, usePathname } from "next/navigation";
 import { signOut } from "@/features/auth/actions/authActions";
 import { IdleSessionGuard } from "@/features/auth/components/IdleSessionGuard";
+import { createClient } from "@/utils/supabase/client";
+import {
+  markNotificationRead,
+  markAllNotificationsRead,
+  clearAllNotifications,
+  savePushSubscription,
+  togglePushEnabled,
+  deleteNotification,
+} from "@/features/notifications/actions/notificationActions";
+
+/** Convert a Base64URL string to a Uint8Array */
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
 
 interface AdminLayoutClientProps {
   children: React.ReactNode;
@@ -110,40 +131,172 @@ export function AdminLayoutClient({
   const isWorksheetPage =
     pathname.startsWith("/admin/orders/") && pathname.replace(/\/$/, "") !== "/admin/orders";
 
-  const [notifications, setNotifications] = useState<any[]>([
-    {
-      id: "NOT-1",
-      title: "SLA Warning: Action Required",
-      message:
-        "Lead Rohan Varma has been pending without site visit for 50h. Escalate immediately.",
-      time: "2 hours ago",
-      type: "error",
-      read: false,
-    },
-    {
-      id: "NOT-2",
-      title: "SLA Warning: WhatsApp Follow-up",
-      message: "Lead Amit Sharma has been pending for 25h. Triggering WhatsApp alert.",
-      time: "4 hours ago",
-      type: "warning",
-      read: false,
-    },
-    {
-      id: "NOT-3",
-      title: "New Webhook Submission",
-      message: "New website enquiry logged automatically for Sneha Reddy.",
-      time: "1 hour ago",
-      type: "success",
-      read: true,
-    },
-  ]);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [pushEnabled, setPushEnabled] = useState(false);
+
+  useEffect(() => {
+    const supabase = createClient();
+    
+    const fetchNotifs = async () => {
+      const { data, error } = await supabase
+        .from("notifications")
+        .select("*")
+        .eq("user_id", profile.id)
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if (error) console.error("Error fetching notifications:", error);
+      if (data) setNotifications(data);
+
+      const { data: pushData } = await supabase
+        .from("push_subscriptions")
+        .select("push_enabled")
+        .eq("user_id", profile.id)
+        .limit(1)
+        .maybeSingle();
+      if (pushData) {
+        setPushEnabled(pushData.push_enabled);
+      }
+    };
+
+    fetchNotifs();
+
+    const userId = profile.id;
+    const channel = supabase
+      .channel("notifications_channel_" + userId)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "notifications" },
+        (payload) => {
+          if (payload.new?.user_id !== userId) return;
+          setNotifications((prev) => [payload.new, ...prev]);
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "notifications" },
+        (payload) => {
+          if (payload.new?.user_id !== userId) return;
+          setNotifications((prev) =>
+            prev.map((n) => (n.id === payload.new.id ? payload.new : n))
+          );
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "notifications" },
+        (payload) => {
+          setNotifications((prev) => prev.filter((n) => n.id !== payload.old.id));
+        }
+      )
+      .subscribe((status, err) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('Successfully subscribed to notifications realtime');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('Realtime channel error:', err);
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [profile.id]);
 
   const [activities, setActivities] = useState<any[]>([]);
+  const [activitiesLoading, setActivitiesLoading] = useState(false);
   const unreadNotifCount = notifications.filter((n) => !n.read).length;
 
-  const markAllNotificationsRead = () =>
+  // Fetch order activity timeline when panel opens
+  useEffect(() => {
+    if (!isHistoryOpen) return;
+    const supabase = createClient();
+    setActivitiesLoading(true);
+    supabase
+      .from("order_activity")
+      .select("id, order_id, actor_name, actor_role, content, created_at")
+      .order("created_at", { ascending: false })
+      .limit(50)
+      .then(({ data }) => {
+        setActivities(data || []);
+        setActivitiesLoading(false);
+      });
+  }, [isHistoryOpen]);
+
+  const handleMarkAllRead = async () => {
+    await markAllNotificationsRead();
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-  const clearNotifications = () => setNotifications([]);
+  };
+
+  const handleClearNotifications = async () => {
+    await clearAllNotifications();
+    setNotifications([]);
+  };
+
+  const handleDeleteNotification = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    await deleteNotification(id);
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+  };
+
+  const handleMarkRead = async (id: string, link?: string) => {
+    await markNotificationRead(id);
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
+    );
+    if (link) {
+      router.push(link);
+      setIsNotifOpen(false);
+    }
+  };
+
+  const handleEnablePush = async () => {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+      alert("Push notifications are not supported by your browser.");
+      return;
+    }
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        alert("Permission denied.");
+        return;
+      }
+      
+      let registration = await navigator.serviceWorker.getRegistration();
+      if (!registration) {
+        registration = await navigator.serviceWorker.register("/printoms/sw.js");
+      }
+      
+      registration = await navigator.serviceWorker.ready;
+      
+      const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      if (!vapidKey) throw new Error("Missing VAPID key");
+      
+      let subscription = await registration.pushManager.getSubscription();
+      if (!subscription) {
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(vapidKey),
+        });
+      }
+
+      const subData = JSON.parse(JSON.stringify(subscription));
+      // In this demo, assuming Admin is global or has no fixed companyId, pass null for now. Or get from cookies.
+      // Actually Admin may not belong to a specific company_id but we just pass null.
+      await savePushSubscription(subData, null);
+      await togglePushEnabled(true);
+      setPushEnabled(true);
+      alert("Push notifications enabled!");
+    } catch (e: any) {
+      console.error(e);
+      alert("Failed to enable push notifications: " + (e.message || String(e)));
+    }
+  };
+
+  const handleTogglePush = async () => {
+    const newState = !pushEnabled;
+    await togglePushEnabled(newState);
+    setPushEnabled(newState);
+  };
+
   const undoActivity = (id: string) =>
     setActivities((prev) => prev.filter((a) => a.id !== id));
 
@@ -178,8 +331,16 @@ export function AdminLayoutClient({
 
       {/* ── DARK SIDEBAR ── */}
       <aside
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
+        onMouseEnter={() => {
+          if (typeof window !== "undefined" && window.matchMedia("(hover: hover)").matches) {
+            setIsHovered(true);
+          }
+        }}
+        onMouseLeave={() => {
+          if (typeof window !== "undefined" && window.matchMedia("(hover: hover)").matches) {
+            setIsHovered(false);
+          }
+        }}
         className={`fixed inset-y-0 left-0 z-[60] transform ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"} lg:sticky lg:top-0 lg:translate-x-0 transition-transform duration-300 lg:transition-none flex flex-col flex-shrink-0 overflow-hidden`}
         style={{
           width: isMobileMenuOpen ? "240px" : sidebarW,
@@ -441,31 +602,43 @@ export function AdminLayoutClient({
                 {isHistoryOpen && (
                   <>
                     <div style={{ position: "fixed", inset: 0, zIndex: 49 }} onClick={() => setIsHistoryOpen(false)} />
-                    <div className="prt-animate-in" style={{ position: "absolute", right: 0, top: "calc(100% + 8px)", width: "min(340px, calc(100vw - 24px))", background: "white", border: "1px solid #E2E8F0", borderRadius: "12px", boxShadow: "0 8px 24px rgba(0,0,0,0.12)", zIndex: 50, overflow: "hidden" }}>
+                    <div className="prt-animate-in fixed inset-x-4 top-[64px] sm:inset-x-auto sm:absolute sm:-right-2 sm:top-[calc(100%+8px)] w-auto sm:w-[380px] bg-white border border-slate-200 rounded-xl shadow-lg z-50 overflow-hidden">
                       <div style={{ padding: "10px 16px", background: "#F8FAFC", borderBottom: "1px solid #E2E8F0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.08em" }}>Operation History</span>
-                        <span style={{ fontSize: 10, color: "#94A3B8" }}>Rollback enabled</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.08em" }}>Order Activity Timeline</span>
+                        <span style={{ fontSize: 10, color: "#94A3B8" }}>Latest 50 events</span>
                       </div>
-                      <div style={{ maxHeight: 280, overflowY: "auto" }}>
-                        {activities.length === 0 ? (
-                          <div style={{ padding: 24, textAlign: "center", fontSize: 12, color: "#94A3B8" }}>No actions recorded yet.</div>
-                        ) : activities.map((act: any) => (
-                          <div key={act.id} style={{ padding: "10px 16px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, borderBottom: "1px solid #F8FAFC" }}>
-                            <div style={{ flex: 1 }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
-                                <span style={{ fontSize: 10, fontWeight: 700, color: "#0F172A", background: "#F1F5F9", padding: "1px 6px", borderRadius: 4 }}>{act.user}</span>
-                                <span style={{ fontSize: 10, color: "#94A3B8", fontFamily: "monospace" }}>{act.timestamp}</span>
-                              </div>
-                              <span style={{ fontSize: 12, color: "#64748B" }}>{act.description}</span>
-                            </div>
-                            <button
-                              onClick={() => undoActivity(act.id)}
-                              style={{ fontSize: 11, color: "var(--color-secondary)", background: "var(--secondary-container)", border: "1px solid rgba(79,70,229,0.2)", padding: "3px 8px", borderRadius: "6px", cursor: "pointer", fontWeight: 700, display: "flex", alignItems: "center", gap: 4, flexShrink: 0, whiteSpace: "nowrap" }}
+                      <div style={{ maxHeight: 360, overflowY: "auto" }}>
+                        {activitiesLoading ? (
+                          <div style={{ padding: 24, textAlign: "center", fontSize: 12, color: "#94A3B8" }}>Loading...</div>
+                        ) : activities.length === 0 ? (
+                          <div style={{ padding: 24, textAlign: "center", fontSize: 12, color: "#94A3B8" }}>No activity recorded yet.</div>
+                        ) : activities.map((act: any) => {
+                          const ts = new Date(act.created_at);
+                          const timeStr = ts.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
+                          const dateStr = ts.toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
+                          return (
+                            <div
+                              key={act.id}
+                              onClick={() => { if (act.order_id) { router.push(`/admin/orders/${act.order_id}`); setIsHistoryOpen(false); } }}
+                              style={{ padding: "10px 16px", display: "flex", alignItems: "flex-start", gap: 10, borderBottom: "1px solid #F8FAFC", cursor: act.order_id ? "pointer" : "default", transition: "background 0.12s" }}
+                              onMouseEnter={(e) => { if (act.order_id) (e.currentTarget as HTMLElement).style.background = "#F8FAFC"; }}
+                              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "white"; }}
                             >
-                              <RotateCcw size={10} /> Undo
-                            </button>
-                          </div>
-                        ))}
+                              {/* Timeline dot */}
+                              <div style={{ flexShrink: 0, marginTop: 3, width: 8, height: 8, borderRadius: "50%", background: act.actor_role === "System" ? "#94A3B8" : "var(--color-secondary)", border: "2px solid white", boxShadow: "0 0 0 1px #E2E8F0" }} />
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2, flexWrap: "wrap" }}>
+                                  <span style={{ fontSize: 10, fontWeight: 700, color: "#0F172A", background: "#F1F5F9", padding: "1px 6px", borderRadius: 4, flexShrink: 0 }}>
+                                    {act.order_id || "—"}
+                                  </span>
+                                  <span style={{ fontSize: 10, color: "#64748B", fontWeight: 600 }}>{act.actor_name}</span>
+                                  <span style={{ fontSize: 10, color: "#94A3B8", marginLeft: "auto", flexShrink: 0 }}>{dateStr} · {timeStr}</span>
+                                </div>
+                                <span style={{ fontSize: 12, color: "#475569", lineHeight: 1.4, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{act.content}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   </>
@@ -487,29 +660,61 @@ export function AdminLayoutClient({
                 {isNotifOpen && (
                   <>
                     <div style={{ position: "fixed", inset: 0, zIndex: 49 }} onClick={() => setIsNotifOpen(false)} />
-                    <div className="prt-animate-in" style={{ position: "absolute", right: 0, top: "calc(100% + 8px)", width: "min(300px, calc(100vw - 24px))", background: "white", border: "1px solid #E2E8F0", borderRadius: "12px", boxShadow: "0 8px 24px rgba(0,0,0,0.12)", zIndex: 50, overflow: "hidden" }}>
+                    <div className="prt-animate-in fixed inset-x-4 top-[64px] sm:inset-x-auto sm:absolute sm:-right-2 sm:top-[calc(100%+8px)] w-auto sm:w-[320px] bg-white border border-slate-200 rounded-xl shadow-lg z-50 overflow-hidden">
                       <div style={{ padding: "10px 16px", background: "#F8FAFC", borderBottom: "1px solid #E2E8F0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                         <span style={{ fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.08em" }}>Notifications</span>
                         <div style={{ display: "flex", gap: 10 }}>
-                          <button onClick={markAllNotificationsRead} style={{ fontSize: 11, color: "var(--color-secondary)", fontWeight: 700, background: "none", border: "none", cursor: "pointer" }}>Mark read</button>
-                          <button onClick={clearNotifications} style={{ fontSize: 11, color: "#EF4444", fontWeight: 700, background: "none", border: "none", cursor: "pointer" }}>Clear</button>
+                          <button onClick={handleMarkAllRead} style={{ fontSize: 11, color: "var(--color-secondary)", fontWeight: 700, background: "none", border: "none", cursor: "pointer" }}>Mark read</button>
+                          <button onClick={handleClearNotifications} style={{ fontSize: 11, color: "#EF4444", fontWeight: 700, background: "none", border: "none", cursor: "pointer" }}>Clear</button>
                         </div>
                       </div>
+                      
+                      <div style={{ padding: "8px 16px", background: "#f8fafc", borderBottom: "1px solid #E2E8F0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <span style={{ fontSize: 11, color: "#64748B" }}>Desktop Alerts</span>
+                        {pushEnabled ? (
+                          <button onClick={handleTogglePush} style={{ fontSize: 11, background: "#EF4444", color: "white", padding: "2px 8px", borderRadius: 4 }}>Disable</button>
+                        ) : (
+                          <button onClick={handleEnablePush} style={{ fontSize: 11, background: "#22C55E", color: "white", padding: "2px 8px", borderRadius: 4 }}>Enable</button>
+                        )}
+                      </div>
+
                       <div style={{ maxHeight: 260, overflowY: "auto" }}>
                         {notifications.length === 0 ? (
                           <div style={{ padding: 24, textAlign: "center", fontSize: 12, color: "#94A3B8" }}>No notifications.</div>
                         ) : notifications.map((notif: any) => (
-                          <div key={notif.id} style={{ padding: "10px 16px", display: "flex", alignItems: "flex-start", gap: 10, borderBottom: "1px solid #F8FAFC", background: notif.read ? "white" : "#EFF6FF" }}>
+                          <div 
+                            key={notif.id} 
+                            onClick={() => handleMarkRead(notif.id, notif.link)}
+                            style={{ position: "relative", padding: "10px 16px", display: "flex", alignItems: "flex-start", gap: 10, borderBottom: "1px solid #F8FAFC", background: notif.read ? "white" : "#EFF6FF", cursor: notif.link ? "pointer" : "default" }}
+                          >
                             <span style={{ marginTop: 1 }}>
                               {notif.type === "success" ? <CheckCircle size={13} color="#22C55E" /> :
                                notif.type === "error" || notif.type === "warning" ? <AlertCircle size={13} color="#EF4444" /> :
                                <Info size={13} color="#94A3B8" />}
                             </span>
-                            <div style={{ flex: 1 }}>
+                            <div style={{ flex: 1, paddingRight: 20 }}>
                               <div style={{ fontSize: 12, fontWeight: 700, color: "#0F172A", lineHeight: 1.3 }}>{notif.title}</div>
                               <div style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>{notif.message}</div>
-                              <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 3, fontFamily: "monospace" }}>{notif.time}</div>
+                              <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 3, fontFamily: "monospace" }}>
+                                {new Date(notif.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </div>
                             </div>
+                            <button
+                              onClick={(e) => handleDeleteNotification(notif.id, e)}
+                              title="Delete notification"
+                              style={{
+                                position: "absolute",
+                                top: 10,
+                                right: 12,
+                                background: "none",
+                                border: "none",
+                                color: "#94A3B8",
+                                cursor: "pointer",
+                                padding: 2
+                              }}
+                            >
+                              <X size={14} />
+                            </button>
                           </div>
                         ))}
                       </div>
@@ -552,8 +757,12 @@ export function AdminLayoutClient({
                 </button>
                 {isProfileOpen && (
                   <>
-                    <div style={{ position: "fixed", inset: 0, zIndex: 49 }} onClick={() => setIsProfileOpen(false)} />
-                    <div className="prt-animate-in" style={{ position: "absolute", right: 0, top: "calc(100% + 8px)", width: 180, background: "white", border: "1px solid #E2E8F0", borderRadius: "12px", boxShadow: "0 8px 24px rgba(0,0,0,0.12)", zIndex: 50, overflow: "hidden", padding: 4 }}>
+                    <div style={{ position: "fixed", inset: 0, zIndex: 55 }} onClick={() => setIsProfileOpen(false)} />
+                    <div className="prt-animate-in fixed right-4 top-[64px] w-[min(calc(100vw-2rem),240px)] bg-white border border-slate-200 rounded-xl shadow-lg z-[60] overflow-hidden p-1">
+                      <div style={{ padding: "12px 16px", borderBottom: "1px solid #E2E8F0", background: "#F8FAFC" }}>
+                        <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "#0F172A" }}>{profile.name}</p>
+                        <p style={{ margin: "2px 0 0", fontSize: 11, color: "#64748B" }}>{profile.email}</p>
+                      </div>
                       <button
                         onClick={handleLogout}
                         style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: "8px", fontSize: 13, fontWeight: 600, color: "#EF4444", background: "none", border: "none", cursor: "pointer", transition: "background 0.15s", textAlign: "left" }}

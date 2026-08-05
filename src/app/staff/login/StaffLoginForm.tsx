@@ -130,8 +130,8 @@ export function StaffLoginForm({ employees }: StaffLoginFormProps) {
           <button
             type="submit"
             disabled={loading}
-            className="prt-btn"
-            style={{ width: "100%", justifyContent: "center", padding: "10px 16px", fontSize: 14, marginTop: 4, background: "var(--color-secondary)", color: "white" }}
+            className="prt-btn prt-btn-primary"
+            style={{ width: "100%", justifyContent: "center", padding: "10px 16px", fontSize: 14, marginTop: 4 }}
           >
             {loading ? "Signing in..." : "Sign In to Staff Portal"}
           </button>

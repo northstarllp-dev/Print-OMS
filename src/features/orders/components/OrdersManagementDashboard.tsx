@@ -25,17 +25,36 @@ import {
   Ban,
 } from "lucide-react";
 import { assignTeamToOrder, updateOrderHealthAction } from "@/features/orders/actions/orderActions";
+import { HoldFollowUpModal } from "@/features/calendar/components/HoldFollowUpModal";
 import { loadClientConfig } from "@/config/loadClientConfig";
 import { parseOrderStage } from "@/features/orders/workspace/shared/stageGrants";
 import {
   countQueueViews,
+  countMyOrdersTabs,
   partitionQueueOrdersByView,
+  partitionMyOrdersByTab,
   queueHasIncomingTab,
+  PIPELINE_QUEUE_STAGES,
+  type MyOrdersTab,
+  type MyOrdersTabCounts,
 } from "@/features/orders/workspace/shared/staffQueueStages";
 import { QueueViewToggle } from "./QueueViewToggle";
+import { MyOrdersStageTabs } from "./MyOrdersStageTabs";
 import type { QueueView } from "@/features/orders/workspace/shared/staffQueueStages";
+import type { OrderStage } from "@/features/orders/workspace/shared/types";
 import { CreateServiceTicketModal } from "@/features/service-tickets/components/CreateServiceTicketModal";
 import type { OrderHealth } from "@/features/orders/lib/orderHealth";
+import {
+  buildServiceTicketPreset,
+  canChangeOrderHealth,
+  canShowAddServiceTicketForOrder,
+  computeOrderKpis,
+  countActiveOrderFilters,
+  filterOrders,
+  healthMenuActions as healthMenuActionLabels,
+  needsAdminApproval,
+  resolveOrderDetailHref,
+} from "@/features/orders/orderListLogic";
 
 const getStatusColor = (status: string) => {
   const colors: Record<string, { bg: string; text: string; label: string }> = {
@@ -67,10 +86,6 @@ const getHealthBadgeColor = (health: string) => {
   return colors[health] || "bg-slate-100 text-slate-600 border-slate-200";
 };
 
-function needsAdminApproval(stageStatus?: string | null) {
-  return !!stageStatus && stageStatus !== "Normal" && stageStatus.startsWith("Pending Admin Approval");
-}
-
 /** Quick health transitions available from the row ⋯ menu (admin). */
 function healthMenuActions(health: string): Array<{
   health: OrderHealth;
@@ -84,30 +99,17 @@ function healthMenuActions(health: string): Array<{
     "On Hold": "text-slate-600 hover:bg-slate-50",
     Lost: "text-rose-600 hover:bg-rose-50",
   };
-  const h = health || "Active";
-  if (h === "Needs Attention") {
-    return [
-      { health: "Active", label: "Make Active", icon: CirclePlay, className: colors.Active },
-      { health: "On Hold", label: "On Hold", icon: Pause, className: colors["On Hold"] },
-      { health: "Lost", label: "Mark as Lost", icon: Ban, className: colors.Lost },
-    ];
-  }
-  if (h === "On Hold") {
-    return [
-      { health: "Active", label: "Make Active", icon: CirclePlay, className: colors.Active },
-      { health: "Lost", label: "Mark as Lost", icon: Ban, className: colors.Lost },
-    ];
-  }
-  if (h === "Lost") {
-    return [
-      { health: "Active", label: "Reopen (Active)", icon: CirclePlay, className: colors.Active },
-    ];
-  }
-  // Active
-  return [
-    { health: "On Hold", label: "On Hold", icon: Pause, className: colors["On Hold"] },
-    { health: "Lost", label: "Mark as Lost", icon: Ban, className: colors.Lost },
-  ];
+  const icons: Record<OrderHealth, typeof CirclePlay> = {
+    Active: CirclePlay,
+    "Needs Attention": AlertTriangle,
+    "On Hold": Pause,
+    Lost: Ban,
+  };
+  return healthMenuActionLabels(health).map((a) => ({
+    ...a,
+    icon: icons[a.health],
+    className: colors[a.health],
+  }));
 }
 
 export function OrdersManagementDashboard({ 
@@ -123,6 +125,10 @@ export function OrdersManagementDashboard({
   hideTitle,
   title,
   subtitle,
+  mode,
+  allowedStages,
+  initialTab,
+  initialStage,
 }: { 
   initialOrders: any[];
   initialCustomers: any[];
@@ -142,6 +148,14 @@ export function OrdersManagementDashboard({
   title?: string;
   /** Custom override for the subtitle */
   subtitle?: string;
+  /** Unified My Orders mode: stage tabs instead of Incoming/Current/Completed. */
+  mode?: "my_orders";
+  /** Stages shown as My Orders tabs (must be editable pipeline stages). */
+  allowedStages?: OrderStage[];
+  /** Initial My Orders tab (incoming | stage | completed). */
+  initialTab?: MyOrdersTab;
+  /** @deprecated Use initialTab */
+  initialStage?: OrderStage;
 }) {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
@@ -153,9 +167,20 @@ export function OrdersManagementDashboard({
   const [adminAssignedFilter, setAdminAssignedFilter] = useState<"ALL" | "MINE">("ALL");
   const [selectedKpi, setSelectedKpi] = useState<string | null>(null);
   const clientConfig = loadClientConfig();
-  const parsedEntryStage = parseOrderStage(entryStage);
+  const isMyOrders = mode === "my_orders";
+  const myOrdersStages = allowedStages ?? [];
+  const parsedEntryStage = isMyOrders ? undefined : parseOrderStage(entryStage);
   const [queueView, setQueueView] = useState<QueueView>("current");
+  const pipelineInitial =
+    initialStage &&
+    (PIPELINE_QUEUE_STAGES as readonly OrderStage[]).includes(initialStage)
+      ? (initialStage as MyOrdersTab)
+      : undefined;
+  const resolvedInitialTab: MyOrdersTab | undefined =
+    initialTab ?? pipelineInitial ?? (myOrdersStages[0] as MyOrdersTab | undefined);
+  const [myOrdersTab, setMyOrdersTab] = useState<MyOrdersTab | undefined>(resolvedInitialTab);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [holdModalOrderId, setHoldModalOrderId] = useState<string | null>(null);
   const [ticketPreset, setTicketPreset] = useState<{
     phone?: string;
     customerId?: string;
@@ -178,6 +203,28 @@ export function OrdersManagementDashboard({
     setOrders(initialOrders);
   }, [initialOrders]);
 
+  useEffect(() => {
+    if (!isMyOrders) return;
+    if (initialTab) {
+      setMyOrdersTab(initialTab);
+      return;
+    }
+    if (
+      initialStage &&
+      (PIPELINE_QUEUE_STAGES as readonly OrderStage[]).includes(initialStage)
+    ) {
+      setMyOrdersTab(initialStage as MyOrdersTab);
+    }
+  }, [isMyOrders, initialTab, initialStage, myOrdersStages]);
+
+  const handleMyOrdersTabChange = useCallback(
+    (tab: MyOrdersTab) => {
+      setMyOrdersTab(tab);
+      router.replace(`/staff/my-orders?stage=${tab}`, { scroll: false });
+    },
+    [router]
+  );
+
   const handleRefresh = useCallback(() => {
     setIsRefreshing(true);
     router.refresh();
@@ -187,14 +234,16 @@ export function OrdersManagementDashboard({
   const currentUserRole = userRole;
 
   const resolveOrderHref = useCallback(
-    (order: { orderId?: string; id: string }) => {
-      const basePath =
-        orderDetailBasePath ??
-        (currentUserRole === "Admin" ? "/admin/orders" : "/staff/orders");
-      const base = `${basePath}/${order.orderId || order.id}`;
-      return entryStage ? `${base}?entryStage=${entryStage}` : base;
-    },
-    [orderDetailBasePath, entryStage, currentUserRole]
+    (order: { orderId?: string; id: string }) =>
+      resolveOrderDetailHref({
+        orderId: order.orderId,
+        id: order.id,
+        userRole: currentUserRole,
+        orderDetailBasePath,
+        // My Orders: omit entryStage so Gate C does not lock other stages.
+        entryStage: isMyOrders ? null : entryStage,
+      }),
+    [orderDetailBasePath, entryStage, currentUserRole, isMyOrders]
   );
 
   const openServiceTicketForOrder = useCallback(
@@ -208,19 +257,27 @@ export function OrdersManagementDashboard({
     }) => {
       const customer = initialCustomers.find((c) => c.id === order.customerId);
       setOpenMenuId(null);
-      setTicketPreset({
-        phone: customer?.phone || "",
-        customerId: order.customerId || "",
-        orderId: order.id,
-        orderLabel: `${order.orderCode || order.orderId || order.id} - ${order.clientName || order.businessName || "Order"}`,
-      });
+      setTicketPreset(
+        buildServiceTicketPreset({
+          order,
+          customerPhone: customer?.phone || "",
+        })
+      );
     },
     [initialCustomers]
   );
 
   const applyOrderHealth = useCallback(
-    async (orderId: string, health: OrderHealth) => {
+    async (
+      orderId: string,
+      health: OrderHealth,
+      hold?: { note: string; reachOutAt: string } | null
+    ) => {
       setOpenMenuId(null);
+      if (health === "On Hold" && !hold) {
+        setHoldModalOrderId(orderId);
+        return;
+      }
       let lostReason: string | undefined;
       if (health === "Lost") {
         const entered = window.prompt("Reason for marking this order as Lost:");
@@ -235,18 +292,36 @@ export function OrdersManagementDashboard({
       setOrders((list) =>
         list.map((o) =>
           o.id === orderId
-            ? { ...o, health, lost_reason: health === "Lost" ? lostReason : null }
+            ? {
+                ...o,
+                health,
+                lost_reason: health === "Lost" ? lostReason : null,
+                hold_note: health === "On Hold" ? hold?.note ?? null : null,
+                reach_out_at: health === "On Hold" ? hold?.reachOutAt ?? null : null,
+              }
             : o
         )
       );
       try {
-        await updateOrderHealthAction(orderId, health, lostReason);
+        await updateOrderHealthAction(
+          orderId,
+          health,
+          lostReason,
+          undefined,
+          health === "On Hold" ? hold : null
+        );
       } catch (err: any) {
         if (prev) {
           setOrders((list) =>
             list.map((o) =>
               o.id === orderId
-                ? { ...o, health: prev.health, lost_reason: prev.lost_reason }
+                ? {
+                    ...o,
+                    health: prev.health,
+                    lost_reason: prev.lost_reason,
+                    hold_note: prev.hold_note,
+                    reach_out_at: prev.reach_out_at,
+                  }
                 : o
             )
           );
@@ -269,10 +344,18 @@ export function OrdersManagementDashboard({
     return countQueueViews(orders, parsedEntryStage);
   }, [orders, parsedEntryStage]);
 
+  const myOrdersTabCounts: MyOrdersTabCounts = useMemo(() => {
+    if (!isMyOrders) return { incoming: 0, completed: 0 };
+    return countMyOrdersTabs(orders, myOrdersStages);
+  }, [isMyOrders, orders, myOrdersStages]);
+
   const queueScopedOrders = useMemo(() => {
+    if (isMyOrders && myOrdersTab) {
+      return partitionMyOrdersByTab(orders, myOrdersTab, myOrdersStages);
+    }
     if (!parsedEntryStage) return orders;
     return partitionQueueOrdersByView(orders, parsedEntryStage, queueView);
-  }, [orders, parsedEntryStage, queueView]);
+  }, [orders, parsedEntryStage, queueView, isMyOrders, myOrdersTab, myOrdersStages]);
   
   // State for right assignment panel
   const [assignPanelOrderId, setAssignPanelOrderId] = useState<string | null>(null);
@@ -294,75 +377,45 @@ export function OrdersManagementDashboard({
   };
 
   /** Shared toolbar filters (search / dates / stage / health / assignment) — used by KPIs + list */
-  const matchesToolbarFilters = useCallback((order: any) => {
-    if (debouncedSearch) {
-      const q = debouncedSearch;
-      const cust = customers.find((c: any) => c.id === order.customerId);
-      const custName = (cust?.name || order.customerName || "").toLowerCase();
-      const matches =
-        (order.clientName || "").toLowerCase().includes(q) ||
-        (order.businessName || "").toLowerCase().includes(q) ||
-        (order.orderCode || order.id || "").toLowerCase().includes(q) ||
-        custName.includes(q);
-      if (!matches) return false;
-    }
-
-    if (dateFilterType === "range") {
-      const orderDate = order.dateCreated
-        ? new Date(order.dateCreated).toISOString().split("T")[0]
-        : null;
-      if (!orderDate) return false;
-      if (startDate && orderDate < startDate) return false;
-      if (endDate && orderDate > endDate) return false;
-    }
-
-    if (stageFilter !== "ALL") {
-      const s = order.stage || "";
-      if (stageFilter === "Site Visit" && !s.includes("Site Visit")) return false;
-      if (stageFilter === "Quotation" && !s.includes("Quotation")) return false;
-      if (stageFilter === "Designing" && !s.includes("Design")) return false;
-      if (stageFilter === "Production" && s !== "Production") return false;
-      if (stageFilter === "Installation" && !s.includes("Installation")) return false;
-      if (stageFilter === "Completed" && !["Completed", "Closed"].includes(s)) return false;
-    }
-
-    if (healthFilter !== "ALL" && (order.health || "Active") !== healthFilter) return false;
-
-    if (currentUserRole === "Employee") {
-      return order.assignedEmployees?.includes(employeeName) || order.assignedEmployees?.includes(currentEmployeeId);
-    }
-
-    if (currentUserRole === "Admin" && adminAssignedFilter === "MINE") {
-      if (!currentUserId) return false;
-      return order.assignedAdmins?.includes(currentUserId);
-    }
-
-    return true;
-  }, [
-    debouncedSearch,
-    customers,
-    dateFilterType,
-    startDate,
-    endDate,
-    stageFilter,
-    healthFilter,
-    currentUserRole,
-    employeeName,
-    currentEmployeeId,
-    adminAssignedFilter,
-    currentUserId,
-  ]);
-
   const toolbarFilteredOrders = useMemo(
-    () => queueScopedOrders.filter(matchesToolbarFilters),
-    [queueScopedOrders, matchesToolbarFilters]
+    () =>
+      filterOrders(queueScopedOrders, {
+        search: debouncedSearch,
+        stageFilter,
+        healthFilter,
+        dateFilterType,
+        startDate,
+        endDate,
+        userRole: currentUserRole,
+        employeeId: currentEmployeeId,
+        employeeName,
+        adminAssignedFilter,
+        currentUserId,
+        customers,
+      }),
+    [
+      queueScopedOrders,
+      debouncedSearch,
+      stageFilter,
+      healthFilter,
+      dateFilterType,
+      startDate,
+      endDate,
+      currentUserRole,
+      currentEmployeeId,
+      employeeName,
+      adminAssignedFilter,
+      currentUserId,
+      customers,
+    ]
   );
 
   // KPI counts reflect the same toolbar filters as the list (admin only)
-  const activeOrders = toolbarFilteredOrders.filter(o => o.stage !== "Completed" && o.stage !== "Closed").length;
-  const unassignedOrders = toolbarFilteredOrders.filter(o => o.stage !== "Completed" && o.stage !== "Closed" && (!o.assignedEmployees || o.assignedEmployees.length === 0)).length;
-  const pendingApprovals = toolbarFilteredOrders.filter(o => needsAdminApproval(o.stageStatus)).length;
-  const completedOrders = toolbarFilteredOrders.filter(o => o.stage === "Completed" || o.stage === "Closed").length;
+  const kpis = computeOrderKpis(toolbarFilteredOrders);
+  const activeOrders = kpis.active;
+  const unassignedOrders = kpis.unassigned;
+  const pendingApprovals = kpis.approvals;
+  const completedOrders = kpis.completed;
 
   const stats = currentUserRole === "Employee" ? [] : [
     {
@@ -399,19 +452,14 @@ export function OrdersManagementDashboard({
     },
   ];
 
-  const filteredOrders = useMemo(() => {
-    let list = toolbarFilteredOrders;
-    if (selectedKpi === "active") {
-      list = list.filter(o => o.stage !== "Completed" && o.stage !== "Closed");
-    } else if (selectedKpi === "unassigned") {
-      list = list.filter(o => o.stage !== "Completed" && o.stage !== "Closed" && (!o.assignedEmployees || o.assignedEmployees.length === 0));
-    } else if (selectedKpi === "approvals") {
-      list = list.filter(o => needsAdminApproval(o.stageStatus));
-    } else if (selectedKpi === "completed") {
-      list = list.filter(o => o.stage === "Completed" || o.stage === "Closed");
-    }
-    return list;
-  }, [toolbarFilteredOrders, selectedKpi, employeeName, currentEmployeeId]);
+  const filteredOrders = useMemo(
+    () =>
+      filterOrders(toolbarFilteredOrders, {
+        selectedKpi,
+        dateFilterType: "all",
+      }),
+    [toolbarFilteredOrders, selectedKpi]
+  );
 
   const resetFilters = () => {
     setDateFilterType("range");
@@ -424,15 +472,15 @@ export function OrdersManagementDashboard({
     setSelectedKpi(null);
   };
 
-  const activeFilterCount = [
-    stageFilter !== "ALL",
-    healthFilter !== "ALL",
-    Boolean(startDate || endDate),
-    currentUserRole === "Admin" &&
-      clientConfig.features.enableAdminAssignment &&
-      adminAssignedFilter !== "ALL",
-    Boolean(selectedKpi),
-  ].filter(Boolean).length;
+  const activeFilterCount = countActiveOrderFilters({
+    stageFilter: isMyOrders ? "ALL" : stageFilter,
+    healthFilter,
+    startDate,
+    endDate,
+    adminAssignedFilter,
+    enableAdminAssignment: clientConfig.features.enableAdminAssignment,
+    selectedKpi,
+  });
 
   const showAdminAssignFilter =
     currentUserRole === "Admin" && clientConfig.features.enableAdminAssignment;
@@ -467,7 +515,18 @@ export function OrdersManagementDashboard({
           </button>
         </div>
 
-        {parsedEntryStage && (
+        {isMyOrders && myOrdersTab && myOrdersStages.length > 0 && (
+          <div className="mb-4 md:mb-5 -mx-1 px-1 overflow-x-auto">
+            <MyOrdersStageTabs
+              stages={myOrdersStages}
+              value={myOrdersTab}
+              onChange={handleMyOrdersTabChange}
+              counts={myOrdersTabCounts}
+            />
+          </div>
+        )}
+
+        {parsedEntryStage && !isMyOrders && (
           <div className="mb-4 md:mb-5 -mx-1 px-1 overflow-x-auto">
             <QueueViewToggle
               value={queueView}
@@ -640,6 +699,7 @@ export function OrdersManagementDashboard({
                   </button>
                 </div>
                 <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 space-y-4">
+                  {!isMyOrders && (
                   <div>
                     <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Stage</label>
                     <select
@@ -656,6 +716,7 @@ export function OrdersManagementDashboard({
                       <option value="Completed">Completed</option>
                     </select>
                   </div>
+                  )}
                   <div>
                     <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Health</label>
                     <select
@@ -753,6 +814,7 @@ export function OrdersManagementDashboard({
               )}
             </div>
 
+            {!isMyOrders && (
             <select
               value={stageFilter}
               onChange={(e) => setStageFilter(e.target.value)}
@@ -766,6 +828,7 @@ export function OrdersManagementDashboard({
               <option value="Installation">Installation</option>
               <option value="Completed">Completed</option>
             </select>
+            )}
 
             {showAdminAssignFilter && (
               <select
@@ -925,6 +988,7 @@ export function OrdersManagementDashboard({
                                   <Eye size={13} /> View Order
                                 </button>
                                 {currentUserRole === "Admin" &&
+                                  canChangeOrderHealth(order.stage) &&
                                   healthMenuActions(order.health || "Active").map((action) => {
                                     const Icon = action.icon;
                                     return (
@@ -938,7 +1002,8 @@ export function OrdersManagementDashboard({
                                       </button>
                                     );
                                   })}
-                                {currentUserRole === "Admin" && (
+                                {currentUserRole === "Admin" &&
+                                  canShowAddServiceTicketForOrder(order.stage) && (
                                   <button
                                     type="button"
                                     onClick={() => openServiceTicketForOrder(order)}
@@ -1195,7 +1260,8 @@ export function OrdersManagementDashboard({
                                   onClick={() => setOpenMenuId(null)}
                                 />
                                 <div className="absolute right-0 top-full mt-1 z-50 min-w-[170px] rounded-lg border border-slate-200 bg-white shadow-lg overflow-hidden">
-                                  {healthMenuActions(order.health || "Active").map((action) => {
+                                  {canChangeOrderHealth(order.stage) &&
+                                    healthMenuActions(order.health || "Active").map((action) => {
                                     const Icon = action.icon;
                                     return (
                                       <button
@@ -1208,6 +1274,7 @@ export function OrdersManagementDashboard({
                                       </button>
                                     );
                                   })}
+                                  {canShowAddServiceTicketForOrder(order.stage) && (
                                   <button
                                     type="button"
                                     onClick={() => openServiceTicketForOrder(order)}
@@ -1215,6 +1282,7 @@ export function OrdersManagementDashboard({
                                   >
                                     <Wrench size={13} /> Add Service Ticket
                                   </button>
+                                  )}
                                 </div>
                               </>
                             )}
@@ -1335,6 +1403,18 @@ export function OrdersManagementDashboard({
           }}
         />
       )}
+
+      <HoldFollowUpModal
+        isOpen={!!holdModalOrderId}
+        entityLabel="order"
+        onClose={() => setHoldModalOrderId(null)}
+        onSubmit={(payload) => {
+          if (!holdModalOrderId) return;
+          const id = holdModalOrderId;
+          setHoldModalOrderId(null);
+          void applyOrderHealth(id, "On Hold", payload);
+        }}
+      />
     </div>
   );
 }

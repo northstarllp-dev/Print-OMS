@@ -3,6 +3,9 @@ import type { Libraries } from "@react-google-maps/api";
 /** Shared loader id — must stay identical across every useJsApiLoader call. */
 export const GOOGLE_MAPS_SCRIPT_ID = "google-map-script";
 
+/** Prefer weekly channel so Places Autocomplete (New) APIs are available. */
+export const GOOGLE_MAPS_API_VERSION = "weekly";
+
 /**
  * Libraries loaded once for the whole app.
  * `marker` is required for AdvancedMarkerElement (legacy Marker is deprecated).

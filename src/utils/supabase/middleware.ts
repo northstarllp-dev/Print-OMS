@@ -28,7 +28,7 @@ function canAccessPath(
 
 function homePathForLogin(loginPath: string): string {
   if (loginPath === "/admin/login") return "/admin/dashboard";
-  if (loginPath === "/staff/login") return "/staff/orders";
+  if (loginPath === "/staff/login") return "/staff/my-orders";
   if (loginPath === "/production/login") return "/production/orders";
   if (loginPath === "/installation/login") return "/installation/orders";
   return "/";

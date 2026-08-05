@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   X, 
   Plus, 
@@ -38,15 +38,20 @@ import { ScheduleVisitModal } from "./ScheduleVisitModal";
 import { updateSiteVisitDetailsAction } from "@/features/orders/actions/orderActions";
 import { deleteStorageFilesAction } from "@/features/orders/actions/storageActions";
 import { scheduleSiteVisitAction } from "@/features/orders/actions/orderActions";
+import { buildGoogleMapsSearchUrl } from "@/features/orders/actions/siteVisitMapper";
+import {
+  isSkippedSiteVisit,
+} from "@/features/orders/workspace/modules/site-visit/siteVisitUiLogic";
 import { uploadFileViaStaffApi } from "@/utils/supabase/uploadStorageFile";
-import { OverlayPortal } from "@/components/ui/OverlayPortal";
 import { GoogleMap, useJsApiLoader } from "@react-google-maps/api";
 import { AdvancedMapMarker } from "@/components/maps/AdvancedMapMarker";
+import { OverlayPortal } from "@/components/ui/OverlayPortal";
 import {
   GOOGLE_MAPS_DEFAULT_OPTIONS,
   GOOGLE_MAPS_LIBRARIES,
   GOOGLE_MAPS_SCRIPT_ID,
 } from "@/components/maps/googleMapsConfig";
+import { loadClientConfig } from "@/config/loadClientConfig";
 
 export interface ExtendedSignLocation {
   id: string;
@@ -86,7 +91,10 @@ interface SiteVisitModuleProps {
   actionsNode?: React.ReactNode;
   adminOverrideUnlocked?: boolean;
   setAdminOverrideUnlocked?: (val: boolean) => void;
-  onSkipSiteVisit?: () => void;
+  onSkipSiteVisit?: (location: {
+    customerAddress: string;
+    gpsLocation: string;
+  }) => void | Promise<void>;
   /** Opens the admin customer-update message popup (copy / wa.me / mailto). */
   onCustomerMessage?: (
     key: "site_visit_scheduled",
@@ -122,6 +130,10 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
   // RBAC: when canEdit is false (e.g. Designer viewing Site Visit read-only),
   // all write actions are disabled on top of the existing workflow freeze.
   const canEdit = permission?.canEdit ?? true;
+  // Current client config
+  const config = loadClientConfig();
+  const hiddenFields = config.features.siteVisit || {};
+  const defaultMeasurementUnit = hiddenFields.defaultMeasurementUnit || "inch";
   // Current client
   const client = customers.find(c => c.id === order.customerId);
   
@@ -183,7 +195,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
   // Effective lock also includes RBAC read-only grants (e.g. Designer viewing Site Visit).
   const isFrozen = (baseFrozen && !adminOverrideUnlocked) || !canEdit;
   
-  const [isConfirmSkipOpen, setIsConfirmSkipOpen] = useState(false);
+  const [isSkipLocationModalOpen, setIsSkipLocationModalOpen] = useState(false);
 
   // State for manual scheduling
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
@@ -196,6 +208,21 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
     setViewerPhotos(photosArray);
     setViewerIndex(index);
   };
+
+  useEffect(() => {
+    if (viewerIndex === null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setViewerIndex(null);
+      if (e.key === "ArrowLeft") setViewerIndex((i) => (i !== null && i > 0 ? i - 1 : i));
+      if (e.key === "ArrowRight") {
+        setViewerIndex((i) =>
+          i !== null && i < viewerPhotos.length - 1 ? i + 1 : i
+        );
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [viewerIndex, viewerPhotos.length]);
 
   const uploadSitePhoto = async (file: File) => {
     const { url } = await uploadFileViaStaffApi(file, order.id, "site_visit_photo");
@@ -282,7 +309,11 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
     const newLocation: SignLocation = {
       id: crypto.randomUUID(),
       ...defaultSignLocation,
-      name: `Item-${nextNum}`
+      name: `Item-${nextNum}`,
+      widthUnit: defaultMeasurementUnit,
+      heightUnit: defaultMeasurementUnit,
+      depthUnit: defaultMeasurementUnit,
+      groundClearanceUnit: defaultMeasurementUnit
     };
     
     const updatedLocations = [...(siteVisit.locations || []), newLocation];
@@ -351,7 +382,10 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
   const scheduledDate = siteVisit.auditDate || siteVisit.preferredDate;
   const scheduledTime = siteVisit.auditTime || siteVisit.preferredTime;
   const scheduledAddress = siteVisit.customerAddress;
-  const isSkipped = scheduledAddress?.startsWith("Skipped");
+  const isSkipped = isSkippedSiteVisit(siteVisit);
+  const installationMapsUrl =
+    buildGoogleMapsSearchUrl(siteVisit.gpsLocation) ||
+    buildGoogleMapsSearchUrl(scheduledAddress);
 
   return (
     <div className="space-y-6 text-slate-800">
@@ -387,12 +421,41 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
       
       {/* ── SCHEDULED VISIT DETAILS (from customer portal) ── */}
       {isSkipped ? (
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 shadow-xs text-center flex flex-col items-center justify-center">
-          <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mb-3">
-            <CheckCircle2 size={24} className="text-amber-600" />
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 shadow-xs">
+          <div className="text-center flex flex-col items-center justify-center">
+            <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mb-3">
+              <CheckCircle2 size={24} className="text-amber-600" />
+            </div>
+            <h4 className="text-sm font-bold text-amber-900 mb-1">Site Visit Skipped</h4>
+            <p className="text-xs text-amber-700 max-w-sm mb-4">
+              Visit skipped — installation will use the location below. Add measurements as needed.
+            </p>
           </div>
-          <h4 className="text-sm font-bold text-amber-900 mb-1">Site Visit Skipped</h4>
-          <p className="text-xs text-amber-700 max-w-sm">The site visit has been skipped for this order. You can proceed with adding manual measurements below.</p>
+          {scheduledAddress && !scheduledAddress.startsWith("Skipped") && (
+            <div className="bg-white rounded-xl p-3 border border-amber-100 shadow-sm">
+              <div className="flex items-center gap-2 mb-1">
+                <MapPin size={14} className="text-amber-600" />
+                <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider">
+                  Installation Location
+                </span>
+              </div>
+              {installationMapsUrl ? (
+                <a
+                  href={installationMapsUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs font-semibold text-blue-700 hover:underline leading-relaxed break-words"
+                >
+                  {scheduledAddress}
+                </a>
+              ) : (
+                <div className="text-xs font-semibold text-slate-700 leading-relaxed">{scheduledAddress}</div>
+              )}
+              {siteVisit.gpsLocation && siteVisit.gpsLocation !== "N/A" && (
+                <div className="text-[10px] font-mono text-slate-500 mt-1">{siteVisit.gpsLocation}</div>
+              )}
+            </div>
+          )}
         </div>
       ) : (scheduledDate || scheduledAddress) ? (
         <div className="bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200 rounded-2xl p-5 shadow-xs">
@@ -406,7 +469,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
             <div className="flex items-center gap-2">
               {onSkipSiteVisit && !isFrozen && (
                 <button
-                  onClick={() => setIsConfirmSkipOpen(true)}
+                  onClick={() => setIsSkipLocationModalOpen(true)}
                   className="px-3 py-1.5 bg-amber-50 border border-amber-200 text-amber-700 text-xs font-bold rounded-lg hover:bg-amber-100 transition-colors shadow-sm whitespace-nowrap"
                 >
                   Skip Visit & Add Values
@@ -526,7 +589,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
           <div className="flex items-center gap-2">
             {onSkipSiteVisit && !isFrozen && (
               <button
-                onClick={() => setIsConfirmSkipOpen(true)}
+                onClick={() => setIsSkipLocationModalOpen(true)}
                 className="px-4 py-2 bg-amber-100 text-amber-700 font-semibold text-xs rounded-lg whitespace-nowrap hover:bg-amber-200 transition-colors shadow-sm"
               >
                 Skip Visit & Add Values
@@ -577,38 +640,20 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
         }}
       />
 
-      {isConfirmSkipOpen && (
-        <OverlayPortal>
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100000] flex items-end md:items-center justify-center p-0 md:p-4">
-          <div className="bg-white rounded-t-2xl md:rounded-2xl w-full max-w-sm shadow-xl p-5 md:p-6 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
-            <h2 className="text-lg font-black text-slate-900 mb-2">Confirm Skip Site Visit</h2>
-            <p className="text-sm text-slate-600 mb-6 leading-relaxed">
-              Are you sure you want to skip the site visit? This will bypass the scheduling phase and move directly to adding measurements. This action cannot be undone.
-            </p>
-            <div className="flex flex-col-reverse md:flex-row justify-end gap-2 md:gap-3">
-              <button
-                onClick={() => setIsConfirmSkipOpen(false)}
-                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm rounded-xl transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={async () => {
-                  setIsConfirmSkipOpen(false);
-                  if (!canEdit) return;
-                  if (onSkipSiteVisit) {
-                    await onSkipSiteVisit();
-                  }
-                }}
-                className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm rounded-xl transition-colors shadow-sm"
-              >
-                Skip Site Visit
-              </button>
-            </div>
-          </div>
-        </div>
-        </OverlayPortal>
-      )}
+      <ScheduleVisitModal
+        isOpen={isSkipLocationModalOpen}
+        onClose={() => setIsSkipLocationModalOpen(false)}
+        mode="location_only"
+        defaultAddress={
+          (scheduledAddress && !scheduledAddress.startsWith("Skipped")
+            ? scheduledAddress
+            : client?.shippingAddress) || ""
+        }
+        onSchedule={async (_date, _time, location, coords) => {
+          if (!canEdit || !onSkipSiteVisit) return;
+          await onSkipSiteVisit({ customerAddress: location, gpsLocation: coords });
+        }}
+      />
             {/* ── TOP TOGGLABLE BAR & READY CHECKBOX ── */}
       <div className="bg-gradient-to-r from-slate-50 to-slate-100/50 border border-slate-200/80 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all duration-300">
         
@@ -709,7 +754,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
                       placeholder="0.00"
                     />
                     <select
-                      value={activeLoc.widthUnit || "ft"}
+                      value={activeLoc.widthUnit || defaultMeasurementUnit}
                       onChange={(e) => updateSignLocation(activeLoc.id, { widthUnit: e.target.value })}
                       className="px-2 py-2 text-xs font-bold text-slate-500 focus:outline-none bg-slate-50 disabled:bg-slate-50 disabled:cursor-not-allowed outline-none cursor-pointer"
                     >
@@ -730,7 +775,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
                       placeholder="0.00"
                     />
                     <select
-                      value={activeLoc.heightUnit || "ft"}
+                      value={activeLoc.heightUnit || defaultMeasurementUnit}
                       onChange={(e) => updateSignLocation(activeLoc.id, { heightUnit: e.target.value })}
                       className="px-2 py-2 text-xs font-bold text-slate-500 focus:outline-none bg-slate-50 disabled:bg-slate-50 disabled:cursor-not-allowed outline-none cursor-pointer"
                     >
@@ -740,48 +785,52 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
                     </select>
                   </div>
                 </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-1">Depth</label>
-                  <div className="flex focus-within:ring-2 focus-within:ring-[var(--color-secondary)]/20 focus-within:border-[var(--color-secondary)] border border-slate-200 rounded-xl overflow-hidden transition-all bg-white">
-                    <input
-                      type="number" step="any"
-                      value={activeLoc.depth || ""}
-                      onChange={(e) => updateSignLocation(activeLoc.id, { depth: parseFloat(e.target.value) || 0 })}
-                      className="w-full px-3 py-2 text-xs font-semibold focus:outline-none disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed border-r border-slate-200"
-                      placeholder="0.00"
-                    />
-                    <select
-                      value={activeLoc.depthUnit || "ft"}
-                      onChange={(e) => updateSignLocation(activeLoc.id, { depthUnit: e.target.value })}
-                      className="px-2 py-2 text-xs font-bold text-slate-500 focus:outline-none bg-slate-50 disabled:bg-slate-50 disabled:cursor-not-allowed outline-none cursor-pointer"
-                    >
-                      <option value="ft">ft</option>
-                      <option value="m">m</option>
-                      <option value="inch">inch</option>
-                    </select>
+                {!hiddenFields.hideDepth && (
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-1">Depth</label>
+                    <div className="flex focus-within:ring-2 focus-within:ring-[var(--color-secondary)]/20 focus-within:border-[var(--color-secondary)] border border-slate-200 rounded-xl overflow-hidden transition-all bg-white">
+                      <input
+                        type="number" step="any"
+                        value={activeLoc.depth || ""}
+                        onChange={(e) => updateSignLocation(activeLoc.id, { depth: parseFloat(e.target.value) || 0 })}
+                        className="w-full px-3 py-2 text-xs font-semibold focus:outline-none disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed border-r border-slate-200"
+                        placeholder="0.00"
+                      />
+                      <select
+                        value={activeLoc.depthUnit || defaultMeasurementUnit}
+                        onChange={(e) => updateSignLocation(activeLoc.id, { depthUnit: e.target.value })}
+                        className="px-2 py-2 text-xs font-bold text-slate-500 focus:outline-none bg-slate-50 disabled:bg-slate-50 disabled:cursor-not-allowed outline-none cursor-pointer"
+                      >
+                        <option value="ft">ft</option>
+                        <option value="m">m</option>
+                        <option value="inch">inch</option>
+                      </select>
+                    </div>
                   </div>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-1">Ground Clearance</label>
-                  <div className="flex focus-within:ring-2 focus-within:ring-[var(--color-secondary)]/20 focus-within:border-[var(--color-secondary)] border border-slate-200 rounded-xl overflow-hidden transition-all bg-white">
-                    <input
-                      type="number" step="any"
-                      value={activeLoc.groundClearance || ""}
-                      onChange={(e) => updateSignLocation(activeLoc.id, { groundClearance: parseFloat(e.target.value) || 0 })}
-                      className="w-full px-3 py-2 text-xs font-semibold focus:outline-none disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed border-r border-slate-200"
-                      placeholder="0.00"
-                    />
-                    <select
-                      value={activeLoc.groundClearanceUnit || "ft"}
-                      onChange={(e) => updateSignLocation(activeLoc.id, { groundClearanceUnit: e.target.value })}
-                      className="px-2 py-2 text-xs font-bold text-slate-500 focus:outline-none bg-slate-50 disabled:bg-slate-50 disabled:cursor-not-allowed outline-none cursor-pointer"
-                    >
-                      <option value="ft">ft</option>
-                      <option value="m">m</option>
-                      <option value="inch">inch</option>
-                    </select>
+                )}
+                {!hiddenFields.hideGroundClearance && (
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-1">Ground Clearance</label>
+                    <div className="flex focus-within:ring-2 focus-within:ring-[var(--color-secondary)]/20 focus-within:border-[var(--color-secondary)] border border-slate-200 rounded-xl overflow-hidden transition-all bg-white">
+                      <input
+                        type="number" step="any"
+                        value={activeLoc.groundClearance || ""}
+                        onChange={(e) => updateSignLocation(activeLoc.id, { groundClearance: parseFloat(e.target.value) || 0 })}
+                        className="w-full px-3 py-2 text-xs font-semibold focus:outline-none disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed border-r border-slate-200"
+                        placeholder="0.00"
+                      />
+                      <select
+                        value={activeLoc.groundClearanceUnit || defaultMeasurementUnit}
+                        onChange={(e) => updateSignLocation(activeLoc.id, { groundClearanceUnit: e.target.value })}
+                        className="px-2 py-2 text-xs font-bold text-slate-500 focus:outline-none bg-slate-50 disabled:bg-slate-50 disabled:cursor-not-allowed outline-none cursor-pointer"
+                      >
+                        <option value="ft">ft</option>
+                        <option value="m">m</option>
+                        <option value="inch">inch</option>
+                      </select>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
 
               <div>
@@ -815,71 +864,75 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
           </SectionCard>
 
           {/* ── ELECTRICAL ASSESSMENT ── */}
-          <SectionCard
-            title="Electrical Assessment"
-            icon="⚡"
-            isCollapsed={collapsed.electrical}
-            onToggle={() => toggleSection("electrical")}
-          >
-            <fieldset disabled={isFrozen} className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-4">
-              <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Power Source Available?</label>
-                <div className="flex flex-col sm:flex-row gap-3">
-                  {[true, false].map(option => (
-                    <label
-                      key={String(option)}
-                      className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border rounded-xl transition-all ${isFrozen ? "cursor-not-allowed opacity-70" : "cursor-pointer"} ${
-                        activeLoc.powerAvailable === option 
-                          ? "border-[var(--color-secondary)] bg-[var(--color-secondary)]/5 text-[var(--color-secondary)] font-bold shadow-xs" 
-                          : "border-slate-200 text-slate-650 hover:bg-slate-50 font-medium"
-                      }`}
+          {!hiddenFields.hideElectricalAssessment && (
+            <SectionCard
+              title="Electrical Assessment"
+              icon="⚡"
+              isCollapsed={collapsed.electrical}
+              onToggle={() => toggleSection("electrical")}
+            >
+              <fieldset disabled={isFrozen} className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Power Source Available?</label>
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    {[true, false].map(option => (
+                      <label
+                        key={String(option)}
+                        className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border rounded-xl transition-all ${isFrozen ? "cursor-not-allowed opacity-70" : "cursor-pointer"} ${
+                          activeLoc.powerAvailable === option 
+                            ? "border-[var(--color-secondary)] bg-[var(--color-secondary)]/5 text-[var(--color-secondary)] font-bold shadow-xs" 
+                            : "border-slate-200 text-slate-650 hover:bg-slate-50 font-medium"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name={`power_${activeLoc.id}`}
+                          value={String(option)}
+                          checked={activeLoc.powerAvailable === option}
+                          onChange={() => updateSignLocation(activeLoc.id, { powerAvailable: option })}
+                          className="hidden"
+                          disabled={isFrozen}
+                        />
+                        {option ? "Yes, Available" : "No"}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Distance to Power Source</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="number" step="any"
+                      value={activeLoc.distanceToPowerSource || ""}
+                      onChange={(e) => updateSignLocation(activeLoc.id, { distanceToPowerSource: parseFloat(e.target.value) || 0 })}
+                      className="flex-1 px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]/20 focus:border-[var(--color-secondary)] bg-white transition-all disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
+                      placeholder="e.g. 5"
+                    />
+                    <select
+                      value={activeLoc.distanceToPowerSourceUnit || "meters"}
+                      onChange={(e) => updateSignLocation(activeLoc.id, { distanceToPowerSourceUnit: e.target.value })}
+                      className="px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]/20 focus:border-[var(--color-secondary)] bg-white transition-all disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
                     >
-                      <input
-                        type="radio"
-                        name="powerAvailable"
-                        checked={activeLoc.powerAvailable === option}
-                        onChange={() => updateSignLocation(activeLoc.id, { powerAvailable: option })}
-                        className="accent-[var(--color-secondary)] disabled:cursor-not-allowed"
-                      />
-                      <span className="text-xs">{option ? "Yes, Available" : "No Power"}</span>
-                    </label>
-                  ))}
+                      <option value="meters">meters</option>
+                      <option value="feet">feet</option>
+                    </select>
+                  </div>
                 </div>
-              </div>
-              
-              <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Distance to Power Source</label>
-                <div className="flex gap-2">
-                  <input
-                    type="number" step="any"
-                    value={activeLoc.distanceToPowerSource || ""}
-                    onChange={(e) => updateSignLocation(activeLoc.id, { distanceToPowerSource: parseFloat(e.target.value) || 0 })}
-                    className="flex-1 px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]/20 focus:border-[var(--color-secondary)] bg-white transition-all disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
-                    placeholder="e.g. 5"
+                
+                <div className="md:col-span-2">
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Electrical Assessment Notes</label>
+                  <textarea
+                    value={activeLoc.electricalNotes || ""}
+                    onChange={(e) => updateSignLocation(activeLoc.id, { electricalNotes: e.target.value })}
+                    rows={3}
+                    placeholder="Detail power source details, availability of sockets, switchboards, cabling paths..."
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]/20 focus:border-[var(--color-secondary)] bg-white transition-all resize-none disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
                   />
-                  <select
-                    value={activeLoc.distanceToPowerSourceUnit || "meters"}
-                    onChange={(e) => updateSignLocation(activeLoc.id, { distanceToPowerSourceUnit: e.target.value })}
-                    className="px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]/20 focus:border-[var(--color-secondary)] bg-white transition-all disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
-                  >
-                    <option value="meters">meters</option>
-                    <option value="feet">feet</option>
-                  </select>
                 </div>
-              </div>
-              
-              <div className="md:col-span-2">
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Electrical Assessment Notes</label>
-                <textarea
-                  value={activeLoc.electricalNotes || ""}
-                  onChange={(e) => updateSignLocation(activeLoc.id, { electricalNotes: e.target.value })}
-                  rows={3}
-                  placeholder="Detail power source details, availability of sockets, switchboards, cabling paths..."
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]/20 focus:border-[var(--color-secondary)] bg-white transition-all resize-none disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
-                />
-              </div>
-            </fieldset>
-          </SectionCard>
+              </fieldset>
+            </SectionCard>
+          )}
 
           {/* ── STRUCTURAL ASSESSMENT ── */}
           <SectionCard
@@ -1076,8 +1129,8 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
           {([
             { key: "extraAcpSheetRequired", label: "Extra ACP Sheet Required to Cover Gap" },
             { key: "oldBoardRemovalRequired", label: "Old Board Removal Required" },
-            { key: "extraWireRequired", label: "Extra Wire Required" },
-          ] as { key: keyof typeof siteVisit; label: string }[]).map(({ key, label }) => (
+            !hiddenFields.hideExtraWireRequired ? { key: "extraWireRequired", label: "Extra Wire Required" } : null,
+          ].filter(Boolean) as { key: keyof typeof siteVisit; label: string }[]).map(({ key, label }) => (
             <div key={key}>
               <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">{label}</label>
               <div className="flex flex-col sm:flex-row gap-3">
@@ -1141,108 +1194,132 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
           </div>
 
           {/* Fabrication Required */}
-          <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Fabrication Required</label>
-            <div className="flex flex-col sm:flex-row gap-3">
-              {[true, false].map(option => (
-                <label
-                  key={String(option)}
-                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border rounded-xl transition-all ${isFrozen ? "cursor-not-allowed opacity-70" : "cursor-pointer"} ${
-                    siteVisit.fabricationRequired === option
-                      ? "border-[var(--color-secondary)] bg-[var(--color-secondary)]/5 text-[var(--color-secondary)] font-bold shadow-xs"
-                      : "border-slate-200 text-slate-650 hover:bg-slate-50 font-medium"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="fabricationRequired"
-                    checked={siteVisit.fabricationRequired === option}
-                    onChange={() => updateRootFields({ fabricationRequired: option })}
-                    className="accent-[var(--color-secondary)] disabled:cursor-not-allowed"
-                  />
-                  <span className="text-xs">{option ? "Yes" : "No"}</span>
-                </label>
-              ))}
+          {!hiddenFields.hideFabricationReq && (
+            <div>
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Fabrication Required</label>
+              <div className="flex flex-col sm:flex-row gap-3">
+                {[true, false].map(option => (
+                  <label
+                    key={String(option)}
+                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border rounded-xl transition-all ${isFrozen ? "cursor-not-allowed opacity-70" : "cursor-pointer"} ${
+                      siteVisit.fabricationRequired === option
+                        ? "border-[var(--color-secondary)] bg-[var(--color-secondary)]/5 text-[var(--color-secondary)] font-bold shadow-xs"
+                        : "border-slate-200 text-slate-650 hover:bg-slate-50 font-medium"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="fabricationRequired"
+                      checked={siteVisit.fabricationRequired === option}
+                      onChange={() => updateRootFields({ fabricationRequired: option })}
+                      className="accent-[var(--color-secondary)] disabled:cursor-not-allowed"
+                    />
+                    <span className="text-xs">{option ? "Yes" : "No"}</span>
+                  </label>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Civil Work Required */}
-          <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Civil Work Required</label>
-            <div className="flex flex-col sm:flex-row gap-3">
-              {[true, false].map(option => (
-                <label
-                  key={String(option)}
-                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border rounded-xl transition-all ${isFrozen ? "cursor-not-allowed opacity-70" : "cursor-pointer"} ${
-                    siteVisit.civilWorkRequired === option
-                      ? "border-[var(--color-secondary)] bg-[var(--color-secondary)]/5 text-[var(--color-secondary)] font-bold shadow-xs"
-                      : "border-slate-200 text-slate-650 hover:bg-slate-50 font-medium"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="civilWorkRequired"
-                    checked={siteVisit.civilWorkRequired === option}
-                    onChange={() => updateRootFields({ civilWorkRequired: option })}
-                    className="accent-[var(--color-secondary)] disabled:cursor-not-allowed"
-                  />
-                  <span className="text-xs">{option ? "Yes" : "No"}</span>
-                </label>
-              ))}
+          {!hiddenFields.hideCivilWork && (
+            <div>
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Civil Work Required</label>
+              <div className="flex flex-col sm:flex-row gap-3">
+                {[true, false].map(option => (
+                  <label
+                    key={String(option)}
+                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border rounded-xl transition-all ${isFrozen ? "cursor-not-allowed opacity-70" : "cursor-pointer"} ${
+                      siteVisit.civilWorkRequired === option
+                        ? "border-[var(--color-secondary)] bg-[var(--color-secondary)]/5 text-[var(--color-secondary)] font-bold shadow-xs"
+                        : "border-slate-200 text-slate-650 hover:bg-slate-50 font-medium"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="civilWorkRequired"
+                      checked={siteVisit.civilWorkRequired === option}
+                      onChange={() => updateRootFields({ civilWorkRequired: option })}
+                      className="accent-[var(--color-secondary)] disabled:cursor-not-allowed"
+                    />
+                    <span className="text-xs">{option ? "Yes" : "No"}</span>
+                  </label>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </fieldset>
       </SectionCard>
 
-      {/* ── PHOTO VIEWER MODAL ── */}
+      {/* ── PHOTO VIEWER MODAL (portaled so worksheet overflow cannot clip it) ── */}
       {viewerIndex !== null && viewerPhotos.length > 0 && (
-        <div 
-          className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center backdrop-blur-sm"
-          onClick={() => setViewerIndex(null)}
-        >
-          {/* Close button */}
-          <button 
-            className="absolute top-6 right-6 text-white/70 hover:text-white bg-black/50 hover:bg-black/80 rounded-full p-2 transition-all focus:outline-none"
+        <OverlayPortal>
+          <div
+            className="fixed inset-0 z-[99999] bg-black/95 flex items-center justify-center"
             onClick={() => setViewerIndex(null)}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Photo viewer"
           >
-            <X size={24} />
-          </button>
-          
-          {/* Main Image */}
-          <div className="relative max-w-4xl max-h-[85vh] w-full h-full flex items-center justify-center p-4">
-            <img 
-              src={viewerPhotos[viewerIndex]} 
-              className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
-              alt="Viewed full size"
-              onClick={(e) => e.stopPropagation()}
-            />
-          </div>
-          
-          {/* Previous button */}
-          {viewerIndex > 0 && (
             <button
-              className="absolute left-6 top-1/2 -translate-y-1/2 text-white/70 hover:text-white bg-black/50 hover:bg-black/80 rounded-full p-3 transition-all focus:outline-none"
-              onClick={(e) => { e.stopPropagation(); setViewerIndex(viewerIndex - 1); }}
+              type="button"
+              className="absolute top-3 right-3 sm:top-6 sm:right-6 z-10 text-white/80 hover:text-white bg-black/50 hover:bg-black/80 rounded-full p-2.5 sm:p-2 transition-all focus:outline-none"
+              onClick={() => setViewerIndex(null)}
+              aria-label="Close photo viewer"
             >
-              <ChevronLeft size={32} />
+              <X size={22} />
             </button>
-          )}
-          
-          {/* Next button */}
-          {viewerIndex < viewerPhotos.length - 1 && (
-            <button
-              className="absolute right-6 top-1/2 -translate-y-1/2 text-white/70 hover:text-white bg-black/50 hover:bg-black/80 rounded-full p-3 transition-all focus:outline-none"
-              onClick={(e) => { e.stopPropagation(); setViewerIndex(viewerIndex + 1); }}
-            >
-              <ChevronRight size={32} />
-            </button>
-          )}
-          
-          {/* Image Counter */}
-          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-black/60 text-white text-sm font-medium px-4 py-1.5 rounded-full backdrop-blur-md">
-            {viewerIndex + 1} / {viewerPhotos.length}
+
+            <div className="relative w-full h-full max-w-5xl max-h-[100dvh] sm:max-h-[90vh] flex items-center justify-center px-12 sm:px-16 py-14 sm:py-16">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={viewerPhotos[viewerIndex]}
+                className="max-w-full max-h-full w-auto h-auto object-contain select-none"
+                alt={`Site photo ${viewerIndex + 1}`}
+                onClick={(e) => e.stopPropagation()}
+              />
+            </div>
+
+            {viewerIndex > 0 && (
+              <button
+                type="button"
+                className="absolute left-2 sm:left-6 top-1/2 -translate-y-1/2 text-white/80 hover:text-white bg-black/50 hover:bg-black/80 rounded-full p-2 sm:p-3 transition-all focus:outline-none"
+                onClick={(e) => { e.stopPropagation(); setViewerIndex(viewerIndex - 1); }}
+                aria-label="Previous photo"
+              >
+                <ChevronLeft size={28} className="sm:w-8 sm:h-8" />
+              </button>
+            )}
+
+            {viewerIndex < viewerPhotos.length - 1 && (
+              <button
+                type="button"
+                className="absolute right-2 sm:right-6 top-1/2 -translate-y-1/2 text-white/80 hover:text-white bg-black/50 hover:bg-black/80 rounded-full p-2 sm:p-3 transition-all focus:outline-none"
+                onClick={(e) => { e.stopPropagation(); setViewerIndex(viewerIndex + 1); }}
+                aria-label="Next photo"
+              >
+                <ChevronRight size={28} className="sm:w-8 sm:h-8" />
+              </button>
+            )}
+
+            <div className="absolute bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 sm:gap-3 px-2">
+              <div className="bg-black/60 text-white text-xs sm:text-sm font-medium px-3 sm:px-4 py-1.5 rounded-full backdrop-blur-md whitespace-nowrap">
+                {viewerIndex + 1} / {viewerPhotos.length}
+              </div>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  window.open(`${viewerPhotos[viewerIndex]}?download=`, "_blank");
+                }}
+                className="inline-flex items-center gap-1.5 bg-black/60 hover:bg-black/80 text-white text-xs sm:text-sm font-semibold px-3 sm:px-4 py-1.5 rounded-full backdrop-blur-md transition-colors"
+              >
+                <Download size={14} />
+                Download
+              </button>
+            </div>
           </div>
-        </div>
+        </OverlayPortal>
       )}
     </div>
   );
@@ -1299,58 +1376,62 @@ const SitePhotoUploader: React.FC<{
   onRemove: (url: string) => void;
   onView: (idx: number) => void;
 }> = ({ photos, uploading, disabled, onFiles, onRemove, onView }) => {
-  const cameraRef = useRef<HTMLInputElement>(null);
-  const galleryRef = useRef<HTMLInputElement>(null);
+  const reactId = React.useId();
+  const cameraInputId = `${reactId}-camera`;
+  const galleryInputId = `${reactId}-gallery`;
 
   const handlePick = (files: FileList | null) => {
     void onFiles(files);
   };
 
+  /** Visually hidden but still activatable — `display:none` / `.hidden` breaks iOS Safari file pickers. */
+  const fileInputClassName =
+    "absolute w-px h-px p-0 -m-px overflow-hidden whitespace-nowrap border-0 [clip:rect(0,0,0,0)]";
+
+  const cameraLabelClass =
+    "inline-flex items-center gap-2 px-4 py-2.5 bg-[var(--color-secondary)] text-white rounded-xl text-xs font-bold hover:opacity-90 transition-opacity " +
+    (uploading ? "opacity-50 pointer-events-none" : "cursor-pointer");
+  const galleryLabelClass =
+    "inline-flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-bold hover:bg-slate-50 transition-colors " +
+    (uploading ? "opacity-50 pointer-events-none" : "cursor-pointer");
+
   return (
     <div className="pt-4 space-y-4">
-      {/* Upload buttons */}
+      {/* Upload buttons — native <label for> so iPhone/Android open camera/gallery reliably */}
       {!disabled && (
-        <div className="flex flex-wrap gap-3">
+        <div className="relative flex flex-wrap gap-3">
           <input
-            ref={cameraRef}
+            id={cameraInputId}
             type="file"
             accept="image/*"
             capture="environment"
-            className="hidden"
+            className={fileInputClassName}
+            tabIndex={-1}
             onChange={(e) => {
               handlePick(e.target.files);
               e.target.value = "";
             }}
           />
           <input
-            ref={galleryRef}
+            id={galleryInputId}
             type="file"
-            accept="image/*"
+            accept="image/*,image/heic,image/heif"
             multiple
-            className="hidden"
+            className={fileInputClassName}
+            tabIndex={-1}
             onChange={(e) => {
               handlePick(e.target.files);
               e.target.value = "";
             }}
           />
-          <button
-            type="button"
-            onClick={() => cameraRef.current?.click()}
-            disabled={uploading}
-            className="flex items-center gap-2 px-4 py-2.5 bg-[var(--color-secondary)] text-white rounded-xl text-xs font-bold hover:opacity-90 transition-opacity disabled:opacity-50"
-          >
+          <label htmlFor={cameraInputId} className={cameraLabelClass} aria-disabled={uploading}>
             <Camera size={14} />
             Take Photo
-          </button>
-          <button
-            type="button"
-            onClick={() => galleryRef.current?.click()}
-            disabled={uploading}
-            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-bold hover:bg-slate-50 transition-colors disabled:opacity-50"
-          >
+          </label>
+          <label htmlFor={galleryInputId} className={galleryLabelClass} aria-disabled={uploading}>
             <ImageIcon size={14} />
             Gallery
-          </button>
+          </label>
 
           {uploading && (
             <span className="flex items-center gap-1.5 text-xs text-slate-500 font-semibold">
@@ -1365,30 +1446,37 @@ const SitePhotoUploader: React.FC<{
       {photos.length > 0 ? (
         <div className="flex flex-wrap gap-3">
           {photos.map((url, idx) => (
-            <div key={url} className="relative group w-24 h-24 rounded-xl overflow-hidden border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+            <div key={url} className="relative group w-28 h-28 sm:w-32 sm:h-32 rounded-xl overflow-hidden border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={url} alt={`Site photo ${idx + 1}`} className="w-full h-full object-cover" />
-              <div className="absolute inset-0 bg-slate-900/70 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+              <div className="absolute inset-0 bg-slate-900/70 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 px-1">
                 <button
+                  type="button"
                   onClick={(e) => { e.stopPropagation(); onView(idx); }}
-                  className="w-7 h-7 rounded-full bg-white/20 hover:bg-white/40 flex items-center justify-center text-white transition-colors"
+                  className="w-7 h-7 shrink-0 rounded-full bg-white/20 hover:bg-white/40 flex items-center justify-center text-white transition-colors"
                   title="View"
+                  aria-label="View photo"
                 >
-                  <Eye size={14} />
+                  <Eye size={13} />
                 </button>
                 <button
+                  type="button"
                   onClick={(e) => { e.stopPropagation(); window.open(`${url}?download=`, '_blank'); }}
-                  className="w-7 h-7 rounded-full bg-white/20 hover:bg-white/40 flex items-center justify-center text-white transition-colors"
+                  className="w-7 h-7 shrink-0 rounded-full bg-white/20 hover:bg-white/40 flex items-center justify-center text-white transition-colors"
                   title="Download"
+                  aria-label="Download photo"
                 >
-                  <Download size={14} />
+                  <Download size={13} />
                 </button>
                 {!disabled && (
                   <button
+                    type="button"
                     onClick={(e) => { e.stopPropagation(); onRemove(url); }}
-                    className="w-7 h-7 rounded-full bg-red-500/80 hover:bg-red-500 flex items-center justify-center text-white transition-colors"
+                    className="w-7 h-7 shrink-0 rounded-full bg-red-500/80 hover:bg-red-500 flex items-center justify-center text-white transition-colors"
                     title="Remove"
+                    aria-label="Remove photo"
                   >
-                    <Trash size={14} />
+                    <Trash size={13} />
                   </button>
                 )}
               </div>
@@ -1396,14 +1484,14 @@ const SitePhotoUploader: React.FC<{
           ))}
         </div>
       ) : (
-        <div
+        <label
+          htmlFor={disabled ? undefined : cameraInputId}
           className={`flex flex-col items-center justify-center py-10 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50/50 transition-colors ${disabled ? "" : "cursor-pointer hover:border-[var(--color-secondary)] hover:bg-slate-100/50"}`}
-          onClick={() => !disabled && cameraRef.current?.click()}
         >
           <Camera size={28} className="text-slate-300 mb-2" />
           <p className="text-xs font-bold text-slate-400">No photos yet</p>
           {!disabled && <p className="text-[10px] text-slate-400 mt-0.5">Tap &quot;Take Photo&quot; or &quot;Gallery&quot;</p>}
-        </div>
+        </label>
       )}
     </div>
   );

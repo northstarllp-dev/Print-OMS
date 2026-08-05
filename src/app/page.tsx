@@ -74,7 +74,7 @@ export default async function RootGateway() {
           }}
         >
           <div style={{ width: 40, height: 40, background: "var(--color-primary)", borderRadius: "var(--radius-xl)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
-            <Shield size={18} color="white" />
+            <Shield size={18} color="var(--color-on-primary)" />
           </div>
           <div style={{ fontSize: 16, fontWeight: 800, color: "var(--text-primary)", marginBottom: 6 }}>Admin Portal</div>
           <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5, marginBottom: 20, flex: 1 }}>
@@ -106,7 +106,7 @@ export default async function RootGateway() {
           }}
         >
           <div style={{ width: 40, height: 40, background: "var(--color-secondary)", borderRadius: "var(--radius-xl)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
-            <Users size={18} color="white" />
+            <Users size={18} color="var(--color-on-secondary)" />
           </div>
           <div style={{ fontSize: 16, fontWeight: 800, color: "var(--text-primary)", marginBottom: 6 }}>Staff Portal</div>
           <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5, marginBottom: 20, flex: 1 }}>

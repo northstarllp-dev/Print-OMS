@@ -20,6 +20,10 @@ import {
   normalizePricingType,
   type PricingType,
 } from "@/features/quotations/utils/lineAmount";
+import {
+  getProductPriceForType,
+  resolvePricingForMeasurement,
+} from "@/features/quotations/utils/conditionalProductPricing";
 import { createClient } from "@/utils/supabase/client";
 import { ensureRealtimeAuth } from "@/utils/supabase/ensureRealtimeAuth";
 import type { StagePermission } from "@/features/orders/workspace/shared/types";
@@ -41,6 +45,7 @@ interface Product {
   is_active: boolean;
   price_per_sqft?: number | null;
   price_per_unit?: number | null;
+  unit_price_max_sqft?: number | null;
   images?: string[];
 }
 
@@ -153,30 +158,6 @@ function newItem(gstRate: number = 18): LineItem {
   };
 }
 
-function resolveInitialPricing(p: Product): { pricingType: PricingType; price: number } {
-  const ut = (p.pricing_type || "").toLowerCase().trim();
-
-  if (ut === "per sq.ft" || ut === "per sqft" || ut === "sqft" || ut === "per_sqft") {
-    return { pricingType: "per_sqft", price: p.price_per_sqft ?? 0 };
-  }
-  if (ut === "per unit" || ut === "per_unit" || ut === "unit" || ut === "nos") {
-    return { pricingType: "per_unit", price: p.price_per_unit ?? 0 };
-  }
-  // Legacy running-ft products fall back to unit pricing
-  if (p.price_per_sqft != null && p.price_per_sqft > 0) {
-    return { pricingType: "per_sqft", price: p.price_per_sqft };
-  }
-  if (p.price_per_unit != null && p.price_per_unit > 0) {
-    return { pricingType: "per_unit", price: p.price_per_unit };
-  }
-  return { pricingType: "per_unit", price: 0 };
-}
-
-function getProductPriceForType(p: Product, type: PricingType): number {
-  if (type === "per_sqft") return p.price_per_sqft ?? 0;
-  return p.price_per_unit ?? 0;
-}
-
 function normalizeSection(section: SignageSection): SignageSection {
   return {
     ...section,
@@ -194,12 +175,15 @@ function ProductSearch({
   onSelect,
   onChange,
   disabled,
+  measurement = 1,
 }: {
   value: string;
   products: Product[];
   onSelect: (p: Product) => void;
   onChange: (val: string) => void;
   disabled?: boolean;
+  /** Current line/site measurement — drives dual-price preview (≤10 unit, >10 sqft). */
+  measurement?: number;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState(value);
@@ -273,7 +257,7 @@ function ProductSearch({
           }}
         >
           {visibleResults.map((p) => {
-            const resolved = resolveInitialPricing(p);
+            const resolved = resolvePricingForMeasurement(p, measurement);
             return (
               <button
                 key={p.id}
@@ -690,18 +674,18 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
   }
 
   function selectProduct(sectionId: string, lineId: string, p: Product) {
-    const resolved = resolveInitialPricing(p);
     const siteVisitItem = siteVisitItems.find((sv) => sv.id === sectionId);
     const defaultMeasurement =
       siteVisitItem?.width && siteVisitItem?.height
         ? siteVisitItem.width * siteVisitItem.height
         : 1;
+    const resolved = resolvePricingForMeasurement(p, defaultMeasurement);
 
     updateLine(sectionId, lineId, {
       productId: p.id,
       description: p.name,
       pricingType: resolved.pricingType,
-      unit: resolved.pricingType === "per_sqft" ? "sqft" : "nos",
+      unit: resolved.unit,
       unitPrice: resolved.price,
       quantity: defaultMeasurement,
       totalSqFt: defaultMeasurement,
@@ -710,10 +694,26 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
 
   function setLineMeasurement(sectionId: string, lineId: string, value: number) {
     const measurement = value > 0 ? value : 0;
-    updateLine(sectionId, lineId, {
-      quantity: measurement,
-      totalSqFt: measurement,
-    });
+    updateSection(sectionId, (sec) => ({
+      ...sec,
+      lines: sec.lines.map((l) => {
+        if (l.id !== lineId) return l;
+        const patch: Partial<LineItem> = {
+          quantity: measurement,
+          totalSqFt: measurement,
+        };
+        if (l.productId) {
+          const p = products.find((prod) => prod.id === l.productId);
+          if (p) {
+            const resolved = resolvePricingForMeasurement(p, measurement);
+            patch.pricingType = resolved.pricingType;
+            patch.unit = resolved.unit;
+            patch.unitPrice = resolved.price;
+          }
+        }
+        return { ...l, ...patch };
+      }),
+    }));
   }
 
   // ── Save/Send Actions ──
@@ -987,6 +987,17 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                             value={line.description}
                             products={products}
                             disabled={isLocked}
+                            measurement={
+                              getLineMeasurement(line) ||
+                              (() => {
+                                const sv = siteVisitItems.find(
+                                  (item) => item.id === section.siteVisitItemId
+                                );
+                                return sv?.width && sv?.height
+                                  ? sv.width * sv.height
+                                  : 1;
+                              })()
+                            }
                             onSelect={(p) => selectProduct(section.siteVisitItemId, line.id, p)}
                             onChange={(val) =>
                               updateLine(section.siteVisitItemId, line.id, {

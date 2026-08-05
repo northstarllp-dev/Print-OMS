@@ -32,7 +32,7 @@ export default async function StaffOrderDetailPage({
 
   const order = await getOrderById(id);
   if (!order) {
-    redirect("/staff/orders");
+    redirect("/staff/my-orders");
   }
 
   const [
@@ -72,6 +72,8 @@ export default async function StaffOrderDetailPage({
     orderId: order.order_id || order.id,
     health: order.health || "Active",
     lost_reason: order.lost_reason,
+    hold_note: order.hold_note || null,
+    reach_out_at: order.reach_out_at || null,
     workflow_type: (order.workflow_type as "quote_first" | "design_first") || "quote_first",
   };
 

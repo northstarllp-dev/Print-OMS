@@ -1,12 +1,12 @@
 import { PrintOMSClientConfig } from "../../schema";
 
-const edit = (...stages: Array<"site_visit" | "quotation" | "invoice" | "design" | "production" | "installation" | "service_tickets">) => {
+const edit = (...stages: Array<"enquiry" | "site_visit" | "quotation" | "invoice" | "design" | "production" | "installation" | "service_tickets">) => {
   const map: NonNullable<PrintOMSClientConfig["stageGrantsByRole"]>[string] = {};
   for (const s of stages) map[s] = { canView: true, canEdit: true };
   return map;
 };
 
-const view = (...stages: Array<"site_visit" | "quotation" | "invoice" | "design" | "production" | "installation" | "service_tickets">) => {
+const view = (...stages: Array<"enquiry" | "site_visit" | "quotation" | "invoice" | "design" | "production" | "installation" | "service_tickets">) => {
   const map: NonNullable<PrintOMSClientConfig["stageGrantsByRole"]>[string] = {};
   for (const s of stages) map[s] = { canView: true, canEdit: false };
   return map;
@@ -40,12 +40,21 @@ export const theBoardCompanyConfig: Partial<PrintOMSClientConfig> = {
   features: {
     enableAdminAssignment: true,
     needsAttentionAfterDays: 6,
+    siteVisit: {
+      hideDepth: true,
+      hideGroundClearance: true,
+      hideExtraWireRequired: true,
+      hideFabricationReq: true,
+      hideCivilWork: true,
+      defaultMeasurementUnit: "ft",
+    }
   },
   usesFloorPortals: false,
   stageGrantsByRole: {
     Designer: { ...view("site_visit"), ...edit("design", "quotation", "invoice") },
+    Finance: edit("quotation", "invoice"),
     "Production & Service": { ...view("site_visit"), ...edit("production", "service_tickets") },
-    "Recce & Installation": edit("site_visit", "installation"),
+    "Recce & Installation": edit("site_visit", "installation","production", "service_tickets"),
   },
   whatsappTemplatePrefix: "boardco_",
 };

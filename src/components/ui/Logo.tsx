@@ -22,7 +22,18 @@ function tryLoadClientConfig(): ClientConfig | null {
   }
 }
 
-export function Logo({ className = "", forceText = false, width = 200, height = 48, align = "center", applyScale = true }: LogoProps) {
+function logoSrc(logoUrl: string): string {
+  return `/printoms${logoUrl}`;
+}
+
+export function Logo({
+  className = "",
+  forceText = false,
+  width = 200,
+  height = 48,
+  align = "center",
+  applyScale = true,
+}: LogoProps) {
   // Resolve sync when NEXT_PUBLIC_CLIENT_SLUG is available so loaders show the logo immediately.
   const [client, setClient] = useState<ClientConfig | null>(() => tryLoadClientConfig());
 
@@ -40,6 +51,7 @@ export function Logo({ className = "", forceText = false, width = 200, height = 
     const scale = applyScale ? (client.logoScale || 1) : 1;
     const finalWidth = width * scale;
     const finalHeight = height * scale;
+    const src = logoSrc(client.logoUrl);
 
     return (
       <div
@@ -52,7 +64,7 @@ export function Logo({ className = "", forceText = false, width = 200, height = 
         }}
       >
         <img
-          src={`/printoms${client.logoUrl}`}
+          src={src}
           alt={`${client.name} Logo`}
           width={finalWidth}
           height={finalHeight}

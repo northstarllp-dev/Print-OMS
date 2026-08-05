@@ -69,7 +69,7 @@ export function OrderDetailPageClient({
         isOpen={true}
         onClose={() => {
           router.refresh();
-          router.push(backHref ?? (role === "Admin" ? "/admin/orders" : "/staff/orders"));
+          router.push(backHref ?? (role === "Admin" ? "/admin/orders" : "/staff/my-orders"));
         }}
         order={order}
         customers={customers}

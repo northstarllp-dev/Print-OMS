@@ -205,6 +205,10 @@ body {
   line-height: 1.5;
 }
 
+button, a, input, select, textarea, [role="button"] {
+  touch-action: manipulation;
+}
+
 /* UTILITY CLASSES for custom UI elements */
 .prt-page {
   padding: 24px;
@@ -419,7 +423,7 @@ body {
   animation: polaris-mwl-heart 2.8s ease-in-out 0.2s infinite;
 }
 
-/* Shine masked to logo pixels — never a rectangle */
+/* Shine masked to Polaris footer logo pixels — never a rectangle */
 .polaris-mwl-logo-wrap {
   position: relative;
   display: inline-flex;
@@ -454,6 +458,13 @@ body {
   mask-repeat: no-repeat;
   -webkit-mask-position: center;
   mask-position: center;
+}
+
+@media print {
+  .polaris-mwl-logo-wrap::after {
+    display: none !important;
+    animation: none !important;
+  }
 }
 
 /* ANIMATIONS */

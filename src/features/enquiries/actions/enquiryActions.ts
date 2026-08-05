@@ -11,6 +11,22 @@ import { getRequestBaseUrl } from "@/features/notifications/whatsapp/requestBase
 import { createAdminClient } from "@/utils/supabase/admin";
 import { revalidateStaffQueuePaths } from "@/features/orders/actions/orderActions";
 import { insertOrderActivity } from "@/features/orders/activity/logOrderActivity";
+import { getCurrentUser } from "@/features/auth/actions/authActions";
+import { resolveStagePermission } from "@/features/orders/workspace/shared/permissions";
+import { assertStageEditPermission } from "@/features/orders/workspace/shared/serverPermissions";
+import {
+  buildCustomerInsertFromEnquiry,
+  buildCustomerMatchOrClauses,
+} from "@/features/enquiries/enquiryFormLogic";
+import { buildHealthUpdatePayload } from "@/features/enquiries/enquiryListLogic";
+import {
+  buildConvertCustomerOrClauses,
+  buildCustomerInsertFromConvert,
+  buildEnquiryConvertedUpdate,
+  buildOrderInsertFromConvert,
+  orderCreatedIdempotencyKey,
+  shouldBlockConvert,
+} from "@/features/enquiries/enquiryConvertLogic";
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -34,7 +50,25 @@ async function getSupabase() {
   );
 }
 
+function revalidateEnquiryPaths() {
+  revalidatePath("/admin/enquire");
+  revalidatePath("/staff/enquiries");
+  revalidatePath("/admin/dashboard");
+}
+
 export async function getEnquiries() {
+  const profile = await getCurrentUser();
+  if (!profile) throw new Error("Unauthorized");
+  if (profile.role !== "admin") {
+    const { canView, canEdit } = resolveStagePermission("enquiry", {
+      role: profile.role,
+      staff_role: profile.staff_role ?? null,
+      company_id: profile.company_id ?? null,
+    });
+    // Soft-deny for incidental callers (staff queues, reports) — return empty
+    if (!canView && !canEdit) return [];
+  }
+
   const supabase = await getSupabase();
   const { data, error } = await supabase
     .from("enquiries")
@@ -76,10 +110,7 @@ async function ensureCustomerForEnquiry(
     if (c) return c;
   }
 
-  const orClauses: string[] = [];
-  if (enq.phone) orClauses.push(`phone.eq."${enq.phone}"`);
-  if (enq.whatsapp) orClauses.push(`whatsapp.eq."${enq.whatsapp}"`);
-  if (enq.email) orClauses.push(`email.eq."${enq.email}"`);
+  const orClauses = buildCustomerMatchOrClauses(enq);
 
   if (orClauses.length > 0) {
     const { data: existing } = await db
@@ -101,15 +132,7 @@ async function ensureCustomerForEnquiry(
     (enq.company_id as string) || getDeployCompanyId();
   const { data: created, error } = await db
     .from("customers")
-    .insert({
-      company_id: companyId,
-      name: (enq.business_name as string) || (enq.lead_name as string) || "Customer",
-      phone: enq.phone,
-      whatsapp: enq.whatsapp,
-      email: enq.email,
-      billing_address: "Address Details Pending Intake",
-      shipping_address: (enq.location as string) || "Installation Address Pending Survey",
-    })
+    .insert(buildCustomerInsertFromEnquiry(enq, companyId))
     .select("id, customer_id")
     .single();
 
@@ -127,6 +150,11 @@ export async function createEnquiry(formData: any) {
   const supabase = await getSupabase();
 
   const { data: { user } } = await supabase.auth.getUser();
+  // Public /quote may create without a session; logged-in users need edit grant
+  if (user) {
+    await assertStageEditPermission("enquiry");
+  }
+
   let addedBy = "System";
   const { resolveWriteCompanyId } = await import("@/lib/resolveWriteCompanyId");
   const companyId = await resolveWriteCompanyId();
@@ -166,12 +194,26 @@ export async function createEnquiry(formData: any) {
       );
     }
   }
+  if (enq) {
+    const { dispatchStageNotification } = await import("@/features/notifications/lib/dispatchNotification");
+    await dispatchStageNotification(
+      "enquiry",
+      enq.company_id,
+      {
+        title: "New Enquiry Received",
+        message: `A new enquiry has been added by ${addedBy}.`,
+        type: "success",
+        link: "/staff/enquiries"
+      }
+    );
+  }
 
-  revalidatePath("/admin/enquire");
+  revalidateEnquiryPaths();
   return data;
 }
 
 export async function resendEnquiryWhatsAppAction(enquiryId: string) {
+  await assertStageEditPermission("enquiry");
   const supabase = await getSupabase();
   const { data: enq, error } = await supabase
     .from("enquiries")
@@ -208,10 +250,11 @@ export async function resendEnquiryWhatsAppAction(enquiryId: string) {
 }
 
 export async function updateEnquiry(id: string, updates: any) {
+  await assertStageEditPermission("enquiry");
   const supabase = await getSupabase();
   const { data, error } = await supabase.from("enquiries").update(updates).eq("id", id).select();
   if (error) throw new Error(error.message);
-  revalidatePath("/admin/enquire");
+  revalidateEnquiryPaths();
   return data;
 }
 
@@ -230,6 +273,7 @@ export async function getAdmins() {
 }
 
 export async function convertEnquiryToOrderAction(enquiryId: string, clientName: string, businessName: string, productType?: string, requirements?: string, assignedAdmins?: string[]) {
+  await assertStageEditPermission("enquiry");
   const supabase = await getSupabase();
   
   // 1. Fetch enquiry
@@ -243,13 +287,14 @@ export async function convertEnquiryToOrderAction(enquiryId: string, clientName:
     throw new Error(fetchErr?.message || "Enquiry not found");
   }
 
+  if (shouldBlockConvert(enq)) {
+    throw new Error("Enquiry is already converted to an order");
+  }
+
   // 2. Check if customer already exists using phone, whatsapp, email
   let existingCust = null;
   
-  const orClauses = [];
-  if (enq.phone) orClauses.push(`phone.eq."${enq.phone}"`);
-  if (enq.whatsapp) orClauses.push(`whatsapp.eq."${enq.whatsapp}"`);
-  if (enq.email) orClauses.push(`email.eq."${enq.email}"`);
+  const orClauses = buildConvertCustomerOrClauses(enq);
 
   if (orClauses.length > 0) {
     const { data, error: custErr } = await supabase
@@ -279,15 +324,9 @@ export async function convertEnquiryToOrderAction(enquiryId: string, clientName:
     // 3. Customer does not exist -> Create new customer record
     const { data: newCust, error: insertCustErr } = await supabase
       .from("customers")
-      .insert([{
-        company_id: companyId,
-        name: businessName || clientName,
-        phone: enq.phone,
-        whatsapp: enq.whatsapp,
-        email: enq.email,
-        billing_address: "Address Details Pending Intake",
-        shipping_address: enq.location || "Installation Address Pending Survey"
-      }])
+      .insert([
+        buildCustomerInsertFromConvert(companyId, enq, clientName, businessName),
+      ])
       .select();
       
     if (insertCustErr || !newCust || newCust.length === 0) {
@@ -303,17 +342,20 @@ export async function convertEnquiryToOrderAction(enquiryId: string, clientName:
   // 4. Create new order
   const { data: newOrder, error: insertOrderErr } = await supabase
     .from("orders")
-    .insert([{
-      company_id: companyId,
-      client_name: clientName,
-      business_name: businessName || customerName,
-      customer_id: customerId,
-      stage: "Site Visit Pending",
-      health: "Active",
-      product_type: productType || "",
-      requirements: requirements || "",
-      assigned_admins: assignedAdmins || [],
-    }])
+    .insert([
+      buildOrderInsertFromConvert(
+        companyId,
+        customerId,
+        {
+          clientName,
+          businessName,
+          productType,
+          requirements,
+          assignedAdmins,
+        },
+        customerName
+      ),
+    ])
     .select();
 
   if (insertOrderErr || !newOrder || newOrder.length === 0) {
@@ -353,7 +395,7 @@ export async function convertEnquiryToOrderAction(enquiryId: string, clientName:
   // 5. Update enquiry record
   const { error: updateEnqErr } = await supabase
     .from("enquiries")
-    .update({ status: "Converted", customer_id: customerId, order_id: orderId })
+    .update(buildEnquiryConvertedUpdate(customerId, orderId))
     .eq("id", enquiryId);
   if (updateEnqErr) console.error("Failed to update enquiry status:", updateEnqErr.message);
 
@@ -368,12 +410,25 @@ export async function convertEnquiryToOrderAction(enquiryId: string, clientName:
     orderUuid: orderId,
     orderFriendlyId: friendlyOrderId,
     customerFriendlyId: friendlyCustomerId,
-    idempotencyKey: `order_created:${friendlyOrderId}`,
+    idempotencyKey: orderCreatedIdempotencyKey(friendlyOrderId),
     baseUrl,
   });
 
+  // Dispatch internal notification to admins and relevant staff
+  const { dispatchStageNotification } = await import("@/features/notifications/lib/dispatchNotification");
+  await dispatchStageNotification(
+    "Site Visit Pending",
+    companyId,
+    {
+      title: `Enquiry Converted to Order`,
+      message: `${businessName || clientName} enquiry has been converted to Order #${friendlyOrderId}.`,
+      type: "success",
+      link: `/admin/orders/${friendlyOrderId}`,
+    }
+  );
+
   // 6. Revalidate cache (all staff queues — not only /staff/orders)
-  revalidatePath("/admin/enquire");
+  revalidateEnquiryPaths();
   await revalidateStaffQueuePaths();
   revalidatePath(`/admin/orders/${friendlyOrderId}`);
   revalidatePath(`/staff/orders/${friendlyOrderId}`);
@@ -386,4 +441,88 @@ export async function convertEnquiryToOrderAction(enquiryId: string, clientName:
     orderId: friendlyOrderId,
     portalLink
   };
+}
+
+/** 
+ * Update an enquiry's health manually (e.g. Lost, Active, On Hold).
+ * If Lost, a lostReason can be provided. 
+ */
+export async function updateEnquiryHealthAction(
+  enquiryId: string,
+  health: string,
+  lostReason?: string | null,
+  hold?: { note?: string | null; reachOutAt?: string | null } | null
+) {
+  const profile = await getCurrentUser();
+  if (!profile || (profile.role !== "admin" && profile.role !== "staff")) {
+    throw new Error("Unauthorized");
+  }
+  if (health === "On Hold") {
+    if (!hold?.note?.trim() || !hold?.reachOutAt) {
+      throw new Error("A note and reach-out date are required when putting an enquiry On Hold.");
+    }
+  }
+  const companyId = profile.company_id ?? null;
+
+  const supabase = await getSupabase();
+  const { error } = await supabase
+    .from("enquiries")
+    .update(buildHealthUpdatePayload(health, lostReason, hold))
+    .eq("id", enquiryId)
+    .eq("company_id", companyId);
+
+  if (error) {
+    console.error("Error updating enquiry health:", error.message);
+    throw new Error("Failed to update enquiry health");
+  }
+
+  revalidateEnquiryPaths();
+  revalidatePath("/admin/calendar");
+  revalidatePath("/staff/calendar");
+}
+
+/** Mark Active enquiries stalled past the threshold as Needs Attention. Idempotent. */
+export async function flagStalledEnquiriesAction(): Promise<{ flagged: number }> {
+  const { loadClientConfig, getDeployCompanyId } = await import("@/config/loadClientConfig");
+  const config = loadClientConfig();
+  const days = config.features.enquiryNeedsAttentionAfterDays ?? 5;
+  const companyId = getDeployCompanyId();
+
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  const cutoffIso = cutoff.toISOString();
+
+  const supabase = await getSupabase();
+  const { data: stalled, error } = await supabase
+    .from("enquiries")
+    .select("id, company_id")
+    .eq("company_id", companyId)
+    .eq("health", "Active")
+    // If it's converted, we don't care about health stall.
+    .neq("status", "Converted")
+    .lt("date_received", cutoffIso);
+
+  if (error) {
+    console.error("Error fetching stalled enquiries:", error.message);
+    return { flagged: 0 };
+  }
+
+  if (!stalled || stalled.length === 0) {
+    return { flagged: 0 };
+  }
+
+  const ids = stalled.map((e) => e.id);
+  const { error: updateErr } = await supabase
+    .from("enquiries")
+    .update({ health: "Needs Attention" })
+    .in("id", ids);
+
+  if (updateErr) {
+    console.error("Error flagging stalled enquiries:", updateErr.message);
+    return { flagged: 0 };
+  }
+
+  // We could dispatch internal notifications here if desired, 
+  // but for now, we just update the UI state.
+  return { flagged: ids.length };
 }

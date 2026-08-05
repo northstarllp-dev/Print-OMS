@@ -1,6 +1,25 @@
 # Changelog
 
+## [Unreleased] - 2026-08-04
+
+### Added
+
+#### On Hold reach-out + calendar reminders
+* Putting an order or enquiry **On Hold** requires a note and reach-out date (`hold_note`, `reach_out_at`); these appear on admin/staff calendars as hold follow-ups (staff need enquiry view/edit access).
+* Calendar **Add reminder** with optional visible-to people (`calendar_reminders` table); creator and listed viewers see it; creator/admin can delete.
+* Migration `20260804100000_hold_reach_out_and_reminders.sql` on PrintOMS-dev-db and PrintOMS-prod-db.
+
+#### Admin design approve without customer
+* Admin Design tab: amber **Approve without Customer & Advance** when `Design In Progress` and proofs are not yet customer-approved (`adminMarkDesignApprovedAction` → advance). Staff unchanged.
+
 ## [Unreleased] - 2026-08-01
+
+### Added
+
+#### Enquiry view/edit RBAC
+* Grant key `enquiry` with `{ canView, canEdit }` in `stageGrantsByRole` (admins always full access).
+* Staff `/staff/enquiries` list; sidebar shows Enquiries when view or edit; edit unlocks Add / Convert / updates.
+* Marketer defaults include enquiry edit; public `/quote` create unchanged.
 
 ### Changed
 

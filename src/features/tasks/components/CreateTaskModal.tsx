@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, X } from "lucide-react";
 import {
   TASK_CATEGORIES,
   TASK_PRIORITIES,
@@ -9,6 +9,7 @@ import {
   type TaskRecord,
 } from "@/features/tasks/types";
 import { createTaskAction } from "@/features/tasks/actions/taskActions";
+import { OverlayPortal } from "@/components/ui/OverlayPortal";
 
 interface EmployeeOption {
   id: string;
@@ -26,6 +27,11 @@ interface CreateTaskModalProps {
   onClose: () => void;
   onCreated: (task: Pick<TaskRecord, "id">) => void;
 }
+
+const labelClass =
+  "mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-slate-500";
+const fieldClass =
+  "w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm bg-white";
 
 export function CreateTaskModal({
   employees,
@@ -100,196 +106,198 @@ export function CreateTaskModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <form
-        onSubmit={onSubmit}
-        className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white p-5 space-y-4"
+    <OverlayPortal>
+      <div
+        className="fixed inset-0 z-[100000] flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4"
+        onClick={onClose}
       >
-        <div>
-          <h2 className="m-0 text-lg font-extrabold text-slate-900">Assign Task</h2>
-          <p className="m-0 mt-1 text-xs text-slate-500">
-            Create a new task and assign it to one or more employees.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-500">
-              Title
-            </label>
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Task title"
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-            />
-          </div>
-          <div ref={assigneeRef} className="relative">
-            <label className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-500">
-              Assign To
-            </label>
+        <form
+          onSubmit={onSubmit}
+          onClick={(e) => e.stopPropagation()}
+          className="flex w-full sm:max-w-2xl max-h-[92dvh] sm:max-h-[90vh] flex-col overflow-hidden rounded-t-2xl sm:rounded-xl border border-slate-200 bg-white shadow-xl"
+        >
+          <div className="shrink-0 flex items-start justify-between gap-3 border-b border-slate-100 px-4 py-4 sm:px-5 pt-[max(1rem,env(safe-area-inset-top))] sm:pt-5">
+            <div className="min-w-0">
+              <h2 className="m-0 text-lg font-extrabold text-slate-900">Assign Task</h2>
+              <p className="m-0 mt-1 text-xs text-slate-500">
+                Create a new task and assign it to one or more employees.
+              </p>
+            </div>
             <button
               type="button"
-              onClick={() => setAssigneeOpen((open) => !open)}
-              className="flex w-full items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-sm text-slate-700"
+              onClick={onClose}
+              className="shrink-0 p-2 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50"
+              aria-label="Close"
             >
-              <span className="truncate">{selectedAssigneeLabel}</span>
-              <ChevronDown
-                size={14}
-                className={`shrink-0 text-slate-400 transition-transform ${
-                  assigneeOpen ? "rotate-180" : ""
-                }`}
-              />
+              <X size={16} />
             </button>
-            {assigneeOpen ? (
-              <div className="absolute z-20 mt-1 max-h-44 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white p-2 shadow-lg space-y-1">
-                {employees.length === 0 ? (
-                  <p className="m-0 px-1 py-1 text-xs text-slate-400">No employees found</p>
-                ) : (
-                  employees.map((employee) => {
-                    const checked = assigneeIds.includes(employee.id);
-                    return (
-                      <label
-                        key={employee.id}
-                        className={`flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm ${
-                          checked
-                            ? "bg-slate-900 text-white"
-                            : "text-slate-700 hover:bg-slate-50"
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => toggleAssignee(employee.id)}
-                          className="rounded border-slate-300"
-                        />
-                        <span className="truncate">{employee.name}</span>
-                      </label>
-                    );
-                  })
-                )}
+          </div>
+
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5 space-y-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className={labelClass}>Title</label>
+                <input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Task title"
+                  className={fieldClass}
+                />
               </div>
-            ) : null}
-            <p className="m-0 mt-1 text-[11px] text-slate-400">
-              {assigneeIds.length === 0
-                ? "Select one or more employees"
-                : `${assigneeIds.length} selected`}
-            </p>
-          </div>
-          <div>
-            <label className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-500">
-              Category
-            </label>
-            <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value as any)}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-            >
-              {TASK_CATEGORIES.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-500">
-              Type
-            </label>
-            <select
-              value={taskType}
-              onChange={(e) => setTaskType(e.target.value as any)}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-            >
-              {TASK_TYPES.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-500">
-              Priority
-            </label>
-            <select
-              value={priority}
-              onChange={(e) => setPriority(e.target.value as any)}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-            >
-              {TASK_PRIORITIES.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-500">
-              Deadline
-            </label>
-            <input
-              type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-            />
-          </div>
-          <div className="md:col-span-2">
-            <label className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-500">
-              Linked Order
-            </label>
-            <select
-              value={orderId}
-              onChange={(e) => setOrderId(e.target.value)}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-            >
-              <option value="">Not linked to an order</option>
-              {orders.map((order) => (
-                <option key={order.id} value={order.id}>
-                  {order.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
+              <div ref={assigneeRef} className="relative">
+                <label className={labelClass}>Assign To</label>
+                <button
+                  type="button"
+                  onClick={() => setAssigneeOpen((open) => !open)}
+                  className="flex w-full items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-left text-sm text-slate-700"
+                >
+                  <span className="truncate">{selectedAssigneeLabel}</span>
+                  <ChevronDown
+                    size={14}
+                    className={`shrink-0 text-slate-400 transition-transform ${
+                      assigneeOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </button>
+                {assigneeOpen ? (
+                  <div className="absolute z-20 mt-1 max-h-44 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white p-2 shadow-lg space-y-1">
+                    {employees.length === 0 ? (
+                      <p className="m-0 px-1 py-1 text-xs text-slate-400">No employees found</p>
+                    ) : (
+                      employees.map((employee) => {
+                        const checked = assigneeIds.includes(employee.id);
+                        return (
+                          <label
+                            key={employee.id}
+                            className={`flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm ${
+                              checked
+                                ? "bg-slate-900 text-white"
+                                : "text-slate-700 hover:bg-slate-50"
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleAssignee(employee.id)}
+                              className="rounded border-slate-300"
+                            />
+                            <span className="truncate">{employee.name}</span>
+                          </label>
+                        );
+                      })
+                    )}
+                  </div>
+                ) : null}
+                <p className="m-0 mt-1 text-[11px] text-slate-400">
+                  {assigneeIds.length === 0
+                    ? "Select one or more employees"
+                    : `${assigneeIds.length} selected`}
+                </p>
+              </div>
+              <div>
+                <label className={labelClass}>Category</label>
+                <select
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value as any)}
+                  className={fieldClass}
+                >
+                  {TASK_CATEGORIES.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={labelClass}>Type</label>
+                <select
+                  value={taskType}
+                  onChange={(e) => setTaskType(e.target.value as any)}
+                  className={fieldClass}
+                >
+                  {TASK_TYPES.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={labelClass}>Priority</label>
+                <select
+                  value={priority}
+                  onChange={(e) => setPriority(e.target.value as any)}
+                  className={fieldClass}
+                >
+                  {TASK_PRIORITIES.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={labelClass}>Deadline</label>
+                <input
+                  type="date"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                  className={fieldClass}
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className={labelClass}>Linked Order</label>
+                <select
+                  value={orderId}
+                  onChange={(e) => setOrderId(e.target.value)}
+                  className={fieldClass}
+                >
+                  <option value="">Not linked to an order</option>
+                  {orders.map((order) => (
+                    <option key={order.id} value={order.id}>
+                      {order.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
 
-        <div>
-          <label className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-500">
-            Description
-          </label>
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Optional details..."
-            rows={3}
-            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-          />
-        </div>
+            <div>
+              <label className={labelClass}>Description</label>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Optional details..."
+                rows={3}
+                className={fieldClass}
+              />
+            </div>
 
-        {error ? <p className="m-0 text-xs font-semibold text-red-600">{error}</p> : null}
+            {error ? <p className="m-0 text-xs font-semibold text-red-600">{error}</p> : null}
+          </div>
 
-        <div className="flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={!canSubmit || isPending}
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-          >
-            {isPending
-              ? "Assigning..."
-              : assigneeIds.length > 1
-                ? `Assign to ${assigneeIds.length}`
-                : "Assign Task"}
-          </button>
-        </div>
-      </form>
-    </div>
+          <div className="shrink-0 flex flex-col-reverse sm:flex-row sm:justify-end gap-2.5 border-t border-slate-100 px-4 py-4 sm:px-5 pb-[max(1rem,env(safe-area-inset-bottom))]">
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-full sm:w-auto rounded-lg border border-slate-200 px-4 py-3 sm:py-2 text-sm font-semibold text-slate-600"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={!canSubmit || isPending}
+              className="w-full sm:w-auto rounded-lg bg-slate-900 px-4 py-3 sm:py-2 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              {isPending
+                ? "Assigning..."
+                : assigneeIds.length > 1
+                  ? `Assign to ${assigneeIds.length}`
+                  : "Assign Task"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </OverlayPortal>
   );
 }

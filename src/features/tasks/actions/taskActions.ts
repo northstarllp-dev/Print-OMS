@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/features/auth/actions/authActions";
 import { resolveWriteCompanyId } from "@/lib/resolveWriteCompanyId";
 import { insertOrderActivity } from "@/features/orders/activity/logOrderActivity";
+import { dispatchDirectNotification, dispatchAdminNotification } from "@/features/notifications/lib/dispatchNotification";
 import type {
   TaskCommentRecord,
   TaskRecord,
@@ -217,6 +218,20 @@ export async function createTaskAction(input: {
     }
   }
 
+  // Notify each assignee directly
+  for (const assigneeId of assigneeIds) {
+    await dispatchDirectNotification(
+      assigneeId,
+      profile.company_id,
+      {
+        title: `New Task Assigned: ${input.title}`,
+        message: `You have been assigned a new task [${input.priority}].`,
+        type: "info",
+        link: `/staff/tasks`,
+      }
+    );
+  }
+
   revalidateTaskPaths();
   return created[0] ?? { id: "" };
 }
@@ -269,6 +284,13 @@ export async function updateTaskAction(
       actor_id: profile.id,
       content: `Task ${data.task_id || "task"} marked completed.`,
       metadata: { action: "task_completed", task_id: taskId },
+    });
+    // Notify admins when a task is completed
+    await dispatchAdminNotification(existing.orders.company_id, {
+      title: `Task Completed`,
+      message: `Task "${existing.title}" has been marked complete by ${profile.name || "Staff"}.`,
+      type: "success",
+      link: `/admin/tasks`,
     });
   }
 

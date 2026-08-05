@@ -10,14 +10,21 @@ import {
   mapSiteVisitToDb,
 } from "./siteVisitMapper";
 import { mapDesignFromDb } from "@/features/designs/actions/designMapper";
+import { mapProductionDetails } from "@/features/orders/actions/productionMapper";
 import {
   dispatchWhatsAppNotification,
   dispatchWhatsAppForPipelineStage,
   notifyOrderStageChange,
 } from "@/features/notifications/actions/dispatchNotification";
+import {
+  dispatchDirectNotification,
+  dispatchAdminNotification,
+} from "@/features/notifications/lib/dispatchNotification";
 import { getRequestBaseUrl } from "@/features/notifications/whatsapp/requestBaseUrl";
 import {
   assertAdminOnly,
+  assertCanAssignOrderTeam,
+  assertOrderUpdateAccess,
   assertStageEditPermission,
 } from "@/features/orders/workspace/shared/serverPermissions";
 import {
@@ -114,7 +121,9 @@ export async function getOrders() {
       siteVisitDetails: mapSiteVisitFromDb(sv),
       design: designRow ? mapDesignFromDb(designRow) : null,
       installationDetails: Array.isArray(order.installations) ? order.installations[0] : order.installations,
-      productionDetails: Array.isArray(order.productions) ? order.productions[0] : order.productions,
+      productionDetails: mapProductionDetails(
+        Array.isArray(order.productions) ? order.productions[0] : order.productions
+      ),
       quotations: order.quotations,
       payments: order.payments
     };
@@ -185,13 +194,16 @@ export async function getOrderById(id: string) {
     siteVisitDetails: mapSiteVisitFromDb(sv),
     design: designRow ? mapDesignFromDb(designRow) : null,
     installationDetails: Array.isArray(data.installations) && data.installations.length > 0 ? data.installations[0] : (data.installations || null),
-    productionDetails: Array.isArray(data.productions) && data.productions.length > 0 ? data.productions[0] : (data.productions || null),
+    productionDetails: mapProductionDetails(
+      Array.isArray(data.productions) && data.productions.length > 0 ? data.productions[0] : (data.productions || null)
+    ),
     quotations: data.quotations,
     payments: data.payments
   };
 }
 
 export async function createOrder(formData: any) {
+  await assertAdminOnly();
   const supabase = await getSupabase();
   
   const { resolveWriteCompanyId } = await import("@/lib/resolveWriteCompanyId");
@@ -248,6 +260,7 @@ async function resolveOrderUuid(supabase: any, idOrOrderId: string): Promise<str
 }
 
 export async function updateOrder(id: string, updates: any) {
+  await assertOrderUpdateAccess(updates ?? {});
   const supabase = await getSupabase();
   // Resolve UUID in case a friendly order_id was passed
   const orderUuid = await resolveOrderUuid(supabase, id);
@@ -269,19 +282,29 @@ export async function updateOrder(id: string, updates: any) {
   if (error) throw new Error(error.message);
   if (data && data.length > 0) {
     const orderIdFriendly = data[0].order_id || id;
-    await revalidateStaffQueuePaths();
-    revalidatePath(`/admin/orders/${orderIdFriendly}`);
-    revalidatePath(`/admin/orders/${orderUuid}`);
-    revalidatePath(`/staff/orders/${orderIdFriendly}`);
-    revalidatePath(`/staff/orders/${orderUuid}`);
-    revalidatePath("/printoms/portal");
-    revalidatePath(`/printoms/portal/order/${orderIdFriendly}`);
-    revalidatePath(`/printoms/portal/order/${orderUuid}`);
+    const updateKeys = Object.keys(updates);
+    // Status-only patches (staff request approval) don't need every floor/portal path.
+    const statusOnly =
+      updateKeys.length > 0 &&
+      updateKeys.every((k) => k === "stage_status" || k === "stage_admin_notes");
+    if (statusOnly) {
+      revalidatePath("/admin/orders");
+      revalidatePath("/admin/dashboard");
+      revalidatePath("/staff/orders");
+      revalidateOrderDetailPaths(orderIdFriendly);
+      revalidateOrderDetailPaths(orderUuid);
+    } else {
+      await revalidateStaffQueuePaths();
+      revalidateOrderDetailPaths(orderIdFriendly);
+      revalidateOrderDetailPaths(orderUuid);
+      revalidatePath("/printoms/portal");
+    }
   }
   return data;
 }
 
 export async function deleteOrder(id: string) {
+  await assertAdminOnly();
   const supabase = await getSupabase();
   const { data: o } = await supabase.from("orders").select("order_id").eq("id", id).single();
   const { error } = await supabase.from("orders").delete().eq("id", id);
@@ -390,17 +413,11 @@ export async function updateSiteVisitDetailsAction(orderId: string, details: any
     }
   }
 
-  // Revalidate cache for all possible URLs
+  // Revalidate this order only — queues refresh when stage/status changes.
   const orderCode = order?.order_id;
-  await revalidateStaffQueuePaths();
-  revalidatePath(`/admin/orders/${orderId}`);
-  revalidatePath(`/staff/orders/${orderId}`);
-  revalidatePath("/printoms/portal");
-  revalidatePath(`/printoms/portal/order/${orderId}`);
-  if (orderCode) {
-    revalidatePath(`/admin/orders/${orderCode}`);
-    revalidatePath(`/staff/orders/${orderCode}`);
-    revalidatePath(`/printoms/portal/order/${orderCode}`);
+  revalidateOrderDetailPaths(orderId);
+  if (orderCode && orderCode !== orderId) {
+    revalidateOrderDetailPaths(orderCode);
   }
 
   const mappedVisit = mapSiteVisitFromDb(siteVisit);
@@ -421,29 +438,37 @@ export async function updateProductionDetailsAction(orderId: string, details: an
   const supabase = await getSupabase();
   const orderUuid = await resolveOrderUuid(supabase, orderId);
 
+  const payload = { ...details };
+  delete payload.deadline;
+  delete payload.installation_deadline;
+
+  const keys = Object.keys(details ?? {});
+  const isDeadlineOnlyUpdate =
+    keys.length > 0 &&
+    keys.every((k) => k === "deadline" || k === "installation_deadline");
+
+  // Installation deadline is admin-only. Staff checklist/draft saves must not touch it.
+  if (isDeadlineOnlyUpdate) {
+    await assertAdminOnly();
+    payload.installation_deadline =
+      details.installation_deadline ?? details.deadline ?? null;
+  }
+
   // Check if a production row exists
   const { data: current, error: fetchError } = await supabase.from("productions").select("*").eq("order_id", orderUuid).maybeSingle();
   
   if (current) {
-    const { error: updateError } = await supabase.from("productions").update(details).eq("order_id", orderUuid);
+    const { error: updateError } = await supabase.from("productions").update(payload).eq("order_id", orderUuid);
     if (updateError) throw new Error(updateError.message);
   } else {
-    const { error: insertError } = await supabase.from("productions").insert({ order_id: orderUuid, ...details });
+    const { error: insertError } = await supabase.from("productions").insert({ order_id: orderUuid, ...payload });
     if (insertError) throw new Error(insertError.message);
   }
   
-  // Revalidate cache
-  await revalidateStaffQueuePaths();
-  revalidatePath(`/production/orders/${orderId}`);
-  revalidatePath(`/production/orders/${orderUuid}`);
-  revalidatePath(`/admin/orders/${orderId}`);
-  revalidatePath(`/admin/orders/${orderUuid}`);
-  revalidatePath(`/staff/orders/${orderId}`);
-  revalidatePath(`/staff/orders/${orderUuid}`);
-  revalidatePath("/printoms/portal");
-  revalidatePath(`/printoms/portal/order/${orderId}`);
-  revalidatePath(`/printoms/portal/order/${orderUuid}`);
-  
+  // Client owns checklist UI — only refresh this order's detail pages.
+  revalidateOrderDetailPaths(orderId);
+  revalidateOrderDetailPaths(orderUuid);
+
   return { success: true };
 }
 
@@ -463,18 +488,9 @@ export async function updateInstallationDetailsAction(orderId: string, details: 
     if (insertError) throw new Error(insertError.message);
   }
   
-  // Revalidate cache
-  await revalidateStaffQueuePaths();
-  revalidatePath(`/installation/orders/${orderId}`);
-  revalidatePath(`/installation/orders/${orderUuid}`);
-  revalidatePath(`/admin/orders/${orderId}`);
-  revalidatePath(`/admin/orders/${orderUuid}`);
-  revalidatePath(`/staff/orders/${orderId}`);
-  revalidatePath(`/staff/orders/${orderUuid}`);
-  revalidatePath("/printoms/portal");
-  revalidatePath(`/printoms/portal/order/${orderId}`);
-  revalidatePath(`/printoms/portal/order/${orderUuid}`);
-  
+  revalidateOrderDetailPaths(orderId);
+  revalidateOrderDetailPaths(orderUuid);
+
   return { success: true };
 }
 
@@ -544,7 +560,36 @@ export async function requestStageAdvancementAction(orderId: string) {
     nextStatus = "Pending Admin Approval: Job Done";
   }
   
-  return await updateOrder(orderId, { stage_status: nextStatus, stage_admin_notes: "" });
+  const result = await updateOrder(orderId, { stage_status: nextStatus, stage_admin_notes: "" });
+
+  // Notify all admins that stage advancement has been requested
+  const { data: reqOrder } = await supabase
+    .from("orders")
+    .select("order_id, company_id")
+    .eq("id", orderUuid)
+    .single();
+  if (reqOrder?.company_id) {
+    await insertOrderActivity(supabase, {
+      order_id: reqOrder.order_id || orderId,
+      company_id: reqOrder.company_id,
+      actor_name: "System",
+      actor_role: "System",
+      content: `Stage advancement requested from "${current.stage}" (${nextStatus}).`,
+      metadata: {
+        action: "stage_advancement_requested",
+        from_stage: current.stage,
+        stage_status: nextStatus,
+      },
+    });
+    await dispatchAdminNotification(reqOrder.company_id, {
+      title: `Stage Approval Requested`,
+      message: `Order ${reqOrder.order_id} needs your approval to advance from "${current.stage}".`,
+      type: "warning",
+      link: `/admin/orders/${reqOrder.order_id}`,
+    });
+  }
+
+  return result;
 }
 
 export async function adminApproveStageAction(orderId: string) {
@@ -653,8 +698,15 @@ export async function adminApproveStageAction(orderId: string) {
     metadata: { action: "stage_approved", old: o.stage, new: nextStage }
   });
 
+  // Don't block the admin UI on WhatsApp delivery.
   if (nextStage !== o.stage) {
-    await dispatchWhatsAppForPipelineStage(supabase, orderUuid, nextStage);
+    void dispatchWhatsAppForPipelineStage(supabase, orderUuid, nextStage).catch((err) =>
+      console.error("WhatsApp pipeline notify failed:", err)
+    );
+    // Notify relevant staff that stage was approved and advanced
+    void notifyOrderStageChange(supabase, orderUuid, nextStage, o.stage).catch((err) =>
+      console.error("Stage change notify failed:", err)
+    );
   }
 
   return result;
@@ -702,6 +754,14 @@ export async function adminRejectStageAction(orderId: string, notes: string) {
     metadata: { action: "stage_rejected", stage: o.stage, notes: trimmed },
   });
 
+  // Notify relevant staff that changes were requested (rejection)
+  await dispatchAdminNotification(o.company_id, {
+    title: `Changes Requested on Order ${o.order_id || orderId}`,
+    message: `Admin has requested changes at "${o.stage}": ${trimmed.slice(0, 80)}`,
+    type: "warning",
+    link: `/admin/orders/${o.order_id || orderId}`,
+  });
+
   return result;
 }
 
@@ -714,36 +774,51 @@ export async function setWorkflowTypeAction(
   workflowType: "quote_first" | "design_first"
 ) {
   await assertAdminOnly();
+  const {
+    buildWorkflowChoiceActivity,
+    buildWorkflowChoiceUpdate,
+    isValidWorkflowType,
+    resolveConcurrentWorkflowChoice,
+  } = await import("@/features/orders/workflowSelectionLogic");
+
+  if (!isValidWorkflowType(workflowType)) {
+    throw new Error("Invalid workflow type.");
+  }
+
   const supabase = await getSupabase();
   const orderUuid = await resolveOrderUuid(supabase, orderId);
   const { data: o, error: fetchError } = await supabase
     .from("orders")
-    .select("order_id, stage, company_id")
+    .select("order_id, stage, company_id, workflow_type")
     .eq("id", orderUuid)
     .single();
   if (fetchError) throw new Error(fetchError.message);
 
-  const firstStage = workflowType === "design_first"
-    ? "Design In Progress"
-    : "Quotation In Progress";
+  // Orders default to quote_first in DB — only treat as conflict once stage has left Site Visit.
+  if (!(o.stage || "").startsWith("Site Visit")) {
+    const conflict = resolveConcurrentWorkflowChoice({
+      attempted: workflowType,
+      existing: o.workflow_type,
+    });
+    throw new Error(
+      conflict.reason || "Workflow already selected for this order."
+    );
+  }
 
-  const result = await updateOrder(orderUuid, {
-    workflow_type: workflowType,
-    stage: firstStage,
-    stage_status: "Normal",
-    stage_admin_notes: "",
-  });
+  const updates = buildWorkflowChoiceUpdate(workflowType);
+  const result = await updateOrder(orderUuid, updates);
 
+  const activity = buildWorkflowChoiceActivity(workflowType);
   await insertOrderActivity(supabase, {
     order_id: o.order_id || orderId,
     company_id: o.company_id,
     actor_name: "System",
     actor_role: "System",
-    content: `Workflow path set to "${workflowType === "design_first" ? "Design First" : "Quote First"}". Order advanced to ${firstStage}.`,
-    metadata: { action: "workflow_type_set", workflow_type: workflowType, stage: firstStage }
+    content: activity.content,
+    metadata: activity.metadata,
   });
 
-  await dispatchWhatsAppForPipelineStage(supabase, orderUuid, firstStage);
+  await dispatchWhatsAppForPipelineStage(supabase, orderUuid, updates.stage);
 
   return result;
 }
@@ -834,6 +909,7 @@ export async function revalidateOrderPathsAction(orderId?: string) {
 export async function revalidateStaffQueuePaths() {
   revalidatePath("/admin/orders");
   revalidatePath("/admin/dashboard");
+  revalidatePath("/staff/my-orders");
   revalidatePath("/staff/orders");
   revalidatePath("/staff/site-visit");
   revalidatePath("/staff/design");
@@ -881,6 +957,7 @@ export async function fetchEmployeeStats() {
 }
 
 export async function assignTeamToOrder(orderId: string, employeeIds: string[]) {
+  await assertCanAssignOrderTeam();
   const supabase = await getSupabase();
 
   // Resolve UUID in case a friendly order_id was passed
@@ -907,6 +984,26 @@ export async function assignTeamToOrder(orderId: string, employeeIds: string[]) 
     metadata: { action: "team_assigned", count: employeeIds.length }
   });
 
+  // Notify each assigned employee directly
+  if (employeeIds.length > 0) {
+    const { data: employees } = await supabase
+      .from("users")
+      .select("id, name")
+      .in("id", employeeIds);
+    for (const emp of employees || []) {
+      await dispatchDirectNotification(
+        emp.id,
+        o.company_id,
+        {
+          title: `You've been assigned to Order ${o.order_id || orderId}`,
+          message: `You have been added to the team for this order.`,
+          type: "info",
+          link: `/staff/orders/${o.order_id || orderUuid}`,
+        }
+      );
+    }
+  }
+
   await revalidateStaffQueuePaths();
   if (o?.order_id) {
     revalidatePath(`/admin/orders/${o.order_id}`);
@@ -921,8 +1018,10 @@ export async function updateOrderHealthAction(
   orderId: string,
   health: string,
   lostReason?: string,
-  callRemarks?: string
+  callRemarks?: string,
+  hold?: { note?: string | null; reachOutAt?: string | null } | null
 ) {
+  await assertAdminOnly();
   const { isOrderHealth } = await import("@/features/orders/lib/orderHealth");
   if (!isOrderHealth(health)) {
     throw new Error("Invalid health. Use Active, Needs Attention, On Hold, or Lost.");
@@ -930,18 +1029,29 @@ export async function updateOrderHealthAction(
   if (health === "Lost" && !lostReason?.trim()) {
     throw new Error("A reason is required when marking an order as Lost.");
   }
+  if (health === "On Hold" && (!hold?.note?.trim() || !hold?.reachOutAt)) {
+    throw new Error("A note and reach-out date are required when putting an order On Hold.");
+  }
 
   const supabase = await getSupabase();
   const { data: o, error: fetchError } = await supabase
     .from("orders")
-    .select("order_id, company_id")
+    .select("order_id, company_id, stage")
     .eq("id", orderId)
     .single();
   if (fetchError) throw new Error(fetchError.message);
+  if (o.stage === "Completed" || o.stage === "Closed") {
+    throw new Error("Health cannot be changed on completed or closed orders.");
+  }
+
+  const holdNote = health === "On Hold" ? hold!.note!.trim() : null;
+  const reachOutAt = health === "On Hold" ? hold!.reachOutAt! : null;
 
   const result = await updateOrder(orderId, {
     health,
     lost_reason: health === "Lost" ? lostReason!.trim() : null,
+    hold_note: holdNote,
+    reach_out_at: reachOutAt,
   });
 
   const remarks = callRemarks?.trim();
@@ -963,14 +1073,22 @@ export async function updateOrderHealthAction(
     actor_role: "System",
     content: `Order health status updated to "${health}"${
       health === "Lost" && lostReason?.trim() ? ` with reason: "${lostReason.trim()}"` : ""
+    }${
+      health === "On Hold" && reachOutAt
+        ? ` (reach out ${reachOutAt}${holdNote ? `: ${holdNote}` : ""})`
+        : ""
     }.`,
     metadata: {
       action: "health_changed",
       health,
       lost_reason: health === "Lost" ? lostReason!.trim() : null,
+      hold_note: holdNote,
+      reach_out_at: reachOutAt,
     },
   });
 
+  revalidatePath("/admin/calendar");
+  revalidatePath("/staff/calendar");
   return result;
 }
 
@@ -1024,6 +1142,7 @@ export async function flagStalledOrdersAction(): Promise<{ flagged: number }> {
 }
 
 export async function reopenOrderAction(orderId: string) {
+  await assertAdminOnly();
   const supabase = await getSupabase();
   const { data: o, error: fetchError } = await supabase
     .from("orders")
@@ -1032,7 +1151,12 @@ export async function reopenOrderAction(orderId: string) {
     .single();
   if (fetchError) throw new Error(fetchError.message);
 
-  const result = await updateOrder(orderId, { health: "Active", lost_reason: null });
+  const result = await updateOrder(orderId, {
+    health: "Active",
+    lost_reason: null,
+    hold_note: null,
+    reach_out_at: null,
+  });
 
   await insertOrderActivity(supabase, {
     order_id: o.order_id || orderId,

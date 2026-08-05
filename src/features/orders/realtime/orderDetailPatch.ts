@@ -3,6 +3,7 @@ import {
   mapSiteVisitFromDb,
   mapSiteVisitMeasurementFromDb,
 } from "@/features/orders/actions/siteVisitMapper";
+import { mapProductionDetails } from "@/features/orders/actions/productionMapper";
 import type { SiteVisitDetails } from "@/types";
 
 export interface OrderDetailPatch {
@@ -85,7 +86,7 @@ export function patchFromProductionRow(
   row: Record<string, unknown> | null
 ): OrderDetailPatch {
   if (eventType === "DELETE") return { productionDetails: null };
-  return row ? { productionDetails: row } : {};
+  return row ? { productionDetails: mapProductionDetails(row) as Record<string, unknown> } : {};
 }
 
 export function patchFromInstallationRow(

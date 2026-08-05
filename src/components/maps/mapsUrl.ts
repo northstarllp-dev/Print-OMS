@@ -61,12 +61,12 @@ export function parseViewportCoordsFromMapsUrl(rawUrl: string): MapsLatLng | nul
 
 /**
  * Extract lat/lng from common Google Maps URL shapes (full or already-resolved).
- * Prefers the share-link map center (`@lat,lng`) — what users see when opening the link.
+ * Prefers the place pin (`!3d/!4d`) over map camera center (`@lat,lng`).
  */
 export function parseCoordsFromMapsUrl(rawUrl: string): MapsLatLng | null {
   return (
-    parseViewportCoordsFromMapsUrl(rawUrl) ||
-    parsePlacePinCoordsFromMapsUrl(rawUrl)
+    parsePlacePinCoordsFromMapsUrl(rawUrl) ||
+    parseViewportCoordsFromMapsUrl(rawUrl)
   );
 }
 

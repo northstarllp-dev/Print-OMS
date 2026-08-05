@@ -36,16 +36,17 @@ import type { OrderDetailPatch } from "@/features/orders/realtime/orderDetailPat
 import { QuotationTab } from "@/app/portal/components/QuotationTab";
 import { InvoiceTab } from "@/app/portal/components/InvoiceTab";
 import { useQuotationActions } from "@/app/portal/hooks/useQuotationActions";
-import { GoogleMap, useJsApiLoader, Autocomplete } from "@react-google-maps/api";
+import { GoogleMap, useJsApiLoader } from "@react-google-maps/api";
+import { AdvancedMapMarker } from "@/components/maps/AdvancedMapMarker";
+import { PlaceAutocompleteInput } from "@/components/maps/PlaceAutocompleteInput";
 import { DesignTab } from "@/app/portal/components/DesignTab";
 import { PaymentsTab } from "@/app/portal/components/PaymentsTab";
 import {
   didStageAdvance,
   getTabForStage,
 } from "@/app/portal/utils/portalStageNavigation";
-import type { InvoiceProfile } from "@/features/quotations/types/invoiceProfile";
-import { AdvancedMapMarker } from "@/components/maps/AdvancedMapMarker";
 import {
+  GOOGLE_MAPS_API_VERSION,
   GOOGLE_MAPS_DEFAULT_OPTIONS,
   GOOGLE_MAPS_LIBRARIES,
   GOOGLE_MAPS_SCRIPT_ID,
@@ -55,6 +56,7 @@ import {
   ensureResolvedSiteLocation,
   resolveGoogleMapsLocation,
 } from "@/components/maps/resolveGoogleMapsLocation";
+import type { InvoiceProfile } from "@/features/quotations/types/invoiceProfile";
 
 const containerStyle = {
   width: "100%",
@@ -240,9 +242,8 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
     id: GOOGLE_MAPS_SCRIPT_ID,
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
     libraries: GOOGLE_MAPS_LIBRARIES,
+    version: GOOGLE_MAPS_API_VERSION,
   });
-
-  const autocompleteRef = useRef<any>(null);
 
   const applyLocation = useCallback((lat: number, lng: number, address?: string) => {
     setMarkerPosition({ lat, lng });
@@ -250,20 +251,6 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
     setGpsCoords(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
     if (address && !isGoogleMapsUrl(address)) setSiteAddress(address);
   }, []);
-
-  const onPlaceChanged = () => {
-    try {
-      const place = autocompleteRef.current?.getPlace?.();
-      const location = place?.geometry?.location;
-      if (!location) return;
-      const lat = typeof location.lat === "function" ? location.lat() : location.lat;
-      const lng = typeof location.lng === "function" ? location.lng() : location.lng;
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
-      applyLocation(lat, lng, place.formatted_address || place.name || undefined);
-    } catch (err) {
-      console.warn("[PortalOrder] onPlaceChanged ignored incomplete place:", err);
-    }
-  };
 
   const tryResolveMapsLink = useCallback(
     async (value: string) => {
@@ -619,30 +606,16 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
                       Choose Location in Maps
                     </label>
                     {isLoaded ? (
-                      <Autocomplete
-                        onLoad={autocomplete => (autocompleteRef.current = autocomplete)}
-                        onPlaceChanged={onPlaceChanged}
-                      >
-                        <input
-                          type="text"
-                          required
-                          value={siteAddress}
-                          onChange={e => setSiteAddress(e.target.value)}
-                          onPaste={(e) => {
-                            const pasted = e.clipboardData.getData("text");
-                            if (isGoogleMapsUrl(pasted)) {
-                              e.preventDefault();
-                              setSiteAddress(pasted.trim());
-                              void tryResolveMapsLink(pasted);
-                            }
-                          }}
-                          onBlur={() => {
-                            void tryResolveMapsLink(siteAddress);
-                          }}
-                          placeholder="Search address or paste a Google Maps link..."
-                          className="w-full p-3 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none bg-gray-50 focus:bg-white transition-all"
-                        />
-                      </Autocomplete>
+                      <PlaceAutocompleteInput
+                        isLoaded={isLoaded}
+                        required
+                        value={siteAddress}
+                        onChange={setSiteAddress}
+                        onPlaceSelect={({ address, lat, lng }) => applyLocation(lat, lng, address)}
+                        onMapsUrl={(url) => void tryResolveMapsLink(url)}
+                        placeholder="Search address or paste a Google Maps link..."
+                        className="w-full p-3 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none bg-gray-50 focus:bg-white transition-all"
+                      />
                     ) : (
                       <input
                         type="text"

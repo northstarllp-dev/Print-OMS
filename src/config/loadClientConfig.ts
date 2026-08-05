@@ -11,23 +11,35 @@ function resolveSlug(): string {
   );
 }
 
+/** True while `next build` is prerendering (NODE_ENV=production but no request yet). */
+function isProductionBuildPhase(): boolean {
+  return (
+    process.env.NEXT_PHASE === "phase-production-build" ||
+    process.env.NEXT_PHASE === "phase-export"
+  );
+}
+
 export function loadClientConfig(): PrintOMSClientConfig {
   const slug = resolveSlug();
   const isProd = process.env.NODE_ENV === "production";
 
   if (!slug) {
-    if (isProd) {
+    // Prerender of /_not-found (and other static shells) runs in production NODE_ENV.
+    // Allow a safe fallback so the build does not crash when env is missing at build time.
+    // Runtime Production still requires CLIENT_SLUG / NEXT_PUBLIC_CLIENT_SLUG.
+    if (isProd && !isProductionBuildPhase()) {
       throw new Error("CLIENT_SLUG or NEXT_PUBLIC_CLIENT_SLUG is required");
     }
     console.warn(
-      "[loadClientConfig] No CLIENT_SLUG set; falling back to printoms for local dev."
+      "[loadClientConfig] No CLIENT_SLUG set; falling back to printoms" +
+        (isProductionBuildPhase() ? " for production build prerender." : " for local dev.")
     );
     return defaultConfig;
   }
 
   const override = clientRegistry[slug];
   if (!override) {
-    if (isProd) {
+    if (isProd && !isProductionBuildPhase()) {
       throw new Error(`Unknown CLIENT_SLUG: ${slug}`);
     }
     console.warn(

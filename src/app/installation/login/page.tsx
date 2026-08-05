@@ -123,7 +123,7 @@ export default function InstallationLogin() {
             type="submit"
             disabled={loading}
             className="prt-btn prt-btn-primary"
-            style={{ width: "100%", justifyContent: "center", padding: "10px 16px", fontSize: 14, marginTop: 4, background: "#16a34a" }}
+            style={{ width: "100%", justifyContent: "center", padding: "10px 16px", fontSize: 14, marginTop: 4 }}
           >
             {loading ? "Signing in..." : "Sign In to Installation Portal"}
           </button>

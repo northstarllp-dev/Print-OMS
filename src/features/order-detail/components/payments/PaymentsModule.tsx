@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState, useTransition } from "react";
+import React, { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import {
   CreditCard,
   CheckCircle2,
@@ -52,7 +52,20 @@ export const PaymentsModule: React.FC<PaymentsModuleProps> = ({
   const [newType, setNewType] = useState<PaymentAmountType>("percentage");
   const [newValue, setNewValue] = useState("50");
   const [restOfAmount, setRestOfAmount] = useState(false);
+  /** Keeps the last % the user entered so Rest/Fixed → Percentage doesn't leave a ₹ amount in the % field. */
+  const lastPercentRef = useRef("50");
   const withGst = true;
+
+  const selectPercentage = () => {
+    setRestOfAmount(false);
+    setNewType("percentage");
+    setNewValue(lastPercentRef.current);
+  };
+
+  const selectFixed = () => {
+    setRestOfAmount(false);
+    setNewType("fixed");
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -128,6 +141,7 @@ export const PaymentsModule: React.FC<PaymentsModuleProps> = ({
                     setRestOfAmount(false);
                     setNewName(nextInstallmentName(payments.length));
                     setNewType("percentage");
+                    lastPercentRef.current = "50";
                     setNewValue("50");
                   }
                   return !v;
@@ -207,26 +221,26 @@ export const PaymentsModule: React.FC<PaymentsModuleProps> = ({
                 <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Type</label>
                 <div className="flex gap-4 pt-1 flex-wrap">
                   <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 cursor-pointer">
-                    <input 
-                      type="radio" 
-                      checked={!restOfAmount && newType === "percentage"} 
-                      onChange={() => { setRestOfAmount(false); setNewType("percentage"); }} 
+                    <input
+                      type="radio"
+                      checked={!restOfAmount && newType === "percentage"}
+                      onChange={selectPercentage}
                     />
                     Percentage
                   </label>
                   <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 cursor-pointer">
-                    <input 
-                      type="radio" 
-                      checked={!restOfAmount && newType === "fixed"} 
-                      onChange={() => { setRestOfAmount(false); setNewType("fixed"); }} 
+                    <input
+                      type="radio"
+                      checked={!restOfAmount && newType === "fixed"}
+                      onChange={selectFixed}
                     />
                     Fixed
                   </label>
                   <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 cursor-pointer">
-                    <input 
-                      type="radio" 
-                      checked={restOfAmount} 
-                      onChange={() => setRestOfAmount(true)} 
+                    <input
+                      type="radio"
+                      checked={restOfAmount}
+                      onChange={() => setRestOfAmount(true)}
                     />
                     Rest of amount
                   </label>
@@ -246,25 +260,43 @@ export const PaymentsModule: React.FC<PaymentsModuleProps> = ({
                 onChange={(e) => {
                   const raw = e.target.value;
                   if (newType === "percentage" && !restOfAmount) {
-                    if (raw === "") {
-                      setNewValue("");
-                      return;
+                    if (raw === "" || /^\d*\.?\d*$/.test(raw)) {
+                      setNewValue(raw);
+                      const num = parseFloat(raw);
+                      if (Number.isFinite(num) && num >= 0 && num <= 100) {
+                        lastPercentRef.current = raw;
+                      }
                     }
-                    const num = parseFloat(raw);
-                    if (!Number.isFinite(num)) return;
-                    setNewValue(String(Math.min(100, Math.max(0, num))));
                     return;
                   }
                   setNewValue(raw);
+                }}
+                onBlur={() => {
+                  if (newType !== "percentage" || restOfAmount || newValue === "") return;
+                  const num = parseFloat(newValue);
+                  if (!Number.isFinite(num)) {
+                    setNewValue(lastPercentRef.current);
+                    return;
+                  }
+                  const clamped = String(Math.min(100, Math.max(0, num)));
+                  setNewValue(clamped);
+                  lastPercentRef.current = clamped;
                 }}
                 disabled={restOfAmount}
                 className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg bg-white font-mono disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
               />
               {!restOfAmount && newType === "percentage" && balance && (
                 <div className="text-xs font-bold text-blue-700 mt-2 bg-blue-50/50 px-3 py-2 rounded-lg border border-blue-100 flex justify-between items-center">
-                  <span>Calculated:</span>
+                  <span>% of total incl. GST →</span>
                   <span className="font-mono">
-                    ₹{Math.round(((withGst ? balance.grandTotal : balance.totalBeforeTax) * (parseFloat(newValue) || 0) / 100) * 100) / 100}
+                    ₹{(
+                      Math.round(
+                        ((withGst ? balance.grandTotal : balance.totalBeforeTax) *
+                          (parseFloat(newValue) || 0) /
+                          100) *
+                          100
+                      ) / 100
+                    ).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                   </span>
                 </div>
               )}

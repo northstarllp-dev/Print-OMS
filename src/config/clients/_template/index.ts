@@ -6,6 +6,7 @@ import { PrintOMSClientConfig } from "../../schema";
  */
 const edit = (
   ...stages: Array<
+    | "enquiry"
     | "site_visit"
     | "quotation"
     | "invoice"
@@ -53,7 +54,7 @@ export const templateClientConfig: Partial<PrintOMSClientConfig> = {
     Production: edit("production", "service_tickets"),
     Installation: edit("site_visit", "installation"),
     Designer: edit("site_visit", "design"),
-    Marketer: edit("site_visit", "quotation", "invoice"),
+    Marketer: edit("enquiry", "site_visit", "quotation", "invoice"),
   },
   whatsappTemplatePrefix: "PLACEHOLDER_SLUG_",
 };

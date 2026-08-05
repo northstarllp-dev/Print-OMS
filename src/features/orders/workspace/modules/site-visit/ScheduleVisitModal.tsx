@@ -1,9 +1,11 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { X, MapPin } from "lucide-react";
-import { GoogleMap, useJsApiLoader, Autocomplete } from "@react-google-maps/api";
+import { GoogleMap, useJsApiLoader } from "@react-google-maps/api";
 import { AdvancedMapMarker } from "@/components/maps/AdvancedMapMarker";
+import { PlaceAutocompleteInput } from "@/components/maps/PlaceAutocompleteInput";
 import {
+  GOOGLE_MAPS_API_VERSION,
   GOOGLE_MAPS_DEFAULT_OPTIONS,
   GOOGLE_MAPS_LIBRARIES,
   GOOGLE_MAPS_SCRIPT_ID,
@@ -30,9 +32,18 @@ interface ScheduleVisitModalProps {
   onClose: () => void;
   onSchedule: (date: string, time: string, location: string, coords: string) => Promise<void>;
   defaultAddress?: string;
+  /** When `location_only`, skip date/time and collect map location for installation. */
+  mode?: "schedule" | "location_only";
 }
 
-export const ScheduleVisitModal: React.FC<ScheduleVisitModalProps> = ({ isOpen, onClose, onSchedule, defaultAddress }) => {
+export const ScheduleVisitModal: React.FC<ScheduleVisitModalProps> = ({
+  isOpen,
+  onClose,
+  onSchedule,
+  defaultAddress,
+  mode = "schedule",
+}) => {
+  const locationOnly = mode === "location_only";
   const [selectedDate, setSelectedDate] = useState("");
   const [selectedTime, setSelectedTime] = useState("");
   const [siteAddress, setSiteAddress] = useState(defaultAddress || "");
@@ -49,30 +60,17 @@ export const ScheduleVisitModal: React.FC<ScheduleVisitModalProps> = ({ isOpen, 
     id: GOOGLE_MAPS_SCRIPT_ID,
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
     libraries: GOOGLE_MAPS_LIBRARIES,
+    version: GOOGLE_MAPS_API_VERSION,
   });
 
-  const autocompleteRef = useRef<any>(null);
-
   const applyLocation = useCallback((lat: number, lng: number, address?: string) => {
-    setMarkerPosition({ lat, lng });
-    setMapCenter({ lat, lng });
+    const pos = { lat, lng };
+    setMarkerPosition(pos);
+    setMapCenter(pos);
     setGpsCoords(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
     if (address && !isGoogleMapsUrl(address)) setSiteAddress(address);
-  }, []);
-
-  const onPlaceChanged = () => {
-    try {
-      const place = autocompleteRef.current?.getPlace?.();
-      const location = place?.geometry?.location;
-      if (!location) return;
-      const lat = typeof location.lat === "function" ? location.lat() : location.lat;
-      const lng = typeof location.lng === "function" ? location.lng() : location.lng;
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
-      applyLocation(lat, lng, place.formatted_address || place.name || undefined);
-    } catch (err) {
-      console.warn("[ScheduleVisit] onPlaceChanged ignored incomplete place:", err);
-    }
-  };
+    map?.panTo(pos);
+  }, [map]);
 
   const geocoder = useRef<any>(null);
 
@@ -170,7 +168,8 @@ export const ScheduleVisitModal: React.FC<ScheduleVisitModalProps> = ({ isOpen, 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedDate || !selectedTime || !siteAddress) return;
+    if (!siteAddress) return;
+    if (!locationOnly && (!selectedDate || !selectedTime)) return;
     setSubmitting(true);
     try {
       const location = await ensureResolvedSiteLocation({
@@ -179,12 +178,22 @@ export const ScheduleVisitModal: React.FC<ScheduleVisitModalProps> = ({ isOpen, 
       });
       setSiteAddress(location.customerAddress);
       setGpsCoords(location.gpsLocation);
-      await onSchedule(
-        selectedDate,
-        selectedTime,
-        location.customerAddress,
-        location.gpsLocation
-      );
+      if (locationOnly) {
+        const now = new Date();
+        await onSchedule(
+          now.toISOString().split("T")[0],
+          now.toTimeString().slice(0, 5),
+          location.customerAddress,
+          location.gpsLocation
+        );
+      } else {
+        await onSchedule(
+          selectedDate,
+          selectedTime,
+          location.customerAddress,
+          location.gpsLocation
+        );
+      }
       onClose();
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to schedule site visit.");
@@ -210,7 +219,7 @@ export const ScheduleVisitModal: React.FC<ScheduleVisitModalProps> = ({ isOpen, 
       >
         <div className="px-4 md:px-5 py-3.5 md:py-4 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
           <h2 id="schedule-visit-title" className="text-base md:text-lg font-black text-slate-800">
-            Schedule Site Visit
+            {locationOnly ? "Installation Location" : "Schedule Site Visit"}
           </h2>
           <button
             type="button"
@@ -224,6 +233,7 @@ export const ScheduleVisitModal: React.FC<ScheduleVisitModalProps> = ({ isOpen, 
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y p-4 md:p-5">
           <form id="schedule-visit-form" onSubmit={handleSubmit} className="space-y-5">
             {/* Date Picker */}
+            {!locationOnly && (
             <div>
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
                 Pick a Date
@@ -273,37 +283,29 @@ export const ScheduleVisitModal: React.FC<ScheduleVisitModalProps> = ({ isOpen, 
                 </div>
               )}
             </div>
+            )}
 
             {/* Location */}
             <div>
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                Location
+                {locationOnly ? "Installation / site location" : "Location"}
               </label>
+              {locationOnly && (
+                <p className="text-xs text-slate-500 mb-2 leading-relaxed">
+                  Site visit is skipped — pin the place where installation will happen.
+                </p>
+              )}
               {isLoaded ? (
-                <Autocomplete
-                  onLoad={autocomplete => (autocompleteRef.current = autocomplete)}
-                  onPlaceChanged={onPlaceChanged}
-                >
-                  <input
-                    type="text"
-                    required
-                    value={siteAddress}
-                    onChange={e => setSiteAddress(e.target.value)}
-                    onPaste={(e) => {
-                      const pasted = e.clipboardData.getData("text");
-                      if (isGoogleMapsUrl(pasted)) {
-                        e.preventDefault();
-                        setSiteAddress(pasted.trim());
-                        void tryResolveMapsLink(pasted);
-                      }
-                    }}
-                    onBlur={() => {
-                      void tryResolveMapsLink(siteAddress);
-                    }}
-                    placeholder="Search address or paste a Google Maps link..."
-                    className="w-full p-3 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none bg-slate-50 focus:bg-white transition-all"
-                  />
-                </Autocomplete>
+                <PlaceAutocompleteInput
+                  isLoaded={isLoaded}
+                  required
+                  value={siteAddress}
+                  onChange={setSiteAddress}
+                  onPlaceSelect={({ address, lat, lng }) => applyLocation(lat, lng, address)}
+                  onMapsUrl={(url) => void tryResolveMapsLink(url)}
+                  placeholder="Search address or paste a Google Maps link..."
+                  className="w-full p-3 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none bg-slate-50 focus:bg-white transition-all"
+                />
               ) : (
                 <input
                   type="text"
@@ -364,10 +366,20 @@ export const ScheduleVisitModal: React.FC<ScheduleVisitModalProps> = ({ isOpen, 
           <button
             type="submit"
             form="schedule-visit-form"
-            disabled={!selectedDate || !selectedTime || !siteAddress || submitting}
+            disabled={
+              !siteAddress ||
+              submitting ||
+              (!locationOnly && (!selectedDate || !selectedTime))
+            }
             className="px-5 py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-colors shadow-sm"
           >
-            {submitting ? "Scheduling..." : "Schedule Visit"}
+            {submitting
+              ? locationOnly
+                ? "Saving..."
+                : "Scheduling..."
+              : locationOnly
+                ? "Save Location & Skip Visit"
+                : "Schedule Visit"}
           </button>
         </div>
       </div>

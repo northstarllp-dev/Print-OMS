@@ -9,6 +9,17 @@ import {
 import { loadClientConfig } from "@/config/loadClientConfig";
 import { createAdminClient } from "@/utils/supabase/admin";
 
+function accountStatusLoginError(status: unknown): string | null {
+  const s = String(status || "Active");
+  if (s === "Inactive") {
+    return "This account has been frozen. Contact your administrator.";
+  }
+  if (s === "Archived") {
+    return "This account has been archived. Contact your administrator.";
+  }
+  return null;
+}
+
 async function getSupabase() {
   const cookieStore = await cookies();
   return createServerClient(
@@ -77,9 +88,10 @@ export async function adminSignIn(email: string, pass: string) {
     return { error: "Unauthorized access. This account belongs to a different client workspace." };
   }
 
-  if (String(profile.status || "Active") === "Inactive") {
+  const statusErr = accountStatusLoginError(profile.status);
+  if (statusErr) {
     await supabase.auth.signOut();
-    return { error: "This account has been frozen. Contact your administrator." };
+    return { error: statusErr };
   }
 
   if (profile.role !== "admin") {
@@ -119,9 +131,10 @@ export async function staffSignIn(email: string, pass: string) {
     return { error: "Unauthorized access. This account belongs to a different client workspace." };
   }
 
-  if (String(profile.status || "Active") === "Inactive") {
+  const statusErr = accountStatusLoginError(profile.status);
+  if (statusErr) {
     await supabase.auth.signOut();
-    return { error: "This account has been frozen. Contact your administrator." };
+    return { error: statusErr };
   }
 
   if (profile.role !== "staff") {
@@ -164,9 +177,10 @@ export async function productionFloorSignIn(email: string, pass: string) {
     return { error: "Unauthorized access. This account belongs to a different client workspace." };
   }
 
-  if (String(profile.status || "Active") === "Inactive") {
+  const statusErr = accountStatusLoginError(profile.status);
+  if (statusErr) {
     await supabase.auth.signOut();
-    return { error: "This account has been frozen. Contact your administrator." };
+    return { error: statusErr };
   }
 
   if (profile.role !== "staff" && profile.role !== "admin") {
@@ -223,9 +237,10 @@ export async function installationFloorSignIn(email: string, pass: string) {
     return { error: "Unauthorized access. This account belongs to a different client workspace." };
   }
 
-  if (String(profile.status || "Active") === "Inactive") {
+  const statusErr = accountStatusLoginError(profile.status);
+  if (statusErr) {
     await supabase.auth.signOut();
-    return { error: "This account has been frozen. Contact your administrator." };
+    return { error: statusErr };
   }
 
   if (profile.role !== "staff" && profile.role !== "admin") {

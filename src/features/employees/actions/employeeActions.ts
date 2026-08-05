@@ -73,17 +73,17 @@ export async function updateEmployee(id: string, updates: any) {
   return data;
 }
 
-export type EmployeeAccountStatus = "Active" | "Inactive";
+export type EmployeeAccountStatus = "Active" | "Inactive" | "Archived";
 
-/** Freeze (Inactive) or reactivate (Active) a staff employee. Admin only. */
+/** Freeze (Inactive) / reactivate (Active) / archive a staff employee. Admin only. */
 export async function setEmployeeStatus(
   id: string,
   status: EmployeeAccountStatus
 ): Promise<{ id: string; status: string }> {
   await assertAdminOnly();
 
-  if (status !== "Active" && status !== "Inactive") {
-    throw new Error("Invalid status. Use Active or Inactive.");
+  if (status !== "Active" && status !== "Inactive" && status !== "Archived") {
+    throw new Error("Invalid status. Use Active, Inactive, or Archived.");
   }
 
   const supabase = await getSupabase();
@@ -96,7 +96,7 @@ export async function setEmployeeStatus(
   if (fetchError) throw new Error(fetchError.message);
   if (!target) throw new Error("Employee not found.");
   if (target.role !== "staff") {
-    throw new Error("Only staff employees can be frozen or reactivated.");
+    throw new Error("Only staff employees can be frozen, reactivated, or archived.");
   }
 
   const { data, error } = await supabase
@@ -112,9 +112,12 @@ export async function setEmployeeStatus(
   return data;
 }
 
-export async function deleteEmployee(id: string) {
-  const supabase = await getSupabase();
-  const { error } = await supabase.from("users").delete().eq("id", id);
-  if (error) throw new Error(error.message);
-  revalidatePath("/admin/employees");
+/** Soft-delete: archive employee. Never hard-deletes the users row. */
+export async function archiveEmployee(id: string) {
+  return setEmployeeStatus(id, "Archived");
+}
+
+/** Restore an archived employee to Active. */
+export async function restoreEmployee(id: string) {
+  return setEmployeeStatus(id, "Active");
 }

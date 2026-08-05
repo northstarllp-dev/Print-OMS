@@ -36,11 +36,27 @@
 ### Admin
 
 Permissions:
+* Full enquiry access (view + edit) via `adminGrantMap`.
 * Create new orders manually.
 * Reassign employees to orders.
 * Update pipeline stages.
 
-### Sales Representative (Staff)
+### Staff (stage grant: `enquiry`)
+
+Grant key: `enquiry` with `{ canView, canEdit }` in client `stageGrantsByRole` (same shape as invoice).
+
+| Grant | Allowed |
+| ----- | ------- |
+| `canView` only | Open Enquiries list/detail at `/staff/enquiries`; no Add, Convert, or status updates |
+| `canEdit` | Add enquiry, update enquiry, convert to order |
+| neither | No Enquiries nav item; redirect away from `/staff/enquiries` |
+
+* Staff sidebar shows **Enquiries** when `canView` or `canEdit` for `enquiry` (view-only roles still see the tab).
+* Default / Marketer grants include `edit("enquiry")` where Marketer exists.
+* Public `/quote` create remains open without a staff session.
+* Server: `createEnquiry` (authenticated), `updateEnquiry`, `convertEnquiryToOrderAction` assert `assertStageEditPermission("enquiry")`.
+
+### Sales Representative (Staff) — order pipeline
 
 Permissions:
 * View orders assigned to them.

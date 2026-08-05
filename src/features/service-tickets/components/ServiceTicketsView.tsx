@@ -57,14 +57,27 @@ export function ServiceTicketsView({
   }
 
   const filteredTickets = tickets.filter((ticket) => {
-    const text = search.toLowerCase();
+    const text = search.trim().toLowerCase();
+    if (!text) {
+      return statusFilter === "ALL" || ticket.status === statusFilter;
+    }
+    const phoneDigits = (ticket.phone || "").replace(/\D/g, "");
+    const searchDigits = text.replace(/\D/g, "");
+    const haystack = [
+      ticket.ticket_id,
+      ticket.customer_name,
+      ticket.customer_business_name,
+      ticket.order_code,
+      ticket.phone,
+      ticket.description,
+      ticket.status,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
     const matchesSearch =
-      !text ||
-      ticket.ticket_id.toLowerCase().includes(text) ||
-      (ticket.customer_name || "").toLowerCase().includes(text) ||
-      (ticket.customer_business_name || "").toLowerCase().includes(text) ||
-      ticket.phone.toLowerCase().includes(text) ||
-      ticket.description.toLowerCase().includes(text);
+      haystack.includes(text) ||
+      (searchDigits.length >= 4 && phoneDigits.includes(searchDigits));
     const matchesStatus = statusFilter === "ALL" || ticket.status === statusFilter;
     return matchesSearch && matchesStatus;
   });

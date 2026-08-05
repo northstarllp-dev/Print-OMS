@@ -8,6 +8,7 @@ import { assertAdminOnly } from "@/features/orders/workspace/shared/serverPermis
 import { revalidateStaffQueuePaths } from "@/features/orders/actions/orderActions";
 import { insertOrderActivity } from "@/features/orders/activity/logOrderActivity";
 import { syncSalesReceiptFromOrderPayment } from "@/features/finance/syncFinance";
+import { dispatchAdminNotification } from "@/features/notifications/lib/dispatchNotification";
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -308,6 +309,16 @@ export async function markPaymentReceived(paymentId: string): Promise<Payment> {
   }
 
   await revalidatePaymentPaths(current.order_id);
+
+  // Notify admins about payment received
+  if (order?.company_id) {
+    await dispatchAdminNotification(order.company_id, {
+      title: `Payment Received`,
+      message: `Payment "${current.payment_name}" (₹${(Number(current.calculated_amount) || 0).toLocaleString("en-IN")}) received for Order ${order.order_id || current.order_id}.`,
+      type: "success",
+      link: `/admin/payments`,
+    });
+  }
   return mapPayment(data);
 }
 

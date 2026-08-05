@@ -48,7 +48,7 @@ export default async function StaffInvoiceDetailPage({
     company_id: profile.company_id ?? null,
   });
   if (!perm.canView && !perm.canEdit) {
-    redirect("/staff/orders");
+    redirect("/staff/my-orders");
   }
 
   const { id } = await params;

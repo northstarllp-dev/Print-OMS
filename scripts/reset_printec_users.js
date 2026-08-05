@@ -66,40 +66,42 @@ const PRINTEC_DEMO_USERS = [
     name: "Printec Admin",
     role: "admin",
     staff_role: null,
-    phone: "9100000001",
-    password: "9100000001",
+    phone: "9000000001",
+    password: "9000000001",
   },
   {
-    email: "marketer@printec.in",
-    name: "Printec Marketer",
+    email: "staff@printec.in",
+    name: "Printec Staff",
     role: "staff",
     staff_role: "Marketer",
-    phone: "9100000002",
-    password: "9100000002",
+    phone: "9000000002",
+    password: "9000000002",
+    // Legacy email from older seeds — migrate if present
+    legacyEmails: ["marketer@printec.in"],
   },
   {
     email: "designer@printec.in",
     name: "Printec Designer",
     role: "staff",
     staff_role: "Designer",
-    phone: "9100000003",
-    password: "9100000003",
+    phone: "9000000003",
+    password: "9000000003",
   },
   {
     email: "production@printec.in",
     name: "Printec Production",
     role: "staff",
     staff_role: "Production",
-    phone: "9100000004",
-    password: "9100000004",
+    phone: "9000000004",
+    password: "9000000004",
   },
   {
     email: "installation@printec.in",
     name: "Printec Installation",
     role: "staff",
     staff_role: "Installation",
-    phone: "9100000005",
-    password: "9100000005",
+    phone: "9000000005",
+    password: "9000000005",
   },
 ];
 
@@ -118,11 +120,19 @@ async function ensureCompanySlug(supabase, id, slug, name) {
 }
 
 async function upsertSeedUser(supabase, user, companyId) {
-  const { data: existing } = await supabase
-    .from("users")
-    .select("id, company_id")
-    .eq("email", user.email)
-    .maybeSingle();
+  const lookupEmails = [user.email, ...(user.legacyEmails || [])];
+  let existing = null;
+  for (const email of lookupEmails) {
+    const { data } = await supabase
+      .from("users")
+      .select("id, company_id, email")
+      .eq("email", email)
+      .maybeSingle();
+    if (data) {
+      existing = data;
+      break;
+    }
+  }
 
   if (existing) {
     const { error } = await supabase
@@ -133,6 +143,7 @@ async function upsertSeedUser(supabase, user, companyId) {
         role: user.role,
         staff_role: user.staff_role,
         phone: user.phone,
+        email: user.email,
         status: "Active",
       })
       .eq("id", existing.id);
@@ -142,15 +153,18 @@ async function upsertSeedUser(supabase, user, companyId) {
       return;
     }
 
-    // Keep password in sync for demo accounts
+    // Keep password + auth email in sync for demo accounts
     const { error: pwErr } = await supabase.auth.admin.updateUserById(existing.id, {
       password: user.password,
+      email: user.email,
       email_confirm: true,
     });
-    if (pwErr) console.warn(`  password update ${user.email}: ${pwErr.message}`);
+    if (pwErr) console.warn(`  password/email update ${user.email}: ${pwErr.message}`);
 
+    const migrated =
+      existing.email !== user.email ? ` (migrated from ${existing.email})` : "";
     console.log(
-      `  updated ${user.email} → company ${companyId.slice(0, 8)}… (${user.role}${user.staff_role ? ` / ${user.staff_role}` : ""})`
+      `  updated ${user.email} → company ${companyId.slice(0, 8)}… (${user.role}${user.staff_role ? ` / ${user.staff_role}` : ""})${migrated}`
     );
     return;
   }

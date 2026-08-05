@@ -3,6 +3,13 @@ import type { RoleStageGrantMapConfig } from "@/config/schema";
 import { clientRegistry } from "@/config/registry";
 import { mergeConfig } from "@/config/mergeConfig";
 import { loadClientConfig } from "@/config/loadClientConfig";
+import { PIPELINE_QUEUE_STAGES, type PipelineQueueStage } from "./staffQueueStages";
+export { PIPELINE_QUEUE_STAGES };
+export type { PipelineQueueStage };
+
+function isPipelineNavStage(s: OrderStage): s is PipelineQueueStage {
+  return (PIPELINE_QUEUE_STAGES as readonly string[]).includes(s);
+}
 
 export type RoleStageGrantMap = Partial<Record<OrderStage, StagePermission>>;
 
@@ -21,7 +28,7 @@ export const DEFAULT_STAGE_GRANTS_BY_ROLE: Record<string, RoleStageGrantMap> = {
   Production: edit("production", "service_tickets"),
   Installation: edit("site_visit", "installation"),
   Designer: edit("site_visit", "design"),
-  Marketer: edit("site_visit", "quotation", "invoice"),
+  Marketer: edit("enquiry", "site_visit", "quotation", "invoice"),
 };
 
 function toRoleMap(
@@ -67,6 +74,7 @@ export function tenantUsesFloorPortals(actor: StageActor): boolean {
 }
 
 const ALL_STAGES: OrderStage[] = [
+  "enquiry",
   "site_visit",
   "quotation",
   "invoice",
@@ -162,17 +170,37 @@ export function canAccessInstallationPortal(actor: StageActor): boolean {
   return false;
 }
 
+/** Pipeline stages collapsed into a single My Orders nav item. */
+export const MY_ORDERS_NAV: StaffNavItem = {
+  href: "/staff/my-orders",
+  label: "My Orders",
+  icon: "orders",
+};
+
+/** Editable pipeline stages for My Orders tabs (subset of grants). */
+export function getMyOrdersStages(actor: StageActor): PipelineQueueStage[] {
+  return getEditableStages(actor).filter(isPipelineNavStage);
+}
+
 /** Post-login redirect for staff — first grant-based queue tab. */
 export function getStaffHomePath(actor: StageActor): string {
   if (actor.role === "admin") return "/admin/dashboard";
   const items = getNavItemsForActor(actor);
-  const firstQueue = items.find((item) => item.href !== "/staff/settings");
-  return firstQueue?.href ?? "/staff/orders";
+  const myOrders = items.find((item) => item.href === MY_ORDERS_NAV.href);
+  if (myOrders) return myOrders.href;
+  const firstQueue = items.find(
+    (item) =>
+      item.href !== "/staff/settings" &&
+      item.href !== "/staff/tasks" &&
+      item.href !== "/staff/calendar"
+  );
+  return firstQueue?.href ?? "/staff/my-orders";
 }
 
 export type StaffNavIcon =
   | "orders"
   | "invoice"
+  | "enquiry"
   | "site_visit"
   | "design"
   | "production"
@@ -191,6 +219,11 @@ export interface StaffNavItem {
 }
 
 const STAGE_NAV: Record<OrderStage, StaffNavItem> = {
+  enquiry: {
+    href: "/staff/enquiries",
+    label: "Enquiries",
+    icon: "enquiry",
+  },
   site_visit: {
     href: "/staff/site-visit",
     label: "Site Visit",
@@ -235,6 +268,7 @@ const STAGE_NAV: Record<OrderStage, StaffNavItem> = {
 };
 
 const NAV_STAGE_ORDER: OrderStage[] = [
+  "enquiry",
   "site_visit",
   "quotation",
   "invoice",
@@ -244,19 +278,34 @@ const NAV_STAGE_ORDER: OrderStage[] = [
   "service_tickets",
 ];
 
-/** Sidebar tabs derived from tenant stage grants (canEdit stages only). */
+/** Sidebar tabs derived from tenant stage grants (canEdit stages only; enquiry also shows for canView). */
 export function getNavItemsForActor(actor: StageActor): StaffNavItem[] {
-  const stages = getEditableStages(actor);
+  const editable = getEditableStages(actor);
+  const viewable = getViewableStages(actor);
   const items: StaffNavItem[] = [];
+  const hasMyOrders = editable.some(isPipelineNavStage);
+  let myOrdersInserted = false;
 
   for (const stage of NAV_STAGE_ORDER) {
-    if (stages.includes(stage)) {
+    if (isPipelineNavStage(stage)) {
+      if (hasMyOrders && !myOrdersInserted) {
+        items.push({ ...MY_ORDERS_NAV });
+        myOrdersInserted = true;
+      }
+      continue;
+    }
+
+    const show =
+      stage === "enquiry"
+        ? viewable.includes(stage) || editable.includes(stage)
+        : editable.includes(stage);
+    if (show) {
       items.push({ ...STAGE_NAV[stage] });
     }
   }
 
   if (items.length === 0) {
-    items.push({ ...STAGE_NAV.quotation });
+    items.push({ ...MY_ORDERS_NAV });
   }
 
   items.push({ href: "/staff/tasks", label: "My Tasks", icon: "tasks" });
@@ -266,12 +315,13 @@ export function getNavItemsForActor(actor: StageActor): StaffNavItem[] {
 }
 
 const BACK_HREF_BY_STAGE: Record<OrderStage, string> = {
-  site_visit: "/staff/site-visit",
-  quotation: "/staff/orders",
+  enquiry: "/staff/enquiries",
+  site_visit: "/staff/my-orders?stage=site_visit",
+  quotation: "/staff/my-orders?stage=quotation",
   invoice: "/staff/invoices",
-  design: "/staff/design",
-  production: "/staff/production",
-  installation: "/staff/installation",
+  design: "/staff/my-orders?stage=design",
+  production: "/staff/my-orders?stage=production",
+  installation: "/staff/my-orders?stage=installation",
   service_tickets: "/staff/service-tickets",
 };
 
@@ -279,8 +329,17 @@ export function getStaffOrderBackHref(entryStage?: OrderStage | null): string {
   if (entryStage && BACK_HREF_BY_STAGE[entryStage]) {
     return BACK_HREF_BY_STAGE[entryStage];
   }
-  return "/staff/orders";
+  return "/staff/my-orders";
 }
+
+/** Map legacy queue URL slug → My Orders stage query. */
+export const QUEUE_SLUG_TO_STAGE: Record<string, OrderStage> = {
+  orders: "quotation",
+  "site-visit": "site_visit",
+  design: "design",
+  production: "production",
+  installation: "installation",
+};
 
 export function parseOrderStage(value?: string | null): OrderStage | undefined {
   if (!value) return undefined;

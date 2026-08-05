@@ -211,7 +211,7 @@ export function ProductionDashboardClient({
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="text-[10px] font-bold text-slate-400 uppercase">Deadline</div>
+                      <div className="text-[10px] font-bold text-slate-400 uppercase">Installation Deadline</div>
                       <div className="text-xs font-bold text-rose-500">
                         {order.productionDeadline
                           ? new Date(order.productionDeadline).toLocaleDateString("en-IN", {
@@ -249,7 +249,7 @@ export function ProductionDashboardClient({
                 <th className="text-left py-4 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Business Name</th>
                 <th className="text-left py-4 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Current Stage</th>
                 <th className="text-left py-4 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Date Initiated</th>
-                <th className="text-left py-4 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Deadline Date</th>
+                <th className="text-left py-4 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Installation Deadline</th>
                 <th className="text-right py-4 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Action</th>
               </tr>
             </thead>
