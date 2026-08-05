@@ -240,12 +240,12 @@ button, a, input, select, textarea, [role="button"] {
 }
 
 .prt-btn-primary {
-  background: #1E40AF;
-  color: #ffffff;
+  background: var(--color-primary, #1E40AF);
+  color: var(--color-on-primary, #ffffff);
   border: none;
 }
 .prt-btn-primary:hover {
-  background: #1d4ed8;
+  filter: brightness(1.06);
 }
 
 .prt-btn-accent {

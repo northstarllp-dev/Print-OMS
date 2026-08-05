@@ -239,7 +239,15 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
                       className="px-4 py-2.5 bg-emerald-500 text-white rounded-lg text-xs font-bold hover:bg-emerald-600 transition-colors flex items-center justify-center gap-1.5 w-full sm:w-auto"
                     >
                       <CheckCircle2 size={16} />
-                      {isJobDonePending ? "Review Payments & Complete" : "Approve Stage"}
+                      {isJobDonePending
+                        ? "Review Payments & Complete"
+                        : (order.workflow_type || "quote_first") === "design_first"
+                          ? order.stage === "Quotation Approved"
+                            ? "Set deadline & start fabrication"
+                            : "Approve Stage"
+                          : order.stage === "Design Approved"
+                            ? "Set deadline & start fabrication"
+                            : "Approve Stage"}
                     </button>
                   )}
                 </div>

@@ -421,41 +421,48 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
       
       {/* ── SCHEDULED VISIT DETAILS (from customer portal) ── */}
       {isSkipped ? (
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 shadow-xs">
-          <div className="text-center flex flex-col items-center justify-center">
-            <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mb-3">
-              <CheckCircle2 size={24} className="text-amber-600" />
-            </div>
-            <h4 className="text-sm font-bold text-amber-900 mb-1">Site Visit Skipped</h4>
-            <p className="text-xs text-amber-700 max-w-sm mb-4">
-              Visit skipped — installation will use the location below. Add measurements as needed.
-            </p>
-          </div>
-          {scheduledAddress && !scheduledAddress.startsWith("Skipped") && (
-            <div className="bg-white rounded-xl p-3 border border-amber-100 shadow-sm">
-              <div className="flex items-center gap-2 mb-1">
-                <MapPin size={14} className="text-amber-600" />
-                <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider">
-                  Installation Location
-                </span>
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 shadow-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
+            <div className="flex items-center gap-2 shrink-0">
+              <div className="w-7 h-7 bg-amber-100 rounded-full flex items-center justify-center shrink-0">
+                <CheckCircle2 size={14} className="text-amber-600" />
               </div>
-              {installationMapsUrl ? (
-                <a
-                  href={installationMapsUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-xs font-semibold text-blue-700 hover:underline leading-relaxed break-words"
-                >
-                  {scheduledAddress}
-                </a>
-              ) : (
-                <div className="text-xs font-semibold text-slate-700 leading-relaxed">{scheduledAddress}</div>
-              )}
-              {siteVisit.gpsLocation && siteVisit.gpsLocation !== "N/A" && (
-                <div className="text-[10px] font-mono text-slate-500 mt-1">{siteVisit.gpsLocation}</div>
-              )}
+              <div>
+                <h4 className="text-xs font-bold text-amber-900">Site Visit Skipped</h4>
+                <p className="text-[11px] text-amber-700">
+                  Add measurements as needed.
+                </p>
+              </div>
             </div>
-          )}
+            {scheduledAddress && !scheduledAddress.startsWith("Skipped") && (
+              <div className="flex items-start gap-1.5 min-w-0 sm:max-w-[55%] sm:text-right sm:items-end sm:flex-col">
+                <div className="flex items-start gap-1.5 min-w-0 sm:flex-row-reverse">
+                  <MapPin size={12} className="text-amber-600 shrink-0 mt-0.5" />
+                  <div className="min-w-0 sm:text-right">
+                    {installationMapsUrl ? (
+                      <a
+                        href={installationMapsUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[11px] font-semibold text-blue-700 hover:underline leading-snug break-words"
+                      >
+                        {scheduledAddress}
+                      </a>
+                    ) : (
+                      <div className="text-[11px] font-semibold text-slate-700 leading-snug">
+                        {scheduledAddress}
+                      </div>
+                    )}
+                    {siteVisit.gpsLocation && siteVisit.gpsLocation !== "N/A" && (
+                      <div className="text-[10px] font-mono text-slate-500 mt-0.5">
+                        {siteVisit.gpsLocation}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       ) : (scheduledDate || scheduledAddress) ? (
         <div className="bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200 rounded-2xl p-5 shadow-xs">

@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased] - 2026-08-05
+
+### Added
+
+#### Production advance gate (installation deadline + payment note)
+* When admin moves/approves an order **into Production**, a popup requires an **installation deadline**, notes that the **production deadline is one day earlier**, reminds to add payment, and offers **Go to Payments**.
+* **Production files required**: Continue is blocked until final production files are uploaded on the Design tab (server also rejects advance to Production without them); popup offers **Go to Design to upload**.
+
 ## [Unreleased] - 2026-08-04
 
 ### Added
@@ -10,7 +18,8 @@
 * Migration `20260804100000_hold_reach_out_and_reminders.sql` on PrintOMS-dev-db and PrintOMS-prod-db.
 
 #### Admin design approve without customer
-* Admin Design tab: amber **Approve without Customer & Advance** when `Design In Progress` and proofs are not yet customer-approved (`adminMarkDesignApprovedAction` → advance). Staff unchanged.
+* Admin Design tab: amber **Approve design (skip customer)** when `Design In Progress` and proofs are not yet customer-approved (`adminMarkDesignApprovedAction` → **Design Approved** only). Does **not** jump to Production or ask for installation deadline.
+* Installation deadline popup opens **only** when advancing **into Production** (quote-first: from Design Approved; design-first: from Quotation Approved — including Quotation admin advance). Primary CTA **Confirm & start fabrication**.
 
 ## [Unreleased] - 2026-08-01
 

@@ -228,7 +228,18 @@ describe('orderActions', () => {
         // resolveOrderUuid
         .mockImplementationOnce((resolve: any) => resolve({ data: { id: 'uuid-1' }, error: null }))
         // fetch current order state
-        .mockImplementationOnce((resolve: any) => resolve({ data: { stage: 'Site Visit Pending', order_id: 'ORD-1', workflow_type: 'quote_first' }, error: null }))
+        .mockImplementationOnce((resolve: any) =>
+          resolve({
+            data: {
+              stage: 'Quotation Approved',
+              order_id: 'ORD-1',
+              workflow_type: 'quote_first',
+              stage_status: 'Normal',
+              company_id: 'c1',
+            },
+            error: null,
+          })
+        )
         // updateOrder resolveUuid again inside it
         .mockImplementationOnce((resolve: any) => resolve({ data: { id: 'uuid-1' }, error: null }))
         // updateOrder update
@@ -236,6 +247,27 @@ describe('orderActions', () => {
 
       await orderActions.adminApproveStageAction('uuid-1');
       
+      expect(assertAdminOnly).toHaveBeenCalled();
+    });
+
+    it('should reject Site Visit stages (must schedule/skip then choose workflow)', async () => {
+      mockFilterBuilder.then
+        .mockImplementationOnce((resolve: any) => resolve({ data: { id: 'uuid-1' }, error: null }))
+        .mockImplementationOnce((resolve: any) =>
+          resolve({
+            data: {
+              stage: 'Site Visit Pending',
+              order_id: 'ORD-1',
+              workflow_type: 'quote_first',
+              stage_status: 'Normal',
+            },
+            error: null,
+          })
+        );
+
+      await expect(orderActions.adminApproveStageAction('uuid-1')).rejects.toThrow(
+        /Cannot advance from Site Visit/
+      );
       expect(assertAdminOnly).toHaveBeenCalled();
     });
 
@@ -408,7 +440,7 @@ describe('orderActions', () => {
         // fetch current stage
         .mockImplementationOnce((resolve: any) =>
           resolve({
-            data: { stage: 'Production', workflow_type: 'quote_first' },
+            data: { stage: 'Design Approved', workflow_type: 'quote_first' },
             error: null,
           })
         )
@@ -426,14 +458,14 @@ describe('orderActions', () => {
 
       await orderActions.requestStageAdvancementAction(orderUuid);
 
-      expect(assertStageEditPermission).toHaveBeenCalledWith('production');
+      expect(assertStageEditPermission).toHaveBeenCalledWith('design');
       expect(insertOrderActivity).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({
           company_id: 'company-123',
           metadata: expect.objectContaining({
             action: 'stage_advancement_requested',
-            from_stage: 'Production',
+            from_stage: 'Design Approved',
           }),
         })
       );

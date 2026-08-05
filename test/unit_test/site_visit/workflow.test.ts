@@ -21,7 +21,7 @@ import {
 
 describe("site visit workflow", () => {
   describe("UI — advance, freeze, display, portal tabs", () => {
-    it("blocks advance until schedule + at least one location", () => {
+    it("blocks advance until schedule or skip + at least one location", () => {
       expect(
         canAdvanceSiteVisitAudit({
           auditDate: "2026-08-03",
@@ -30,13 +30,29 @@ describe("site visit workflow", () => {
         })
       ).toEqual({ ok: true, tooltip: "" });
 
-      const blocked = canAdvanceSiteVisitAudit({
-        auditDate: "2026-08-03",
+      expect(
+        canAdvanceSiteVisitAudit({
+          landmark: "SKIPPED_SITE_VISIT",
+          customerAddress: "123 Main St",
+          locations: [{ id: "1" }],
+        }).ok
+      ).toBe(true);
+
+      const noSchedule = canAdvanceSiteVisitAudit({
+        auditDate: null,
         auditTime: null,
+        locations: [{ id: "1" }],
+      });
+      expect(noSchedule.ok).toBe(false);
+      expect(noSchedule.tooltip).toMatch(/Schedule or skip/);
+
+      const noLocations = canAdvanceSiteVisitAudit({
+        auditDate: "2026-08-03",
+        auditTime: "10:00",
         locations: [],
       });
-      expect(blocked.ok).toBe(false);
-      expect(blocked.tooltip).toMatch(/Schedule the visit/);
+      expect(noLocations.ok).toBe(false);
+      expect(noLocations.tooltip).toMatch(/location/);
     });
 
     it("base freeze: non–Site Visit stages or completed+non-Normal", () => {

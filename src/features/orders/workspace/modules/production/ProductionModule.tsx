@@ -15,6 +15,7 @@ import {
 } from "@/features/settings/productionChecklist";
 import { resolveSiteVisitInstallationAddress } from "@/features/orders/actions/siteVisitMapper";
 import { ProductionMaterialsPanel } from "@/features/inventory/components/ProductionMaterialsPanel";
+import { getInstallationDeadlineCountdown } from "./installationDeadlineUi";
 
 interface LocationMeasurement {
   id: string;
@@ -131,6 +132,7 @@ export function ProductionModule({
   };
   const checklistProgress = resolveChecklistProgress(pd, checklistItems);
   const deadlineIso = pd.installation_deadline ?? pd.deadline ?? null;
+  const deadlineCountdown = getInstallationDeadlineCountdown(deadlineIso);
 
   const [editingDeadline, setEditingDeadline] = useState(false);
   const [deadlineValue, setDeadlineValue] = useState(
@@ -266,12 +268,12 @@ export function ProductionModule({
 
       {/* Embedded: only date started + deadline. Portal: full header + info cards. */}
       {embedded ? (
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50">
+            <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider whitespace-nowrap">
               Date Started
-            </div>
-            <div className="text-sm font-bold text-slate-800">
+            </span>
+            <span className="text-xs font-bold text-slate-800 whitespace-nowrap">
               {order.dateCreated
                 ? new Date(order.dateCreated).toLocaleDateString("en-IN", {
                     day: "numeric",
@@ -279,68 +281,64 @@ export function ProductionModule({
                     year: "numeric",
                   })
                 : "TBD"}
-            </div>
+            </span>
           </div>
 
-          <div className="flex items-center gap-4">
-            {alert && (
-              <div className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${
-                alert.type === "success"
-                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                  : "bg-rose-50 text-rose-700 border-rose-200"
-              }`}>
-                {alert.message}
-              </div>
-            )}
-            <div className="flex flex-col items-end">
-              {editingDeadline ? (
-                <div className="flex items-center gap-2">
-                  <input
-                    type="date"
-                    value={deadlineValue}
-                    onChange={(e) => setDeadlineValue(e.target.value)}
-                    className="px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
-                  />
-                  <button
-                    onClick={handleDeadlineSave}
-                    disabled={saving}
-                    className="p-1.5 bg-slate-800 text-white rounded-lg hover:bg-slate-900 transition-colors"
-                  >
-                    {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setEditingDeadline(false);
-                      setDeadlineValue(deadlineIso ? new Date(deadlineIso).toISOString().split("T")[0] : "");
-                    }}
-                    className="p-1.5 bg-slate-100 text-slate-500 rounded-lg hover:bg-slate-200 transition-colors"
-                  >
-                    <ArrowLeft size={14} />
-                  </button>
-                </div>
-              ) : (
-                <div
-                  className={`flex items-center gap-2.5 px-4 py-2 rounded-xl border border-slate-200 bg-white shadow-sm ${canEditDeadline ? 'cursor-pointer hover:border-slate-300 hover:shadow-md transition-all' : ''}`}
-                  onClick={() => canEditDeadline && setEditingDeadline(true)}
-                  title={canEditDeadline ? "Click to edit installation deadline" : "Admin only"}
-                >
-                  <Timer size={14} className="text-slate-400" />
-                  <div className="flex flex-col">
-                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider leading-none">Installation Deadline</span>
-                    <span className="text-xs font-black text-slate-700 leading-tight mt-0.5">
-                      {deadlineIso
-                        ? new Date(deadlineIso).toLocaleDateString("en-IN", {
-                            day: "numeric",
-                            month: "short",
-                            year: "numeric",
-                          })
-                        : "Not Set"}
-                    </span>
-                  </div>
-                </div>
-              )}
+          {alert && (
+            <div className={`px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-all ${
+              alert.type === "success"
+                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                : "bg-rose-50 text-rose-700 border-rose-200"
+            }`}>
+              {alert.message}
             </div>
-          </div>
+          )}
+
+          {editingDeadline ? (
+            <div className="inline-flex items-center gap-1.5">
+              <input
+                type="date"
+                value={deadlineValue}
+                onChange={(e) => setDeadlineValue(e.target.value)}
+                className="px-2 py-1 text-xs border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
+              />
+              <button
+                onClick={handleDeadlineSave}
+                disabled={saving}
+                className="p-1.5 bg-slate-800 text-white rounded-lg hover:bg-slate-900 transition-colors"
+              >
+                {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+              </button>
+              <button
+                onClick={() => {
+                  setEditingDeadline(false);
+                  setDeadlineValue(deadlineIso ? new Date(deadlineIso).toISOString().split("T")[0] : "");
+                }}
+                className="p-1.5 bg-slate-100 text-slate-500 rounded-lg hover:bg-slate-200 transition-colors"
+              >
+                <ArrowLeft size={14} />
+              </button>
+            </div>
+          ) : (
+            <div
+              className={`inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border shadow-sm ${deadlineCountdown.badgeClass} ${canEditDeadline ? "cursor-pointer hover:shadow-md transition-all" : ""}`}
+              onClick={() => canEditDeadline && setEditingDeadline(true)}
+              title={canEditDeadline ? "Click to edit installation deadline" : "Admin only"}
+            >
+              <Timer size={13} className={deadlineCountdown.iconClass} />
+              <span className={`text-[9px] font-bold uppercase tracking-wider whitespace-nowrap ${deadlineCountdown.labelClass}`}>
+                Installation Deadline
+              </span>
+              <span className={`text-xs font-black whitespace-nowrap ${deadlineCountdown.valueClass}`}>
+                {deadlineCountdown.countdownLabel}
+              </span>
+              {deadlineCountdown.dateLabel ? (
+                <span className={`text-[10px] font-semibold whitespace-nowrap opacity-80 ${deadlineCountdown.valueClass}`}>
+                  · {deadlineCountdown.dateLabel}
+                </span>
+              ) : null}
+            </div>
+          )}
         </div>
       ) : (
         <>
@@ -395,22 +393,23 @@ export function ProductionModule({
                 </div>
               ) : (
                 <div
-                  className={`flex items-center gap-2.5 px-4 py-2 rounded-xl border border-slate-200 bg-white shadow-sm ${canEditDeadline ? 'cursor-pointer hover:border-slate-300 hover:shadow-md transition-all' : ''}`}
+                  className={`flex items-center gap-2.5 px-4 py-2 rounded-xl border shadow-sm ${deadlineCountdown.badgeClass} ${canEditDeadline ? 'cursor-pointer hover:shadow-md transition-all' : ''}`}
                   onClick={() => canEditDeadline && setEditingDeadline(true)}
                   title={canEditDeadline ? "Click to edit installation deadline" : "Admin only"}
                 >
-                  <Timer size={14} className="text-slate-400" />
-                  <div className="flex flex-col">
-                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider leading-none">Installation Deadline</span>
-                    <span className="text-xs font-black text-slate-700 leading-tight mt-0.5">
-                      {deadlineIso
-                        ? new Date(deadlineIso).toLocaleDateString("en-IN", {
-                            day: "numeric",
-                            month: "short",
-                            year: "numeric",
-                          })
-                        : "Not Set"}
+                  <Timer size={14} className={deadlineCountdown.iconClass} />
+                  <div className="flex flex-col min-w-0">
+                    <span className={`text-[9px] font-bold uppercase tracking-wider leading-none ${deadlineCountdown.labelClass}`}>
+                      Installation Deadline
                     </span>
+                    <span className={`text-xs font-black leading-tight mt-0.5 ${deadlineCountdown.valueClass}`}>
+                      {deadlineCountdown.countdownLabel}
+                    </span>
+                    {deadlineCountdown.dateLabel ? (
+                      <span className={`text-[10px] font-semibold leading-tight mt-0.5 opacity-80 ${deadlineCountdown.valueClass}`}>
+                        {deadlineCountdown.dateLabel}
+                      </span>
+                    ) : null}
                   </div>
                 </div>
               )}
