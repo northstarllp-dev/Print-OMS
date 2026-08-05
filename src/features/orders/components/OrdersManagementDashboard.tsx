@@ -55,6 +55,8 @@ import {
   needsAdminApproval,
   resolveOrderDetailHref,
 } from "@/features/orders/orderListLogic";
+import { resolveSiteVisitMapLink } from "@/features/orders/actions/siteVisitMapper";
+import { isSkippedSiteVisit } from "@/features/orders/workspace/modules/site-visit/siteVisitUiLogic";
 
 const getStatusColor = (status: string) => {
   const colors: Record<string, { bg: string; text: string; label: string }> = {
@@ -919,7 +921,13 @@ export function OrdersManagementDashboard({
               const sv = order.siteVisitDetails;
               const visitDate = isInstallQueue ? inst?.scheduledDate : sv?.auditDate;
               const visitTime = isInstallQueue ? inst?.scheduledTime : sv?.auditTime;
-              const mapAddress = sv?.customerAddress || sv?.siteAddress || sv?.site_address || null;
+              const siteMap = resolveSiteVisitMapLink(sv);
+              const installMapLink = inst?.gmapLink || inst?.gmap_link || null;
+              const mapHref = isInstallQueue
+                ? installMapLink || siteMap?.href || null
+                : siteMap?.href || null;
+              const mapLabel = siteMap?.label || (mapHref ? "Open map location" : null);
+              const siteVisitSkipped = !isInstallQueue && isSkippedSiteVisit(sv);
               const title = order.businessName || order.clientName || "Order";
 
               return (
@@ -1037,10 +1045,22 @@ export function OrdersManagementDashboard({
                         {(visitDate && visitTime) ? (
                           <div className="mt-2 rounded-lg bg-slate-50 border border-slate-100 px-2.5 py-1.5">
                             <div className="text-[11px] font-bold text-slate-800">{visitDate} • {visitTime}</div>
-                            {mapAddress ? (
-                              <div className="text-[10px] text-slate-500 mt-0.5 truncate" title={mapAddress}>
-                                {mapAddress}
+                            {siteVisitSkipped ? (
+                              <div className="text-[10px] font-semibold text-amber-700 mt-0.5">
+                                Site visit skipped
                               </div>
+                            ) : null}
+                            {mapHref && mapLabel ? (
+                              <a
+                                href={mapHref}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title={mapLabel}
+                                className="block text-[10px] text-slate-500 mt-0.5 truncate underline-offset-2 hover:underline"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {mapLabel}
+                              </a>
                             ) : null}
                           </div>
                         ) : null}
@@ -1129,22 +1149,13 @@ export function OrdersManagementDashboard({
                         const sv = order.siteVisitDetails;
                         const visitDate = isInstallQueue ? inst?.scheduledDate : sv?.auditDate;
                         const visitTime = isInstallQueue ? inst?.scheduledTime : sv?.auditTime;
-                        const mapLink =
-                          (isInstallQueue && (inst?.gmapLink || inst?.gmap_link)) ||
-                          sv?.gmapLink ||
-                          sv?.gmap_link ||
-                          null;
-                        const mapAddress =
-                          sv?.customerAddress ||
-                          sv?.siteAddress ||
-                          sv?.site_address ||
-                          null;
-                        const mapHref = mapLink
-                          ? mapLink
-                          : mapAddress
-                            ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapAddress)}`
-                            : null;
-                        const mapLabel = mapAddress || (mapLink ? "Open map location" : null);
+                        const siteMap = resolveSiteVisitMapLink(sv);
+                        const installMapLink = inst?.gmapLink || inst?.gmap_link || null;
+                        const mapHref = isInstallQueue
+                          ? installMapLink || siteMap?.href || null
+                          : siteMap?.href || null;
+                        const mapLabel = siteMap?.label || (mapHref ? "Open map location" : null);
+                        const siteVisitSkipped = !isInstallQueue && isSkippedSiteVisit(sv);
 
                         if (visitDate && visitTime) {
                           return (
@@ -1152,6 +1163,18 @@ export function OrdersManagementDashboard({
                               <div style={{ fontSize: "12px", fontWeight: "600", color: "#0f172a" }}>
                                 {visitDate} • {visitTime}
                               </div>
+                              {siteVisitSkipped && (
+                                <div
+                                  style={{
+                                    fontSize: "10px",
+                                    fontWeight: 700,
+                                    color: "#b45309",
+                                    marginTop: "2px",
+                                  }}
+                                >
+                                  Site visit skipped
+                                </div>
+                              )}
                               {mapHref && mapLabel && (
                                 <div style={{ fontSize: "11px", marginTop: "2px", maxWidth: 220 }}>
                                   <a

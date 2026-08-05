@@ -26,7 +26,7 @@ async function getActiveProducts() {
   );
   const { data } = await supabase
     .from("products")
-    .select("id, product_id, name, category, pricing_type, price_per_sqft, price_per_unit, is_active")
+    .select("id, product_id, name, category, pricing_type, price_per_sqft, price_per_unit, unit_price_max_sqft, pricing_type_below, pricing_type_above, is_active")
     .eq("is_active", true)
     .order("name");
   return data || [];

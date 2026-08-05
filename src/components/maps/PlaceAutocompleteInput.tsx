@@ -27,6 +27,9 @@ interface PlaceAutocompleteInputProps {
   placeholder?: string;
   required?: boolean;
   className?: string;
+  style?: React.CSSProperties;
+  onFocus?: (e: React.FocusEvent<HTMLInputElement>) => void;
+  onBlur?: (e: React.FocusEvent<HTMLInputElement>) => void;
   regionCodes?: string[];
 }
 
@@ -45,6 +48,9 @@ export function PlaceAutocompleteInput({
   required,
   className =
     "w-full p-3 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none bg-slate-50 focus:bg-white transition-all",
+  style,
+  onFocus,
+  onBlur,
   regionCodes = DEFAULT_REGION_CODES,
 }: PlaceAutocompleteInputProps) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -201,11 +207,12 @@ export function PlaceAutocompleteInput({
         required={required}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        onFocus={() => {
+        onFocus={(e) => {
           if (suggestions.length > 0) {
             setOpen(true);
             updateMenuPosition();
           }
+          onFocus?.(e);
         }}
         onPaste={(e) => {
           const pasted = e.clipboardData.getData("text");
@@ -216,13 +223,15 @@ export function PlaceAutocompleteInput({
             setOpen(false);
           }
         }}
-        onBlur={() => {
+        onBlur={(e) => {
           // Delay so suggestion click registers first.
           window.setTimeout(() => setOpen(false), 180);
           if (isGoogleMapsUrl(value)) emitMapsUrl(value);
+          onBlur?.(e);
         }}
         placeholder={placeholder}
         className={className}
+        style={style}
         autoComplete="off"
       />
       {loading && (

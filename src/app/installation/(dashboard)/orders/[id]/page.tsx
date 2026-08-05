@@ -129,6 +129,9 @@ export default async function InstallationOrderDetailPage({
     is_active: p.is_active,
     price_per_sqft: p.price_per_sqft != null ? Number(p.price_per_sqft) : null,
     price_per_unit: p.price_per_unit != null ? Number(p.price_per_unit) : null,
+    unit_price_max_sqft: p.unit_price_max_sqft != null ? Number(p.unit_price_max_sqft) : null,
+    pricing_type_below: p.pricing_type_below ?? null,
+    pricing_type_above: p.pricing_type_above ?? null,
     images: Array.isArray(p.images) ? p.images : [],
   }));
 

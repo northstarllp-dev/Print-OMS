@@ -46,6 +46,8 @@ interface Product {
   price_per_sqft?: number | null;
   price_per_unit?: number | null;
   unit_price_max_sqft?: number | null;
+  pricing_type_below?: string | null;
+  pricing_type_above?: string | null;
   images?: string[];
 }
 

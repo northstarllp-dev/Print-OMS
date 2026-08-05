@@ -77,6 +77,8 @@ describe("conditional product pricing by area", () => {
     price_per_unit: 500,
     price_per_sqft: 80,
     unit_price_max_sqft: 10,
+    pricing_type_below: "per_unit",
+    pricing_type_above: "per_sqft",
   };
 
   it("uses product threshold for unit vs sqft pricing", () => {
@@ -105,6 +107,46 @@ describe("conditional product pricing by area", () => {
     expect(resolvePricingForMeasurement(custom, 26)).toMatchObject({
       pricingType: "per_sqft",
       price: 80,
+    });
+  });
+
+  it("supports sqft+sqft and unit+unit band combinations", () => {
+    const bothSqft = {
+      pricing_type: "Multiple",
+      price_per_unit: 150,
+      price_per_sqft: 120,
+      unit_price_max_sqft: 10,
+      pricing_type_below: "per_sqft",
+      pricing_type_above: "per_sqft",
+    };
+    expect(resolvePricingForMeasurement(bothSqft, 8)).toMatchObject({
+      pricingType: "per_sqft",
+      price: 150,
+      unit: "sqft",
+    });
+    expect(resolvePricingForMeasurement(bothSqft, 12)).toMatchObject({
+      pricingType: "per_sqft",
+      price: 120,
+      unit: "sqft",
+    });
+
+    const bothUnit = {
+      pricing_type: "Multiple",
+      price_per_unit: 800,
+      price_per_sqft: 600,
+      unit_price_max_sqft: 10,
+      pricing_type_below: "per_unit",
+      pricing_type_above: "per_unit",
+    };
+    expect(resolvePricingForMeasurement(bothUnit, 5)).toMatchObject({
+      pricingType: "per_unit",
+      price: 800,
+      unit: "nos",
+    });
+    expect(resolvePricingForMeasurement(bothUnit, 15)).toMatchObject({
+      pricingType: "per_unit",
+      price: 600,
+      unit: "nos",
     });
   });
 

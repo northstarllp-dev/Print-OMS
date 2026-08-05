@@ -133,6 +133,83 @@ function ProductImageUpload({
   );
 }
 
+const BAND_TYPE_OPTIONS = [
+  { value: "per_sqft", label: "Per Sq.Ft" },
+  { value: "per_unit", label: "Per Unit" },
+] as const;
+
+function PriceAmountInput({
+  label,
+  value,
+  disabled,
+  placeholder,
+  onChange,
+}: {
+  label: string;
+  value: number | null | undefined;
+  disabled?: boolean;
+  placeholder: string;
+  onChange: (v: number | null) => void;
+}) {
+  return (
+    <div>
+      <label style={{ ...labelStyle, fontSize: 10, textTransform: "none" }}>{label}</label>
+      <div style={{ position: "relative" }}>
+        <IndianRupee
+          size={11}
+          style={{
+            position: "absolute",
+            left: 9,
+            top: "50%",
+            transform: "translateY(-50%)",
+            color: disabled ? "#cbd5e1" : "#94a3b8",
+            pointerEvents: "none",
+          }}
+        />
+        <input
+          type="number"
+          min={0}
+          step="0.01"
+          placeholder={placeholder}
+          disabled={disabled}
+          value={value ?? ""}
+          onChange={(e) => onChange(e.target.value === "" ? null : parseFloat(e.target.value))}
+          style={{
+            ...inputStyle,
+            paddingLeft: 26,
+            background: disabled ? "#f8fafc" : "white",
+            color: disabled ? "#cbd5e1" : "#374151",
+            cursor: disabled ? "not-allowed" : "text",
+            borderColor: disabled ? "#f1f5f9" : "#cbd5e1",
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function BandTypeSelect({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      style={{ ...inputStyle, cursor: "pointer" }}
+    >
+      {BAND_TYPE_OPTIONS.map((opt) => (
+        <option key={opt.value} value={opt.value}>
+          {opt.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 // ── Pricing Section ──────────────────────────────────────────────────────────
 function PricingSection({
   form, setForm,
@@ -140,49 +217,16 @@ function PricingSection({
   form: Partial<CreateProductPayload>;
   setForm: React.Dispatch<React.SetStateAction<Partial<CreateProductPayload>>>;
 }) {
-  const pricingFields = [
-    { key: "price_per_sqft", label: "Price / Sq.Ft", placeholder: "e.g. 120" },
-    { key: "price_per_unit", label: "Price / Unit", placeholder: "e.g. 500" },
-  ] as const;
-  const showThreshold = form.pricing_type === "Multiple";
+  const isMultiple = form.pricing_type === "Multiple";
+  const threshold = form.unit_price_max_sqft ?? 10;
 
-  return (
-    <div>
-      <label style={labelStyle}>Pricing (fill whichever apply)</label>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
-        {pricingFields.map(({ key, label, placeholder }) => {
-          const disabled = isPricingFieldDisabled(key, form.pricing_type);
-          return (
-            <div key={key}>
-              <label style={{ ...labelStyle, fontSize: 10, textTransform: "none" }}>{label}</label>
-              <div style={{ position: "relative" }}>
-                <IndianRupee size={11} style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", color: disabled ? "#cbd5e1" : "#94a3b8", pointerEvents: "none" }} />
-                <input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  placeholder={placeholder}
-                  disabled={disabled}
-                  value={(form as any)[key] ?? ""}
-                  onChange={e => setForm(f => ({ ...f, [key]: e.target.value === "" ? null : parseFloat(e.target.value) }))}
-                  style={{
-                    ...inputStyle,
-                    paddingLeft: 26,
-                    background: disabled ? "#f8fafc" : "white",
-                    color: disabled ? "#cbd5e1" : "#374151",
-                    cursor: disabled ? "not-allowed" : "text",
-                    borderColor: disabled ? "#f1f5f9" : "#cbd5e1"
-                  }}
-                />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      {showThreshold && (
-        <div className="mb-1">
+  if (isMultiple) {
+    return (
+      <div>
+        <label style={labelStyle}>Pricing (threshold bands)</label>
+        <div className="mb-3">
           <label style={{ ...labelStyle, fontSize: 10, textTransform: "none" }}>
-            Unit price up to (sq.ft) *
+            Switch at (sq.ft) *
           </label>
           <input
             type="number"
@@ -200,11 +244,77 @@ function PricingSection({
             }
             style={inputStyle}
           />
-          <p style={{ margin: "6px 0 0", fontSize: 10, color: "#64748b", fontWeight: 600, lineHeight: 1.4 }}>
-            ≤ this area uses unit price; above uses sq.ft price.
-          </p>
         </div>
-      )}
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-1">
+          <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-2.5 space-y-2">
+            <div style={{ fontSize: 10, fontWeight: 700, color: "#475569" }}>
+              Up to {Number.isFinite(Number(threshold)) ? threshold : "—"} sq.ft
+            </div>
+            <PriceAmountInput
+              label="Price *"
+              value={form.price_per_unit}
+              placeholder="e.g. 500"
+              onChange={(v) => setForm((f) => ({ ...f, price_per_unit: v }))}
+            />
+            <div>
+              <label style={{ ...labelStyle, fontSize: 10, textTransform: "none" }}>Type</label>
+              <BandTypeSelect
+                value={form.pricing_type_below || "per_unit"}
+                onChange={(v) => setForm((f) => ({ ...f, pricing_type_below: v }))}
+              />
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-2.5 space-y-2">
+            <div style={{ fontSize: 10, fontWeight: 700, color: "#475569" }}>
+              Above {Number.isFinite(Number(threshold)) ? threshold : "—"} sq.ft
+            </div>
+            <PriceAmountInput
+              label="Price *"
+              value={form.price_per_sqft}
+              placeholder="e.g. 120"
+              onChange={(v) => setForm((f) => ({ ...f, price_per_sqft: v }))}
+            />
+            <div>
+              <label style={{ ...labelStyle, fontSize: 10, textTransform: "none" }}>Type</label>
+              <BandTypeSelect
+                value={form.pricing_type_above || "per_sqft"}
+                onChange={(v) => setForm((f) => ({ ...f, pricing_type_above: v }))}
+              />
+            </div>
+          </div>
+        </div>
+        <p style={{ margin: "6px 0 0", fontSize: 10, color: "#64748b", fontWeight: 600, lineHeight: 1.4 }}>
+          Each band can be Per Unit or Per Sq.Ft — any combination.
+        </p>
+      </div>
+    );
+  }
+
+  const pricingFields = [
+    { key: "price_per_sqft" as const, label: "Price / Sq.Ft", placeholder: "e.g. 120" },
+    { key: "price_per_unit" as const, label: "Price / Unit", placeholder: "e.g. 500" },
+  ];
+
+  return (
+    <div>
+      <label style={labelStyle}>Pricing (fill whichever apply)</label>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+        {pricingFields.map(({ key, label, placeholder }) => {
+          const disabled = isPricingFieldDisabled(key, form.pricing_type);
+          return (
+            <PriceAmountInput
+              key={key}
+              label={label}
+              value={form[key]}
+              disabled={disabled}
+              placeholder={placeholder}
+              onChange={(v) => setForm((f) => ({ ...f, [key]: v }))}
+            />
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -247,6 +357,8 @@ function ProductFormModal({
       price_per_sqft: product?.price_per_sqft ?? null,
       price_per_unit: product?.price_per_unit ?? null,
       unit_price_max_sqft: product?.unit_price_max_sqft ?? (product?.pricing_type === "Multiple" ? 10 : null),
+      pricing_type_below: product?.pricing_type_below ?? (product?.pricing_type === "Multiple" ? "per_unit" : null),
+      pricing_type_above: product?.pricing_type_above ?? (product?.pricing_type === "Multiple" ? "per_sqft" : null),
       images: product?.images ?? [],
       is_active: product?.is_active ?? true,
       final_prdt,
@@ -274,12 +386,23 @@ function ProductFormModal({
         else if (payloadToSave.pricing_type === "Per Sq.Ft") payloadToSave.pricing_type = "per_sqft";
         if (payloadToSave.pricing_type !== "Multiple") {
           payloadToSave.unit_price_max_sqft = null;
+          payloadToSave.pricing_type_below = null;
+          payloadToSave.pricing_type_above = null;
         } else if (
           payloadToSave.unit_price_max_sqft == null ||
           Number.isNaN(Number(payloadToSave.unit_price_max_sqft))
         ) {
-          setError("Set the sq.ft threshold for unit vs sq.ft pricing.");
+          setError("Set the sq.ft threshold where pricing switches.");
           return;
+        } else if (
+          !(Number(payloadToSave.price_per_unit) > 0) ||
+          !(Number(payloadToSave.price_per_sqft) > 0)
+        ) {
+          setError("Enter a price for both the up-to and above threshold bands.");
+          return;
+        } else {
+          payloadToSave.pricing_type_below = payloadToSave.pricing_type_below || "per_unit";
+          payloadToSave.pricing_type_above = payloadToSave.pricing_type_above || "per_sqft";
         }
 
         if (isEdit) {
@@ -385,15 +508,23 @@ function ProductFormModal({
                       if (nextPricingType === "Per Sq.Ft") {
                         next.price_per_unit = null;
                         next.unit_price_max_sqft = null;
+                        next.pricing_type_below = null;
+                        next.pricing_type_above = null;
                       } else if (nextPricingType === "Per Unit") {
                         next.price_per_sqft = null;
                         next.unit_price_max_sqft = null;
+                        next.pricing_type_below = null;
+                        next.pricing_type_above = null;
                       } else if (nextPricingType === "Multiple") {
                         if (next.unit_price_max_sqft == null) next.unit_price_max_sqft = 10;
+                        if (!next.pricing_type_below) next.pricing_type_below = "per_unit";
+                        if (!next.pricing_type_above) next.pricing_type_above = "per_sqft";
                       } else if (!nextPricingType) {
                         next.price_per_sqft = null;
                         next.price_per_unit = null;
                         next.unit_price_max_sqft = null;
+                        next.pricing_type_below = null;
+                        next.pricing_type_above = null;
                       }
                       return next;
                     });
@@ -639,12 +770,46 @@ function ProductCard({
         {/* Pricing display */}
         {hasPricing && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 8px", marginTop: 2 }}>
-            {product.price_per_sqft && <span style={{ fontSize: 11, fontWeight: 700, color: "#0f172a" }}>₹{Number(product.price_per_sqft).toLocaleString("en-IN")}<span style={{ fontWeight: 500, color: "#64748b", fontSize: 9 }}>/sqft</span></span>}
-            {product.price_per_unit && <span style={{ fontSize: 11, fontWeight: 700, color: "#0f172a" }}>₹{Number(product.price_per_unit).toLocaleString("en-IN")}<span style={{ fontWeight: 500, color: "#64748b", fontSize: 9 }}>/unit</span></span>}
-            {product.pricing_type === "Multiple" && product.unit_price_max_sqft != null && (
-              <span style={{ fontSize: 10, fontWeight: 600, color: "#64748b" }}>
-                unit ≤{Number(product.unit_price_max_sqft)} sqft
-              </span>
+            {product.pricing_type === "Multiple" ? (
+              <>
+                {product.price_per_unit != null && Number(product.price_per_unit) > 0 && (
+                  <span style={{ fontSize: 11, fontWeight: 700, color: "#0f172a" }}>
+                    ₹{Number(product.price_per_unit).toLocaleString("en-IN")}
+                    <span style={{ fontWeight: 500, color: "#64748b", fontSize: 9 }}>
+                      /{product.pricing_type_below === "per_sqft" ? "sqft" : "unit"}
+                      {product.unit_price_max_sqft != null
+                        ? ` ≤${Number(product.unit_price_max_sqft)}`
+                        : ""}
+                    </span>
+                  </span>
+                )}
+                {product.price_per_sqft != null && Number(product.price_per_sqft) > 0 && (
+                  <span style={{ fontSize: 11, fontWeight: 700, color: "#0f172a" }}>
+                    ₹{Number(product.price_per_sqft).toLocaleString("en-IN")}
+                    <span style={{ fontWeight: 500, color: "#64748b", fontSize: 9 }}>
+                      /{product.pricing_type_above === "per_unit" ? "unit" : "sqft"}
+                      {product.unit_price_max_sqft != null
+                        ? ` >${Number(product.unit_price_max_sqft)}`
+                        : ""}
+                    </span>
+                  </span>
+                )}
+              </>
+            ) : (
+              <>
+                {product.price_per_sqft && (
+                  <span style={{ fontSize: 11, fontWeight: 700, color: "#0f172a" }}>
+                    ₹{Number(product.price_per_sqft).toLocaleString("en-IN")}
+                    <span style={{ fontWeight: 500, color: "#64748b", fontSize: 9 }}>/sqft</span>
+                  </span>
+                )}
+                {product.price_per_unit && (
+                  <span style={{ fontSize: 11, fontWeight: 700, color: "#0f172a" }}>
+                    ₹{Number(product.price_per_unit).toLocaleString("en-IN")}
+                    <span style={{ fontWeight: 500, color: "#64748b", fontSize: 9 }}>/unit</span>
+                  </span>
+                )}
+              </>
             )}
           </div>
         )}
