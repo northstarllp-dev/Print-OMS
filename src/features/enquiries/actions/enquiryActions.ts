@@ -9,6 +9,7 @@ import { getRequestBaseUrl } from "@/features/notifications/whatsapp/requestBase
 
 
 import { createAdminClient } from "@/utils/supabase/admin";
+import { getDeployCompanyId } from "@/config/loadClientConfig";
 import { revalidateStaffQueuePaths } from "@/features/orders/actions/orderActions";
 import { insertOrderActivity } from "@/features/orders/activity/logOrderActivity";
 import { getCurrentUser } from "@/features/auth/actions/authActions";
@@ -156,29 +157,39 @@ export async function createEnquiry(formData: any) {
   }
 
   let addedBy = "System";
-  const { resolveWriteCompanyId } = await import("@/lib/resolveWriteCompanyId");
-  const companyId = await resolveWriteCompanyId();
+  // Authenticated mutations resolve company from the user profile (strict).
+  // The public /quote form has no session, so use the service-role client with
+  // the deploy company id — anon RLS no longer permits direct enquiry inserts.
+  let writeClient = supabase;
+  let companyId: string;
   if (user) {
+    const { resolveWriteCompanyId } = await import("@/lib/resolveWriteCompanyId");
+    companyId = await resolveWriteCompanyId();
     const { data: profile } = await supabase.from("users").select("name, company_id").eq("id", user.id).single();
     if (profile) {
       if (profile.name) addedBy = profile.name;
     } else {
       addedBy = user.email || "Admin";
     }
+  } else {
+    const admin = createAdminClient();
+    if (!admin) throw new Error("Service role client not configured");
+    writeClient = admin;
+    companyId = getDeployCompanyId();
   }
   formData.added_by = addedBy;
   if (!formData.company_id) {
     formData.company_id = companyId;
   }
 
-  const { data, error } = await supabase.from("enquiries").insert([formData]).select();
+  const { data, error } = await writeClient.from("enquiries").insert([formData]).select();
   if (error) throw new Error(error.message);
 
   const enq = data?.[0];
   if (enq?.whatsapp || enq?.phone) {
-    const customer = await ensureCustomerForEnquiry(supabase, enq);
+    const customer = await ensureCustomerForEnquiry(writeClient, enq);
     const baseUrl = await getRequestBaseUrl();
-    const notifyResult = await dispatchWhatsAppNotification(supabase, {
+    const notifyResult = await dispatchWhatsAppNotification(writeClient, {
       templateKey: "enquiry_received",
       enquiryId: enq.id,
       enquiryRow: enq,
