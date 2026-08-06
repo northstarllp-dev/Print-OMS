@@ -35,6 +35,21 @@ function amountOf(p: Payment): number {
   return Number(p.calculated_amount ?? p.amount ?? 0);
 }
 
+/** Round to paise and format for money inputs (avoids 49.889999999 display). */
+function formatMoneyInput(n: number): string {
+  const rounded = Math.round((Number(n) || 0) * 100) / 100;
+  return rounded.toFixed(2);
+}
+
+/** Keep percentage field as a clean digit string (no float noise). */
+function formatPercentInput(raw: string): string {
+  const num = parseFloat(raw);
+  if (!Number.isFinite(num)) return raw;
+  const clamped = Math.min(100, Math.max(0, num));
+  // Prefer integers when the user typed a whole percent (e.g. 50 not 50.00)
+  return Number.isInteger(clamped) ? String(clamped) : String(Math.round(clamped * 100) / 100);
+}
+
 export const PaymentsModule: React.FC<PaymentsModuleProps> = ({
   orderId,
   currentStage = "",
@@ -59,12 +74,19 @@ export const PaymentsModule: React.FC<PaymentsModuleProps> = ({
   const selectPercentage = () => {
     setRestOfAmount(false);
     setNewType("percentage");
-    setNewValue(lastPercentRef.current);
+    // Never leave a ₹ outstanding float in the % field
+    setNewValue(lastPercentRef.current || "50");
   };
 
   const selectFixed = () => {
+    const leavingRest = restOfAmount;
     setRestOfAmount(false);
     setNewType("fixed");
+    if (leavingRest && balance) {
+      const amt = withGst ? balance.outstanding : balance.totalBeforeTax - balance.receivedTotal;
+      setNewValue(formatMoneyInput(Math.max(0, amt)));
+    }
+    // Percentage → Fixed: keep the typed digits as ₹ (e.g. 50% field → ₹50)
   };
 
   const load = useCallback(async () => {
@@ -96,8 +118,8 @@ export const PaymentsModule: React.FC<PaymentsModuleProps> = ({
   useEffect(() => {
     if (restOfAmount && balance) {
       setNewType("fixed");
-      const amt = withGst ? balance.outstanding : (balance.totalBeforeTax - balance.receivedTotal);
-      setNewValue(String(Math.max(0, amt)));
+      const amt = withGst ? balance.outstanding : balance.totalBeforeTax - balance.receivedTotal;
+      setNewValue(formatMoneyInput(Math.max(0, amt)));
       setNewName((n) => (isAutoPaymentName(n) ? "Rest of Amount" : n));
     } else if (!restOfAmount) {
       setNewName((n) =>
@@ -252,35 +274,46 @@ export const PaymentsModule: React.FC<PaymentsModuleProps> = ({
                 Value ({newType === "percentage" && !restOfAmount ? "%" : "₹"})
               </label>
               <input
-                type="number"
-                min="0"
-                max={newType === "percentage" && !restOfAmount ? "100" : undefined}
-                step="0.01"
+                type="text"
+                inputMode="decimal"
                 value={newValue}
                 onChange={(e) => {
                   const raw = e.target.value;
                   if (newType === "percentage" && !restOfAmount) {
-                    if (raw === "" || /^\d*\.?\d*$/.test(raw)) {
-                      setNewValue(raw);
+                    // Allow empty, digits, optional one decimal — never coerce to float mid-type
+                    if (raw === "" || /^\d{0,3}(\.\d{0,2})?$/.test(raw)) {
                       const num = parseFloat(raw);
+                      if (raw !== "" && Number.isFinite(num) && num > 100) return;
+                      setNewValue(raw);
                       if (Number.isFinite(num) && num >= 0 && num <= 100) {
-                        lastPercentRef.current = raw;
+                        lastPercentRef.current = formatPercentInput(raw);
                       }
                     }
                     return;
                   }
-                  setNewValue(raw);
+                  if (raw === "" || /^\d*\.?\d{0,2}$/.test(raw)) {
+                    setNewValue(raw);
+                  }
                 }}
                 onBlur={() => {
-                  if (newType !== "percentage" || restOfAmount || newValue === "") return;
-                  const num = parseFloat(newValue);
-                  if (!Number.isFinite(num)) {
-                    setNewValue(lastPercentRef.current);
+                  if (restOfAmount || newValue === "") return;
+                  if (newType === "percentage") {
+                    const num = parseFloat(newValue);
+                    if (!Number.isFinite(num)) {
+                      setNewValue(lastPercentRef.current || "50");
+                      return;
+                    }
+                    const cleaned = formatPercentInput(String(Math.min(100, Math.max(0, num))));
+                    setNewValue(cleaned);
+                    lastPercentRef.current = cleaned;
                     return;
                   }
-                  const clamped = String(Math.min(100, Math.max(0, num)));
-                  setNewValue(clamped);
-                  lastPercentRef.current = clamped;
+                  const num = parseFloat(newValue);
+                  if (!Number.isFinite(num) || num < 0) {
+                    setNewValue("");
+                    return;
+                  }
+                  setNewValue(formatMoneyInput(num));
                 }}
                 disabled={restOfAmount}
                 className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg bg-white font-mono disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
@@ -296,7 +329,7 @@ export const PaymentsModule: React.FC<PaymentsModuleProps> = ({
                           100) *
                           100
                       ) / 100
-                    ).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                    ).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                 </div>
               )}
@@ -321,9 +354,10 @@ export const PaymentsModule: React.FC<PaymentsModuleProps> = ({
                 if (restOfAmount) {
                   const bal = balance || (await getPaymentBalanceSummary(orderId));
                   const restAmt = withGst ? bal.outstanding : (bal.totalBeforeTax - bal.receivedTotal);
-                  if (restAmt <= 0) throw new Error("No outstanding balance for this base.");
+                  const rounded = Math.round(Math.max(0, restAmt) * 100) / 100;
+                  if (rounded <= 0) throw new Error("No outstanding balance for this base.");
                   amountType = "fixed";
-                  amount = restAmt;
+                  amount = rounded;
                 } else {
                   const num = parseFloat(newValue);
                   if (!Number.isFinite(num) || num <= 0) {
@@ -334,10 +368,10 @@ export const PaymentsModule: React.FC<PaymentsModuleProps> = ({
                   }
 
                   if (newType === "fixed") {
-                    amount = num;
+                    amount = Math.round(num * 100) / 100;
                   } else {
                     if (withGst) {
-                      percentage = num;
+                      percentage = Math.round(num * 100) / 100;
                     } else {
                       amountType = "fixed";
                       amount = Math.round(((balance?.totalBeforeTax || 0) * (num / 100)) * 100) / 100;
