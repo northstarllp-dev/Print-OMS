@@ -31,6 +31,18 @@ export function isSkippedSiteVisit(details?: {
   return isSkippedSiteVisitAddress(details.customerAddress);
 }
 
+/** True when a real schedule exists or the visit was explicitly skipped. */
+export function isSiteVisitScheduledOrSkipped(details?: {
+  auditDate?: string | null;
+  auditTime?: string | null;
+  landmark?: string | null;
+  customerAddress?: string | null;
+} | null): boolean {
+  if (!details) return false;
+  if (isSkippedSiteVisit(details)) return true;
+  return !!(details.auditDate && details.auditTime);
+}
+
 /**
  * Read-only audit UI (mirrors SiteVisitModule baseFrozen before admin override / RBAC).
  * Prefer `isSiteVisitAuditFrozen` for the stricter pending-admin gate.
@@ -63,17 +75,24 @@ export function isSiteVisitUiFrozen(input: {
 export function canAdvanceSiteVisitAudit(details: {
   auditDate?: string | null;
   auditTime?: string | null;
+  landmark?: string | null;
+  customerAddress?: string | null;
   locations?: unknown[] | null;
 }): { ok: boolean; tooltip: string } {
-  const scheduled = !!(details.auditDate && details.auditTime);
+  if (!isSiteVisitScheduledOrSkipped(details)) {
+    return {
+      ok: false,
+      tooltip: "Schedule or skip the site visit before advancing.",
+    };
+  }
   const hasLocations = !!(details.locations && details.locations.length > 0);
-  const ok = scheduled && hasLocations;
-  return {
-    ok,
-    tooltip: ok
-      ? ""
-      : "Schedule the visit and add at least one location item to unlock approval.",
-  };
+  if (!hasLocations) {
+    return {
+      ok: false,
+      tooltip: "Add at least one location item to unlock approval.",
+    };
+  }
+  return { ok: true, tooltip: "" };
 }
 
 /**

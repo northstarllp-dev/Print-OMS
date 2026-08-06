@@ -43,8 +43,12 @@ export type Product = {
   // New pricing fields
   price_per_sqft?: number | null;
   price_per_unit?: number | null;
-  /** ≤ this sqft → unit price; above → sqft (Multiple / dual-price products). */
+  /** ≤ this sqft → below band; above → above band (Multiple). */
   unit_price_max_sqft?: number | null;
+  /** Multiple: billing type ≤ threshold (per_unit | per_sqft). Amount in price_per_unit. */
+  pricing_type_below?: string | null;
+  /** Multiple: billing type > threshold (per_unit | per_sqft). Amount in price_per_sqft. */
+  pricing_type_above?: string | null;
   images?: string[];
   is_active: boolean;
   final_prdt?: boolean;
@@ -74,6 +78,8 @@ export type CreateProductPayload = {
   price_per_sqft?: number | null;
   price_per_unit?: number | null;
   unit_price_max_sqft?: number | null;
+  pricing_type_below?: string | null;
+  pricing_type_above?: string | null;
   images?: string[];
   is_active?: boolean;
   final_prdt?: boolean;

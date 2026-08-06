@@ -14,9 +14,10 @@
    * Procurement of Materials
    * ACP & Acrylic Cutting
    * Lighting & Wiring
-4. **Deadline Tracking**: Admin can set and edit a production deadline which dictates when fabrication must be complete.
-5. **Completion**: Once all checkboxes are checked, the staff clicks "Submit/Request Stage Advancement".
-5. **Admin Approval**: Admin verifies the production completion, clears the lock, and transitions the order to `Installation Pending`.
+4. **Deadline Tracking**: Admin can set and edit an **installation deadline** (`productions.installation_deadline`). The implied **production deadline** is one calendar day before that date.
+5. **Entering Production**: When admin approves advancement **into** Production (`Design Approved` → Production on quote-first, or `Quotation Approved` → Production on design-first), a popup requires final **production files** on the Design tab, an installation deadline, reminds that production is due one day earlier, notes to add payment, and offers redirects to Design / Payments.
+6. **Completion**: Once all checkboxes are checked, the staff clicks "Submit/Request Stage Advancement".
+7. **Admin Approval**: Admin verifies the production completion, clears the lock, and transitions the order to `Installation Pending`.
 
 ## Workflow States
 

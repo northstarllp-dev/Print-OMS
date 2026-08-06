@@ -18,6 +18,8 @@ import {
 } from "@/types";
 import { SiteVisitModule } from "@/features/orders/workspace/modules/site-visit/SiteVisitModule";
 import { SiteVisitReviewModal } from "@/features/orders/workspace/modules/site-visit/SiteVisitReviewModal";
+import { canAdvanceSiteVisitAudit } from "@/features/orders/workspace/modules/site-visit/siteVisitUiLogic";
+import { productionChecklistAdvanceGate } from "@/features/settings/productionChecklist";
 import { QuotationModule } from "@/features/orders/workspace/modules/quotation/QuotationModule";
 import { DesignModule } from "@/features/orders/workspace/modules/design/DesignModule";
 import { AdminControlModule } from "./admin/AdminControlModule";
@@ -27,6 +29,7 @@ import { WorkflowChoiceModal } from "./WorkflowChoiceModal";
 import { ProductionModule } from "@/features/orders/workspace/modules/production/ProductionModule";
 import { InstallationModule } from "@/features/orders/workspace/modules/installation/InstallationModule";
 import { InstallationPaymentApprovalModal } from "./InstallationPaymentApprovalModal";
+import { ProductionAdvanceModal } from "./ProductionAdvanceModal";
 import { withBasePath } from "@/lib/appBasePath";
 import { copyTextToClipboard } from "@/lib/clipboard";
 
@@ -242,6 +245,9 @@ interface Product {
   is_active: boolean;
   price_per_sqft?: number | null;
   price_per_unit?: number | null;
+  unit_price_max_sqft?: number | null;
+  pricing_type_below?: string | null;
+  pricing_type_above?: string | null;
   images?: string[];
 }
 
@@ -311,6 +317,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   const [siteVisitReviewMode, setSiteVisitReviewMode] = useState<"staff_push" | "admin_lock">("admin_lock");
   const [isWorkflowChoiceOpen, setIsWorkflowChoiceOpen] = useState(false);
   const [isInstallationPaymentModalOpen, setIsInstallationPaymentModalOpen] = useState(false);
+  const [isProductionAdvanceModalOpen, setIsProductionAdvanceModalOpen] = useState(false);
   const [adminOverrideUnlocked, setAdminOverrideUnlocked] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -694,6 +701,12 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
       }
       // On Site Visit tab with normal status, open review modal first.
       if (activeStepTab === 0 && order.stageStatus === "Normal") {
+        const gate = canAdvanceSiteVisitAudit(sv);
+        if (!gate.ok) {
+          alert(gate.tooltip);
+          setIsProcessing(false);
+          return;
+        }
         setSiteVisitReviewMode("admin_lock");
         setIsReviewModalOpen(true);
         setIsProcessing(false);
@@ -705,6 +718,12 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
         order.stageStatus &&
         order.stageStatus !== "Normal"
       ) {
+        const gate = canAdvanceSiteVisitAudit(sv);
+        if (!gate.ok) {
+          alert(gate.tooltip);
+          setIsProcessing(false);
+          return;
+        }
         setIsWorkflowChoiceOpen(true);
         setIsProcessing(false);
         return;
@@ -717,6 +736,24 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           order.stageStatus === "Normal")
       ) {
         setIsInstallationPaymentModalOpen(true);
+        setIsProcessing(false);
+        return;
+      }
+      if (order.stage === "Production") {
+        const gate = productionChecklistAdvanceGate(order.productionDetails);
+        if (!gate.ok) {
+          alert(gate.tooltip);
+          setIsProcessing(false);
+          return;
+        }
+      }
+      // Gate: moving into Production requires installation deadline (+ payment reminder).
+      const isDesignFirst = (order.workflow_type || "quote_first") === "design_first";
+      const advancesToProduction = isDesignFirst
+        ? order.stage === "Quotation Approved"
+        : order.stage === "Design Approved";
+      if (advancesToProduction) {
+        setIsProductionAdvanceModalOpen(true);
         setIsProcessing(false);
         return;
       }
@@ -755,6 +792,14 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
       );
       if (!allDesignItemsApproved || !hasProductionFiles) {
         alert("All designs must be approved and final production files must be uploaded.");
+        return;
+      }
+    }
+
+    if (order.stage === "Production") {
+      const gate = productionChecklistAdvanceGate(order.productionDetails);
+      if (!gate.ok) {
+        alert(gate.tooltip);
         return;
       }
     }
@@ -839,7 +884,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     }
   };
 
-  /** Quotation tab: staff requests approval; admin advances to Design/Production. */
+  /** Quotation tab: staff requests approval; admin advances to Design or (design-first) fabrication gate. */
   const handleQuotationAdvance = async () => {
     if (isEmployee) {
       await handleRequestAdvancement();
@@ -861,6 +906,15 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
         }));
       }
 
+      // design_first: Quotation Approved → Production — must set installation deadline first.
+      const isDesignFirst = (order.workflow_type || "quote_first") === "design_first";
+      if (isDesignFirst) {
+        setIsProductionAdvanceModalOpen(true);
+        setIsProcessing(false);
+        return;
+      }
+
+      // quote_first: Quotation Approved → Design In Progress
       await executeAdminApprove();
       setIsProcessing(false);
     } catch (err: any) {
@@ -869,13 +923,14 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     }
   };
 
-  /** Design tab: admin force-approves proofs (no portal) then advances past Design. */
+  /** Design tab: admin force-approves proofs (no portal). Does not start fabrication yet. */
   const handleDesignAdvanceWithoutCustomer = async () => {
-    if (
-      !window.confirm(
-        "Approve design without customer portal approval and move to the next stage?"
-      )
-    ) {
+    const isDesignFirst = (order.workflow_type || "quote_first") === "design_first";
+    const confirmMsg = isDesignFirst
+      ? "Approve this design without waiting for the customer?\n\nThis only marks the design approved so you can continue to Quotation. The installation deadline is set later — just before fabrication starts."
+      : "Approve this design without waiting for the customer?\n\nThis only marks the design approved. Next: upload production files, then use “Set deadline & start fabrication” when you are ready for the workshop.";
+
+    if (!window.confirm(confirmMsg)) {
       return;
     }
 
@@ -891,11 +946,17 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
         stageStatus: "Normal",
         design: updatedDesign,
       }));
-
-      await executeAdminApprove();
+      setActiveStepTab(designTab);
+      triggerLocalAlert(
+        isDesignFirst
+          ? "Design approved. Continue to Quotation when ready."
+          : "Design approved. Upload production files, then set the deadline to start fabrication.",
+        "success"
+      );
+      startTransition(() => router.refresh());
       setIsProcessing(false);
     } catch (err: any) {
-      triggerLocalAlert(err?.message || "Failed to approve design and advance.", "error");
+      triggerLocalAlert(err?.message || "Failed to approve design.", "error");
       setIsProcessing(false);
     }
   };
@@ -1066,14 +1127,14 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     (activeStepTab === 0 && isSiteVisitFrozen) ||
     (activeStepTab === designTab && isDesignFrozen);
 
-  // Strict Site Visit Validations
-  const isSiteVisitScheduled = !!(sv.auditDate && sv.auditTime);
-  const hasSiteVisitLocations = !!(sv.locations && sv.locations.length > 0);
+  // Strict Site Visit Validations — must schedule or skip (+ locations) before advance.
+  const siteVisitAdvanceGate = canAdvanceSiteVisitAudit(sv);
+  const productionAdvanceGate = productionChecklistAdvanceGate(pd);
   let canAdvanceSiteVisit = true;
   let siteVisitAdvanceTooltip = "";
   if (activeStepTab === 0) {
-    canAdvanceSiteVisit = isSiteVisitScheduled && hasSiteVisitLocations;
-    siteVisitAdvanceTooltip = !canAdvanceSiteVisit ? "Schedule the visit and add at least one location item to unlock approval." : "";
+    canAdvanceSiteVisit = siteVisitAdvanceGate.ok;
+    siteVisitAdvanceTooltip = siteVisitAdvanceGate.tooltip;
   } else if (activeStepTab === designTab) {
     const itemsList = dd.items || [];
     const allDesignItemsApproved = areAllDesignItemsApproved(itemsList as any);
@@ -1085,19 +1146,30 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
       : !hasProductionFiles
         ? "Final production files must be uploaded for at least one design item."
         : "";
+  } else if (activeStepTab === 3) {
+    canAdvanceSiteVisit = productionAdvanceGate.ok;
+    siteVisitAdvanceTooltip = productionAdvanceGate.tooltip;
   }
 
   const designItemsForGate = ((order.design as DesignRecord)?.items || []) as any[];
+  const hasDesignProofsForGate = getDesignItemsWithVersions(designItemsForGate as any).length > 0;
+  const isDesignApprovedForGate = areAllDesignItemsApproved(designItemsForGate);
+  const hasProductionFilesForGate = designItemsForGate.some(
+    (item: any) => item.productionFiles && item.productionFiles.length > 0
+  );
   const isDesignAdvanceReady =
-    areAllDesignItemsApproved(designItemsForGate) &&
-    designItemsForGate.some((item: any) => item.productionFiles && item.productionFiles.length > 0);
+    isDesignApprovedForGate && hasProductionFilesForGate;
+  const willAdvanceToProduction =
+    (order.workflow_type || "quote_first") === "design_first"
+      ? order.stage === "Quotation Approved"
+      : order.stage === "Design Approved";
   const showAdminDesignOverrideButton =
     !isEmployee &&
     currentUserRole === "Admin" &&
     activeStepTab === designTab &&
     order.stage === "Design In Progress" &&
-    getDesignItemsWithVersions(designItemsForGate as any).length > 0 &&
-    !areAllDesignItemsApproved(designItemsForGate);
+    hasDesignProofsForGate &&
+    !isDesignApprovedForGate;
   const isJobDonePending = order.stageStatus === "Pending Admin Approval: Job Done";
   const isInstallationStageTab =
     activeStepTab === 4 &&
@@ -1108,9 +1180,12 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     order.stage === "Installation Scheduled" &&
     (order.stageStatus === "Normal" || isJobDonePending);
   // Stage-page Approve when Normal; installation tab also supports admin completion (with or without staff push).
+  // Site Visit: hide until scheduled/skipped. Production: hide until checklist complete.
   const showAdminApproveButton =
     !isEmployee &&
     currentStageIndex === activeStepTab &&
+    !(activeStepTab === 0 && !canAdvanceSiteVisit) &&
+    !(activeStepTab === 3 && !productionAdvanceGate.ok) &&
     (
       (
         order.stageStatus === "Normal" &&
@@ -1321,6 +1396,11 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           onAdminApprove={handleAdminApprove}
           onAdminReject={handleAdminReject}
           onApproveWithWorkflowChoice={async () => {
+            const gate = canAdvanceSiteVisitAudit(sv);
+            if (!gate.ok) {
+              alert(gate.tooltip);
+              return;
+            }
             // Staff push may leave site visit unlocked — lock before workflow choice.
             if (order.stage.startsWith("Site Visit") && !sv.completed) {
               setIsProcessing(true);
@@ -1949,10 +2029,13 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                               </button>
 
                               {isEmployee ? (
-                                !hideStaffAdvanceRequest && (() => {
+                                !hideStaffAdvanceRequest &&
+                                !(activeStepTab === 0 && !canAdvanceSiteVisit) &&
+                                !(activeStepTab === 3 && !productionAdvanceGate.ok) &&
+                                (() => {
                                   const advanceBlocked =
-                                    (activeStepTab === 0 || activeStepTab === designTab) &&
-                                    !canAdvanceSiteVisit;
+                                    ((activeStepTab === 0 || activeStepTab === designTab || activeStepTab === 3) &&
+                                    !canAdvanceSiteVisit);
                                   const designNeedsCustomerApproval =
                                     activeStepTab === designTab &&
                                     !areAllDesignItemsApproved((dd.items || []) as any);
@@ -2022,9 +2105,9 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                                         }}
                                       >
                                         <Check size={13} className="shrink-0" />
-                                        <span className="md:hidden">Approve &amp; Advance</span>
+                                        <span className="md:hidden">Approve design</span>
                                         <span className="hidden md:inline">
-                                          Approve without Customer &amp; Advance
+                                          Approve design (skip customer)
                                         </span>
                                       </button>
                                     </div>
@@ -2032,7 +2115,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                                   {showAdminApproveButton && (
                                   <div className="flex-1 sm:flex-none min-w-0">
                                     <button onClick={() => {
-                                      if ((activeStepTab === 0 || activeStepTab === designTab) && !canAdvanceSiteVisit) {
+                                      if ((activeStepTab === 0 || activeStepTab === designTab || activeStepTab === 3) && !canAdvanceSiteVisit) {
                                         alert(siteVisitAdvanceTooltip);
                                         return;
                                       }
@@ -2043,6 +2126,16 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                                         <>
                                           <span className="md:hidden">Complete Order</span>
                                           <span className="hidden md:inline">Review Payments &amp; Complete</span>
+                                        </>
+                                      ) : willAdvanceToProduction ? (
+                                        <>
+                                          <span className="md:hidden">Start fabrication</span>
+                                          <span className="hidden md:inline">Set deadline &amp; start fabrication</span>
+                                        </>
+                                      ) : order.stage === "Design In Progress" ? (
+                                        <>
+                                          <span className="md:hidden">Mark approved</span>
+                                          <span className="hidden md:inline">Mark design approved</span>
                                         </>
                                       ) : (
                                         "Approve & Advance"
@@ -2108,6 +2201,11 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           onClose={() => setIsReviewModalOpen(false)}
           onConfirm={async () => {
             try {
+              const gate = canAdvanceSiteVisitAudit(sv);
+              if (!gate.ok) {
+                triggerLocalAlert(gate.tooltip, "error");
+                return;
+              }
               if (siteVisitReviewMode === "staff_push") {
                 const workflowType = order.workflow_type || "quote_first";
                 const nextStatus = computePendingStageStatus(order.stage, workflowType);
@@ -2166,6 +2264,48 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
             } finally {
               setIsProcessing(false);
             }
+          }}
+        />
+      )}
+
+      {isProductionAdvanceModalOpen && (
+        <ProductionAdvanceModal
+          orderLabel={`${order.businessName || ""} - ${order.clientName || ""}`.trim() || order.orderId || ""}
+          initialDeadline={
+            order.productionDetails?.installation_deadline ||
+            order.productionDetails?.deadline ||
+            null
+          }
+          hasDesignProofs={hasDesignProofsForGate}
+          isDesignApproved={isDesignApprovedForGate}
+          hasProductionFiles={hasProductionFilesForGate}
+          onClose={() => setIsProductionAdvanceModalOpen(false)}
+          onConfirm={async (installationDeadline) => {
+            setIsProcessing(true);
+            try {
+              await updateProductionDetails(order.id, {
+                installation_deadline: installationDeadline,
+                deadline: installationDeadline,
+              });
+              await executeAdminApprove();
+              setIsProductionAdvanceModalOpen(false);
+            } finally {
+              setIsProcessing(false);
+            }
+          }}
+          onGoToPayments={async (installationDeadline) => {
+            if (installationDeadline) {
+              await updateProductionDetails(order.id, {
+                installation_deadline: installationDeadline,
+                deadline: installationDeadline,
+              });
+            }
+            setIsProductionAdvanceModalOpen(false);
+            setActiveStepTab(PAYMENTS_TAB);
+          }}
+          onGoToDesign={() => {
+            setIsProductionAdvanceModalOpen(false);
+            setActiveStepTab(designTab);
           }}
         />
       )}

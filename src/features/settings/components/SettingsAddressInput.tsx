@@ -55,7 +55,10 @@ export function SettingsAddressInput({
       onChange={onChange}
       onPlaceSelect={({ address }) => onChange(address)}
       placeholder="Search address..."
-      className="w-full"
+      className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-[13px] font-[inherit] bg-white outline-none focus:border-slate-400 focus:ring-[3px] focus:ring-slate-400/10"
+      style={style}
+      onFocus={onFocus}
+      onBlur={onBlur}
     />
   );
 }

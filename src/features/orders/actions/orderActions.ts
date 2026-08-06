@@ -62,6 +62,92 @@ async function assertDesignReadyToLeaveInProgress(
   }
 }
 
+/** Entering Production requires final fabrication files on at least one design item. */
+async function assertProductionFilesUploaded(
+  supabase: Awaited<ReturnType<typeof getSupabase>>,
+  orderUuid: string
+): Promise<void> {
+  const { data: design, error } = await supabase
+    .from("designs")
+    .select("items")
+    .eq("order_id", orderUuid)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+
+  const items = (design?.items as any[]) || [];
+  const hasProductionFiles = items.some(
+    (item: any) => Array.isArray(item.productionFiles) && item.productionFiles.length > 0
+  );
+  if (!hasProductionFiles) {
+    throw new Error(
+      "Cannot move to Production until final production files are uploaded on the Design tab."
+    );
+  }
+}
+
+/** Site Visit cannot advance / freeze until scheduled or skipped (+ at least one location). */
+async function assertSiteVisitReadyToAdvance(
+  supabase: Awaited<ReturnType<typeof getSupabase>>,
+  orderUuid: string
+): Promise<void> {
+  const { canAdvanceSiteVisitAudit } = await import(
+    "@/features/orders/workspace/modules/site-visit/siteVisitUiLogic"
+  );
+  const { data: sv, error } = await supabase
+    .from("site_visits")
+    .select("*, site_visit_measurements(*)")
+    .eq("order_id", orderUuid)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+
+  const gate = canAdvanceSiteVisitAudit(mapSiteVisitFromDb(sv) || {});
+  if (!gate.ok) {
+    throw new Error(gate.tooltip || "Schedule or skip the site visit before advancing.");
+  }
+}
+
+/** Production cannot leave the stage until workshop checklist is fully checked. */
+async function assertProductionChecklistReady(
+  supabase: Awaited<ReturnType<typeof getSupabase>>,
+  orderUuid: string
+): Promise<void> {
+  const {
+    isProductionChecklistComplete,
+    normalizeProductionChecklistItems,
+    DEFAULT_PRODUCTION_CHECKLIST_ITEMS,
+  } = await import("@/features/settings/productionChecklist");
+
+  const { data: prod, error: prodError } = await supabase
+    .from("productions")
+    .select("*")
+    .eq("order_id", orderUuid)
+    .maybeSingle();
+  if (prodError) throw new Error(prodError.message);
+
+  const { data: order, error: orderError } = await supabase
+    .from("orders")
+    .select("company_id")
+    .eq("id", orderUuid)
+    .single();
+  if (orderError) throw new Error(orderError.message);
+
+  let items = DEFAULT_PRODUCTION_CHECKLIST_ITEMS;
+  if (order?.company_id) {
+    const { data: settings } = await supabase
+      .from("app_settings")
+      .select("production_checklist_items")
+      .eq("company_id", order.company_id)
+      .maybeSingle();
+    items = normalizeProductionChecklistItems(settings?.production_checklist_items);
+  }
+
+  if (!isProductionChecklistComplete(mapProductionDetails(prod) || {}, items)) {
+    throw new Error(
+      "Complete all workshop production checklist items before requesting approval."
+    );
+  }
+}
+
 async function getSupabase() {
   const cookieStore = await cookies();
   return createServerClient(
@@ -530,6 +616,14 @@ export async function requestStageAdvancementAction(orderId: string) {
 
   let nextStatus = "Normal";
   const stage = current.stage;
+
+  if (
+    stage === "Site Visit Pending" ||
+    stage === "Site Visit Scheduled" ||
+    stage === "Site Visit Completed"
+  ) {
+    await assertSiteVisitReadyToAdvance(supabase, orderUuid);
+  }
   
   if (stage === "Site Visit Pending" || stage === "Site Visit Scheduled") {
     nextStatus = "Pending Admin Approval: Site Visit Completed";
@@ -551,6 +645,7 @@ export async function requestStageAdvancementAction(orderId: string) {
       ? "Pending Admin Approval: Quote Stage"
       : "Pending Admin Approval: Production Ready";
   } else if (stage === "Production") {
+    await assertProductionChecklistReady(supabase, orderUuid);
     nextStatus = "Pending Admin Approval: Production Ready";
   } else if (stage === "Ready For Installation") {
     throw new Error(
@@ -613,9 +708,9 @@ export async function adminApproveStageAction(orderId: string) {
       `Cannot advance from "${o.stage}" via generic stage approval. Use Send to Customer or the quotation workflow actions in the Quotation tab.`
     );
   }
-  if (o.stage === "Site Visit Completed") {
+  if ((o.stage || "").startsWith("Site Visit")) {
     throw new Error(
-      "Cannot advance from Site Visit Completed via generic stage approval. Choose workflow (Quote First or Design First) from Site Visit review."
+      "Cannot advance from Site Visit via generic stage approval. Schedule or skip the visit, then choose workflow (Quote First or Design First) from Site Visit review."
     );
   }
 
@@ -625,9 +720,6 @@ export async function adminApproveStageAction(orderId: string) {
   // Build the next-stage map dynamically based on workflow type
   const nextStageMap: Record<string, string> = isDesignFirst
     ? {
-        "Site Visit Pending":     "Site Visit Scheduled",
-        "Site Visit Scheduled":   "Design In Progress",
-        "Site Visit Completed":   "Design In Progress",
         "Design In Progress":     "Design Approved",
         "Design Approved":        "Quotation In Progress",
         "Quotation In Progress":  "Quotation Sent",
@@ -640,9 +732,6 @@ export async function adminApproveStageAction(orderId: string) {
         "Completed":              "Closed",
       }
     : {
-        "Site Visit Pending":     "Site Visit Scheduled",
-        "Site Visit Scheduled":   "Quotation In Progress",
-        "Site Visit Completed":   "Quotation In Progress",
         "Quotation In Progress":  "Quotation Sent",
         "Quotation Sent":         "Quotation Negotiation",
         "Quotation Negotiation":  "Quotation Approved",
@@ -664,6 +753,12 @@ export async function adminApproveStageAction(orderId: string) {
   }
   if (o.stage === "Design In Progress" && nextStage === "Design Approved") {
     await assertDesignReadyToLeaveInProgress(supabase, orderUuid);
+  }
+  if (o.stage === "Production" && nextStage === "Ready For Installation") {
+    await assertProductionChecklistReady(supabase, orderUuid);
+  }
+  if (nextStage === "Production") {
+    await assertProductionFilesUploaded(supabase, orderUuid);
   }
 
   // Hard gate: never close/complete while quote balance is still outstanding.
@@ -748,8 +843,8 @@ export async function adminRejectStageAction(orderId: string, notes: string) {
   await insertOrderActivity(supabase, {
     order_id: o.order_id || orderId,
     company_id: o.company_id,
-    actor_name: "Admin",
-    actor_role: "Admin",
+    actor_name: "System",
+    actor_role: "System",
     content: `Admin requested changes at "${o.stage}": ${trimmed}`,
     metadata: { action: "stage_rejected", stage: o.stage, notes: trimmed },
   });
@@ -804,6 +899,8 @@ export async function setWorkflowTypeAction(
       conflict.reason || "Workflow already selected for this order."
     );
   }
+
+  await assertSiteVisitReadyToAdvance(supabase, orderUuid);
 
   const updates = buildWorkflowChoiceUpdate(workflowType);
   const result = await updateOrder(orderUuid, updates);
@@ -1295,9 +1392,11 @@ export async function scheduleSiteVisitAction(
   await insertOrderActivity(supabase, {
     order_id: order.order_id || orderId,
     company_id: order.company_id,
-    actor_name: "System",
-    actor_role: "System",
-    content: `📅 Site visit scheduled for ${date} at ${time} by client.`,
+    actor_name: profile ? "System" : "Customer",
+    actor_role: profile ? "System" : "Customer",
+    content: profile
+      ? `📅 Site visit scheduled for ${date} at ${time}.`
+      : `📅 Site visit scheduled for ${date} at ${time} by client.`,
     metadata: {
       action: "site_visit_scheduled",
       date,
@@ -1398,6 +1497,8 @@ export async function freezeSiteVisitAction(orderId: string) {
   await assertStageEditPermission("site_visit");
   const supabase = await getSupabase();
   const orderUuid = await resolveOrderUuid(supabase, orderId);
+
+  await assertSiteVisitReadyToAdvance(supabase, orderUuid);
 
   // 1. Mark the site_visit row as completed (frozen)
   const { error: svError } = await supabase

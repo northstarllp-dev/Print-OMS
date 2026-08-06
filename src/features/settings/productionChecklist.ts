@@ -97,10 +97,10 @@ export function createProductionChecklistItemId(
 
 /** Resolve checkbox state from checklist jsonb, falling back to stage columns. */
 export function resolveChecklistProgress(
-  productionDetails: Record<string, unknown> | null | undefined,
+  productionDetails: object | null | undefined,
   items: ProductionChecklistItem[]
 ): Record<string, boolean> {
-  const pd = productionDetails || {};
+  const pd = (productionDetails || {}) as Record<string, unknown>;
   const fromJson =
     pd.checklist && typeof pd.checklist === "object" && !Array.isArray(pd.checklist)
       ? (pd.checklist as Record<string, unknown>)
@@ -140,4 +140,27 @@ export function buildProductionChecklistUpdate(
     payload[STAGE_COLUMN_IDS[index]] = !!progress[item.id];
   });
   return payload;
+}
+
+/** True when every workshop checklist milestone is checked. */
+export function isProductionChecklistComplete(
+  productionDetails: object | null | undefined,
+  items: ProductionChecklistItem[] = DEFAULT_PRODUCTION_CHECKLIST_ITEMS
+): boolean {
+  if (!items.length) return false;
+  const progress = resolveChecklistProgress(productionDetails, items);
+  return items.every((item) => !!progress[item.id]);
+}
+
+export function productionChecklistAdvanceGate(
+  productionDetails: object | null | undefined,
+  items: ProductionChecklistItem[] = DEFAULT_PRODUCTION_CHECKLIST_ITEMS
+): { ok: boolean; tooltip: string } {
+  const ok = isProductionChecklistComplete(productionDetails, items);
+  return {
+    ok,
+    tooltip: ok
+      ? ""
+      : "Complete all workshop production checklist items before requesting approval.",
+  };
 }

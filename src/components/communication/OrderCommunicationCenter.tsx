@@ -183,9 +183,14 @@ export function OrderCommunicationCenter({
               className="rounded-xl border border-slate-200 bg-white px-3.5 py-3 shadow-sm"
             >
               <div className="flex items-center justify-between gap-2 mb-1">
-                <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                <span className="text-[10px] font-bold tracking-wide text-slate-600">
                   {event.actor_name}
-                  {event.actor_role ? ` · ${event.actor_role}` : ""}
+                  {event.actor_role ? (
+                    <span className="text-slate-400 font-semibold">
+                      {" "}
+                      · {event.actor_role}
+                    </span>
+                  ) : null}
                 </span>
                 <span className="text-[10px] font-mono text-slate-400 shrink-0">{time}</span>
               </div>

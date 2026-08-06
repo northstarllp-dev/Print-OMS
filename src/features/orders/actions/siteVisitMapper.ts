@@ -99,6 +99,50 @@ export function buildGoogleMapsSearchUrl(query?: string | null): string | null {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(trimmed)}`;
 }
 
+/**
+ * Location link for list/table cells.
+ * Never uses legacy "Skipped…" placeholder text as the link label — prefers real
+ * address, then GPS, then an explicit gmap link.
+ */
+export function resolveSiteVisitMapLink(
+  details?: {
+    customerAddress?: string | null;
+    customer_address?: string | null;
+    siteAddress?: string | null;
+    site_address?: string | null;
+    gpsLocation?: string | null;
+    gps_location?: string | null;
+    gmapLink?: string | null;
+    gmap_link?: string | null;
+  } | null
+): { href: string; label: string } | null {
+  if (!details) return null;
+
+  const gmap =
+    (typeof details.gmapLink === "string" && details.gmapLink.trim()) ||
+    (typeof details.gmap_link === "string" && details.gmap_link.trim()) ||
+    "";
+  if (gmap) {
+    const address = resolveSiteVisitInstallationAddress(details);
+    return { href: gmap, label: address || "Open map location" };
+  }
+
+  const address = resolveSiteVisitInstallationAddress(details);
+  if (address) {
+    const href = buildGoogleMapsSearchUrl(address);
+    if (href) return { href, label: address };
+  }
+
+  const gpsRaw = details.gpsLocation ?? details.gps_location;
+  const gps = typeof gpsRaw === "string" ? gpsRaw.trim() : "";
+  if (gps && gps !== "N/A") {
+    const href = buildGoogleMapsSearchUrl(gps);
+    if (href) return { href, label: gps };
+  }
+
+  return null;
+}
+
 export function mapSiteVisitFromDb(sv: any): SiteVisitDetails | null {
   if (!sv) return null;
 

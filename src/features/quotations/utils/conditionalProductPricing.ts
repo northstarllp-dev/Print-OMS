@@ -1,18 +1,40 @@
 import type { PricingType } from "@/features/quotations/utils/lineAmount";
 
-/** Fallback when a dual-price product has no per-product threshold set. */
+/** Fallback when a Multiple product has no per-product threshold set. */
 export const DEFAULT_UNIT_PRICE_MAX_SQFT = 10;
 
 export type ProductPricingSource = {
   pricing_type?: string | null;
   price_per_sqft?: number | null;
   price_per_unit?: number | null;
-  /** ≤ this sqft → unit price; above → sqft. Set on the product. */
+  /** ≤ this sqft → below band; above → above band. */
   unit_price_max_sqft?: number | null;
+  /** Billing type for ≤ threshold (Multiple). Defaults to per_unit. */
+  pricing_type_below?: string | null;
+  /** Billing type for > threshold (Multiple). Defaults to per_sqft. */
+  pricing_type_above?: string | null;
 };
 
+export function normalizeBandPricingType(
+  value?: string | null,
+  fallback: PricingType = "per_unit"
+): PricingType {
+  const v = (value || "").toLowerCase().trim();
+  if (v === "per_sqft" || v === "per sq.ft" || v === "per sqft" || v === "sqft") {
+    return "per_sqft";
+  }
+  if (v === "per_unit" || v === "per unit" || v === "unit" || v === "nos") {
+    return "per_unit";
+  }
+  return fallback;
+}
+
+export function isMultiplePricingType(pricingType?: string | null): boolean {
+  return (pricingType || "").toLowerCase().trim() === "multiple";
+}
+
+/** Both band amounts present (legacy dual / Multiple). */
 export function productHasDualPricing(p: ProductPricingSource): boolean {
-  // Need both rates so ≤threshold / >threshold switching never zeros the line.
   return (Number(p.price_per_sqft) || 0) > 0 && (Number(p.price_per_unit) || 0) > 0;
 }
 
@@ -22,7 +44,7 @@ export function resolveUnitPriceMaxSqft(p: ProductPricingSource): number {
   return DEFAULT_UNIT_PRICE_MAX_SQFT;
 }
 
-/** ≤ threshold sq → per_unit; above → per_sqft. */
+/** @deprecated Prefer resolvePricingForMeasurement — kept for tests of threshold side. */
 export function pricingTypeForArea(
   measurement: number,
   maxSqftForUnit: number = DEFAULT_UNIT_PRICE_MAX_SQFT
@@ -61,21 +83,32 @@ export function resolveInitialPricing(p: ProductPricingSource): {
 }
 
 /**
- * When adding/updating a line: dual/Multiple products switch by product threshold;
- * single-type products keep catalog pricing.
+ * Multiple / dual products: pick below or above band by threshold.
+ * Each band has its own amount + billing type (unit×unit, sqft×sqft, mixed OK).
+ * Single-type products keep catalog pricing.
  */
 export function resolvePricingForMeasurement(
   p: ProductPricingSource,
   measurement: number
 ): { pricingType: PricingType; price: number; unit: "sqft" | "nos" } {
-  if (productHasDualPricing(p)) {
-    const pricingType = pricingTypeForArea(measurement, resolveUnitPriceMaxSqft(p));
+  const useBands =
+    isMultiplePricingType(p.pricing_type) || productHasDualPricing(p);
+
+  if (useBands && productHasDualPricing(p)) {
+    const useAbove = measurement > resolveUnitPriceMaxSqft(p);
+    const pricingType = useAbove
+      ? normalizeBandPricingType(p.pricing_type_above, "per_sqft")
+      : normalizeBandPricingType(p.pricing_type_below, "per_unit");
+    const price = useAbove
+      ? Number(p.price_per_sqft) || 0
+      : Number(p.price_per_unit) || 0;
     return {
       pricingType,
-      price: getProductPriceForType(p, pricingType),
+      price,
       unit: pricingType === "per_sqft" ? "sqft" : "nos",
     };
   }
+
   const resolved = resolveInitialPricing(p);
   return {
     pricingType: resolved.pricingType,
