@@ -15,11 +15,12 @@ export async function generateMetadata(): Promise<Metadata> {
     ? config.faviconUrl.replace(/\/[^/]+$/, "")
     : null;
 
-  // Prefer brand logo (higher quality) for link previews — favicon.ico looks pixelated in WhatsApp.
-  // Fall back to 512×512 PWA icon when no logo is configured.
+  // WhatsApp crops OG images to a square. Prefer the 512×512 PWA icon (logo
+  // already padded into a square). Wide brand logos (e.g. 992×251) get clipped
+  // to a center crop and look broken in previews.
   const ogImagePath =
-    config.logoUrl ||
-    (iconFolder ? `${iconFolder}/android-chrome-512x512.png` : null);
+    (iconFolder ? `${iconFolder}/android-chrome-512x512.png` : null) ||
+    config.logoUrl;
 
   const ogImageAbs = ogImagePath
     ? `${origin}/printoms${ogImagePath}`

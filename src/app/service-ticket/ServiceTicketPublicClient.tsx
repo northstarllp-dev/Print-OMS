@@ -101,9 +101,10 @@ export default function ServiceTicketPublicClient() {
         );
       }
       setCustomerId(payload.customer?.id || "");
-      setOrders(payload.orders || []);
-      setOrderId("");
-      if (!payload.customer || (payload.orders || []).length === 0) {
+      const nextOrders: LookupOrder[] = payload.orders || [];
+      setOrders(nextOrders);
+      setOrderId(nextOrders.length === 1 ? nextOrders[0].id : "");
+      if (!payload.customer || nextOrders.length === 0) {
         setError("No orders found with this number.");
       }
     } catch (err: unknown) {

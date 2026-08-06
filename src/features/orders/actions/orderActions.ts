@@ -693,7 +693,7 @@ export async function adminApproveStageAction(orderId: string) {
   const orderUuid = await resolveOrderUuid(supabase, orderId);
   const { data: o, error: fetchError } = await supabase
     .from("orders")
-    .select("stage, order_id, workflow_type, stage_status, company_id")
+    .select("stage, order_id, workflow_type, stage_status, company_id, customer_id")
     .eq("id", orderUuid)
     .single();
   if (fetchError) throw new Error(fetchError.message);
@@ -802,6 +802,23 @@ export async function adminApproveStageAction(orderId: string) {
     void notifyOrderStageChange(supabase, orderUuid, nextStage, o.stage).catch((err) =>
       console.error("Stage change notify failed:", err)
     );
+  }
+
+  if (
+    nextStage !== o.stage &&
+    (nextStage === "Completed" || nextStage === "Closed")
+  ) {
+    void import("@/features/portal/actions/portalAdminActions")
+      .then(({ revokePortalAccessForClosedOrder }) =>
+        revokePortalAccessForClosedOrder({
+          customerId: o.customer_id,
+          orderUuid,
+          friendlyOrderId: o.order_id,
+        })
+      )
+      .catch((err) =>
+        console.error("Portal revoke on order close failed:", err)
+      );
   }
 
   return result;
@@ -927,7 +944,7 @@ export async function updateOrderStageAction(id: string, stage: string) {
   const orderUuid = await resolveOrderUuid(supabase, id);
   const { data: o, error: fetchError } = await supabase
     .from("orders")
-    .select("stage, order_id, company_id")
+    .select("stage, order_id, company_id, customer_id")
     .eq("id", orderUuid)
     .single();
   if (fetchError) throw new Error(fetchError.message);
@@ -958,6 +975,20 @@ export async function updateOrderStageAction(id: string, stage: string) {
       metadata: { action: "stage_changed", old: o.stage, new: stage }
     });
     await notifyOrderStageChange(supabase, orderUuid, stage, o.stage);
+
+    if (stage === "Completed" || stage === "Closed") {
+      void import("@/features/portal/actions/portalAdminActions")
+        .then(({ revokePortalAccessForClosedOrder }) =>
+          revokePortalAccessForClosedOrder({
+            customerId: o.customer_id,
+            orderUuid,
+            friendlyOrderId: o.order_id,
+          })
+        )
+        .catch((err) =>
+          console.error("Portal revoke on order close failed:", err)
+        );
+    }
   }
 
   return result;

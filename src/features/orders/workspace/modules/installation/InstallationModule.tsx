@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { ArrowLeft, Sparkles, Check, Loader2, CheckCircle, Save, UploadCloud, Calendar, Clock, Shield, FileText, Image as ImageIcon, Eye, Download, Trash, X, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft, Sparkles, Check, Loader2, CheckCircle, Save, Camera, Calendar, Clock, Shield, FileText, Image as ImageIcon, Eye, Download, Trash, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { InstallationScheduleModule } from "@/features/installations/components/InstallationScheduleModule";
 import { deleteStorageFilesAction } from "@/features/orders/actions/storageActions";
 import { uploadFiles } from "@/utils/storage/uploadClient";
@@ -484,30 +484,57 @@ export function InstallationModule({
                 )}
                 
                 {!isCompleted && (
-                  <div className="pt-2">
+                  <div className="relative pt-2 flex flex-wrap items-center gap-3">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      id="installation-photos-camera"
+                      className="absolute w-px h-px p-0 -m-px overflow-hidden whitespace-nowrap border-0 [clip:rect(0,0,0,0)]"
+                      onChange={handlePhotoFiles}
+                      disabled={uploadingPhotos || !canEdit}
+                      tabIndex={-1}
+                    />
                     <input
                       type="file"
                       multiple
-                      accept="image/*"
-                      id="installation-photos-upload"
-                      className="hidden"
+                      accept="image/*,image/heic,image/heif"
+                      id="installation-photos-gallery"
+                      className="absolute w-px h-px p-0 -m-px overflow-hidden whitespace-nowrap border-0 [clip:rect(0,0,0,0)]"
                       onChange={handlePhotoFiles}
                       disabled={uploadingPhotos || !canEdit}
+                      tabIndex={-1}
                     />
-                    <label
-                      htmlFor="installation-photos-upload"
-                      className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all border ${
-                        uploadingPhotos || !canEdit
-                          ? "bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed" 
-                          : "bg-white hover:bg-slate-50 border-slate-200 text-slate-700 cursor-pointer shadow-sm"
-                      }`}
-                    >
-                      {uploadingPhotos ? (
-                        <><Loader2 size={14} className="animate-spin text-slate-400" /> Uploading...</>
-                      ) : (
-                        <><UploadCloud size={14} className="text-slate-500" /> Upload Photos</>
-                      )}
-                    </label>
+                    {uploadingPhotos ? (
+                      <span className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold border border-slate-200 bg-slate-50 text-slate-400">
+                        <Loader2 size={14} className="animate-spin" /> Uploading...
+                      </span>
+                    ) : (
+                      <>
+                        <label
+                          htmlFor="installation-photos-camera"
+                          className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                            !canEdit
+                              ? "bg-slate-50 text-slate-400 border border-slate-200 cursor-not-allowed pointer-events-none"
+                              : "bg-[var(--color-secondary)] text-white cursor-pointer hover:opacity-90"
+                          }`}
+                          aria-disabled={!canEdit}
+                        >
+                          <Camera size={14} /> Take Photo
+                        </label>
+                        <label
+                          htmlFor="installation-photos-gallery"
+                          className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all border ${
+                            !canEdit
+                              ? "bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed pointer-events-none"
+                              : "bg-white hover:bg-slate-50 border-slate-200 text-slate-700 cursor-pointer shadow-sm"
+                          }`}
+                          aria-disabled={!canEdit}
+                        >
+                          <ImageIcon size={14} className="text-slate-500" /> Gallery
+                        </label>
+                      </>
+                    )}
                   </div>
                 )}
               </div>

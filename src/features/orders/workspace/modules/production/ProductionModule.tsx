@@ -268,31 +268,33 @@ export function ProductionModule({
 
       {/* Embedded: only date started + deadline. Portal: full header + info cards. */}
       {embedded ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50">
-            <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider whitespace-nowrap">
-              Date Started
-            </span>
-            <span className="text-xs font-bold text-slate-800 whitespace-nowrap">
-              {order.dateCreated
-                ? new Date(order.dateCreated).toLocaleDateString("en-IN", {
-                    day: "numeric",
-                    month: "short",
-                    year: "numeric",
-                  })
-                : "TBD"}
-            </span>
-          </div>
-
-          {alert && (
-            <div className={`px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-all ${
-              alert.type === "success"
-                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                : "bg-rose-50 text-rose-700 border-rose-200"
-            }`}>
-              {alert.message}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50">
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider whitespace-nowrap">
+                Date Started
+              </span>
+              <span className="text-xs font-bold text-slate-800 whitespace-nowrap">
+                {order.dateCreated
+                  ? new Date(order.dateCreated).toLocaleDateString("en-IN", {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                    })
+                  : "TBD"}
+              </span>
             </div>
-          )}
+
+            {alert && (
+              <div className={`px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-all ${
+                alert.type === "success"
+                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                  : "bg-rose-50 text-rose-700 border-rose-200"
+              }`}>
+                {alert.message}
+              </div>
+            )}
+          </div>
 
           {editingDeadline ? (
             <div className="inline-flex items-center gap-1.5">

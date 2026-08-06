@@ -1711,9 +1711,6 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                     <div className="text-base sm:text-lg font-extrabold text-slate-900 leading-snug truncate">
                       {order.businessName || "—"}
                     </div>
-                    <div className="mt-0.5 text-sm text-slate-500 truncate">
-                      Lead: {order.clientName || "—"}
-                    </div>
                   </div>
 
                   {!isEmployee && (
@@ -2355,6 +2352,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           onClose={() => setShowCustomerPanel(false)}
           customer={client}
           orderId={initialOrder.id}
+          leadName={order.clientName}
           installationAddress={
             order.siteVisitDetails?.customerAddress &&
             !String(order.siteVisitDetails.customerAddress).startsWith("Skipped")

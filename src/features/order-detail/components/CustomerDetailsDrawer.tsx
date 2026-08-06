@@ -11,6 +11,8 @@ interface CustomerDetailsDrawerProps {
   onClose: () => void;
   customer: Customer;
   orderId: string;
+  /** Contact / lead person name for this order. */
+  leadName?: string | null;
   /** Site-visit / skip-flow location used for installation. */
   installationAddress?: string | null;
   installationGps?: string | null;
@@ -57,6 +59,7 @@ export const CustomerDetailsDrawer: React.FC<CustomerDetailsDrawerProps> = ({
   onClose,
   customer,
   orderId,
+  leadName,
   installationAddress,
   installationGps,
 }) => {
@@ -142,6 +145,11 @@ export const CustomerDetailsDrawer: React.FC<CustomerDetailsDrawerProps> = ({
               <div className="text-xs font-semibold text-slate-500 mt-0.5 font-mono truncate">
                 {customer.customerCode || customer.customerId || "No ID"}
               </div>
+              {(leadName?.trim() || enquiry?.leadName?.trim()) && (
+                <div className="text-xs text-slate-500 mt-0.5 truncate">
+                  Lead: {leadName?.trim() || enquiry?.leadName}
+                </div>
+              )}
             </div>
           </div>
           <button

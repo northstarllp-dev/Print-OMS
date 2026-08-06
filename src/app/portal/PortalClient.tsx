@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { Logo } from "@/components/ui/Logo";
 import { PlatformMadeWithLove } from "@/components/ui/PlatformMadeWithLove";
+import { OrderImage } from "@/components/storage/OrderImage";
 import { withBasePath } from "@/lib/appBasePath";
 import { loadClientConfig } from "@/config/loadClientConfig";
 import { createClient } from "@/utils/supabase/client";
@@ -1092,8 +1093,9 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                                   key={`${url}-${index}`}
                                   className="border border-slate-200 rounded-xl overflow-hidden aspect-video bg-slate-100"
                                 >
-                                  <img
+                                  <OrderImage
                                     src={url}
+                                    width={640}
                                     alt={`Installation photo ${index + 1}`}
                                     className="w-full h-full object-cover"
                                   />

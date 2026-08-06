@@ -50,9 +50,10 @@ function normalizeLinkUrl(url: string): string {
 }
 
 function appendLink(text: string, url: string): string {
-  const withCta = text
-    .replace(/using the button below\.?/, "using the link below:")
-    .replace(/using the link below\.?/, "using the link below:");
+  const withCta = text.replace(
+    /using the (?:button|link) below[:.]?/g,
+    "using the link below:"
+  );
   return `${withCta.trimEnd()}\n\n${normalizeLinkUrl(url)}`;
 }
 

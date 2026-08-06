@@ -57,6 +57,7 @@ export function ServiceTicketDetailModal({
     ticket?.resolution_photos ?? []
   );
   const [showCompleteConfirm, setShowCompleteConfirm] = React.useState(false);
+  const [showSaveConfirm, setShowSaveConfirm] = React.useState(false);
   // Ticket resolved — show the customer message popup before closing
   const [showResolvedMsg, setShowResolvedMsg] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
@@ -131,6 +132,8 @@ export function ServiceTicketDetailModal({
         resolutionPhotos,
       });
       onUpdated();
+      setShowSaveConfirm(false);
+      onClose();
     } finally {
       setSaving(false);
     }
@@ -384,7 +387,7 @@ export function ServiceTicketDetailModal({
           {canManage && (
             <button
               className="prt-btn prt-btn-secondary"
-              onClick={handleSaveResolution}
+              onClick={() => setShowSaveConfirm(true)}
               disabled={saving}
             >
               Save Resolution
@@ -401,6 +404,54 @@ export function ServiceTicketDetailModal({
           )}
         </div>
       </div>
+
+      {/* ─── Save Confirmation ─── */}
+      {showSaveConfirm && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(12, 15, 26, 0.65)",
+            zIndex: 110,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "16px",
+          }}
+        >
+          <div
+            className="prt-card prt-animate-in"
+            style={{
+              width: "100%",
+              maxWidth: "420px",
+              padding: "24px",
+            }}
+          >
+            <h4 className="text-title-sm" style={{ margin: "0 0 8px", color: "var(--color-on-surface)" }}>
+              Save Resolution?
+            </h4>
+            <p className="text-body-md" style={{ margin: "0 0 24px", color: "var(--color-on-surface-variant)" }}>
+              This will save the resolution notes and photos for this ticket.
+            </p>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px" }}>
+              <button
+                className="prt-btn prt-btn-secondary"
+                onClick={() => setShowSaveConfirm(false)}
+                disabled={saving}
+              >
+                Cancel
+              </button>
+              <button
+                className="prt-btn prt-btn-primary"
+                onClick={() => void handleSaveResolution()}
+                disabled={saving}
+              >
+                {saving ? "Saving..." : "Confirm"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ─── Complete Confirmation ─── */}
       {showCompleteConfirm && (

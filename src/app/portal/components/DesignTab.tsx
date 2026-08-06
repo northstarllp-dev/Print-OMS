@@ -296,11 +296,10 @@ export function DesignTab({ order, customer, siteVisitItems = [], portalToken, o
         status: "Changes Requested" 
       } : v
     );
-    
-    await handleUpdateItemVersions(updatedVersions, "Design In Progress");
-    
+
     setCommentingOn(null);
     setCommentText("");
+    await handleUpdateItemVersions(updatedVersions, "Design In Progress");
   };
 
   const handleGeneralFeedbackSubmit = async () => {

@@ -215,8 +215,10 @@ export default async function PortalPage({
   // If orderId is provided, perform an explicit IDOR verification check:
   // ensure the requested order_id belongs to the validated customer_id.
   if (payload.orderId) {
-    const hasOrder = ordersData.some((o) => o.order_id === payload.orderId || o.id === payload.orderId);
-    if (!hasOrder) {
+    const linkedOrder = (ordersData || []).find(
+      (o) => o.order_id === payload.orderId || o.id === payload.orderId
+    );
+    if (!linkedOrder) {
       return (
         <PortalError
           title="Access Denied"
@@ -224,6 +226,26 @@ export default async function PortalPage({
         />
       );
     }
+    if (linkedOrder.stage === "Completed" || linkedOrder.stage === "Closed") {
+      return (
+        <PortalError
+          title="Portal Link Inactive"
+          message="This order has been closed. The customer portal link is no longer active. Please contact us if you need help."
+        />
+      );
+    }
+  } else if (
+    (ordersData || []).length > 0 &&
+    (ordersData || []).every(
+      (o) => o.stage === "Completed" || o.stage === "Closed"
+    )
+  ) {
+    return (
+      <PortalError
+        title="Portal Link Inactive"
+        message="All linked orders have been closed. The customer portal link is no longer active. Please contact us if you need help."
+      />
+    );
   }
 
   // ── Map to camelCase for frontend ──

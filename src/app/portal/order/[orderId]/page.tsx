@@ -159,6 +159,15 @@ export default async function OrderDetailPage({
     );
   }
 
+  if (orderData.stage === "Completed" || orderData.stage === "Closed") {
+    return (
+      <PortalError
+        title="Portal Link Inactive"
+        message="This order has been closed. The customer portal link is no longer active. Please contact us if you need help."
+      />
+    );
+  }
+
   // Fetch quotation for this order (service role; customer-visible statuses only)
   const { data: quotationRow } = await admin
     .from("quotations")

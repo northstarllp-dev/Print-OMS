@@ -90,9 +90,10 @@ export function CreateServiceTicketModal({
       const formattedPhone = getFormattedPhone(phone);
       const result = await lookupOrdersByPhone(formattedPhone);
       setSelectedCustomerId(result.customer?.id ?? "");
-      setOrders(result.orders ?? []);
-      setSelectedOrderId("");
-      if (!result.customer || result.orders.length === 0) {
+      const nextOrders = result.orders ?? [];
+      setOrders(nextOrders);
+      setSelectedOrderId(nextOrders.length === 1 ? nextOrders[0].id : "");
+      if (!result.customer || nextOrders.length === 0) {
         setError("No customer orders found for this mobile number.");
       }
     } catch (err: unknown) {
