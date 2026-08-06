@@ -3,8 +3,15 @@
 import React, { useState, useRef, useEffect } from "react";
 import { FileText, ZoomIn, ZoomOut, UploadCloud, Upload, X, Trash, RefreshCw, Download, Maximize, RotateCw, Shield, AlertTriangle, CheckCircle } from "lucide-react";
 import { Order, DesignRecord, DesignVersion } from "@/types";
-import { uploadFileViaStaffApi } from "@/utils/supabase/uploadStorageFile";
+import { uploadFiles } from "@/utils/storage/uploadClient";
+import { parseStoredRef } from "@/utils/storage/storageRef";
+import { getSignedReadUrl } from "@/utils/storage/signedReadCache";
+import { OrderImage } from "@/components/storage/OrderImage";
 import type { StorageUploadPurpose } from "@/utils/supabase/serverStorageUpload";
+import {
+  planProductionFileDelete,
+  removeProductionFileById,
+} from "@/utils/supabase/storageLifecycleLogic";
 import { updateDesignDetailsAction } from "@/features/designs/actions/designActions";
 import { deleteStorageFilesAction } from "@/features/orders/actions/storageActions";
 import { getServerActionErrorMessage } from "@/lib/serverActionError";
@@ -109,8 +116,17 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
     const fileName = file instanceof File ? file.name : (originalFileName || "image.png");
     const purpose: StorageUploadPurpose =
       folder === "production" ? "production_asset" : "design_proof";
-    const { url } = await uploadFileViaStaffApi(file, order.id, purpose, fileName);
-    return url;
+    const asFile =
+      file instanceof File && file.name ? file : new File([file], fileName, { type: file.type || "image/png" });
+    const { ok, failed } = await uploadFiles([asFile], {
+      orderId: order.id,
+      purpose,
+      channel: "staff",
+      // Design proofs / production files: don't recompress production assets.
+      compress: purpose !== "production_asset",
+    });
+    if (!ok.length) throw new Error(failed[0]?.error || "Upload failed");
+    return `${ok[0].bucket}/${ok[0].path}`;
   };
 
   const handleDesignerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -124,35 +140,52 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
       setPreviewUrl(url);
       setPendingUploadFile(file);
       setRotationAngle(0);
+      e.target.value = "";
       return;
     }
 
     // Direct upload for multiple files or single PDF
     setUploading(true);
-    let currentVersions = [...localVersions];
     try {
-      for (const file of files) {
-        const url = await uploadFile(file);
-        const newVersion: DesignVersion = {
+      const { ok, failed } = await uploadFiles(files, {
+        orderId: order.id,
+        purpose: "design_proof",
+        channel: "staff",
+        compress: true,
+        concurrency: 3,
+      });
+      if (failed.length) {
+        alert(`${failed.length} file(s) failed to upload: ${failed[0].error}`);
+      }
+      if (!ok.length) return;
+
+      let currentVersions = [...localVersions];
+      for (let i = 0; i < ok.length; i++) {
+        currentVersions.push({
           id: crypto.randomUUID(),
           versionNumber: currentVersions.length + 1,
-          proofUrl: url,
-          fileName: file.name,
+          proofUrl: `${ok[i].bucket}/${ok[i].path}`,
+          fileName: ok[i].fileName,
           status: "Draft",
           comments: [],
           createdAt: new Date().toISOString()
-        };
-        currentVersions.push(newVersion);
+        });
       }
-      if (currentVersions.length > localVersions.length) {
-        setSelectedVersionId(currentVersions[currentVersions.length - 1].id);
+      setSelectedVersionId(currentVersions[currentVersions.length - 1].id);
+      try {
         await handleUpdateItemVersions(currentVersions);
+      } catch (dbErr) {
+        // Rollback: delete uploaded storage objects so we don't orphan them.
+        for (const o of ok) {
+          try { await deleteStorageFilesAction(o.bucket, [o.path]); } catch {}
+        }
+        throw dbErr;
       }
     } catch (err: any) {
       alert("Upload failed: " + getServerActionErrorMessage(err));
     } finally {
       setUploading(false);
-      e.target.value = ''; // Reset input
+      e.target.value = '';
     }
   };
 
@@ -171,7 +204,16 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
       };
       const newVersions = [...localVersions, newVersion];
       setSelectedVersionId(newVersion.id);
-      await handleUpdateItemVersions(newVersions);
+      try {
+        await handleUpdateItemVersions(newVersions);
+      } catch (dbErr) {
+        // Rollback: delete the uploaded storage object.
+        const parsed = parseStoredRef(url);
+        if (parsed) {
+          try { await deleteStorageFilesAction(parsed.bucket, [parsed.path]); } catch {}
+        }
+        throw dbErr;
+      }
     } catch (err: any) {
       alert("Upload failed: " + getServerActionErrorMessage(err));
     } finally {
@@ -243,16 +285,24 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
     if (files.length === 0 || !activeItem) return;
     setUploading(true);
     try {
-      const newFiles: { id: string; name: string; url: string; createdAt: string }[] = [];
-      for (const file of files) {
-        const url = await uploadFile(file, undefined, "production");
-        newFiles.push({
-          id: crypto.randomUUID(),
-          name: file.name,
-          url,
-          createdAt: new Date().toISOString()
-        });
+      const { ok, failed } = await uploadFiles(files, {
+        orderId: order.id,
+        purpose: "production_asset",
+        channel: "staff",
+        compress: false,
+        concurrency: 3,
+      });
+      if (failed.length) {
+        alert(`${failed.length} file(s) failed to upload: ${failed[0].error}`);
       }
+      if (!ok.length) return;
+
+      const newFiles = ok.map((o) => ({
+        id: crypto.randomUUID(),
+        name: o.fileName,
+        url: `${o.bucket}/${o.path}`,
+        createdAt: new Date().toISOString()
+      }));
       const newItems = itemsList.map(item => {
         if (item.id === activeItem.id) {
           return { ...item, productionFiles: [...(item.productionFiles || []), ...newFiles] };
@@ -260,25 +310,35 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
         return item;
       });
       const details: Partial<DesignRecord> = { items: newItems };
-      if (updateDesignDetails) {
-        await updateDesignDetails(order.id, details);
-      } else {
-        await updateDesignDetailsAction(order.id, details, dd.updated_at);
+      try {
+        if (updateDesignDetails) {
+          await updateDesignDetails(order.id, details);
+        } else {
+          await updateDesignDetailsAction(order.id, details, dd.updated_at);
+        }
+      } catch (dbErr) {
+        // Rollback: delete uploaded storage objects.
+        for (const o of ok) {
+          try { await deleteStorageFilesAction(o.bucket, [o.path]); } catch {}
+        }
+        throw dbErr;
       }
     } catch (err: any) {
       alert("Upload failed: " + getServerActionErrorMessage(err));
     } finally {
       setUploading(false);
-      e.target.value = ''; // Reset input so same file can be uploaded again if needed
+      e.target.value = '';
     }
   };
 
   const handleDeleteProductionFile = async (fileId: string) => {
     if (!canEdit || !confirm("Are you sure you want to delete this production file?") || !activeItem) return;
     try {
+      const currentFiles = activeItem.productionFiles || [];
+      const { remaining, removed } = removeProductionFileById(currentFiles, fileId);
       const newItems = itemsList.map(item => {
         if (item.id === activeItem.id) {
-          return { ...item, productionFiles: (item.productionFiles || []).filter(f => f.id !== fileId) };
+          return { ...item, productionFiles: remaining };
         }
         return item;
       });
@@ -287,6 +347,16 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
         await updateDesignDetails(order.id, details);
       } else {
         await updateDesignDetailsAction(order.id, details, dd.updated_at);
+      }
+
+      // Best-effort storage cleanup — DB record is already removed.
+      const storagePlan = planProductionFileDelete(removed);
+      if (storagePlan.storage) {
+        try {
+          await deleteStorageFilesAction(storagePlan.storage.bucket, [storagePlan.storage.path]);
+        } catch (cleanupErr) {
+          console.error("Storage cleanup failed (DB record already removed):", cleanupErr);
+        }
       }
     } catch (err: any) {
       alert("Delete failed: " + getServerActionErrorMessage(err));
@@ -304,9 +374,9 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
       await handleUpdateItemVersions(newVersions);
       
       if (versionToDelete?.proofUrl) {
-        const pathPart = versionToDelete.proofUrl.split("/public/site-visit-photos/")[1];
-        if (pathPart) {
-          await deleteStorageFilesAction("site-visit-photos", [pathPart]);
+        const parsed = parseStoredRef(versionToDelete.proofUrl);
+        if (parsed) {
+          await deleteStorageFilesAction(parsed.bucket, [parsed.path]);
         }
       }
     } catch (err: any) {
@@ -317,7 +387,12 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
 
   const handleDownload = async (url: string, filename: string) => {
     try {
-      const response = await fetch(url);
+      let fetchUrl = url;
+      const parsed = parseStoredRef(url);
+      if (parsed) {
+        fetchUrl = await getSignedReadUrl(parsed.bucket, parsed.path);
+      }
+      const response = await fetch(fetchUrl);
       const blob = await response.blob();
       const blobUrl = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -330,6 +405,18 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
     } catch (error) {
       console.error("Download failed:", error);
       alert("Failed to download file");
+    }
+  };
+
+  const openStoredRef = async (refOrUrl: string) => {
+    try {
+      const parsed = parseStoredRef(refOrUrl);
+      const href = parsed
+        ? await getSignedReadUrl(parsed.bucket, parsed.path)
+        : refOrUrl;
+      window.open(href, "_blank", "noopener,noreferrer");
+    } catch {
+      alert("Could not open file.");
     }
   };
 
@@ -398,13 +485,18 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
           <div className="flex flex-wrap gap-3">
             {dd.resources.map(res => (
               <div key={res.id} className="flex items-center p-1.5 bg-white border border-slate-200 rounded-lg shadow-sm hover:border-blue-400 group">
-                <a href={res.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-1.5">
+                <button
+                  type="button"
+                  onClick={() => void openStoredRef(res.url)}
+                  className="flex items-center gap-2 px-1.5 text-left"
+                  title="Open file"
+                >
                   {res.type === 'file' ? <FileText size={16} className="text-blue-500" /> : <UploadCloud size={16} className="text-slate-500" />}
                   <span className="text-xs text-slate-700 font-medium truncate max-w-[140px] group-hover:underline">{res.name}</span>
-                </a>
+                </button>
                 <div className="w-px h-4 bg-slate-200 mx-1.5"></div>
                 <button 
-                  onClick={(e) => { e.preventDefault(); handleDownload(res.url, res.name); }} 
+                  onClick={(e) => { e.preventDefault(); void handleDownload(res.url, res.name); }} 
                   className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
                   title="Download file"
                 >
@@ -493,7 +585,7 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
                 
                 {/* Image Controls (Enlarge & Download) */}
                 <div className="absolute top-4 right-4 flex gap-2 z-50">
-                  <button onClick={() => window.open(activeVersion.proofUrl, '_blank')} className="p-2 bg-white/10 hover:bg-white/20 backdrop-blur text-white rounded-lg transition-colors" title="Enlarge">
+                  <button onClick={() => openStoredRef(activeVersion.proofUrl)} className="p-2 bg-white/10 hover:bg-white/20 backdrop-blur text-white rounded-lg transition-colors" title="Enlarge">
                     <Maximize size={18} />
                   </button>
                   <button onClick={() => handleDownload(activeVersion.proofUrl, `Design_Proof_${activeVersion.versionNumber}`)} className="p-2 bg-white/10 hover:bg-white/20 backdrop-blur text-white rounded-lg transition-colors" title="Download">
@@ -511,7 +603,7 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
                     </div>
                   )}
 
-                  <img src={activeVersion.proofUrl} alt={`Version ${activeVersion.versionNumber}`} className="max-h-[400px] object-contain transition-all duration-300 relative z-0" style={{ display: 'block' }} />
+                  <OrderImage src={activeVersion.proofUrl} format="origin" alt={`Version ${activeVersion.versionNumber}`} className="max-h-[400px] object-contain transition-all duration-300 relative z-0" style={{ display: 'block' }} />
                   
                   {/* Render Comments/Pins */}
                   {activeVersion.comments?.map((comment) => (
@@ -577,13 +669,13 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
                   <div className="min-w-0">
                     <h3 className="text-base md:text-lg font-bold text-slate-800">Final Production Files for {activeItem.name}</h3>
-                    <p className="text-xs text-slate-500">Upload final production files (.cdr, .ai, .dxf, .plt, .pdf, .svg, .png, .jpg) for fabrication.</p>
+                    <p className="text-xs text-slate-500">Upload final production files (.cdr, .ai, .eps, .psd, .dxf, .plt, .pdf, .svg, .zip, .png, .jpg) for fabrication.</p>
                   </div>
                   {isEmployee && !isReadOnly && (
                     <label className="cursor-pointer bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-sm w-full sm:w-auto shrink-0">
                       {uploading ? <RefreshCw size={14} className="animate-spin" /> : <Upload size={14} />}
                       {uploading ? "Uploading..." : "Upload File"}
-                      <input type="file" multiple onChange={handleProductionFileUpload} accept=".cdr,.ai,.dxf,.plt,.pdf,.svg,.png,.jpg,.jpeg" className="hidden" disabled={uploading} />
+                      <input type="file" multiple onChange={handleProductionFileUpload} accept=".cdr,.ai,.eps,.psd,.dxf,.plt,.pdf,.svg,.zip,.png,.jpg,.jpeg,.webp,.gif" className="hidden" disabled={uploading} />
                     </label>
                   )}
                 </div>
@@ -596,9 +688,13 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
                         <span className="text-xs font-bold text-slate-700 truncate w-full text-center" title={file.name}>
                           {file.name}
                         </span>
-                        <a href={file.url} target="_blank" rel="noreferrer" className="mt-3 px-3 py-1.5 bg-slate-100 text-slate-600 rounded text-[10px] font-bold hover:bg-slate-200 transition-colors">
+                        <button
+                          type="button"
+                          onClick={() => openStoredRef(file.url)}
+                          className="mt-3 px-3 py-1.5 bg-slate-100 text-slate-600 rounded text-[10px] font-bold hover:bg-slate-200 transition-colors"
+                        >
                           Download
-                        </a>
+                        </button>
                         {isEmployee && !isReadOnly && (
                           <button 
                             onClick={() => handleDeleteProductionFile(file.id)}

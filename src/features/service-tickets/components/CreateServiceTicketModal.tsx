@@ -2,8 +2,11 @@
 
 import React from "react";
 import { Upload, Loader2, Search, X, Phone, FileText, Trash2, Eye, ArrowLeft } from "lucide-react";
-import { createClient } from "@/utils/supabase/client";
 import { deleteStorageFilesAction } from "@/features/orders/actions/storageActions";
+import { parseStoredRef } from "@/utils/storage/storageRef";
+import { uploadFiles } from "@/utils/storage/uploadClient";
+import { OrderImage } from "@/components/storage/OrderImage";
+import { getSignedReadUrl } from "@/utils/storage/signedReadCache";
 import {
   createServiceTicketAction,
   lookupOrdersByPhone,
@@ -99,32 +102,26 @@ export function CreateServiceTicketModal({
     }
   }
 
-  async function uploadFiles(files: FileList | null) {
-    if (!files || files.length === 0) return;
+  async function uploadFilesHandler(files: FileList | null) {
+    if (!files || files.length === 0 || !selectedOrderId) return;
     setError(null);
-    const supabase = createClient();
-
     try {
-      const uploadPromises = Array.from(files).map(async (file) => {
-        const ext = file.name.split(".").pop() || "jpg";
-        const path = `support/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-        const { error: uploadError } = await supabase.storage
-          .from("service-ticket-photos")
-          .upload(path, file, { contentType: file.type, upsert: false });
-
-        if (uploadError) throw new Error(uploadError.message);
-
-        const { data } = supabase.storage.from("service-ticket-photos").getPublicUrl(path);
-        return {
-          url: data.publicUrl,
-          name: file.name,
-          uploadedBy: "Admin",
-          createdAt: new Date().toISOString(),
-        };
+      const { ok, failed } = await uploadFiles(Array.from(files), {
+        orderId: selectedOrderId,
+        purpose: "service_ticket_photo",
+        channel: "staff",
+        concurrency: 3,
       });
-
-      const uploadedPhotos = await Promise.all(uploadPromises);
+      const uploadedPhotos: TicketPhoto[] = ok.map((o) => ({
+        url: `${o.bucket}/${o.path}`,
+        name: o.fileName,
+        uploadedBy: "Admin",
+        createdAt: new Date().toISOString(),
+      }));
       setPhotos((prev) => [...prev, ...uploadedPhotos]);
+      if (failed.length) {
+        setError(`${failed.length} photo(s) failed to upload: ${failed[0].error}`);
+      }
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Photo upload failed"));
     }
@@ -132,10 +129,11 @@ export function CreateServiceTicketModal({
 
   async function removePhoto(index: number) {
     const photo = photos[index];
+    // Best-effort storage cleanup (photo is not yet linked to a DB record).
     try {
-      const path = photo.url.split("/service-ticket-photos/").pop();
-      if (path) {
-        await deleteStorageFilesAction("service-ticket-photos", [path]);
+      const parsed = parseStoredRef(photo.url);
+      if (parsed) {
+        await deleteStorageFilesAction(parsed.bucket, [parsed.path]);
       }
     } catch {
       // best-effort cleanup
@@ -158,6 +156,20 @@ export function CreateServiceTicketModal({
       });
       setCreatedTicket(ticket);
     } catch (err: unknown) {
+      // Roll back uploaded photos so they don't become storage orphans.
+      const byBucket = new Map<string, string[]>();
+      for (const p of photos) {
+        const parsed = parseStoredRef(p.url);
+        if (parsed) {
+          const list = byBucket.get(parsed.bucket) || [];
+          list.push(parsed.path);
+          byBucket.set(parsed.bucket, list);
+        }
+      }
+      for (const [bucket, paths] of byBucket) {
+        await deleteStorageFilesAction(bucket, paths).catch(() => {});
+      }
+      setPhotos([]);
       setError(getErrorMessage(err, "Failed to create ticket"));
     } finally {
       setSaveLoading(false);
@@ -349,7 +361,7 @@ export function CreateServiceTicketModal({
                       className="hidden"
                       onChange={async (e) => {
                         const target = e.target;
-                        await uploadFiles(target.files);
+                        await uploadFilesHandler(target.files);
                         target.value = "";
                       }}
                     />
@@ -362,22 +374,32 @@ export function CreateServiceTicketModal({
                           key={i}
                           className="group relative w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden border border-[var(--color-outline-variant)] shadow-sm"
                         >
-                          <img
+                          <OrderImage
                             src={photo.url}
+                            width={200}
                             alt={`Preview ${i}`}
                             className="w-full h-full object-cover"
                           />
                           <div className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 absolute inset-0 bg-slate-900/70 flex items-center justify-center gap-1.5 transition-opacity">
-                            <a
-                              href={photo.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              onClick={(e) => e.stopPropagation()}
+                            <button
+                              type="button"
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                try {
+                                  const parsed = parseStoredRef(photo.url);
+                                  const href = parsed
+                                    ? await getSignedReadUrl(parsed.bucket, parsed.path)
+                                    : photo.url;
+                                  window.open(href, "_blank", "noopener,noreferrer");
+                                } catch {
+                                  /* ignore */
+                                }
+                              }}
                               className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center text-white hover:bg-white/40"
                               title="View"
                             >
                               <Eye size={14} />
-                            </a>
+                            </button>
                             <button
                               type="button"
                               onClick={(e) => {

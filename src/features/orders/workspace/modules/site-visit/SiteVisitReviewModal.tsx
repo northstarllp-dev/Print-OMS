@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { SiteVisitDetails, SignLocation } from "@/types";
 import { loadClientConfig } from "@/config/loadClientConfig";
+import { OrderImage } from "@/components/storage/OrderImage";
 
 interface SiteVisitReviewModalProps {
   siteVisit: SiteVisitDetails;
@@ -156,19 +157,17 @@ function LocationReviewCard({ loc, index }: { loc: SignLocation; index: number }
               </div>
               <div className="flex flex-wrap gap-2">
                 {loc.photos?.map((url, i) => (
-                  <a
+                  <div
                     key={i}
-                    href={url}
-                    target="_blank"
-                    rel="noopener noreferrer"
                     className="block w-16 h-16 rounded-xl overflow-hidden border border-slate-200 hover:opacity-90 transition-opacity shrink-0"
                   >
-                    <img
+                    <OrderImage
                       src={url}
+                      width={200}
                       alt={`Photo ${i + 1}`}
                       className="w-full h-full object-cover"
                     />
-                  </a>
+                  </div>
                 ))}
               </div>
             </div>

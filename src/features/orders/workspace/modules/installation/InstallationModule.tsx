@@ -4,7 +4,10 @@ import React, { useEffect, useState } from "react";
 import { ArrowLeft, Sparkles, Check, Loader2, CheckCircle, Save, UploadCloud, Calendar, Clock, Shield, FileText, Image as ImageIcon, Eye, Download, Trash, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { InstallationScheduleModule } from "@/features/installations/components/InstallationScheduleModule";
 import { deleteStorageFilesAction } from "@/features/orders/actions/storageActions";
-import { uploadFileViaStaffApi } from "@/utils/supabase/uploadStorageFile";
+import { uploadFiles } from "@/utils/storage/uploadClient";
+import { parseStoredRef } from "@/utils/storage/storageRef";
+import { getSignedReadUrl } from "@/utils/storage/signedReadCache";
+import { OrderImage } from "@/components/storage/OrderImage";
 import { resolveSiteVisitInstallationAddress, buildGoogleMapsSearchUrl } from "@/features/orders/actions/siteVisitMapper";
 import { OverlayPortal } from "@/components/ui/OverlayPortal";
 import type { StageModuleProps } from "../../shared/types";
@@ -101,6 +104,29 @@ export function InstallationModule({
     setViewerIndex(index);
   };
 
+  const handleDownloadPhoto = async (url: string, filename?: string) => {
+    try {
+      let fetchUrl = url;
+      const parsed = parseStoredRef(url);
+      if (parsed) {
+        fetchUrl = await getSignedReadUrl(parsed.bucket, parsed.path);
+      }
+      const response = await fetch(fetchUrl);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = filename || `installation-photo-${Date.now()}.jpg`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error("Download failed:", error);
+      window.alert("Failed to download photo");
+    }
+  };
+
   // Keep local worksheet fields in sync when realtime/parent installation props change.
   useEffect(() => {
     setChecklist(Array.isArray(installation?.checklist) ? installation.checklist : defaultChecklist);
@@ -122,22 +148,42 @@ export function InstallationModule({
     }
   };
 
-  const uploadInstallationPhoto = async (file: File) => {
-    const { url } = await uploadFileViaStaffApi(file, order.id, "installation_photo");
-    return url;
-  };
-
   const handlePhotoFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!canEdit) return;
     const files = e.target.files;
     if (!files || files.length === 0) return;
     setUploadingPhotos(true);
     try {
-      const uploadPromises = Array.from(files).map(file => uploadInstallationPhoto(file));
-      const urls = await Promise.all(uploadPromises);
-      const newUrls = [...afterPhotos, ...urls];
+      const { ok, failed } = await uploadFiles(Array.from(files), {
+        orderId: order.id,
+        purpose: "installation_photo",
+        channel: "staff",
+        concurrency: 3,
+      });
+      const refs = ok.map((o) => `${o.bucket}/${o.path}`);
+      if (failed.length) {
+        window.alert(`${failed.length} photo(s) failed to upload: ${failed[0].error}`);
+      }
+      const newUrls = [...afterPhotos, ...refs];
       setAfterPhotos(newUrls);
-      await updateInstallationDetails(order.id, { afterPhotos: newUrls, photos: newUrls });
+      if (refs.length) {
+        try {
+          await updateInstallationDetails(order.id, { afterPhotos: newUrls, photos: newUrls });
+        } catch (dbErr) {
+          // Roll back storage on DB failure to avoid orphans.
+          const byBucket = new Map<string, string[]>();
+          for (const o of ok) {
+            const list = byBucket.get(o.bucket) || [];
+            list.push(o.path);
+            byBucket.set(o.bucket, list);
+          }
+          for (const [bucket, paths] of byBucket) {
+            await deleteStorageFilesAction(bucket, paths).catch(() => {});
+          }
+          setAfterPhotos(afterPhotos);
+          throw dbErr;
+        }
+      }
     } catch (err: any) {
       window.alert("Upload failed: " + (err?.message || "Unknown error"));
     } finally {
@@ -148,15 +194,24 @@ export function InstallationModule({
 
   const removeInstallationPhoto = async (urlToRemove: string) => {
     if (!canEdit) return;
+    if (!window.confirm("Are you sure you want to remove this photo?")) return;
     try {
-      const path = urlToRemove.split("/installation-photos/").pop();
-      if (path) {
-        await deleteStorageFilesAction("installation-photos", [path]);
-      }
       const newUrls = afterPhotos.filter(u => u !== urlToRemove);
       setAfterPhotos(newUrls);
+      // DB first — if this fails, the photo is still in storage (no broken link).
       await updateInstallationDetails(order.id, { afterPhotos: newUrls, photos: newUrls });
+      // Then best-effort storage cleanup.
+      const parsed = parseStoredRef(urlToRemove);
+      if (parsed) {
+        try {
+          await deleteStorageFilesAction(parsed.bucket, [parsed.path]);
+        } catch (cleanupErr) {
+          console.error("Storage cleanup failed (DB record already removed):", cleanupErr);
+        }
+      }
     } catch (err: any) {
+      // Restore local state if DB write failed.
+      setAfterPhotos(afterPhotos);
       window.alert("Failed to delete photo: " + (err?.message || "Unknown error"));
     }
   };
@@ -391,8 +446,7 @@ export function InstallationModule({
                   <div className="flex flex-wrap gap-4">
                     {afterPhotos.map((photo, index) => (
                       <div key={photo} className="group relative w-24 h-24 sm:w-32 sm:h-32 bg-slate-100 rounded-xl overflow-hidden border border-slate-200 shadow-sm">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={photo} alt={`Installation photo ${index + 1}`} className="w-full h-full object-cover" />
+                        <OrderImage src={photo} width={320} alt={`Installation photo ${index + 1}`} className="w-full h-full object-cover" />
                         <div className="absolute inset-0 bg-slate-900/70 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                           <button
                             type="button"
@@ -405,7 +459,7 @@ export function InstallationModule({
                           </button>
                           <button
                             type="button"
-                            onClick={(e) => { e.stopPropagation(); window.open(`${photo}?download=`, "_blank"); }}
+                            onClick={(e) => { e.stopPropagation(); void handleDownloadPhoto(photo, `installation-photo-${index + 1}.jpg`); }}
                             className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/40 flex items-center justify-center text-white transition-colors"
                             title="Download"
                             aria-label="Download photo"
@@ -478,9 +532,10 @@ export function InstallationModule({
                 </h2>
               </div>
               <div className="rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
-                <img 
-                  src={designImage} 
-                  alt="Design Proof" 
+                <OrderImage
+                  src={designImage}
+                  format="origin"
+                  alt="Design Proof"
                   className="w-full h-auto max-h-[400px] object-contain"
                 />
               </div>
@@ -571,11 +626,11 @@ export function InstallationModule({
           </button>
 
           <div className="relative max-w-4xl max-h-[85vh] w-full h-full flex items-center justify-center p-4">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            <OrderImage
               src={viewerPhotos[viewerIndex]}
-              className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+              format="origin"
               alt={`Installation photo ${viewerIndex + 1}`}
+              className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             />
           </div>
@@ -610,7 +665,7 @@ export function InstallationModule({
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                window.open(`${viewerPhotos[viewerIndex]}?download=`, "_blank");
+                void handleDownloadPhoto(viewerPhotos[viewerIndex], `installation-photo-${viewerIndex + 1}.jpg`);
               }}
               className="inline-flex items-center gap-1.5 bg-black/60 hover:bg-black/80 text-white text-sm font-semibold px-4 py-1.5 rounded-full backdrop-blur-md transition-colors"
             >

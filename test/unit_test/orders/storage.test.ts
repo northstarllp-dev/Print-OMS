@@ -74,6 +74,54 @@ describe("deleteStorageFilesAction", () => {
     );
   });
 
+  it("allowlists all five order-stage buckets for delete", async () => {
+    const orderId = "11111111-1111-1111-1111-111111111111";
+    const stageBuckets = [
+      "site-visit-photos",
+      "order-resources",
+      "design-proofs",
+      "production-files",
+      "installation-photos",
+    ];
+
+    for (const bucket of stageBuckets) {
+      vi.mocked(getCurrentUser).mockResolvedValue({
+        role: "admin",
+        company_id: "co-1",
+      } as any);
+      mockMaybeSingle.mockResolvedValue({
+        data: { id: orderId, company_id: "co-1" },
+        error: null,
+      });
+      mockRemove.mockClear();
+
+      await deleteStorageFilesAction(bucket, [`${orderId}/file.jpg`]);
+      expect(mockRemove).toHaveBeenCalledWith([`${orderId}/file.jpg`]);
+    }
+  });
+
+  it("deletes production-files objects planned by production file delete", async () => {
+    const orderId = "11111111-1111-1111-1111-111111111111";
+    vi.mocked(getCurrentUser).mockResolvedValue({
+      role: "admin",
+      company_id: "co-1",
+    } as any);
+    mockMaybeSingle.mockResolvedValue({
+      data: { id: orderId, company_id: "co-1" },
+      error: null,
+    });
+
+    const { planProductionFileDelete } = await import(
+      "@/utils/supabase/storageLifecycleLogic"
+    );
+    const plan = planProductionFileDelete({
+      url: `https://xyz.supabase.co/storage/v1/object/public/production-files/${orderId}/print.pdf`,
+    });
+    expect(plan.storage).not.toBeNull();
+    await deleteStorageFilesAction(plan.storage!.bucket, [plan.storage!.path]);
+    expect(mockRemove).toHaveBeenCalledWith([`${orderId}/print.pdf`]);
+  });
+
   it("rejects path traversal", async () => {
     vi.mocked(getCurrentUser).mockResolvedValueOnce({
       role: "admin",

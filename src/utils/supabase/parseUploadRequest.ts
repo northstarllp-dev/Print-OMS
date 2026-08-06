@@ -1,12 +1,14 @@
 import { NextRequest } from "next/server";
 import type { StorageUploadPurpose } from "@/utils/supabase/serverStorageUpload";
 
-const VALID_PURPOSES = new Set<StorageUploadPurpose>([
+export const VALID_PURPOSES = new Set<StorageUploadPurpose>([
   "design_resource",
   "design_proof",
   "production_asset",
   "site_visit_photo",
   "installation_photo",
+  "service_ticket_photo",
+  "service_ticket_resolution_photo",
 ]);
 
 export interface ParsedUploadRequest {

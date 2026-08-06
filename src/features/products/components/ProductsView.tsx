@@ -6,16 +6,22 @@ import {
   Upload, Image as ImageIcon, Loader2, IndianRupee, ChevronDown, Tag, Ruler, Hash, RefreshCw, Filter
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
+import { compressImageFile } from "@/utils/storage/compressImage";
+import { runQueue } from "@/utils/storage/uploadQueue";
 import {
   createProduct, updateProduct, deleteProduct, deleteImagesFromStorage, 
   createProductCategory, deleteProductCategory, type Product, type CreateProductPayload, type ProductCategory,
 } from "../actions/productActions";
 import {
+  buildProductImageStoragePath,
   generateFinalProductId,
   generateProductId,
   filterProductsCatalog,
   isPricingFieldDisabled,
   MAX_PRODUCT_IMAGES,
+  PRODUCT_IMAGE_BUCKET,
+  takeProductImageSlots,
+  validateProductImageFile,
 } from "../productLogic";
 
 const PRICING_TYPES = ["Per Sq.Ft", "Per Unit", "Multiple"];
@@ -47,28 +53,81 @@ function ProductImageUpload({
   const [uploading, setUploading] = useState(false);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    if (!files.length) return;
+    const selected = Array.from(e.target.files || []);
+    if (!selected.length) return;
+
+    const { accepted, rejectedCount } = takeProductImageSlots(selected, images.length);
+    if (accepted.length === 0) {
+      alert(`Maximum ${MAX_PRODUCT_IMAGES} images allowed.`);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+    if (rejectedCount > 0) {
+      alert(
+        `Only ${accepted.length} of ${selected.length} files will be uploaded (max ${MAX_PRODUCT_IMAGES} images).`
+      );
+    }
+
     setUploading(true);
     const newUrls: string[] = [];
-    for (const file of files) {
-      const ext = file.name.split(".").pop();
-      const path = `products/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-      const { error: upErr } = await supabase.storage
-        .from("product-images")
-        .upload(path, file, { cacheControl: "3600", upsert: false });
-      if (upErr) {
-        console.error("Storage upload error:", upErr);
-        alert(`Upload failed: ${upErr.message}`);
-      } else {
-        const { data: urlData } = supabase.storage.from("product-images").getPublicUrl(path);
-        newUrls.push(urlData.publicUrl);
+    try {
+      const results = await runQueue(
+        accepted,
+        async (file) => {
+          const validation = validateProductImageFile({
+            fileName: file.name,
+            size: file.size,
+            mime: file.type || undefined,
+          });
+          if (!validation.ok) {
+            throw new Error(`${file.name}: ${validation.message}`);
+          }
+
+          // Compress large images before upload (image pipeline).
+          const compressed = await compressImageFile(file);
+          const toUpload = compressed.file;
+
+          const path = buildProductImageStoragePath(toUpload.name);
+          const { error: upErr } = await supabase.storage
+            .from(PRODUCT_IMAGE_BUCKET)
+            .upload(path, toUpload, {
+              cacheControl: "3600",
+              upsert: false,
+              contentType: toUpload.type || "image/jpeg",
+            });
+          if (upErr) throw new Error(upErr.message);
+
+          // Public catalog bucket: store public URL (reads need no signed token).
+          const { data: urlData } = supabase.storage
+            .from(PRODUCT_IMAGE_BUCKET)
+            .getPublicUrl(path);
+          return urlData.publicUrl;
+        },
+        { concurrency: 3 }
+      );
+
+      const failed: string[] = [];
+      for (const r of results) {
+        if (r?.ok && r.value) newUrls.push(r.value);
+        else {
+          failed.push(
+            r?.error instanceof Error ? r.error.message : "Upload failed"
+          );
+        }
       }
+      if (newUrls.length) {
+        onChange([...images, ...newUrls]);
+        if (onUpload) onUpload(newUrls);
+      }
+      if (failed.length) {
+        alert(`${failed.length} image(s) failed to upload: ${failed[0]}`);
+      }
+    } catch (err: any) {
+      alert(`Upload failed: ${err?.message || "Unknown error"}`);
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
-    onChange([...images, ...newUrls]);
-    if (onUpload) onUpload(newUrls);
-    setUploading(false);
-    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const removeImage = (idx: number) => {
@@ -127,7 +186,7 @@ function ProductImageUpload({
         capture={undefined}
       />
       <p style={{ fontSize: 10, color: "#94a3b8", margin: 0 }}>
-        Upload from gallery or camera · Max {MAX_PRODUCT_IMAGES} images · JPEG / PNG / WebP
+        Upload from gallery or camera · Max {MAX_PRODUCT_IMAGES} images · JPEG / PNG / WebP / GIF · up to 50 MB
       </p>
     </div>
   );

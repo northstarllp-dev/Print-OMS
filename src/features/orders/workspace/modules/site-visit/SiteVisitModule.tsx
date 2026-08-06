@@ -42,7 +42,10 @@ import { buildGoogleMapsSearchUrl } from "@/features/orders/actions/siteVisitMap
 import {
   isSkippedSiteVisit,
 } from "@/features/orders/workspace/modules/site-visit/siteVisitUiLogic";
-import { uploadFileViaStaffApi } from "@/utils/supabase/uploadStorageFile";
+import { uploadFiles } from "@/utils/storage/uploadClient";
+import { parseStoredRef } from "@/utils/storage/storageRef";
+import { getSignedReadUrl } from "@/utils/storage/signedReadCache";
+import { OrderImage } from "@/components/storage/OrderImage";
 import { GoogleMap, useJsApiLoader } from "@react-google-maps/api";
 import { AdvancedMapMarker } from "@/components/maps/AdvancedMapMarker";
 import { OverlayPortal } from "@/components/ui/OverlayPortal";
@@ -224,21 +227,22 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
     return () => window.removeEventListener("keydown", onKey);
   }, [viewerIndex, viewerPhotos.length]);
 
-  const uploadSitePhoto = async (file: File) => {
-    const { url } = await uploadFileViaStaffApi(file, order.id, "site_visit_photo");
-    return url;
-  };
-
   const handlePhotoFiles = async (files: FileList | null) => {
     if (!files || files.length === 0 || !selectedLocationId) return;
     setUploadingPhotos(true);
     try {
-      const uploadPromises = Array.from(files).map((file) => uploadSitePhoto(file));
-      const urls = await Promise.all(uploadPromises);
-
+      const { ok, failed } = await uploadFiles(Array.from(files), {
+        orderId: order.id,
+        purpose: "site_visit_photo",
+        channel: "staff",
+        concurrency: 3,
+      });
+      const refs = ok.map((o) => `${o.bucket}/${o.path}`);
+      if (failed.length) {
+        alert(`${failed.length} photo(s) failed to upload: ${failed[0].error}`);
+      }
       const activeLoc = (siteVisit.locations || []).find((l) => l.id === selectedLocationId);
-      const newUrls = [...(activeLoc?.photos || []), ...urls];
-
+      const newUrls = [...(activeLoc?.photos || []), ...refs];
       updateSignLocation(selectedLocationId, { photos: newUrls });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Unknown error";
@@ -251,9 +255,9 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
   const removeSitePhoto = async (url: string) => {
     if (!selectedLocationId) return;
     try {
-      const path = url.split("/site-visit-photos/").pop();
-      if (path) {
-        await deleteStorageFilesAction("site-visit-photos", [path]);
+      const parsed = parseStoredRef(url);
+      if (parsed) {
+        await deleteStorageFilesAction(parsed.bucket, [parsed.path]);
       }
       
       const activeLoc = (siteVisit.locations || []).find(l => l.id === selectedLocationId);
@@ -348,11 +352,16 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
     
     // Clean up photos attached to this location in the background
     if (locToDelete?.photos && locToDelete.photos.length > 0) {
-      const paths = locToDelete.photos
-        .map(url => url.split("/site-visit-photos/").pop())
-        .filter(Boolean) as string[];
-      if (paths.length > 0) {
-        deleteStorageFilesAction("site-visit-photos", paths).catch(err => {
+      const byBucket = new Map<string, string[]>();
+      for (const photoRef of locToDelete.photos) {
+        const parsed = parseStoredRef(photoRef);
+        if (!parsed) continue;
+        const list = byBucket.get(parsed.bucket) || [];
+        list.push(parsed.path);
+        byBucket.set(parsed.bucket, list);
+      }
+      for (const [bucket, paths] of byBucket) {
+        deleteStorageFilesAction(bucket, paths).catch(err => {
           console.error("Failed to clean up location photos:", err);
         });
       }
@@ -1278,9 +1287,9 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
             </button>
 
             <div className="relative w-full h-full max-w-5xl max-h-[100dvh] sm:max-h-[90vh] flex items-center justify-center px-12 sm:px-16 py-14 sm:py-16">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+              <OrderImage
                 src={viewerPhotos[viewerIndex]}
+                format="origin"
                 className="max-w-full max-h-full w-auto h-auto object-contain select-none"
                 alt={`Site photo ${viewerIndex + 1}`}
                 onClick={(e) => e.stopPropagation()}
@@ -1454,8 +1463,15 @@ const SitePhotoUploader: React.FC<{
         <div className="flex flex-wrap gap-3">
           {photos.map((url, idx) => (
             <div key={url} className="relative group w-28 h-28 sm:w-32 sm:h-32 rounded-xl overflow-hidden border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={url} alt={`Site photo ${idx + 1}`} className="w-full h-full object-cover" />
+              <OrderImage
+                src={url}
+                width={320}
+                alt={`Site photo ${idx + 1}`}
+                className="w-full h-full object-cover"
+                placeholder={
+                  <div className="w-full h-full bg-slate-100 animate-pulse" aria-hidden />
+                }
+              />
               <div className="absolute inset-0 bg-slate-900/70 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 px-1">
                 <button
                   type="button"
@@ -1468,7 +1484,30 @@ const SitePhotoUploader: React.FC<{
                 </button>
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); window.open(`${url}?download=`, '_blank'); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void (async () => {
+                      try {
+                        const parsed = parseStoredRef(url);
+                        const href = parsed
+                          ? await getSignedReadUrl(parsed.bucket, parsed.path)
+                          : url;
+                        // Force download via blob so private signed URLs work on mobile.
+                        const res = await fetch(href);
+                        const blob = await res.blob();
+                        const blobUrl = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = blobUrl;
+                        a.download = `site-photo-${idx + 1}.jpg`;
+                        document.body.appendChild(a);
+                        a.click();
+                        a.remove();
+                        URL.revokeObjectURL(blobUrl);
+                      } catch {
+                        alert("Could not download photo.");
+                      }
+                    })();
+                  }}
                   className="w-7 h-7 shrink-0 rounded-full bg-white/20 hover:bg-white/40 flex items-center justify-center text-white transition-colors"
                   title="Download"
                   aria-label="Download photo"

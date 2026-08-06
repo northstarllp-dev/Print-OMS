@@ -3,12 +3,23 @@
 import type { Product } from "@/features/products/actions/productActions";
 
 export const MAX_PRODUCT_IMAGES = 5;
+/** Catalog images share the same 50 MB image-pipeline ceiling as other stage photos. */
+export const MAX_PRODUCT_IMAGE_BYTES = 50 * 1024 * 1024;
 export const PRODUCT_IMAGE_BUCKET = "product-images";
+/** Public catalog bucket — reads use public URLs (not signed). Writes remain admin-gated. */
+export const PRODUCT_IMAGE_PIPELINE = "image" as const;
 export const PRODUCT_IMAGE_ACCEPT = [
   "image/jpeg",
   "image/png",
   "image/webp",
   "image/gif",
+] as const;
+export const PRODUCT_IMAGE_ACCEPT_EXT = [
+  "jpg",
+  "jpeg",
+  "png",
+  "webp",
+  "gif",
 ] as const;
 export const PRODUCT_IMAGE_REJECT = [
   "application/x-msdownload",
@@ -16,6 +27,13 @@ export const PRODUCT_IMAGE_REJECT = [
   "application/pdf",
   "application/octet-stream",
 ] as const;
+
+export type ProductImageValidationOk = { ok: true };
+export type ProductImageValidationError = {
+  ok: false;
+  reason: "file_type" | "file_size" | "file_empty" | "max_count";
+  message: string;
+};
 
 export type ProductCatalogFilters = {
   search?: string;
@@ -250,6 +268,10 @@ export function isAcceptedProductImageMime(mime: string): boolean {
   return (PRODUCT_IMAGE_ACCEPT as readonly string[]).includes(mime);
 }
 
+export function isAcceptedProductImageExt(ext: string): boolean {
+  return (PRODUCT_IMAGE_ACCEPT_EXT as readonly string[]).includes(ext.toLowerCase());
+}
+
 export function canAddProductImages(
   currentCount: number,
   incomingCount: number
@@ -257,18 +279,99 @@ export function canAddProductImages(
   return currentCount + incomingCount <= MAX_PRODUCT_IMAGES;
 }
 
+/** How many more images can be added given current count. */
+export function remainingProductImageSlots(currentCount: number): number {
+  return Math.max(0, MAX_PRODUCT_IMAGES - currentCount);
+}
+
+/** Slice a FileList selection down to the remaining slots. */
+export function takeProductImageSlots(
+  files: File[],
+  currentCount: number
+): { accepted: File[]; rejectedCount: number } {
+  const slots = remainingProductImageSlots(currentCount);
+  if (slots <= 0) return { accepted: [], rejectedCount: files.length };
+  if (files.length <= slots) return { accepted: files, rejectedCount: 0 };
+  return { accepted: files.slice(0, slots), rejectedCount: files.length - slots };
+}
+
+export function validateProductImageFile(input: {
+  fileName: string;
+  size: number;
+  mime?: string;
+}): ProductImageValidationOk | ProductImageValidationError {
+  if (!input.size || input.size <= 0) {
+    return { ok: false, reason: "file_empty", message: "File is empty" };
+  }
+  if (input.size > MAX_PRODUCT_IMAGE_BYTES) {
+    return {
+      ok: false,
+      reason: "file_size",
+      message: `File exceeds ${Math.round(MAX_PRODUCT_IMAGE_BYTES / (1024 * 1024))} MB limit`,
+    };
+  }
+  const ext = (input.fileName.split(".").pop() || "").toLowerCase();
+  const mimeOk = input.mime ? isAcceptedProductImageMime(input.mime) : false;
+  const extOk = isAcceptedProductImageExt(ext);
+  if (!mimeOk && !extOk) {
+    return {
+      ok: false,
+      reason: "file_type",
+      message: "Only JPEG, PNG, WebP, and GIF images are allowed",
+    };
+  }
+  return { ok: true };
+}
+
 export function buildProductImageStoragePath(fileName: string, now = Date.now()): string {
-  const ext = fileName.split(".").pop() || "jpg";
+  const rawExt = (fileName.split(".").pop() || "jpg").toLowerCase();
+  const ext = isAcceptedProductImageExt(rawExt) ? rawExt : "jpg";
+  // Sanitize: no path separators, no traversal.
   return `products/${now}_${Math.random().toString(36).slice(2)}.${ext}`;
 }
 
+/** True when a stored URL/ref belongs to the public product-images bucket. */
+export function isProductImageUrl(url: string): boolean {
+  if (!url) return false;
+  if (url.includes(`/object/public/${PRODUCT_IMAGE_BUCKET}/`)) return true;
+  // Modern "bucket/path" ref form (if ever stored that way).
+  if (url.startsWith(`${PRODUCT_IMAGE_BUCKET}/products/`)) return true;
+  return false;
+}
+
+/**
+ * Extract object keys under product-images/products/… for deletion.
+ * Rejects other buckets, path traversal, and non-products prefixes.
+ */
 export function extractProductImageStoragePaths(urls: string[]): string[] {
-  return urls
-    .map((url) => {
-      const parts = url.split(`/${PRODUCT_IMAGE_BUCKET}/`);
-      return parts.length > 1 ? parts[1] : null;
-    })
-    .filter(Boolean) as string[];
+  const out: string[] = [];
+  for (const url of urls) {
+    if (!url) continue;
+    let path: string | null = null;
+
+    const publicMarker = `/object/public/${PRODUCT_IMAGE_BUCKET}/`;
+    const pubIdx = url.indexOf(publicMarker);
+    if (pubIdx !== -1) {
+      path = decodeURIComponent(url.slice(pubIdx + publicMarker.length).split("?")[0] || "");
+    } else if (url.startsWith(`${PRODUCT_IMAGE_BUCKET}/`)) {
+      path = url.slice(PRODUCT_IMAGE_BUCKET.length + 1).split("?")[0];
+    }
+
+    if (!path) continue;
+    if (path.includes("..") || path.includes("\\") || path.startsWith("/")) continue;
+    if (!path.startsWith("products/")) continue;
+    out.push(path);
+  }
+  return out;
+}
+
+/** Normalize + validate image URL list before persisting to products.images. */
+export function normalizeProductImageUrls(images: unknown): string[] {
+  if (!Array.isArray(images)) return [];
+  const urls = images
+    .filter((u): u is string => typeof u === "string" && u.length > 0)
+    .filter(isProductImageUrl);
+  return urls.slice(0, MAX_PRODUCT_IMAGES);
 }
 
 export function inventoryFieldsVisible(trackInventory?: boolean | null): boolean {

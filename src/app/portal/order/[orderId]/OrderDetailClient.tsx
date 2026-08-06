@@ -787,7 +787,13 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
         )}
         {mountedTabs.has("design") && (
           <div hidden={activeTab !== "design"}>
-            <DesignTab order={order} customer={customer} siteVisitItems={siteVisitItems} portalToken={token} />
+            <DesignTab
+              order={order}
+              customer={customer}
+              siteVisitItems={siteVisitItems}
+              portalToken={token}
+              onDesignUpdated={(design) => setOrder((prev) => ({ ...prev, design }))}
+            />
           </div>
         )}
         {mountedTabs.has("payments") && (

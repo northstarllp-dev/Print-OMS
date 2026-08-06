@@ -1,12 +1,16 @@
 "use server";
 
 import { createServerClient } from "@supabase/ssr";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { assertAdminOnly } from "@/features/orders/workspace/shared/serverPermissions";
 import {
   extractProductImageStoragePaths,
   generateFinalProductId,
   generateProductId,
+  MAX_PRODUCT_IMAGES,
+  normalizeProductImageUrls,
   PRODUCT_IMAGE_BUCKET,
 } from "../productLogic";
 
@@ -30,6 +34,18 @@ async function getSupabase() {
       },
     }
   );
+}
+
+function assertValidImagePayload(images: unknown): string[] {
+  const normalized = normalizeProductImageUrls(images);
+  if (Array.isArray(images) && images.length > MAX_PRODUCT_IMAGES) {
+    throw new Error(`Max ${MAX_PRODUCT_IMAGES} product images allowed`);
+  }
+  // Reject payloads that smuggle non-catalog URLs.
+  if (Array.isArray(images) && images.length > 0 && normalized.length !== images.filter((u) => typeof u === "string" && u.length > 0).length) {
+    throw new Error("Invalid product image URL");
+  }
+  return normalized;
 }
 
 export type Product = {
@@ -126,14 +142,16 @@ export async function getActiveProducts(): Promise<Product[]> {
 }
 
 export async function createProduct(formData: CreateProductPayload) {
+  await assertAdminOnly();
   const supabase = await getSupabase();
   const { resolveWriteCompanyId } = await import("@/lib/resolveWriteCompanyId");
   const companyId = await resolveWriteCompanyId();
+  const images = assertValidImagePayload(formData.images);
   const payload = {
     company_id: companyId,
     is_active: true,
     ...formData,
-    images: formData.images ?? [],
+    images,
   };
   let { data, error } = await supabase
     .from("products")
@@ -172,10 +190,15 @@ export async function updateProduct(
   id: string,
   updates: Partial<CreateProductPayload>
 ) {
+  await assertAdminOnly();
   const supabase = await getSupabase();
+  const payload: Partial<CreateProductPayload> = { ...updates };
+  if (updates.images !== undefined) {
+    payload.images = assertValidImagePayload(updates.images);
+  }
   const { data, error } = await supabase
     .from("products")
-    .update(updates)
+    .update(payload)
     .eq("id", id)
     .select();
   if (error) throw new Error(error.message);
@@ -184,6 +207,7 @@ export async function updateProduct(
 }
 
 export async function deleteProduct(id: string) {
+  await assertAdminOnly();
   const supabase = await getSupabase();
   
   // Fetch product first to get the images
@@ -196,22 +220,44 @@ export async function deleteProduct(id: string) {
   const { error } = await supabase.from("products").delete().eq("id", id);
   if (error) throw new Error(error.message);
   
-  // If deletion succeeded, wipe the images from storage
+  // If deletion succeeded, wipe the images from storage (best-effort)
   if (product && Array.isArray(product.images) && product.images.length > 0) {
-    await deleteImagesFromStorage(product.images);
+    await deleteImagesFromStorage(product.images).catch((err) => {
+      console.error("Product image cleanup failed after delete:", err);
+    });
   }
 
   revalidatePath("/admin/products");
 }
 
+/**
+ * Securely deletes product catalog images from the public product-images bucket.
+ * Admin-only; paths are validated to products/… under product-images only.
+ */
 export async function deleteImagesFromStorage(urls: string[]) {
   if (!urls || urls.length === 0) return;
-  const supabase = await getSupabase();
-  
-  const paths = extractProductImageStoragePaths(urls);
+  await assertAdminOnly();
 
-  if (paths.length > 0) {
-    await supabase.storage.from(PRODUCT_IMAGE_BUCKET).remove(paths);
+  const paths = extractProductImageStoragePaths(urls);
+  if (paths.length === 0) return;
+
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!serviceKey) {
+    // Fallback to user-scoped client when service role is unavailable locally.
+    const supabase = await getSupabase();
+    const { error } = await supabase.storage.from(PRODUCT_IMAGE_BUCKET).remove(paths);
+    if (error) throw new Error(error.message);
+    return;
+  }
+
+  const adminSupabase = createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    serviceKey
+  );
+  const { error } = await adminSupabase.storage.from(PRODUCT_IMAGE_BUCKET).remove(paths);
+  if (error) {
+    console.error(`Failed to delete product images:`, error);
+    throw new Error(error.message);
   }
 }
 

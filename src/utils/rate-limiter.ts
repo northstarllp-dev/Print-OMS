@@ -88,3 +88,33 @@ export function isRateLimited(key: string): boolean {
 export function clearRateLimit(key: string): void {
   store.delete(key);
 }
+
+/**
+ * Configurable rate limit (per-order / per-user upload quotas).
+ * Independent store so it doesn't compete with the coarse global IP limiter.
+ */
+const customStore = new Map<string, RateLimitEntry>();
+
+export function checkCustomRateLimit(
+  key: string,
+  maxAttempts: number,
+  windowMs = WINDOW_MS
+): { allowed: boolean; retryAfter?: number } {
+  if (process.env.NODE_ENV === "development") return { allowed: true };
+
+  const now = Date.now();
+  const entry = customStore.get(key) || { timestamps: [] };
+  if (entry.blockedUntil && entry.blockedUntil > now) {
+    return { allowed: false, retryAfter: Math.ceil((entry.blockedUntil - now) / 1000) };
+  }
+  const windowStart = now - windowMs;
+  entry.timestamps = entry.timestamps.filter((t) => t > windowStart);
+  if (entry.timestamps.length >= maxAttempts) {
+    entry.blockedUntil = now + BLOCK_DURATION_MS;
+    customStore.set(key, entry);
+    return { allowed: false, retryAfter: Math.ceil(BLOCK_DURATION_MS / 1000) };
+  }
+  entry.timestamps.push(now);
+  customStore.set(key, entry);
+  return { allowed: true };
+}

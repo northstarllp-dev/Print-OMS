@@ -6,6 +6,7 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { DesignRecord } from "@/types";
 import { mapDesignFromDb } from "./designMapper";
+import { mergePortalDesignItemsPreservingStaffDrafts } from "@/features/designs/utils/customerVisibleDesign";
 import { dispatchWhatsAppNotification } from "@/features/notifications/actions/dispatchNotification";
 import { getRequestBaseUrl } from "@/features/notifications/whatsapp/requestBaseUrl";
 import { getCurrentUser } from "@/features/auth/actions/authActions";
@@ -202,6 +203,16 @@ export async function updateDesignDetailsAction(
     ...details,
   };
   payload.order_id = orderUuid;
+
+  // Portal clients only see customer-visible items (staff drafts + production files
+  // stripped). Re-attach staff-only data from the DB so customer feedback/approval
+  // never wipes a designer's in-progress work.
+  if (fromPortal && Array.isArray(details.items)) {
+    payload.items = mergePortalDesignItemsPreservingStaffDrafts(
+      (current?.items as any[]) || [],
+      details.items
+    );
+  }
 
   let data: Record<string, unknown> | null = null;
   let error: Error | null = null;

@@ -1001,7 +1001,17 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                 {/* ------ DESIGN STAGE ------ */}
                 {mountedStepKeys.has("design") && (
                   <div hidden={activeStepKey !== "design"}>
-                    <DesignTab order={activeOrder as any} customer={customer} siteVisitItems={activeOrder?.siteVisitItems || []} portalToken={token} />
+                    <DesignTab
+                      order={activeOrder as any}
+                      customer={customer}
+                      siteVisitItems={activeOrder?.siteVisitItems || []}
+                      portalToken={token}
+                      onDesignUpdated={(design) =>
+                        setOrders((prev) =>
+                          prev.map((o) => (o.id === activeOrderId ? { ...o, design } : o))
+                        )
+                      }
+                    />
                   </div>
                 )}
 
