@@ -89,7 +89,7 @@ describe("site visit GPS & maps", () => {
     it("resolveSiteVisitMapLink prefers real address, then GPS, never Skipped text", () => {
       expect(
         resolveSiteVisitMapLink({
-          landmark: SKIPPED_SITE_VISIT_LANDMARK,
+          siteAddress: SKIPPED_SITE_VISIT_LANDMARK,
           customerAddress: "12 MG Road, Bengaluru",
         })
       ).toEqual({

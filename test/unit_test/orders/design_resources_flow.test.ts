@@ -314,7 +314,8 @@ describe("customer design resources flow", () => {
                 id: "v-draft",
                 versionNumber: 1,
                 proofUrl: "design-proofs/x/draft.png",
-                status: "Draft",
+                fileName: "draft.png",
+                status: "Draft" as const,
                 comments: [],
                 createdAt: "2026-01-01T00:00:00.000Z",
               },
@@ -322,7 +323,8 @@ describe("customer design resources flow", () => {
                 id: "v-sent",
                 versionNumber: 2,
                 proofUrl: "design-proofs/x/sent.png",
-                status: "Sent to Customer",
+                fileName: "sent.png",
+                status: "Sent to Customer" as const,
                 comments: [],
                 createdAt: "2026-01-02T00:00:00.000Z",
               },
@@ -369,12 +371,29 @@ describe("customer design resources flow", () => {
       const portalFeedbackItems = portalItems.map((item) => ({
         ...item,
         versions: item.versions.map((v) =>
-          v.id === "v-sent" ? { ...v, status: "Changes Requested", comments: [{ id: "c1", content: "Make it bigger", author: "Client", createdAt: "2026-01-04", isGeneral: true }] } : v
+          v.id === "v-sent"
+            ? {
+                ...v,
+                status: "Changes Requested" as const,
+                comments: [
+                  {
+                    id: "c1",
+                    content: "Make it bigger",
+                    author: "Client",
+                    createdAt: "2026-01-04",
+                    isGeneral: true,
+                  },
+                ],
+              }
+            : v
         ),
       }));
 
       // Server merges portal feedback with DB items before writing.
-      const merged = mergePortalDesignItemsPreservingStaffDrafts(dbItems, portalFeedbackItems);
+      const merged = mergePortalDesignItemsPreservingStaffDrafts(
+        dbItems,
+        portalFeedbackItems as typeof dbItems
+      );
 
       expect(merged).toHaveLength(1);
       const versions = merged[0].versions.map((v) => v.id);
@@ -417,13 +436,16 @@ describe("customer design resources flow", () => {
           name: "Sign",
           currentVersion: 2,
           versions: [
-            { id: "v1", versionNumber: 1, proofUrl: "p1", status: "Approved", comments: [], createdAt: "2026-01-01" },
-            { id: "v2", versionNumber: 2, proofUrl: "p2", status: "Approved", comments: [], createdAt: "2026-01-02" },
+            { id: "v1", versionNumber: 1, proofUrl: "p1", fileName: "p1.png", status: "Approved" as const, comments: [], createdAt: "2026-01-01" },
+            { id: "v2", versionNumber: 2, proofUrl: "p2", fileName: "p2.png", status: "Approved" as const, comments: [], createdAt: "2026-01-02" },
           ],
           productionFiles: undefined,
         },
       ];
-      const merged = mergePortalDesignItemsPreservingStaffDrafts(dbItems, portalItems);
+      const merged = mergePortalDesignItemsPreservingStaffDrafts(
+        dbItems,
+        portalItems as typeof dbItems
+      );
       expect(merged[0].versions.map((v) => v.id)).toEqual(["v1", "v2"]);
       expect(merged[0].versions).toHaveLength(2);
     });

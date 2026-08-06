@@ -65,12 +65,15 @@ export function ServiceTicketDetailModal({
 
   if (!ticket) return null;
 
+  const ticketId = ticket.id;
+  const ticketOrderId = ticket.order_id;
+
   async function uploadResolutionFiles(files: FileList | null) {
-    if (!files || files.length === 0 || !ticket) return;
+    if (!files || files.length === 0) return;
     setUploadingResolution(true);
     try {
       const { ok, failed } = await uploadFiles(Array.from(files), {
-        orderId: ticket.order_id,
+        orderId: ticketOrderId,
         purpose: "service_ticket_resolution_photo",
         channel: "staff",
         concurrency: 3,
@@ -100,7 +103,7 @@ export function ServiceTicketDetailModal({
     setResolutionPhotos(newPhotos);
     try {
       // DB first — if this fails, the photo is still in storage (no broken link).
-      await updateTicketResolutionAction(ticket.id, {
+      await updateTicketResolutionAction(ticketId, {
         resolutionPhotos: newPhotos,
       });
       // Then best-effort storage cleanup.
@@ -123,7 +126,7 @@ export function ServiceTicketDetailModal({
     if (!ticket) return;
     setSaving(true);
     try {
-      await updateTicketResolutionAction(ticket.id, {
+      await updateTicketResolutionAction(ticketId, {
         resolutionNotes,
         resolutionPhotos,
       });
@@ -137,11 +140,11 @@ export function ServiceTicketDetailModal({
     if (!ticket) return;
     setSaving(true);
     try {
-      await updateTicketResolutionAction(ticket.id, {
+      await updateTicketResolutionAction(ticketId, {
         resolutionNotes,
         resolutionPhotos,
       });
-      await completeTicketAction(ticket.id);
+      await completeTicketAction(ticketId);
       onUpdated();
       // Show the customer message popup first; onClose fires when it closes.
       setShowResolvedMsg(true);

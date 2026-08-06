@@ -27,6 +27,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Server not configured" }, { status: 500 });
   }
 
+  const adminClient = admin;
+
   let companyId: string;
   try {
     companyId = getDeployCompanyId();
@@ -46,7 +48,7 @@ export async function POST(req: NextRequest) {
   async function rollbackUploads() {
     for (const obj of uploadedObjects) {
       try {
-        await admin.storage.from(obj.bucket).remove([obj.path]);
+        await adminClient.storage.from(obj.bucket).remove([obj.path]);
       } catch (e) {
         console.error("[service-ticket] rollback delete failed:", e);
       }
@@ -84,7 +86,7 @@ export async function POST(req: NextRequest) {
         }
         const fileBuffer = Buffer.from(await fileValue.arrayBuffer());
 
-        const { error: uploadError } = await admin.storage
+        const { error: uploadError } = await adminClient.storage
           .from("service-ticket-photos")
           .upload(path, fileBuffer, {
             contentType: fileValue.type || "application/octet-stream",
@@ -131,7 +133,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Please complete all required fields." }, { status: 400 });
   }
 
-  const { data: order, error: orderError } = await admin
+  const { data: order, error: orderError } = await adminClient
     .from("orders")
     .select("id, customer_id, company_id")
     .eq("id", orderId)
@@ -146,7 +148,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Selected order does not match this mobile number." }, { status: 400 });
   }
 
-  const { data: created, error: createError } = await admin
+  const { data: created, error: createError } = await adminClient
     .from("service_tickets")
     .insert({
       company_id: companyId,
