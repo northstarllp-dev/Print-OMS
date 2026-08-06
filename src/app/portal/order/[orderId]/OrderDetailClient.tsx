@@ -28,6 +28,7 @@ import {
 import { createClient } from "@/utils/supabase/client";
 import { withBasePath } from "@/lib/appBasePath";
 import { scheduleSiteVisitAction } from "@/features/orders/actions/orderActions";
+import { isSkippedSiteVisit } from "@/features/orders/workspace/modules/site-visit/siteVisitUiLogic";
 import {
   mergeOrderDetailPatch,
   useOrderDetailSync,
@@ -501,7 +502,17 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
       <main className="max-w-7xl mx-auto px-3 sm:px-6 py-5 sm:py-8 pb-24">
         {activeTab === "site_visit" && (
           <div className="space-y-6">
-            {(!sv.auditDate || isRescheduling) ? (
+            {isSkippedSiteVisit(sv) ? (
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 text-center">
+                <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <CheckCircle size={24} className="text-amber-600" />
+                </div>
+                <h2 className="text-xl font-black text-amber-900 mb-2">Site Visit Skipped</h2>
+                <p className="text-sm text-amber-700 max-w-md mx-auto">
+                  The site visit has been skipped by our team. We will directly proceed with adding measurements for your project.
+                </p>
+              </div>
+            ) : (!sv.auditDate || isRescheduling) ? (
               <div className="space-y-6">
                 <div>
                   <h2 className="text-xl font-black text-gray-900 mb-1.5">

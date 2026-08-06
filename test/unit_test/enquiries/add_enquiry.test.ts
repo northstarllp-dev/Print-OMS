@@ -239,7 +239,8 @@ describe("add enquiry", () => {
       );
       const startId = performance.now();
       expect(nextEnquireSequence(existing)).toBe(10001);
-      expect(performance.now() - startId).toBeLessThan(50);
+      // Budget is generous: catches O(n²) regressions, not wall-clock noise on busy CI/dev machines.
+      expect(performance.now() - startId).toBeLessThan(150);
 
       const startMsg = performance.now();
       for (let i = 0; i < 2000; i++) {

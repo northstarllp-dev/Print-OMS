@@ -20,6 +20,7 @@ import {
 import { SiteVisitDetails, SignLocation } from "@/types";
 import { loadClientConfig } from "@/config/loadClientConfig";
 import { OrderImage } from "@/components/storage/OrderImage";
+import { isSkippedSiteVisit, SKIPPED_SITE_VISIT_LANDMARK } from "@/features/orders/workspace/modules/site-visit/siteVisitUiLogic";
 
 interface SiteVisitReviewModalProps {
   siteVisit: SiteVisitDetails;
@@ -262,6 +263,7 @@ export function SiteVisitReviewModal({
   const scheduledDate = siteVisit.auditDate || siteVisit.preferredDate;
   const scheduledTime = siteVisit.auditTime || siteVisit.preferredTime;
   const locations = siteVisit.locations || [];
+  const skipped = isSkippedSiteVisit(siteVisit);
 
   return (
     <OverlayPortal>
@@ -303,26 +305,36 @@ export function SiteVisitReviewModal({
           {/* Visit Info */}
           <div>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">
-              Scheduled Visit Info
+              {skipped ? "Visit Status" : "Scheduled Visit Info"}
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <InfoChip
-                icon={<Calendar size={15} />}
-                label="Date"
-                value={scheduledDate}
-              />
-              <InfoChip
-                icon={<Clock size={15} />}
-                label="Time"
-                value={scheduledTime}
-              />
+              {skipped ? (
+                <InfoChip
+                  icon={<CheckCircle2 size={15} />}
+                  label="Status"
+                  value="Site visit skipped"
+                />
+              ) : (
+                <>
+                  <InfoChip
+                    icon={<Calendar size={15} />}
+                    label="Date"
+                    value={scheduledDate}
+                  />
+                  <InfoChip
+                    icon={<Clock size={15} />}
+                    label="Time"
+                    value={scheduledTime}
+                  />
+                </>
+              )}
               <InfoChip
                 icon={<MapPin size={15} />}
-                label="Site Address"
+                label={skipped ? "Installation Location" : "Site Address"}
                 value={siteVisit.customerAddress}
-                href={siteVisit.customerAddress ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(siteVisit.customerAddress)}` : undefined}
+                href={siteVisit.customerAddress && !siteVisit.customerAddress.startsWith("Skipped") ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(siteVisit.customerAddress)}` : undefined}
               />
-              {siteVisit.landmark && (
+              {siteVisit.landmark && siteVisit.landmark !== SKIPPED_SITE_VISIT_LANDMARK && (
                 <InfoChip
                   icon={<MapPin size={15} />}
                   label="Landmark"

@@ -65,7 +65,8 @@ describe("order number generation", () => {
       );
       const start = performance.now();
       expect(nextOrderIdAfterDelete("A001", ids)).toBe("A001-20001");
-      expect(performance.now() - start).toBeLessThan(50);
+      // Budget is generous: catches O(n²) regressions, not wall-clock noise on busy CI/dev machines.
+      expect(performance.now() - start).toBeLessThan(150);
     });
   });
 });

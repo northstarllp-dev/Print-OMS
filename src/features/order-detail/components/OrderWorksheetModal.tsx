@@ -1260,14 +1260,16 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           onCustomerMessage={currentUserRole === "Admin" ? openCustomerMessage : undefined}
           onSkipSiteVisit={async (location) => {
             if (!getStagePermissionInContext("site_visit", actor, entryStage).canEdit) return;
-            const now = new Date().toISOString();
             const { SKIPPED_SITE_VISIT_LANDMARK } = await import(
               "@/features/orders/workspace/modules/site-visit/siteVisitUiLogic"
             );
+            // Clear schedule fields — auditTime must not store "skipped at HH:MM" (looks like an appointment).
             const newDetails = {
               ...(order.siteVisitDetails || {}),
-              auditDate: now.split("T")[0],
-              auditTime: now.split("T")[1].substring(0, 5),
+              auditDate: null,
+              auditTime: null,
+              preferredDate: null,
+              preferredTime: null,
               customerAddress: location.customerAddress,
               gpsLocation: location.gpsLocation,
               landmark: SKIPPED_SITE_VISIT_LANDMARK,

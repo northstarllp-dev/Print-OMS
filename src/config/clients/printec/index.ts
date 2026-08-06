@@ -28,7 +28,7 @@ export const printecConfig: Partial<PrintOMSClientConfig> = {
     sidebarAccent: "#fcd900",
   },
   logoUrl: "/clients/printec/logo.png",
-  logoScale: 1.5,
+  logoScale: 1,
   faviconUrl: "/clients/printec/favicon_io/favicon.ico",
   loadingText: "PRINTEC",
   features: {

@@ -39,6 +39,59 @@ export function mapSiteVisitMeasurementFromDb(m: any): SignLocation {
   };
 }
 
+/** Normalize linear unit labels from site-visit UI / DB. */
+export function normalizeLinearUnit(unit?: string | null): "ft" | "in" | "m" | "cm" | "mm" {
+  const u = (unit || "ft").trim().toLowerCase();
+  if (u === "in" || u === "inch" || u === "inches" || u === "\"") return "in";
+  if (u === "m" || u === "meter" || u === "metre" || u === "meters" || u === "metres") return "m";
+  if (u === "cm" || u === "centimeter" || u === "centimetre" || u === "centimeters") return "cm";
+  if (u === "mm" || u === "millimeter" || u === "millimetre" || u === "millimeters") return "mm";
+  // ft, feet, foot, '
+  return "ft";
+}
+
+/** Convert one linear dimension to feet. */
+export function linearToFeet(value: number, unit?: string | null): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  switch (normalizeLinearUnit(unit)) {
+    case "in":
+      return n / 12;
+    case "m":
+      return n / 0.3048;
+    case "cm":
+      return n / 30.48;
+    case "mm":
+      return n / 304.8;
+    default:
+      return n;
+  }
+}
+
+/**
+ * Area in square feet for quotation qty (Per Sq.Ft).
+ * Handles mixed units (e.g. width in inch, height in ft).
+ * Returns 0 when width/height missing or non-positive.
+ */
+export function siteMeasurementAreaSqFt(item: {
+  width?: number | null;
+  height?: number | null;
+  widthUnit?: string | null;
+  heightUnit?: string | null;
+  width_unit?: string | null;
+  height_unit?: string | null;
+} | null | undefined): number {
+  if (!item) return 0;
+  const w = Number(item.width);
+  const h = Number(item.height);
+  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return 0;
+  const wFt = linearToFeet(w, item.widthUnit || item.width_unit);
+  const hFt = linearToFeet(h, item.heightUnit || item.height_unit);
+  const area = wFt * hFt;
+  // Quotation qty should be a simple whole sq ft.
+  return Math.round(area);
+}
+
 /** Label shown under signage items on quotation pages. */
 export function formatSiteMeasurementLabel(item: {
   width?: number | null;

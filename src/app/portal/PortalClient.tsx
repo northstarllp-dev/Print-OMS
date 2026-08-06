@@ -25,6 +25,7 @@ import {
   type ProductionChecklistItem,
 } from "@/features/settings/productionChecklist";
 import { formatSiteMeasurementLabel } from "@/features/orders/actions/siteVisitMapper";
+import { isSkippedSiteVisit } from "@/features/orders/workspace/modules/site-visit/siteVisitUiLogic";
 import {
   mergeOrderDetailPatch,
   useOrderDetailSync,
@@ -333,9 +334,11 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
   // Reset viewed step when order changes
   useEffect(() => {
     setViewedStep(null);
-    setMountedStepKeys(new Set());
+    // Keep current stage mounted after order switch/reset; otherwise the stage panel
+    // can render blank until the user manually clicks a step.
+    setMountedStepKeys(() => (activeStepKey ? new Set([activeStepKey]) : new Set()));
     prevCurrentStepRef.current = currentStep;
-  }, [activeOrderId]);
+  }, [activeOrderId, activeStepKey, currentStep]);
 
   // When staff advances the pipeline, follow the new current step (clear history browse).
   useEffect(() => {
@@ -652,7 +655,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                 {/* ------ SITE VISIT STAGE ------ */}
                 {STEPS[activeStepToRender]?.key === "site_visit" && (
                   <>
-                    {sv.customerAddress?.startsWith("Skipped") ? (
+                    {isSkippedSiteVisit(sv) ? (
                       <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 text-center">
                         <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-3">
                           <CheckCircle2 size={24} className="text-amber-600" />

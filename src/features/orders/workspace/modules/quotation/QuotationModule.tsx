@@ -12,7 +12,7 @@ import {
   upsertQuotation,
   sendQuotationToCustomer
 } from "@/features/quotations/actions/quotationActions";
-import { formatSiteMeasurementLabel } from "@/features/orders/actions/siteVisitMapper";
+import { formatSiteMeasurementLabel, siteMeasurementAreaSqFt } from "@/features/orders/actions/siteVisitMapper";
 import {
   calcLineAmount,
   getLineMeasurement,
@@ -434,7 +434,8 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
           };
         }
 
-        const defaultMeasurement = (item.width && item.height) ? item.width * item.height : 1;
+        const areaSqFt = siteMeasurementAreaSqFt(item);
+        const defaultMeasurement = areaSqFt > 0 ? areaSqFt : 1;
         // Default empty row inside a section
         return {
           siteVisitItemId: item.id,
@@ -677,10 +678,8 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
 
   function selectProduct(sectionId: string, lineId: string, p: Product) {
     const siteVisitItem = siteVisitItems.find((sv) => sv.id === sectionId);
-    const defaultMeasurement =
-      siteVisitItem?.width && siteVisitItem?.height
-        ? siteVisitItem.width * siteVisitItem.height
-        : 1;
+    const areaSqFt = siteMeasurementAreaSqFt(siteVisitItem);
+    const defaultMeasurement = areaSqFt > 0 ? areaSqFt : 1;
     const resolved = resolvePricingForMeasurement(p, defaultMeasurement);
 
     updateLine(sectionId, lineId, {
@@ -995,9 +994,8 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                                 const sv = siteVisitItems.find(
                                   (item) => item.id === section.siteVisitItemId
                                 );
-                                return sv?.width && sv?.height
-                                  ? sv.width * sv.height
-                                  : 1;
+                                const area = siteMeasurementAreaSqFt(sv);
+                                return area > 0 ? area : 1;
                               })()
                             }
                             onSelect={(p) => selectProduct(section.siteVisitItemId, line.id, p)}
@@ -1070,7 +1068,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                         <input
                           type="number"
                           min="0.01"
-                          step="0.01"
+                          step="1"
                           value={measurement === 0 ? "" : measurement}
                           disabled={isLocked}
                           onFocus={(e) => e.target.select()}
