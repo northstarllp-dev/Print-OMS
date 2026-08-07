@@ -6,5 +6,19 @@
       "destination": "/printoms",
       "permanent": true
     }
+  ],
+  "rewrites": [
+    {
+      "source": "/favicon.ico",
+      "destination": "/printoms/api/favicon"
+    },
+    {
+      "source": "/apple-touch-icon.png",
+      "destination": "/printoms/api/apple-touch-icon"
+    },
+    {
+      "source": "/apple-touch-icon-precomposed.png",
+      "destination": "/printoms/api/apple-touch-icon"
+    }
   ]
 }

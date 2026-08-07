@@ -12,29 +12,9 @@ const nextConfig: NextConfig = {
       },
     ];
   },
-  async rewrites() {
-    // Vercel project avatars scrape the deployment root (/favicon.ico), which
-    // sits outside basePath. Proxy those requests to the active client brand.
-    return {
-      beforeFiles: [
-        {
-          source: "/favicon.ico",
-          destination: "/printoms/api/favicon",
-          basePath: false,
-        },
-        {
-          source: "/apple-touch-icon.png",
-          destination: "/printoms/api/apple-touch-icon",
-          basePath: false,
-        },
-        {
-          source: "/apple-touch-icon-precomposed.png",
-          destination: "/printoms/api/apple-touch-icon",
-          basePath: false,
-        },
-      ],
-    };
-  },
+  // Note: do NOT use rewrites with `basePath: false` + internal destinations.
+  // Next.js only allows that for external http(s) URLs and fails the build
+  // with "Invalid rewrites found". Root favicon proxies live in vercel.json.
 };
 
 export default nextConfig;
