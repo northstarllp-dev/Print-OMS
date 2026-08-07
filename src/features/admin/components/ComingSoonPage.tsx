@@ -90,8 +90,35 @@ export function ComingSoonPage({
     );
   }
 
+  const handleLock = () => {
+    try {
+      window.localStorage.removeItem(DEV_ACCESS_STORAGE_KEY);
+    } catch {
+      // ignore storage failures — still lock this session
+    }
+    setUnlocked(false);
+    setShowPassword(false);
+    setPassword("");
+    setError("");
+  };
+
   if (unlocked) {
-    if (children) return <>{children}</>;
+    if (children) {
+      return (
+        <div className="relative">
+          <button
+            type="button"
+            onClick={handleLock}
+            title="Lock development modules"
+            className="fixed bottom-4 right-4 z-40 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold text-slate-600 bg-white border border-slate-200 shadow-md hover:bg-slate-50"
+          >
+            <Lock size={12} />
+            Lock modules
+          </button>
+          {children}
+        </div>
+      );
+    }
     return (
       <div className="p-3 sm:p-5 md:p-8 bg-slate-50 min-h-screen flex items-center justify-center">
         <div className="w-full max-w-lg text-center bg-white border border-slate-200 rounded-2xl px-6 py-12 sm:px-10 shadow-sm">
@@ -104,6 +131,14 @@ export function ComingSoonPage({
           <p className="m-0 text-sm text-slate-500 leading-relaxed">
             Access granted. This module UI is still being finished.
           </p>
+          <button
+            type="button"
+            onClick={handleLock}
+            className="mt-8 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50"
+          >
+            <Lock size={14} />
+            Lock again
+          </button>
         </div>
       </div>
     );
