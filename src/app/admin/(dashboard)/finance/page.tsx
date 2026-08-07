@@ -1,4 +1,3 @@
-import { Wallet } from "lucide-react";
 import { ComingSoonPage } from "@/features/admin/components/ComingSoonPage";
 import { getCurrentUser } from "@/features/auth/actions/authActions";
 import {
@@ -76,7 +75,7 @@ export default async function AdminFinancePage() {
     <ComingSoonPage
       title="Finance"
       description="This section is under development and is not available for use yet. Receipts, payments, expenses, and reports will open here once the module is ready."
-      icon={Wallet}
+      icon="wallet"
     >
       <FinanceDashboard
         summary={summary}

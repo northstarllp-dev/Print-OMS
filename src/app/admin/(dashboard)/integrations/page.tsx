@@ -1,4 +1,3 @@
-import { Plug } from "lucide-react";
 import { ComingSoonPage } from "@/features/admin/components/ComingSoonPage";
 
 export const metadata = {
@@ -10,7 +9,7 @@ export default function AdminIntegrationsPage() {
     <ComingSoonPage
       title="Integrations"
       description="Connect Meta Ads, WhatsApp, Google leads, and other inbound channels to your enquiry pipeline."
-      icon={Plug}
+      icon="plug"
     />
   );
 }

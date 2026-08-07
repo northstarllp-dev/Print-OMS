@@ -1,16 +1,40 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import type { LucideIcon } from "lucide-react";
-import { KeyRound, Lock } from "lucide-react";
+import {
+  Building2,
+  KeyRound,
+  Lock,
+  Package,
+  Plug,
+  ShoppingCart,
+  Wallet,
+  type LucideIcon,
+} from "lucide-react";
 
 const DEV_ACCESS_STORAGE_KEY = "printoms_dev_module_access";
 const DEV_ACCESS_PASSWORD = "hariakshay";
 
+export type ComingSoonIconName =
+  | "building"
+  | "plug"
+  | "wallet"
+  | "package"
+  | "shopping-cart";
+
+const ICONS: Record<ComingSoonIconName, LucideIcon> = {
+  building: Building2,
+  plug: Plug,
+  wallet: Wallet,
+  package: Package,
+  "shopping-cart": ShoppingCart,
+};
+
 interface ComingSoonPageProps {
   title: string;
   description: string;
-  icon: LucideIcon;
+  /** String key — Lucide components cannot be passed from Server Components. */
+  icon: ComingSoonIconName;
   /** Real module UI shown after password unlock. */
   children?: React.ReactNode;
 }
@@ -26,9 +50,10 @@ function readUnlocked(): boolean {
 export function ComingSoonPage({
   title,
   description,
-  icon: Icon,
+  icon,
   children,
 }: ComingSoonPageProps) {
+  const Icon = ICONS[icon] || Package;
   const [ready, setReady] = useState(false);
   const [unlocked, setUnlocked] = useState(false);
   const [showPassword, setShowPassword] = useState(false);

@@ -1,4 +1,3 @@
-import { Package } from "lucide-react";
 import { ComingSoonPage } from "@/features/admin/components/ComingSoonPage";
 import { getCurrentUser } from "@/features/auth/actions/authActions";
 import {
@@ -24,7 +23,7 @@ export default async function AdminInventoryPage() {
     <ComingSoonPage
       title="Inventory"
       description="This section is under development and is not available for use yet. Stock balances, warehouses, and movements will open here once the module is ready."
-      icon={Package}
+      icon="package"
     >
       <InventoryDashboard
         stock={stock}

@@ -1,4 +1,3 @@
-import { ShoppingCart } from "lucide-react";
 import { ComingSoonPage } from "@/features/admin/components/ComingSoonPage";
 import { getCurrentUser } from "@/features/auth/actions/authActions";
 import { getWarehouses } from "@/features/inventory/actions/inventoryActions";
@@ -43,7 +42,7 @@ export default async function AdminPurchaseOrdersPage() {
     <ComingSoonPage
       title="Purchase Orders"
       description="This section is under development and is not available for use yet. Vendors, purchase requests, and goods receipts will open here once the module is ready."
-      icon={ShoppingCart}
+      icon="shopping-cart"
     >
       <PurchasesDashboard
         purchaseOrders={purchaseOrders}
