@@ -38,6 +38,7 @@ export default async function InstallationSiteVisitPage() {
     orderCode: o.order_id || o.id,
     orderId: o.order_id || o.id,
     workflow_type: o.workflow_type ?? null,
+    business_operation: o.business_operation ?? "signage",
     siteVisitDetails: o.siteVisitDetails ?? null,
     installationDetails: o.installationDetails ?? null,
   }));

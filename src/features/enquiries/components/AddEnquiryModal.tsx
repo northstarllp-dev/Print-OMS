@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { X, Send, Loader } from "lucide-react";
 import {
   EMPTY_ENQUIRY_FORM,
@@ -8,6 +8,9 @@ import {
   validateEnquiryForm,
   type EnquiryFormData,
 } from "@/features/enquiries/enquiryFormLogic";
+import { loadClientConfig } from "@/config/loadClientConfig";
+import { getBusinessOperationsForTenant } from "@/features/orders/businessOperations";
+import { DEFAULT_BUSINESS_OPERATION_ID } from "@/config/schema/businessOperations";
 
 export type { EnquiryFormData };
 
@@ -23,10 +26,21 @@ const labelClass =
   "block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1.5";
 
 export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalProps) {
-  const [formData, setFormData] = useState<EnquiryFormData>({ ...EMPTY_ENQUIRY_FORM });
+  const businessOps = useMemo(
+    () => getBusinessOperationsForTenant(loadClientConfig().businessOperations),
+    []
+  );
+  const defaultOpId =
+    businessOps[0]?.id || DEFAULT_BUSINESS_OPERATION_ID;
+
+  const [formData, setFormData] = useState<EnquiryFormData>({
+    ...EMPTY_ENQUIRY_FORM,
+    businessOperation: defaultOpId,
+  });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [syncWhatsapp, setSyncWhatsapp] = useState(false);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  const showBusinessOpPicker = businessOps.length > 1;
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const formatted = formatPhoneNumber(e.target.value);
@@ -67,9 +81,12 @@ export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalPr
     }
 
     setIsSubmitting(true);
-    await onSubmit(formData);
+    await onSubmit({
+      ...formData,
+      businessOperation: formData.businessOperation || defaultOpId,
+    });
     setIsSubmitting(false);
-    setFormData({ ...EMPTY_ENQUIRY_FORM });
+    setFormData({ ...EMPTY_ENQUIRY_FORM, businessOperation: defaultOpId });
     setSyncWhatsapp(false);
     setErrors({});
   };
@@ -254,6 +271,27 @@ export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalPr
                   <option value="Website">Website</option>
                 </select>
               </div>
+
+              {showBusinessOpPicker ? (
+                <div>
+                  <label className={labelClass} htmlFor="enquiry-business-op">
+                    Business Operation *
+                  </label>
+                  <select
+                    id="enquiry-business-op"
+                    name="businessOperation"
+                    value={formData.businessOperation || defaultOpId}
+                    onChange={handleChange}
+                    className={`${fieldClass} cursor-pointer`}
+                  >
+                    {businessOps.map((op) => (
+                      <option key={op.id} value={op.id}>
+                        {op.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
 
               <div>
                 <label className={labelClass} htmlFor="enquiry-location">

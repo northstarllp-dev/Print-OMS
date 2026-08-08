@@ -44,6 +44,7 @@ const validForm = (overrides: Partial<EnquiryFormData> = {}): EnquiryFormData =>
   source: "Website",
   notes: "Need fascia board",
   location: "Whitefield",
+  businessOperation: "signage",
   ...overrides,
 });
 
@@ -60,6 +61,7 @@ function makeForms(n: number): EnquiryFormData[] {
     ],
     notes: `notes-${i}`,
     location: `Area ${i % 50}`,
+    businessOperation: "signage",
   }));
 }
 
@@ -115,6 +117,7 @@ describe("add enquiry", () => {
         primary_communication_mode: "WHATSAPP",
         location: "Whitefield",
         status: "Pending",
+        business_operation: "signage",
       });
       expect(stripPhoneSpaces("+91 98765 43210")).toBe("+919876543210");
       expect(mapEnquiryFormToInsert(validForm({ primaryMode: "email" })).primary_communication_mode).toBe(

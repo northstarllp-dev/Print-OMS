@@ -37,10 +37,32 @@ import type { OrderDetailPatch } from "@/features/orders/realtime/orderDetailPat
 import { useQuotationActions } from "@/app/portal/hooks/useQuotationActions";
 import {
   didStageAdvance,
+  getDetailTabPipeline,
   getTabForStage,
 } from "@/app/portal/utils/portalStageNavigation";
 import { ensureResolvedSiteLocation } from "@/components/maps/resolveGoogleMapsLocation";
 import type { InvoiceProfile } from "@/features/quotations/types/invoiceProfile";
+import { getStagesForOp } from "@/features/orders/businessOperations";
+
+const DETAIL_TAB_META: Record<
+  string,
+  { label: string; icon: typeof MapPin }
+> = {
+  site_visit: { label: "Site Visit", icon: MapPin },
+  quotation: { label: "Quotation", icon: FileCheck },
+  design: { label: "Design", icon: Layout },
+  payments: { label: "Payments", icon: CreditCard },
+  billing: { label: "Invoice", icon: FileCheck },
+};
+
+const STAGE_LABELS: Record<string, string> = {
+  enquiry: "Enquiries",
+  site_visit: "Site Visit",
+  quotation: "Quotations",
+  design: "Design",
+  production: "Production",
+  installation: "Installation",
+};
 
 const TabFallback = () => (
   <div className="flex items-center justify-center py-16 text-sm text-slate-400">
@@ -118,6 +140,7 @@ interface Order {
   orderCode?: string;
   orderId?: string;
   workflow_type?: string;
+  business_operation?: string;
 }
 
 interface OrderDetailClientProps {
@@ -129,32 +152,20 @@ interface OrderDetailClientProps {
 }
 
 export function OrderDetailClient({ customer, order: initialOrder, siteVisitItems = [], token, invoiceProfile = null }: OrderDetailClientProps) {
-  const workflowType = initialOrder.workflow_type || "quote_first";
-  const isDesignFirst = workflowType === "design_first";
+  const businessOperation = initialOrder.business_operation || "signage";
 
-  const stages = isDesignFirst 
-    ? ["Enquiries", "Site Visit", "Design", "Quotations", "Production", "Installation"]
-    : ["Enquiries", "Site Visit", "Quotations", "Design", "Production", "Installation"];
+  const stages = getStagesForOp(businessOperation).map(
+    (key) => STAGE_LABELS[key] || key
+  );
 
-  const tabs = isDesignFirst
-    ? [
-        { id: "site_visit", label: "Site Visit", icon: MapPin },
-        { id: "design", label: "Design", icon: Layout },
-        { id: "quotation", label: "Quotation", icon: FileCheck },
-        { id: "payments", label: "Payments", icon: CreditCard },
-        { id: "billing", label: "Invoice", icon: FileCheck },
-      ]
-    : [
-        { id: "site_visit", label: "Site Visit", icon: MapPin },
-        { id: "quotation", label: "Quotation", icon: FileCheck },
-        { id: "design", label: "Design", icon: Layout },
-        { id: "payments", label: "Payments", icon: CreditCard },
-        { id: "billing", label: "Invoice", icon: FileCheck },
-      ];
+  const tabs = getDetailTabPipeline(businessOperation).map((id) => {
+    const meta = DETAIL_TAB_META[id] || { label: id, icon: FileCheck };
+    return { id, label: meta.label, icon: meta.icon };
+  });
 
   // Initial tab follows server-rendered stage; realtime advances switch forward only (below).
   const [activeTab, setActiveTab] = useState(() =>
-    getTabForStage(initialOrder.stage || "", workflowType)
+    getTabForStage(initialOrder.stage || "", businessOperation)
   );
   const [order, setOrder] = useState(initialOrder);
   const orderRef = useRef(order);
@@ -192,12 +203,13 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
   useEffect(() => {
     const prevStage = prevStageRef.current || "";
     const nextStage = order.stage || "";
-    if (!didStageAdvance(prevStage, nextStage, workflowType)) {
+    const op = order.business_operation || businessOperation;
+    if (!didStageAdvance(prevStage, nextStage, op)) {
       prevStageRef.current = nextStage;
       return;
     }
     prevStageRef.current = nextStage;
-    const nextTab = getTabForStage(nextStage, workflowType);
+    const nextTab = getTabForStage(nextStage, op);
     startTransition(() => {
       setActiveTab(nextTab);
       setMountedTabs((prev) => {
@@ -207,7 +219,7 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
         return next;
       });
     });
-  }, [order.stage, workflowType]);
+  }, [order.stage, order.business_operation, businessOperation]);
 
   const applyPortalPatch = useCallback((patch: OrderDetailPatch) => {
     setOrder((prev) => mergeOrderDetailPatch(prev, patch));
@@ -226,7 +238,7 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
   const [products, setProducts] = useState<any[]>([]);
   const [selectedProductInfo, setSelectedProductInfo] = useState<any | null>(null);
   const [mountedTabs, setMountedTabs] = useState<Set<string>>(
-    () => new Set([getTabForStage(initialOrder.stage || "", workflowType)])
+    () => new Set([getTabForStage(initialOrder.stage || "", businessOperation)])
   );
 
   const {

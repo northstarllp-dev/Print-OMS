@@ -262,6 +262,7 @@ export default async function OrderDetailPage({
     versionHistory: orderData.version_history || [],
     chatHistory: orderData.chat_history || [],
     workflow_type: orderData.workflow_type,
+    business_operation: orderData.business_operation || "signage",
     siteVisitDetails: mapSiteVisitFromDb(
       Array.isArray(orderData.site_visits)
         ? (orderData.site_visits.length > 0 ? orderData.site_visits[0] : null)

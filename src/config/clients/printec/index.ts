@@ -44,4 +44,23 @@ export const printecConfig: Partial<PrintOMSClientConfig> = {
   },
   // Existing Meta templates were approved under the printec_ prefix
   whatsappTemplatePrefix: "printec_",
+  businessOperations: [
+    {
+      id: "signage",
+      label: "Signage",
+      stages: [
+        "enquiry",
+        "site_visit",
+        "quotation",
+        "design",
+        "production",
+        "installation",
+      ],
+    },
+    {
+      id: "flex_printing",
+      label: "Flex Printing",
+      stages: ["enquiry", "quotation", "design", "production", "installation"],
+    },
+  ],
 };

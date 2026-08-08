@@ -35,6 +35,9 @@ export default async function ProductsPage() {
     qr_code: p.qr_code ?? null,
     default_warehouse_id: p.default_warehouse_id ?? null,
     track_inventory: p.track_inventory ?? true,
+    business_operations: Array.isArray(p.business_operations)
+      ? p.business_operations
+      : [],
   }));
 
   const mappedCategories = (categoriesData || []).map((c: any) => ({

@@ -19,6 +19,8 @@ export interface EnquiryFormData {
   source: EnquirySource;
   notes: string;
   location: string;
+  /** Business operation id from client config (default: signage). */
+  businessOperation: string;
 }
 
 export interface EnquiryInsertPayload {
@@ -32,6 +34,7 @@ export interface EnquiryInsertPayload {
   primary_communication_mode: "WHATSAPP" | "MAIL";
   location: string;
   status: "Pending";
+  business_operation: string;
 }
 
 export type EnquiryFormErrors = Partial<
@@ -101,6 +104,7 @@ export function mapEnquiryFormToInsert(data: EnquiryFormData): EnquiryInsertPayl
     primary_communication_mode: data.primaryMode === "whatsapp" ? "WHATSAPP" : "MAIL",
     location: data.location,
     status: "Pending",
+    business_operation: data.businessOperation || "signage",
   };
 }
 
@@ -198,4 +202,5 @@ export const EMPTY_ENQUIRY_FORM: EnquiryFormData = {
   source: "Website",
   notes: "",
   location: "",
+  businessOperation: "signage",
 };

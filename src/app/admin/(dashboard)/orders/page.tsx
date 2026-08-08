@@ -34,6 +34,7 @@ export default async function OrdersPage() {
     orderId: o.order_id || o.id,
     siteVisitDetails: o.siteVisitDetails || null,
     workflow_type: o.workflow_type,
+    business_operation: o.business_operation || "signage",
   })) || [];
 
   const mappedCustomers = customers?.map(c => ({

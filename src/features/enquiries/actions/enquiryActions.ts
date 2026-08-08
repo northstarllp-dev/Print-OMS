@@ -351,6 +351,10 @@ export async function convertEnquiryToOrderAction(enquiryId: string, clientName:
   }
 
   // 4. Create new order
+  const { firstPipelineStageForOp } = await import(
+    "@/features/orders/businessOperations"
+  );
+  const businessOperation = (enq.business_operation as string) || "signage";
   const { data: newOrder, error: insertOrderErr } = await supabase
     .from("orders")
     .insert([
@@ -364,7 +368,11 @@ export async function convertEnquiryToOrderAction(enquiryId: string, clientName:
           requirements,
           assignedAdmins,
         },
-        customerName
+        customerName,
+        {
+          businessOperation,
+          stage: firstPipelineStageForOp(businessOperation),
+        }
       ),
     ])
     .select();

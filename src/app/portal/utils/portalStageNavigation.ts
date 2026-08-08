@@ -1,9 +1,33 @@
-/** Portal tab id for a pipeline stage (quote_first / design_first aware for quotation vs design). */
+import {
+  getStagesForOp,
+  moduleKeyForPipelineStage,
+} from "@/features/orders/businessOperations";
+
+const DETAIL_PIPELINE_TABS = ["site_visit", "quotation", "design"] as const;
+type DetailPipelineTab = (typeof DETAIL_PIPELINE_TABS)[number];
+
+/** Portal detail tabs derived from business-op stage order (+ payments/billing). */
+export function getDetailTabPipeline(businessOperation?: string): string[] {
+  const stages = getStagesForOp(businessOperation || "signage").filter((s) =>
+    (DETAIL_PIPELINE_TABS as readonly string[]).includes(s)
+  ) as DetailPipelineTab[];
+  return [...stages, "payments", "billing"];
+}
+
+/** Portal tab id for a pipeline stage (business-op aware). */
 export function getTabForStage(
   stage: string,
-  workflowType: string = "quote_first"
+  businessOperation: string = "signage"
 ): string {
-  if (!stage) return "site_visit";
+  if (!stage) {
+    return getDetailTabPipeline(businessOperation)[0] || "site_visit";
+  }
+  const mod = moduleKeyForPipelineStage(stage);
+  if (mod === "production" || mod === "installation") return "billing";
+  if (mod && (DETAIL_PIPELINE_TABS as readonly string[]).includes(mod)) {
+    const pipeline = getDetailTabPipeline(businessOperation);
+    return pipeline.includes(mod) ? mod : pipeline[0] || "billing";
+  }
   if (stage.includes("Site Visit")) return "site_visit";
   if (stage.includes("Quotation")) return "quotation";
   if (stage.includes("Design")) return "design";
@@ -16,32 +40,15 @@ export function getTabForStage(
   ) {
     return "billing";
   }
-  return "site_visit";
+  return getDetailTabPipeline(businessOperation)[0] || "site_visit";
 }
-
-const TAB_PIPELINE_QUOTE_FIRST = [
-  "site_visit",
-  "quotation",
-  "design",
-  "payments",
-  "billing",
-] as const;
-
-const TAB_PIPELINE_DESIGN_FIRST = [
-  "site_visit",
-  "design",
-  "quotation",
-  "payments",
-  "billing",
-] as const;
 
 export function getTabPipelineIndex(
   tabId: string,
-  workflowType: string = "quote_first"
+  businessOperation: string = "signage"
 ): number {
-  const order =
-    workflowType === "design_first" ? TAB_PIPELINE_DESIGN_FIRST : TAB_PIPELINE_QUOTE_FIRST;
-  const idx = order.indexOf(tabId as (typeof order)[number]);
+  const order = getDetailTabPipeline(businessOperation);
+  const idx = order.indexOf(tabId);
   return idx === -1 ? 0 : idx;
 }
 
@@ -49,13 +56,13 @@ export function getTabPipelineIndex(
 export function didStageAdvance(
   prevStage: string,
   nextStage: string,
-  workflowType: string = "quote_first"
+  businessOperation: string = "signage"
 ): boolean {
-  const prevTab = getTabForStage(prevStage, workflowType);
-  const nextTab = getTabForStage(nextStage, workflowType);
+  const prevTab = getTabForStage(prevStage, businessOperation);
+  const nextTab = getTabForStage(nextStage, businessOperation);
   if (prevTab === nextTab) return false;
   return (
-    getTabPipelineIndex(nextTab, workflowType) >
-    getTabPipelineIndex(prevTab, workflowType)
+    getTabPipelineIndex(nextTab, businessOperation) >
+    getTabPipelineIndex(prevTab, businessOperation)
   );
 }

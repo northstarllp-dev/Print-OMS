@@ -25,6 +25,7 @@ import { createEnquiry } from "@/features/enquiries/actions/enquiryActions";
 import { CreateServiceTicketModal } from "@/features/service-tickets/components/CreateServiceTicketModal";
 import { CustomerMessageModal, CustomerMessageInfo } from "@/features/notifications/customer-message/CustomerMessageModal";
 import { canShowAddServiceTicketForOrder } from "@/features/orders/orderListLogic";
+import { BusinessOperationCaption } from "@/features/orders/components/BusinessOperationCaption";
 
 /* ─── helpers ──────────────────────────────────────────────────── */
 const STAGE_LABEL: Record<string, { label: string; dot: string }> = {
@@ -658,7 +659,10 @@ export function AdminDashboardClient({
                     >
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-[13px] font-bold text-slate-900">{order.orderCode}</span>
+                          <div className="min-w-0">
+                            <span className="text-[13px] font-bold text-slate-900">{order.orderCode}</span>
+                            <BusinessOperationCaption opId={order.business_operation} />
+                          </div>
                           <span style={{
                             fontSize: "9px", fontWeight: "800", textTransform: "uppercase",
                             padding: "2px 6px", borderRadius: "4px",

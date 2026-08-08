@@ -23,6 +23,8 @@ import {
 interface InstallationPaymentApprovalModalProps {
   orderId: string;
   orderLabel?: string;
+  /** Override the subtitle under the title (defaults to installation wording). */
+  description?: string;
   onClose: () => void;
   onConfirm: () => Promise<void>;
 }
@@ -34,6 +36,7 @@ function amountOf(p: Payment): number {
 export function InstallationPaymentApprovalModal({
   orderId,
   orderLabel,
+  description = "Confirm payment status before marking this order as completed.",
   onClose,
   onConfirm,
 }: InstallationPaymentApprovalModalProps) {
@@ -94,7 +97,7 @@ export function InstallationPaymentApprovalModal({
           amount_type: "fixed",
           amount: outstanding,
           received: true,
-          notes: "Automatically recorded when installation was marked complete",
+          notes: "Automatically recorded when order was marked complete",
         });
         await load();
       } catch (e: any) {
@@ -136,7 +139,7 @@ export function InstallationPaymentApprovalModal({
               <p className="text-xs text-slate-500 font-semibold truncate">{orderLabel}</p>
             )}
             <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-              Installation is complete. Confirm payment status before marking this order as completed.
+              {description}
             </p>
           </div>
           <button

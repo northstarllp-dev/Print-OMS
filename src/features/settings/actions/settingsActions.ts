@@ -15,9 +15,10 @@ import {
 } from "@/features/invoices/types/invoiceNumbering";
 import { createAdminClient } from "@/utils/supabase/admin";
 import {
-  DEFAULT_PRODUCTION_CHECKLIST_ITEMS,
-  normalizeProductionChecklistItems,
-  type ProductionChecklistItem,
+  DEFAULT_PRODUCTION_CHECKLISTS_BY_OP,
+  getChecklistForBusinessOp,
+  normalizeProductionChecklistsByOp,
+  type ProductionChecklistsByOp,
 } from "@/features/settings/productionChecklist";
 import type { AppSettings, CompanyDetails } from "@/features/settings/settingsTypes";
 
@@ -27,7 +28,11 @@ const DEFAULT_SETTINGS: AppSettings = {
   googleReviewLink: "",
   invoiceProfile: EMPTY_INVOICE_PROFILE,
   invoiceNumbering: EMPTY_INVOICE_NUMBERING,
-  productionChecklistItems: DEFAULT_PRODUCTION_CHECKLIST_ITEMS,
+  productionChecklistsByOp: DEFAULT_PRODUCTION_CHECKLISTS_BY_OP,
+  productionChecklistItems: getChecklistForBusinessOp(
+    DEFAULT_PRODUCTION_CHECKLISTS_BY_OP,
+    "signage"
+  ),
 };
 
 function mapRow(data: {
@@ -38,14 +43,19 @@ function mapRow(data: {
   invoice_numbering?: unknown;
   production_checklist_items?: unknown;
 }): AppSettings {
+  const productionChecklistsByOp = normalizeProductionChecklistsByOp(
+    data.production_checklist_items
+  );
   return {
     siteVisitSchedulingEnabled: data.site_visit_scheduling_enabled ?? true,
     installationSchedulingEnabled: data.installation_scheduling_enabled ?? true,
     googleReviewLink: (data.google_review_link ?? "").trim(),
     invoiceProfile: normalizeInvoiceProfile(data.invoice_profile),
     invoiceNumbering: normalizeInvoiceNumbering(data.invoice_numbering),
-    productionChecklistItems: normalizeProductionChecklistItems(
-      data.production_checklist_items
+    productionChecklistsByOp,
+    productionChecklistItems: getChecklistForBusinessOp(
+      productionChecklistsByOp,
+      "signage"
     ),
   };
 }
@@ -100,7 +110,7 @@ export async function getAppSettingsForCompany(
       google_review_link: DEFAULT_SETTINGS.googleReviewLink,
       invoice_profile: EMPTY_INVOICE_PROFILE,
       invoice_numbering: EMPTY_INVOICE_NUMBERING,
-      production_checklist_items: DEFAULT_PRODUCTION_CHECKLIST_ITEMS,
+      production_checklist_items: DEFAULT_PRODUCTION_CHECKLISTS_BY_OP,
     })
     .select(
       "site_visit_scheduling_enabled, installation_scheduling_enabled, google_review_link, invoice_profile, invoice_numbering, production_checklist_items"
@@ -155,11 +165,15 @@ export async function updateAppSettings(
       ? { ...current.invoiceNumbering, ...settings.invoiceNumbering }
       : current.invoiceNumbering
   );
-  const newProductionChecklistItems = normalizeProductionChecklistItems(
-    settings.productionChecklistItems !== undefined
-      ? settings.productionChecklistItems
-      : current.productionChecklistItems
-  );
+  const newProductionChecklistsByOp: ProductionChecklistsByOp =
+    settings.productionChecklistsByOp !== undefined
+      ? normalizeProductionChecklistsByOp(settings.productionChecklistsByOp)
+      : settings.productionChecklistItems !== undefined
+        ? normalizeProductionChecklistsByOp({
+            ...current.productionChecklistsByOp,
+            signage: settings.productionChecklistItems,
+          })
+        : current.productionChecklistsByOp;
 
   const { error: upsertError } = await supabase.from("app_settings").upsert(
     {
@@ -169,7 +183,7 @@ export async function updateAppSettings(
       google_review_link: newGoogleReviewLink,
       invoice_profile: newInvoiceProfile,
       invoice_numbering: newInvoiceNumbering,
-      production_checklist_items: newProductionChecklistItems,
+      production_checklist_items: newProductionChecklistsByOp,
     },
     { onConflict: "company_id" }
   );

@@ -306,6 +306,7 @@ export default async function PortalPage({
       versionHistory: o.version_history || [],
       chatHistory: o.chat_history || [],
       workflow_type: o.workflow_type,
+      business_operation: o.business_operation || "signage",
       siteVisitDetails: mapSiteVisitFromDb(
         Array.isArray(o.site_visits)
           ? (o.site_visits.length > 0 ? o.site_visits[0] : null)

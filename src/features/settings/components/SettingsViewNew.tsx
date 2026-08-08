@@ -3,7 +3,7 @@
 import React, { useMemo, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { Save, Palette, MessageCircle, Calendar, Key, X, FileText, CheckSquare, Plus, Trash2, GripVertical } from "lucide-react";
+import { Save, Palette, MessageCircle, Calendar, Key, X, FileText, CheckSquare, Plus, Trash2, GripVertical, Layers } from "lucide-react";
 import {
   updateAppSettings,
   updateInvoiceProfile,
@@ -12,6 +12,9 @@ import {
 } from "@/features/settings/actions/settingsActions";
 import type { AppSettings, CompanyDetails } from "@/features/settings/settingsTypes";
 import { updateUserPassword } from "@/features/auth/actions/authActions";
+import { loadClientConfig } from "@/config/loadClientConfig";
+import { getBusinessOperationsForTenant } from "@/features/orders/businessOperations";
+import type { BusinessStageKey } from "@/config/schema/businessOperations";
 import {
   EMPTY_INVOICE_PROFILE,
   type InvoiceProfile,
@@ -26,9 +29,20 @@ import {
 } from "@/features/invoices/types/invoiceNumbering";
 import {
   createProductionChecklistItemId,
-  normalizeProductionChecklistItems,
+  getChecklistForBusinessOp,
+  normalizeProductionChecklistsByOp,
   type ProductionChecklistItem,
+  type ProductionChecklistsByOp,
 } from "@/features/settings/productionChecklist";
+
+const STAGE_LABELS: Record<BusinessStageKey, string> = {
+  enquiry: "Enquiry",
+  site_visit: "Site Visit",
+  quotation: "Quotation",
+  design: "Design",
+  production: "Production",
+  installation: "Installation",
+};
 
 const SettingsAddressInput = dynamic(
   () =>
@@ -72,12 +86,37 @@ export function SettingsViewNew({ initialAppSettings, companyDetails }: Settings
     "idle" | "saving" | "saved" | "error"
   >("idle");
 
-  const initialChecklist = useMemo(
-    () => normalizeProductionChecklistItems(initialAppSettings?.productionChecklistItems),
-    [initialAppSettings?.productionChecklistItems]
+  const businessOperations = useMemo(
+    () => getBusinessOperationsForTenant(loadClientConfig().businessOperations),
+    []
   );
-  const [checklistItems, setChecklistItems] = useState<ProductionChecklistItem[]>(initialChecklist);
-  const [initialChecklistItems, setInitialChecklistItems] = useState<ProductionChecklistItem[]>(initialChecklist);
+  const opIds = useMemo(
+    () => businessOperations.map((op) => op.id),
+    [businessOperations]
+  );
+
+  const initialChecklistsByOp = useMemo(
+    () =>
+      normalizeProductionChecklistsByOp(
+        initialAppSettings?.productionChecklistsByOp ??
+          initialAppSettings?.productionChecklistItems,
+        opIds
+      ),
+    [
+      initialAppSettings?.productionChecklistsByOp,
+      initialAppSettings?.productionChecklistItems,
+      opIds,
+    ]
+  );
+  const [checklistsByOp, setChecklistsByOp] =
+    useState<ProductionChecklistsByOp>(initialChecklistsByOp);
+  const [activeChecklistOpId, setActiveChecklistOpId] = useState(
+    () => opIds[0] || "signage"
+  );
+
+  const checklistItems =
+    checklistsByOp[activeChecklistOpId] ||
+    getChecklistForBusinessOp(checklistsByOp, activeChecklistOpId);
 
   const hasUnsavedChanges = isDirty;
 
@@ -224,39 +263,52 @@ export function SettingsViewNew({ initialAppSettings, companyDetails }: Settings
     patch: Partial<ProductionChecklistItem>
   ) => {
     markDirty();
-    setChecklistItems((prev) =>
-      prev.map((item, i) => (i === index ? { ...item, ...patch } : item))
-    );
+    setChecklistsByOp((prev) => {
+      const list = [...(prev[activeChecklistOpId] || checklistItems)];
+      list[index] = { ...list[index], ...patch };
+      return { ...prev, [activeChecklistOpId]: list };
+    });
   };
 
   const addChecklistItem = () => {
     markDirty();
-    const label = `New step ${checklistItems.length + 1}`;
+    const current = checklistsByOp[activeChecklistOpId] || checklistItems;
+    const label = `New step ${current.length + 1}`;
     const id = createProductionChecklistItemId(
       label,
-      checklistItems.map((item) => item.id)
+      current.map((item) => item.id)
     );
-    setChecklistItems((prev) => [
+    setChecklistsByOp((prev) => ({
       ...prev,
-      { id, label, description: "" },
-    ]);
+      [activeChecklistOpId]: [
+        ...(prev[activeChecklistOpId] || current),
+        { id, label, description: "" },
+      ],
+    }));
   };
 
   const removeChecklistItem = (index: number) => {
-    if (checklistItems.length <= 1) return;
+    const current = checklistsByOp[activeChecklistOpId] || checklistItems;
+    if (current.length <= 1) return;
     markDirty();
-    setChecklistItems((prev) => prev.filter((_, i) => i !== index));
+    setChecklistsByOp((prev) => ({
+      ...prev,
+      [activeChecklistOpId]: (prev[activeChecklistOpId] || current).filter(
+        (_, i) => i !== index
+      ),
+    }));
   };
 
   const moveChecklistItem = (index: number, direction: -1 | 1) => {
+    const current = checklistsByOp[activeChecklistOpId] || checklistItems;
     const next = index + direction;
-    if (next < 0 || next >= checklistItems.length) return;
+    if (next < 0 || next >= current.length) return;
     markDirty();
-    setChecklistItems((prev) => {
-      const copy = [...prev];
+    setChecklistsByOp((prev) => {
+      const copy = [...(prev[activeChecklistOpId] || current)];
       const [item] = copy.splice(index, 1);
       copy.splice(next, 0, item);
-      return copy;
+      return { ...prev, [activeChecklistOpId]: copy };
     });
   };
 
@@ -269,11 +321,10 @@ export function SettingsViewNew({ initialAppSettings, companyDetails }: Settings
           siteVisitSchedulingEnabled: settings.siteVisitSchedulingEnabled,
           installationSchedulingEnabled: settings.installationSchedulingEnabled,
           googleReviewLink: settings.googleReviewLink,
-          productionChecklistItems: checklistItems,
+          productionChecklistsByOp: checklistsByOp,
         }),
       ]);
       setInitialSettings(settings);
-      setInitialChecklistItems(checklistItems);
       setIsDirty(false);
       setSaveStatus("saved");
       setTimeout(() => setSaveStatus("idle"), 3000);
@@ -459,7 +510,77 @@ export function SettingsViewNew({ initialAppSettings, companyDetails }: Settings
           </div>
         ))}
 
-        {/* Workshop production checklist */}
+        {/* Business operations (from client config) */}
+        <div
+          style={{
+            background: "white",
+            border: "1px solid #e2e8f0",
+            borderRadius: "12px",
+            padding: "24px",
+            marginBottom: "20px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "20px", paddingBottom: "16px", borderBottom: "1px solid #e2e8f0" }}>
+            <div style={{ width: "40px", height: "40px", background: "#f1f5f9", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-primary)" }}>
+              <Layers size={20} />
+            </div>
+            <div>
+              <div style={{ fontSize: "16px", fontWeight: "700", color: "#0f172a" }}>
+                Business Operations
+              </div>
+              <div style={{ fontSize: "12px", color: "#64748b", marginTop: "2px" }}>
+                Pipelines available when creating enquiries. Chosen op controls which stages appear.
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gap: "12px" }}>
+            {businessOperations.map((op) => (
+              <div
+                key={op.id}
+                style={{
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "10px",
+                  padding: "14px 16px",
+                  background: "#f8fafc",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "12px", marginBottom: "10px", flexWrap: "wrap" }}>
+                  <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>
+                    {op.label}
+                  </div>
+                  <code style={{ fontSize: "11px", color: "#64748b", background: "#e2e8f0", padding: "2px 8px", borderRadius: "999px" }}>
+                    {op.id}
+                  </code>
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", alignItems: "center" }}>
+                  {op.stages.map((stage, i) => (
+                    <React.Fragment key={stage}>
+                      {i > 0 && (
+                        <span style={{ fontSize: "11px", color: "#94a3b8", fontWeight: 600 }}>→</span>
+                      )}
+                      <span
+                        style={{
+                          fontSize: "11px",
+                          fontWeight: 700,
+                          color: "#334155",
+                          background: "white",
+                          border: "1px solid #e2e8f0",
+                          borderRadius: "999px",
+                          padding: "4px 10px",
+                        }}
+                      >
+                        {STAGE_LABELS[stage] || stage}
+                      </span>
+                    </React.Fragment>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Workshop production checklist (per business operation) */}
         <div
           style={{
             background: "white",
@@ -479,7 +600,7 @@ export function SettingsViewNew({ initialAppSettings, companyDetails }: Settings
                   Workshop Production Checklist
                 </div>
                 <div style={{ fontSize: "12px", color: "#64748b", marginTop: "2px" }}>
-                  Customize fabrication milestones shown on the Production stage
+                  Separate fabrication milestones per business operation
                 </div>
               </div>
             </div>
@@ -503,6 +624,40 @@ export function SettingsViewNew({ initialAppSettings, companyDetails }: Settings
               <Plus size={14} /> Add step
             </button>
           </div>
+
+          {businessOperations.length > 1 && (
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "8px",
+                marginBottom: "16px",
+              }}
+            >
+              {businessOperations.map((op) => {
+                const active = op.id === activeChecklistOpId;
+                return (
+                  <button
+                    key={op.id}
+                    type="button"
+                    onClick={() => setActiveChecklistOpId(op.id)}
+                    style={{
+                      padding: "8px 12px",
+                      borderRadius: "8px",
+                      border: active ? "1px solid #1d4ed8" : "1px solid #e2e8f0",
+                      background: active ? "#eff6ff" : "white",
+                      color: active ? "#1d4ed8" : "#475569",
+                      fontSize: "12px",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {op.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           <div style={{ display: "grid", gap: "12px" }}>
             {checklistItems.map((item, index) => (

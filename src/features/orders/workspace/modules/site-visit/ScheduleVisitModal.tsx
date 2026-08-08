@@ -235,7 +235,7 @@ export const ScheduleVisitModal: React.FC<ScheduleVisitModalProps> = ({
             {/* Date Picker */}
             {!locationOnly && (
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
+              <label className="block text-xs font-semibold text-slate-500 mb-3">
                 Pick a Date
               </label>
               <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-slate-200">
@@ -287,7 +287,7 @@ export const ScheduleVisitModal: React.FC<ScheduleVisitModalProps> = ({
 
             {/* Location */}
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+              <label className="block text-xs font-semibold text-slate-500 mb-2">
                 {locationOnly ? "Installation / site location" : "Location"}
               </label>
               {locationOnly && (

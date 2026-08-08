@@ -11,6 +11,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 export async function ensureRealtimeAuth(
   supabase: SupabaseClient
 ): Promise<void> {
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const { data } = await supabase.auth.getSession();
   let session = data.session;
 
@@ -29,7 +30,7 @@ export async function ensureRealtimeAuth(
     }
   }
 
-  const token = session?.access_token;
+  const token = session?.access_token || anonKey;
   if (token) {
     await supabase.realtime.setAuth(token);
   }

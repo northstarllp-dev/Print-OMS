@@ -10,6 +10,7 @@ import { getAppSettings } from "@/features/settings/actions/settingsActions";
 import {
   buildProductionChecklistUpdate,
   DEFAULT_PRODUCTION_CHECKLIST_ITEMS,
+  getChecklistForBusinessOp,
   resolveChecklistProgress,
   type ProductionChecklistItem,
 } from "@/features/settings/productionChecklist";
@@ -115,12 +116,14 @@ export function ProductionModule({
   useEffect(() => {
     getAppSettings()
       .then((settings) => {
-        if (settings?.productionChecklistItems?.length) {
-          setChecklistItems(settings.productionChecklistItems);
-        }
+        const items = getChecklistForBusinessOp(
+          settings?.productionChecklistsByOp ?? settings?.productionChecklistItems,
+          initialOrder?.business_operation
+        );
+        if (items.length) setChecklistItems(items);
       })
       .catch(console.error);
-  }, []);
+  }, [initialOrder?.business_operation]);
 
   const pd = order.productionDetails || {
     stage1: false,
@@ -233,7 +236,7 @@ export function ProductionModule({
             <ArrowLeft size={14} /> Back to Queue
           </button>
           <span className="text-slate-300">/</span>
-          <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">{order.orderCode}</span>
+          <span className="text-slate-400 text-xs font-medium">{order.orderCode}</span>
         </div>
       )}
 
@@ -271,7 +274,7 @@ export function ProductionModule({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2">
             <div className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50">
-              <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider whitespace-nowrap">
+              <span className="text-[9px] font-medium text-slate-500 whitespace-nowrap">
                 Date Started
               </span>
               <span className="text-xs font-bold text-slate-800 whitespace-nowrap">
@@ -328,10 +331,10 @@ export function ProductionModule({
               title={canEditDeadline ? "Click to edit installation deadline" : "Admin only"}
             >
               <Timer size={13} className={deadlineCountdown.iconClass} />
-              <span className={`text-[9px] font-bold uppercase tracking-wider whitespace-nowrap ${deadlineCountdown.labelClass}`}>
+              <span className={`text-[9px] font-medium whitespace-nowrap ${deadlineCountdown.labelClass}`}>
                 Installation Deadline
               </span>
-              <span className={`text-xs font-black whitespace-nowrap ${deadlineCountdown.valueClass}`}>
+              <span className={`text-xs font-bold whitespace-nowrap ${deadlineCountdown.valueClass}`}>
                 {deadlineCountdown.countdownLabel}
               </span>
               {deadlineCountdown.dateLabel ? (
@@ -401,10 +404,10 @@ export function ProductionModule({
                 >
                   <Timer size={14} className={deadlineCountdown.iconClass} />
                   <div className="flex flex-col min-w-0">
-                    <span className={`text-[9px] font-bold uppercase tracking-wider leading-none ${deadlineCountdown.labelClass}`}>
+                    <span className={`text-[9px] font-medium leading-none ${deadlineCountdown.labelClass}`}>
                       Installation Deadline
                     </span>
-                    <span className={`text-xs font-black leading-tight mt-0.5 ${deadlineCountdown.valueClass}`}>
+                    <span className={`text-xs font-bold leading-tight mt-0.5 ${deadlineCountdown.valueClass}`}>
                       {deadlineCountdown.countdownLabel}
                     </span>
                     {deadlineCountdown.dateLabel ? (
@@ -420,28 +423,28 @@ export function ProductionModule({
           </div>
 
           <div className="mb-6 prt-card p-6">
-            <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider mb-4 border-b border-slate-100 pb-3 flex items-center gap-2">
+            <h2 className="text-sm font-bold text-slate-800 mb-4 border-b border-slate-100 pb-3 flex items-center gap-2">
               <FileText size={18} className="text-blue-600" /> Basic Information
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 md:gap-6 text-xs">
               <div>
-                <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Order No</div>
+                <div className="text-[10px] text-slate-500 font-medium mb-1">Order No</div>
                 <div className="font-bold text-slate-800">{order.orderCode}</div>
               </div>
               <div>
-                <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Client Name</div>
+                <div className="text-[10px] text-slate-500 font-medium mb-1">Client Name</div>
                 <div className="font-bold text-slate-800">{order.clientName || "—"}</div>
               </div>
               <div>
-                <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Business Name</div>
+                <div className="text-[10px] text-slate-500 font-medium mb-1">Business Name</div>
                 <div className="font-bold text-slate-800">{order.businessName || "—"}</div>
               </div>
               <div>
-                <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Priority</div>
+                <div className="text-[10px] text-slate-500 font-medium mb-1">Priority</div>
                 <div className="font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded inline-block">{order.priority || "High"}</div>
               </div>
               <div>
-                <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Expected Completion Date</div>
+                <div className="text-[10px] text-slate-500 font-medium mb-1">Expected Completion Date</div>
                 <div className="font-bold text-slate-800">{order.expected_completion_date ? new Date(order.expected_completion_date).toLocaleDateString("en-IN") : "TBD"}</div>
               </div>
             </div>
@@ -451,37 +454,39 @@ export function ProductionModule({
             <div className="mb-6 prt-card p-6">
               <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
                 <Sparkles size={18} className="text-rose-600" />
-                <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider">
+                <h2 className="text-sm font-bold text-slate-800">
                   Client Contact
                 </h2>
               </div>
               <div className="flex flex-wrap gap-8 text-xs">
                 <div>
-                  <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Client Name</div>
+                  <div className="text-[10px] text-slate-500 font-medium mb-1">Client Name</div>
                   <div className="font-bold text-slate-800">{client.name}</div>
                 </div>
                 {client.phone && (
                   <div>
-                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Phone</div>
+                    <div className="text-[10px] text-slate-500 font-medium mb-1">Phone</div>
                     <div className="font-semibold text-slate-700">📞 {maskPhone(client.phone)}</div>
                   </div>
                 )}
                 {client.email && (
                   <div>
-                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Email Address</div>
+                    <div className="text-[10px] text-slate-500 font-medium mb-1">Email Address</div>
                     <div className="font-semibold text-slate-700">{maskEmail(client.email)}</div>
                   </div>
                 )}
                 {installationSiteAddress && (
                   <div className="flex-1 min-w-[200px]">
-                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Installation Site Address</div>
+                    <div className="text-[10px] text-slate-500 font-medium mb-1">Installation Site Address</div>
                     <div className="font-medium text-slate-600 leading-relaxed">{installationSiteAddress}</div>
                   </div>
                 )}
-                {(order.notes || quotation?.notes) && (
+                {(order.requirements || order.notes || quotation?.notes) && (
                   <div className="flex-1 min-w-[200px]">
-                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Requirements / Notes</div>
-                    <div className="font-medium text-slate-600 leading-relaxed">{order.notes || quotation?.notes}</div>
+                    <div className="text-[10px] text-slate-500 font-medium mb-1">Requirements / Notes</div>
+                    <div className="font-medium text-slate-600 leading-relaxed whitespace-pre-wrap">
+                      {order.requirements || order.notes || quotation?.notes}
+                    </div>
                   </div>
                 )}
               </div>
@@ -513,7 +518,7 @@ export function ProductionModule({
           <div className="prt-card p-6">
             <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
               <ImageIcon size={18} className="text-emerald-600" />
-              <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider">
+              <h2 className="text-sm font-bold text-slate-800">
                 Design Files
               </h2>
             </div>
@@ -556,7 +561,7 @@ export function ProductionModule({
           <div className="prt-card p-6">
             <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
               <AlertOctagon size={18} className="text-rose-600" />
-              <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider">
+              <h2 className="text-sm font-bold text-slate-800">
                 Production Notes
               </h2>
             </div>
@@ -564,7 +569,7 @@ export function ProductionModule({
               <div className="space-y-4">
                 {quotation.notes && (
                   <div>
-                    <h3 className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1.5">General Notes</h3>
+                    <h3 className="text-[10px] text-slate-500 font-medium mb-1.5">General Notes</h3>
                     <div className="text-xs text-slate-700 font-medium whitespace-pre-wrap bg-slate-50 p-4 rounded-xl border border-slate-100">
                       {quotation.notes}
                     </div>
@@ -572,7 +577,7 @@ export function ProductionModule({
                 )}
                 {quotation.terms && (
                   <div>
-                    <h3 className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1.5">Terms & Conditions</h3>
+                    <h3 className="text-[10px] text-slate-500 font-medium mb-1.5">Terms & Conditions</h3>
                     <div className="text-xs text-slate-700 font-medium whitespace-pre-wrap bg-slate-50 p-4 rounded-xl border border-slate-100">
                       {quotation.terms}
                     </div>
@@ -598,7 +603,7 @@ export function ProductionModule({
           <div className="prt-card p-4 md:p-6 lg:sticky lg:top-6">
             <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
               <CheckSquare size={18} className="text-blue-600" />
-              <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider">
+              <h2 className="text-sm font-bold text-slate-800">
                 Workshop Production
               </h2>
             </div>

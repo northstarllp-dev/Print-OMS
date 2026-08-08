@@ -13,14 +13,18 @@ import {
   countActiveEnquiryFilters,
   filterEnquiries,
   healthMenuActions,
+  paginateEnquiries,
   requiresLostReasonPrompt,
   requiresHoldFollowUpPrompt,
 } from "@/features/enquiries/enquiryListLogic";
+import { ListPagination, LIST_PAGE_SIZE } from "@/components/ui/ListPagination";
 import { HoldFollowUpModal } from "@/features/calendar/components/HoldFollowUpModal";
 import {
   canConvertEnquiry,
 } from "@/features/enquiries/enquiryConvertLogic";
 import { shouldOpenAssignTeamAfterConvert } from "@/features/enquiries/enquiryAssignLogic";
+import { getBusinessOperation } from "@/features/orders/businessOperations";
+import { BusinessOperationCaption } from "@/features/orders/components/BusinessOperationCaption";
 import { createEnquiry, convertEnquiryToOrderAction, updateEnquiryHealthAction } from "@/features/enquiries/actions/enquiryActions";
 import { CustomerMessageModal, CustomerMessageInfo } from "@/features/notifications/customer-message/CustomerMessageModal";
 import type { CustomerMessageKey } from "@/features/notifications/customer-message/templates";
@@ -154,6 +158,7 @@ export function EnquiriesViewNew({
   const [addedByFilter, setAddedByFilter] = useState("All");
   const [healthFilter, setHealthFilter] = useState("ALL");
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [page, setPage] = useState(1);
 
   const availableAddedBy = useMemo(() => {
     const creatorsSet = new Set<string>();
@@ -174,7 +179,13 @@ export function EnquiriesViewNew({
   const [convertModalOpen, setConvertModalOpen] = useState(false);
   const [assignTeamModalOpen, setAssignTeamModalOpen] = useState(false);
   const [assignedOrderId, setAssignedOrderId] = useState("");
-  const [selectedEnquiry, setSelectedEnquiry] = useState<{id: string, businessName: string, leadName: string, notes?: string} | null>(null);
+  const [selectedEnquiry, setSelectedEnquiry] = useState<{
+    id: string;
+    businessName: string;
+    leadName: string;
+    notes?: string;
+    businessOperation?: string;
+  } | null>(null);
 
   // Customer message popup (templated copy / WhatsApp / email)
   const [customerMsg, setCustomerMsg] = useState<{
@@ -364,6 +375,25 @@ export function EnquiriesViewNew({
     });
   }, [enquiries, debouncedSearchTerm, sourceFilter, addedByFilter, healthFilter, selectedKpi, dateFilterType, startDate, endDate]);
 
+  useEffect(() => {
+    setPage(1);
+  }, [
+    debouncedSearchTerm,
+    sourceFilter,
+    addedByFilter,
+    healthFilter,
+    selectedKpi,
+    dateFilterType,
+    startDate,
+    endDate,
+  ]);
+
+  const pagedEnquiries = useMemo(
+    () => paginateEnquiries(filteredEnquiries, page, LIST_PAGE_SIZE),
+    [filteredEnquiries, page]
+  );
+  const pageEnquiries = pagedEnquiries.items;
+
   const resetFilters = () => {
     setDateFilterType("range");
     setStartDate("");
@@ -373,6 +403,7 @@ export function EnquiriesViewNew({
     setHealthFilter("ALL");
     setSearchTerm("");
     setSelectedKpi(null);
+    setPage(1);
   };
 
   const activeFilterCount = countActiveEnquiryFilters({
@@ -390,6 +421,7 @@ export function EnquiriesViewNew({
       businessName: enq.businessName || enq.leadName,
       leadName: enq.leadName,
       notes: enq.notes,
+      businessOperation: enq.businessOperation || "signage",
     });
     setConvertModalOpen(true);
   };
@@ -773,7 +805,7 @@ export function EnquiriesViewNew({
               No enquiries found matching your search.
             </div>
           ) : (
-            filteredEnquiries.map((enq) => {
+            pageEnquiries.map((enq) => {
               const statusColor = getStatusColor(enq.status);
               const dateStr = enq.dateReceived
                 ? new Date(enq.dateReceived).toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" })
@@ -807,6 +839,7 @@ export function EnquiriesViewNew({
                               </span>
                             )}
                           </div>
+                          <BusinessOperationCaption opId={enq.businessOperation} />
                           <div className="text-[13px] font-semibold text-slate-800 truncate mt-1">
                             {enq.businessName || enq.leadName}
                           </div>
@@ -908,10 +941,13 @@ export function EnquiriesViewNew({
               </tr>
             </thead>
             <tbody>
-              {filteredEnquiries.map((enq) => {
+              {pageEnquiries.map((enq) => {
                 return (
                   <tr key={enq.id} style={{ borderBottom: "1px solid #e2e8f0", transition: "background 0.2s" }} onMouseEnter={(e) => { e.currentTarget.style.background = "#f8fafc"; }} onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
-                    <td style={{ padding: "16px 20px", fontSize: "13px", color: "#0f172a", fontWeight: "700" }}>{enq.enquireId || enq.id.substring(0, 8)}</td>
+                    <td style={{ padding: "16px 20px", fontSize: "13px", color: "#0f172a", fontWeight: "700" }}>
+                      <div>{enq.enquireId || enq.id.substring(0, 8)}</div>
+                      <BusinessOperationCaption opId={enq.businessOperation} />
+                    </td>
                     <td style={{ padding: "16px 20px", fontSize: "13px", color: "#64748b", fontWeight: "500" }}>{new Date(enq.dateReceived).toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" })}</td>
                     <td style={{ padding: "16px 20px", fontSize: "13px", color: "#0f172a" }}>
                       <div style={{ fontWeight: "700" }}>{enq.businessName}</div>
@@ -1050,6 +1086,14 @@ export function EnquiriesViewNew({
             </tbody>
           </table>
         </div>
+        <ListPagination
+          page={pagedEnquiries.page}
+          totalPages={pagedEnquiries.totalPages}
+          total={pagedEnquiries.total}
+          pageSize={pagedEnquiries.pageSize}
+          onPageChange={setPage}
+          itemLabel="enquiries"
+        />
       </div>
       
       {canEdit ? (
@@ -1070,6 +1114,10 @@ export function EnquiriesViewNew({
           defaultClientName={selectedEnquiry.leadName || ""}
           defaultBusinessName={selectedEnquiry.businessName || ""}
           defaultRequirements={selectedEnquiry.notes || ""}
+          businessOperationLabel={
+            getBusinessOperation(selectedEnquiry.businessOperation || "signage").label
+          }
+          businessOperationId={selectedEnquiry.businessOperation || "signage"}
           onSubmit={async (clientName, businessName, productType, requirements, assignedAdmins) => {
             const enq = enquiries.find(e => e.id === selectedEnquiry.id);
             const res = await convertEnquiryToOrderLocal(selectedEnquiry.id, clientName, businessName, productType, requirements, assignedAdmins);

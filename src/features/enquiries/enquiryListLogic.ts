@@ -30,6 +30,7 @@ export interface EnquiryListRow {
   lostReason?: string | null;
   holdNote?: string | null;
   reachOutAt?: string | null;
+  businessOperation?: string | null;
 }
 
 export interface EnquiryFilterOptions {
@@ -66,6 +67,7 @@ export function mapDbEnquiryToViewRow(e: Record<string, any>): EnquiryListRow {
     lostReason: e.lost_reason,
     holdNote: e.hold_note,
     reachOutAt: e.reach_out_at,
+    businessOperation: e.business_operation || "signage",
   };
 }
 
@@ -259,4 +261,24 @@ export function canListEnquiries(actor: {
 }): boolean {
   if (actor.role === "admin") return true;
   return actor.canView || actor.canEdit;
+}
+
+/** Client-side page slice after filters (10/page UI). */
+export function paginateEnquiries<T>(
+  rows: T[],
+  page: number,
+  pageSize: number
+): { items: T[]; total: number; page: number; pageSize: number; totalPages: number } {
+  const size = Math.max(1, Math.floor(pageSize));
+  const total = rows.length;
+  const totalPages = Math.max(1, Math.ceil(total / size));
+  const safePage = Math.min(Math.max(1, Math.floor(page)), totalPages);
+  const start = (safePage - 1) * size;
+  return {
+    items: rows.slice(start, start + size),
+    total,
+    page: safePage,
+    pageSize: size,
+    totalPages,
+  };
 }

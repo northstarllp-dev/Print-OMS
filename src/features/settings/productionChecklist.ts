@@ -4,6 +4,9 @@ export type ProductionChecklistItem = {
   description: string;
 };
 
+/** Checklist items keyed by business operation id (signage, flex_printing, …). */
+export type ProductionChecklistsByOp = Record<string, ProductionChecklistItem[]>;
+
 export const STAGE_COLUMN_IDS = ["stage1", "stage2", "stage3", "stage4"] as const;
 
 export const DEFAULT_PRODUCTION_CHECKLIST_ITEMS: ProductionChecklistItem[] = [
@@ -29,6 +32,34 @@ export const DEFAULT_PRODUCTION_CHECKLIST_ITEMS: ProductionChecklistItem[] = [
   },
 ];
 
+export const DEFAULT_FLEX_PRINTING_CHECKLIST_ITEMS: ProductionChecklistItem[] = [
+  {
+    id: "stage1",
+    label: "Print File Ready",
+    description: "Artwork approved and print-ready file prepared",
+  },
+  {
+    id: "stage2",
+    label: "Media Loading & Printing",
+    description: "Load flex/vinyl and complete print run",
+  },
+  {
+    id: "stage3",
+    label: "Lamination & Finishing",
+    description: "Lamination, cutting, eyelets, or other finishing",
+  },
+  {
+    id: "stage4",
+    label: "Quality Check & Packing",
+    description: "Final inspection and packing for dispatch",
+  },
+];
+
+export const DEFAULT_PRODUCTION_CHECKLISTS_BY_OP: ProductionChecklistsByOp = {
+  signage: DEFAULT_PRODUCTION_CHECKLIST_ITEMS.map((item) => ({ ...item })),
+  flex_printing: DEFAULT_FLEX_PRINTING_CHECKLIST_ITEMS.map((item) => ({ ...item })),
+};
+
 /** Old camelCase column ids → stageN */
 const ID_ALIASES: Record<string, string> = {
   procurementOfMaterials: "stage1",
@@ -50,11 +81,15 @@ function canonicalizeItemId(id: string): string {
   return ID_ALIASES[id] || id;
 }
 
+function cloneItems(items: ProductionChecklistItem[]): ProductionChecklistItem[] {
+  return items.map((item) => ({ ...item }));
+}
+
 export function normalizeProductionChecklistItems(
   raw: unknown
 ): ProductionChecklistItem[] {
   if (!Array.isArray(raw) || raw.length === 0) {
-    return DEFAULT_PRODUCTION_CHECKLIST_ITEMS.map((item) => ({ ...item }));
+    return cloneItems(DEFAULT_PRODUCTION_CHECKLIST_ITEMS);
   }
 
   const seen = new Set<string>();
@@ -77,7 +112,79 @@ export function normalizeProductionChecklistItems(
 
   return items.length > 0
     ? items
-    : DEFAULT_PRODUCTION_CHECKLIST_ITEMS.map((item) => ({ ...item }));
+    : cloneItems(DEFAULT_PRODUCTION_CHECKLIST_ITEMS);
+}
+
+function defaultItemsForOp(opId: string): ProductionChecklistItem[] {
+  const fromDefaults = DEFAULT_PRODUCTION_CHECKLISTS_BY_OP[opId];
+  if (fromDefaults?.length) return cloneItems(fromDefaults);
+  return cloneItems(DEFAULT_PRODUCTION_CHECKLIST_ITEMS);
+}
+
+/**
+ * Normalize DB jsonb which may be:
+ * - legacy array → applied as the shared/default checklist for all ops
+ * - object map of opId → items[]
+ */
+export function normalizeProductionChecklistsByOp(
+  raw: unknown,
+  opIds: string[] = Object.keys(DEFAULT_PRODUCTION_CHECKLISTS_BY_OP)
+): ProductionChecklistsByOp {
+  const ids = opIds.length > 0 ? opIds : ["signage"];
+  const result: ProductionChecklistsByOp = {};
+
+  if (Array.isArray(raw)) {
+    const shared = normalizeProductionChecklistItems(raw);
+    for (const opId of ids) {
+      // Legacy single list was the signage workshop checklist — keep other ops on their defaults.
+      result[opId] =
+        opId === "signage" || ids.length === 1
+          ? cloneItems(shared)
+          : defaultItemsForOp(opId);
+    }
+    return result;
+  }
+
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    const map = raw as Record<string, unknown>;
+    for (const opId of ids) {
+      if (opId in map) {
+        result[opId] = normalizeProductionChecklistItems(map[opId]);
+      } else {
+        result[opId] = defaultItemsForOp(opId);
+      }
+    }
+    // Preserve any extra op keys already stored
+    for (const key of Object.keys(map)) {
+      if (!(key in result)) {
+        result[key] = normalizeProductionChecklistItems(map[key]);
+      }
+    }
+    return result;
+  }
+
+  for (const opId of ids) {
+    result[opId] = defaultItemsForOp(opId);
+  }
+  return result;
+}
+
+export function getChecklistForBusinessOp(
+  byOp: ProductionChecklistsByOp | ProductionChecklistItem[] | null | undefined,
+  businessOperationId?: string | null
+): ProductionChecklistItem[] {
+  const opId = (businessOperationId || "signage").trim() || "signage";
+
+  if (Array.isArray(byOp)) {
+    return normalizeProductionChecklistItems(byOp);
+  }
+
+  if (byOp && typeof byOp === "object") {
+    if (byOp[opId]?.length) return cloneItems(byOp[opId]);
+    if (byOp.signage?.length) return cloneItems(byOp.signage);
+  }
+
+  return defaultItemsForOp(opId);
 }
 
 export function createProductionChecklistItemId(

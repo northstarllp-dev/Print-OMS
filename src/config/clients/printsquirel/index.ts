@@ -55,6 +55,26 @@ export const printsquirelConfig: Partial<PrintOMSClientConfig> = {
       hideElectricalAssessment: true,
     }
   },
+  businessOperations: [
+    {
+      id: "signage",
+      label: "Signage",
+      stages: [
+        "enquiry",
+        "site_visit",
+        "quotation",
+        "design",
+        "production",
+        "installation",
+      ],
+    },
+    {
+      id: "flex_printing",
+      label: "Flex Printing",
+      // Enquiries → Design → Quote → Production (no site visit / installation).
+      stages: ["enquiry", "design", "quotation", "production"],
+    },
+  ],
   usesFloorPortals: false,
   stageGrantsByRole: {
     Designer: { ...view("site_visit"), ...edit("design", "quotation", "invoice") },

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { Search, Filter, Plus, MoreVertical, Users, Star, Clock, AlertCircle, Edit, Trash2, Briefcase, BarChart2, Key, X, RefreshCw, Shield, Ban, CircleCheck } from "lucide-react";
 import { Employee } from "@/types";
@@ -21,9 +21,11 @@ import {
   filterEmployeesCatalog,
   isEmployeeArchived,
   isEmployeeFrozen,
+  paginateEmployees,
   resetEmployeeFilters,
   validatePasswordPolicy,
 } from "@/features/employees/employeeLogic";
+import { ListPagination, LIST_PAGE_SIZE } from "@/components/ui/ListPagination";
 
 interface EmployeesViewNewProps {
   initialEmployees: Employee[];
@@ -57,6 +59,7 @@ export function EmployeesViewNew({
   const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "Active" | "Inactive" | "Archived">("ALL");
+  const [page, setPage] = useState(1);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | undefined>(undefined);
@@ -315,10 +318,21 @@ export function EmployeesViewNew({
     statusFilter,
   });
 
+  useEffect(() => {
+    setPage(1);
+  }, [searchTerm, statusFilter]);
+
+  const pagedEmployees = useMemo(
+    () => paginateEmployees(filteredEmployees, page, LIST_PAGE_SIZE),
+    [filteredEmployees, page]
+  );
+  const pageEmployees = pagedEmployees.items;
+
   const resetFilters = () => {
     const defaults = resetEmployeeFilters();
     setSearchTerm(defaults.search);
     setStatusFilter(defaults.statusFilter as "ALL" | "Active" | "Inactive" | "Archived");
+    setPage(1);
   };
 
   const activeFilterCount = [statusFilter !== "ALL"].filter(Boolean).length;
@@ -597,7 +611,7 @@ export function EmployeesViewNew({
               No employees found.
             </div>
           ) : (
-            filteredEmployees.map((emp) => {
+            pageEmployees.map((emp) => {
               const frozen = isEmployeeFrozen(emp.status);
               const archived = isEmployeeArchived(emp.status);
               return (
@@ -721,7 +735,7 @@ export function EmployeesViewNew({
               </tr>
             </thead>
             <tbody>
-              {filteredEmployees.map((emp) => {
+              {pageEmployees.map((emp) => {
                 const frozen = isEmployeeFrozen(emp.status);
                 const archived = isEmployeeArchived(emp.status);
                 return (
@@ -771,6 +785,14 @@ export function EmployeesViewNew({
             </tbody>
           </table>
         </div>
+        <ListPagination
+          page={pagedEmployees.page}
+          totalPages={pagedEmployees.totalPages}
+          total={pagedEmployees.total}
+          pageSize={pagedEmployees.pageSize}
+          onPageChange={setPage}
+          itemLabel="employees"
+        />
       </div>
       </>
       )}

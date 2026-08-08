@@ -38,6 +38,7 @@ import { ScheduleVisitModal } from "./ScheduleVisitModal";
 import { updateSiteVisitDetailsAction } from "@/features/orders/actions/orderActions";
 import { deleteStorageFilesAction } from "@/features/orders/actions/storageActions";
 import { scheduleSiteVisitAction } from "@/features/orders/actions/orderActions";
+import { isStageInOp } from "@/features/orders/businessOperations";
 import { buildGoogleMapsSearchUrl } from "@/features/orders/actions/siteVisitMapper";
 import {
   isSkippedSiteVisit,
@@ -137,6 +138,32 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
   const config = loadClientConfig();
   const hiddenFields = config.features.siteVisit || {};
   const defaultMeasurementUnit = hiddenFields.defaultMeasurementUnit || "inch";
+
+  if (!isStageInOp(order.business_operation || "signage", "site_visit")) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-2 px-6 py-16 text-center text-slate-500">
+        <MapPin size={28} className="opacity-40" />
+        <div className="text-sm font-semibold text-slate-700">Site visit not part of this business operation</div>
+        <div className="max-w-sm text-xs text-slate-500">
+          This order uses a workflow that skips site visit. Continue from Quotation or the next included stage.
+        </div>
+      </div>
+    );
+  }
+  const opScoped = hiddenFields.businessOperations;
+  if (
+    opScoped &&
+    opScoped.length > 0 &&
+    !opScoped.includes(order.business_operation || "signage")
+  ) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-2 px-6 py-16 text-center text-slate-500">
+        <MapPin size={28} className="opacity-40" />
+        <div className="text-sm font-semibold text-slate-700">Site visit disabled for this operation</div>
+      </div>
+    );
+  }
+
   // Current client
   const client = customers.find(c => c.id === order.customerId);
   
@@ -474,11 +501,11 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
           </div>
         </div>
       ) : (scheduledDate || scheduledAddress) ? (
-        <div className="bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200 rounded-2xl p-5 shadow-xs">
+        <div className="bg-indigo-50/60 border border-indigo-200/70 rounded-xl p-4">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
             <div className="flex items-center gap-2">
               <Calendar size={18} className="text-indigo-600" />
-              <h3 className="text-sm font-extrabold text-indigo-900 uppercase tracking-wider">
+              <h3 className="text-sm font-bold text-indigo-900">
                 Scheduled Site Visit
               </h3>
             </div>
@@ -748,7 +775,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
 
             <fieldset disabled={isFrozen} className="space-y-4">
               <div>
-                <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-1">Item Label / Name</label>
+                <label className="block text-[10px] text-slate-500 font-medium mb-1">Item Label / Name</label>
                 <input
                   type="text"
                   value={activeLoc.name}
@@ -760,7 +787,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-1">Width</label>
+                  <label className="block text-[10px] text-slate-500 font-medium mb-1">Width</label>
                   <div className="flex focus-within:ring-2 focus-within:ring-[var(--color-secondary)]/20 focus-within:border-[var(--color-secondary)] border border-slate-200 rounded-xl overflow-hidden transition-all bg-white">
                     <input
                       type="number" step="any"
@@ -781,7 +808,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
                   </div>
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-1">Height</label>
+                  <label className="block text-[10px] text-slate-500 font-medium mb-1">Height</label>
                   <div className="flex focus-within:ring-2 focus-within:ring-[var(--color-secondary)]/20 focus-within:border-[var(--color-secondary)] border border-slate-200 rounded-xl overflow-hidden transition-all bg-white">
                     <input
                       type="number" step="any"
@@ -803,7 +830,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
                 </div>
                 {!hiddenFields.hideDepth && (
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-1">Depth</label>
+                    <label className="block text-[10px] text-slate-500 font-medium mb-1">Depth</label>
                     <div className="flex focus-within:ring-2 focus-within:ring-[var(--color-secondary)]/20 focus-within:border-[var(--color-secondary)] border border-slate-200 rounded-xl overflow-hidden transition-all bg-white">
                       <input
                         type="number" step="any"
@@ -826,7 +853,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
                 )}
                 {!hiddenFields.hideGroundClearance && (
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-1">Ground Clearance</label>
+                    <label className="block text-[10px] text-slate-500 font-medium mb-1">Ground Clearance</label>
                     <div className="flex focus-within:ring-2 focus-within:ring-[var(--color-secondary)]/20 focus-within:border-[var(--color-secondary)] border border-slate-200 rounded-xl overflow-hidden transition-all bg-white">
                       <input
                         type="number" step="any"
@@ -850,7 +877,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-1">Location / Surface Specific Notes</label>
+                <label className="block text-[10px] text-slate-500 font-medium mb-1">Location / Surface Specific Notes</label>
                 <textarea
                   value={activeLoc.notes || ""}
                   onChange={(e) => updateSignLocation(activeLoc.id, { notes: e.target.value })}
@@ -889,7 +916,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
             >
               <fieldset disabled={isFrozen} className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-4">
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Power Source Available?</label>
+                  <label className="block text-[10px] text-slate-500 font-medium mb-2">Power Source Available?</label>
                   <div className="flex flex-col sm:flex-row gap-3">
                     {[true, false].map(option => (
                       <label
@@ -916,7 +943,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
                 </div>
                 
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Distance to Power Source</label>
+                  <label className="block text-[10px] text-slate-500 font-medium mb-2">Distance to Power Source</label>
                   <div className="flex gap-2">
                     <input
                       type="number" step="any"
@@ -937,7 +964,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
                 </div>
                 
                 <div className="md:col-span-2">
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Electrical Assessment Notes</label>
+                  <label className="block text-[10px] text-slate-500 font-medium mb-1.5">Electrical Assessment Notes</label>
                   <textarea
                     value={activeLoc.electricalNotes || ""}
                     onChange={(e) => updateSignLocation(activeLoc.id, { electricalNotes: e.target.value })}
@@ -959,7 +986,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
           >
             <fieldset disabled={isFrozen} className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-4">
               <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Wall / Surface Type</label>
+                <label className="block text-[10px] text-slate-500 font-medium mb-1.5">Wall / Surface Type</label>
                 <select
                   value={activeLoc.wallType || ""}
                   onChange={(e) => updateSignLocation(activeLoc.id, { wallType: e.target.value })}
@@ -977,7 +1004,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
               </div>
               
               <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Proposed Mounting Method</label>
+                <label className="block text-[10px] text-slate-500 font-medium mb-1.5">Proposed Mounting Method</label>
                 <select
                   value={activeLoc.mountingMethod || ""}
                   onChange={(e) => updateSignLocation(activeLoc.id, { mountingMethod: e.target.value })}
@@ -992,7 +1019,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
               </div>
               
               <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Surface Quality / Condition</label>
+                <label className="block text-[10px] text-slate-500 font-medium mb-1.5">Surface Quality / Condition</label>
                 <input
                   type="text"
                   value={activeLoc.surfaceCondition || ""}
@@ -1003,7 +1030,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
               </div>
               
               <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Physical Obstacles</label>
+                <label className="block text-[10px] text-slate-500 font-medium mb-1.5">Physical Obstacles</label>
                 <input
                   type="text"
                   value={activeLoc.obstacles?.join(", ") || ""}
@@ -1014,7 +1041,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
               </div>
               
               <div className="md:col-span-2">
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Structural Reinforcements / Special Instructions</label>
+                <label className="block text-[10px] text-slate-500 font-medium mb-1.5">Structural Reinforcements / Special Instructions</label>
                 <textarea
                   value={activeLoc.structuralNotes || ""}
                   onChange={(e) => updateSignLocation(activeLoc.id, { structuralNotes: e.target.value })}
@@ -1040,7 +1067,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
         <fieldset disabled={isFrozen} className="space-y-5 pt-4">
           {/* Scaffolding & Crane */}
           <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Installation Type</label>
+            <label className="block text-[10px] text-slate-500 font-medium mb-2">Installation Type</label>
             <div className="flex flex-col sm:flex-row gap-3">
               <label className={`flex items-center gap-2.5 px-4 py-2.5 border rounded-xl transition-all flex-1 ${isFrozen ? "cursor-not-allowed opacity-70" : "cursor-pointer"} ${
                 siteVisit.scaffoldingRequired ? "border-[var(--color-secondary)] bg-[var(--color-secondary)]/5 font-bold text-[var(--color-secondary)]" : "border-slate-200 text-slate-650 hover:bg-slate-50 font-medium"
@@ -1069,7 +1096,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
 
           {/* Overnight Installation */}
           <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Overnight Installation</label>
+            <label className="block text-[10px] text-slate-500 font-medium mb-2">Overnight Installation</label>
             <div className="flex flex-col sm:flex-row gap-3">
               {[true, false].map(option => (
                 <label
@@ -1105,7 +1132,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
         <fieldset disabled={isFrozen} className="space-y-5 pt-4">
           {/* Extra Angles */}
           <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Extra Angles Required</label>
+            <label className="block text-[10px] text-slate-500 font-medium mb-2">Extra Angles Required</label>
             <div className="flex flex-col sm:flex-row gap-3 mb-3">
               {[true, false].map(option => (
                 <label
@@ -1129,7 +1156,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
             </div>
             {siteVisit.extraAnglesRequired && (
               <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Length</label>
+                <label className="block text-[10px] text-slate-500 font-medium mb-1.5">Length</label>
                 <input
                   type="text"
                   value={siteVisit.extraAnglesLength ?? ""}
@@ -1148,7 +1175,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
             !hiddenFields.hideExtraWireRequired ? { key: "extraWireRequired", label: "Extra Wire Required" } : null,
           ].filter(Boolean) as { key: keyof typeof siteVisit; label: string }[]).map(({ key, label }) => (
             <div key={key}>
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">{label}</label>
+              <label className="block text-[10px] text-slate-500 font-medium mb-2">{label}</label>
               <div className="flex flex-col sm:flex-row gap-3">
                 {[true, false].map(option => (
                   <label
@@ -1185,7 +1212,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
         <fieldset disabled={isFrozen} className="space-y-5 pt-4">
           {/* Design Brief */}
           <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Design Brief Available?</label>
+            <label className="block text-[10px] text-slate-500 font-medium mb-2">Design Brief Available?</label>
             <div className="flex flex-col sm:flex-row gap-3">
               {(["Yes", "No", "Later"] as const).map(option => (
                 <label
@@ -1212,7 +1239,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
           {/* Fabrication Required */}
           {!hiddenFields.hideFabricationReq && (
             <div>
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Fabrication Required</label>
+              <label className="block text-[10px] text-slate-500 font-medium mb-2">Fabrication Required</label>
               <div className="flex flex-col sm:flex-row gap-3">
                 {[true, false].map(option => (
                   <label
@@ -1240,7 +1267,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
           {/* Civil Work Required */}
           {!hiddenFields.hideCivilWork && (
             <div>
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Civil Work Required</label>
+              <label className="block text-[10px] text-slate-500 font-medium mb-2">Civil Work Required</label>
               <div className="flex flex-col sm:flex-row gap-3">
                 {[true, false].map(option => (
                   <label

@@ -228,8 +228,13 @@ export interface Order {
   hold_note?: string | null;
   reach_out_at?: string | null;
   orderId?: string;
-  /** Determines whether Quote or Design comes first after Site Visit */
+  /** Determines whether Quote or Design comes first after Site Visit (legacy). */
   workflow_type?: "quote_first" | "design_first";
+  /**
+   * Business operation id from client config (e.g. signage, flex_printing).
+   * Drives which pipeline stages apply and their order.
+   */
+  business_operation?: string;
 }
 
 /** Payment tracking statuses (financial record only — no workflow). */
@@ -272,6 +277,8 @@ export interface Enquiry {
   enquireId?: string;
   customerId?: string;
   orderId?: string;
+  /** Business operation chosen at enquiry creation (copied to order on convert). */
+  businessOperation?: string;
 }
 
 

@@ -113,7 +113,8 @@ async function assertProductionChecklistReady(
 ): Promise<void> {
   const {
     isProductionChecklistComplete,
-    normalizeProductionChecklistItems,
+    getChecklistForBusinessOp,
+    normalizeProductionChecklistsByOp,
     DEFAULT_PRODUCTION_CHECKLIST_ITEMS,
   } = await import("@/features/settings/productionChecklist");
 
@@ -126,7 +127,7 @@ async function assertProductionChecklistReady(
 
   const { data: order, error: orderError } = await supabase
     .from("orders")
-    .select("company_id")
+    .select("company_id, business_operation")
     .eq("id", orderUuid)
     .single();
   if (orderError) throw new Error(orderError.message);
@@ -138,7 +139,10 @@ async function assertProductionChecklistReady(
       .select("production_checklist_items")
       .eq("company_id", order.company_id)
       .maybeSingle();
-    items = normalizeProductionChecklistItems(settings?.production_checklist_items);
+    const byOp = normalizeProductionChecklistsByOp(
+      settings?.production_checklist_items
+    );
+    items = getChecklistForBusinessOp(byOp, order.business_operation);
   }
 
   if (!isProductionChecklistComplete(mapProductionDetails(prod) || {}, items)) {
@@ -585,12 +589,17 @@ export async function requestStageAdvancementAction(orderId: string) {
   const orderUuid = await resolveOrderUuid(supabase, orderId);
   const { data: current, error: fetchError } = await supabase
     .from("orders")
-    .select("stage, workflow_type")
+    .select("stage, workflow_type, business_operation")
     .eq("id", orderUuid)
     .single();
   if (fetchError) throw new Error(fetchError.message);
 
-  const isDesignFirst = (current.workflow_type || "quote_first") === "design_first";
+  const { pendingApprovalLabelAfter } = await import(
+    "@/features/orders/businessOperations"
+  );
+  const businessOp =
+    (current.business_operation as string) || "signage";
+
   // Permission is for the stage being advanced FROM — not the destination stage.
   const stageToPermission: Record<string, "site_visit" | "quotation" | "design" | "production" | "installation"> = {
     "Site Visit Pending": "site_visit",
@@ -624,35 +633,23 @@ export async function requestStageAdvancementAction(orderId: string) {
   ) {
     await assertSiteVisitReadyToAdvance(supabase, orderUuid);
   }
-  
-  if (stage === "Site Visit Pending" || stage === "Site Visit Scheduled") {
-    nextStatus = "Pending Admin Approval: Site Visit Completed";
-  } else if (stage === "Site Visit Completed") {
-    nextStatus = isDesignFirst
-      ? "Pending Admin Approval: Design Stage"
-      : "Pending Admin Approval: Quote Stage";
-  } else if (stage === "Quotation In Progress" || stage === "Quotation Sent" || stage === "Quotation Negotiation") {
-    nextStatus = "Pending Admin Approval: Quote Approval";
-  } else if (stage === "Quotation Approved") {
-    nextStatus = isDesignFirst
-      ? "Pending Admin Approval: Production Ready"
-      : "Pending Admin Approval: Design Stage";
-  } else if (stage === "Design In Progress") {
-    await assertDesignReadyToLeaveInProgress(supabase, orderUuid);
-    nextStatus = "Pending Admin Approval: Design Approval";
-  } else if (stage === "Design Approved") {
-    nextStatus = isDesignFirst
-      ? "Pending Admin Approval: Quote Stage"
-      : "Pending Admin Approval: Production Ready";
-  } else if (stage === "Production") {
-    await assertProductionChecklistReady(supabase, orderUuid);
-    nextStatus = "Pending Admin Approval: Production Ready";
-  } else if (stage === "Ready For Installation") {
+
+  if (stage === "Ready For Installation") {
     throw new Error(
       "Schedule the installation first. Job-done approval is only available after the order is Installation Scheduled."
     );
-  } else if (stage === "Installation Scheduled") {
-    nextStatus = "Pending Admin Approval: Job Done";
+  }
+
+  if (stage === "Design In Progress") {
+    await assertDesignReadyToLeaveInProgress(supabase, orderUuid);
+  }
+  if (stage === "Production") {
+    await assertProductionChecklistReady(supabase, orderUuid);
+  }
+
+  nextStatus = pendingApprovalLabelAfter(businessOp, stage);
+  if (nextStatus === "Normal") {
+    throw new Error(`No advancement path configured from "${stage}"`);
   }
   
   const result = await updateOrder(orderId, { stage_status: nextStatus, stage_admin_notes: "" });
@@ -693,7 +690,7 @@ export async function adminApproveStageAction(orderId: string) {
   const orderUuid = await resolveOrderUuid(supabase, orderId);
   const { data: o, error: fetchError } = await supabase
     .from("orders")
-    .select("stage, order_id, workflow_type, stage_status, company_id, customer_id")
+    .select("stage, order_id, workflow_type, business_operation, stage_status, company_id, customer_id")
     .eq("id", orderUuid)
     .single();
   if (fetchError) throw new Error(fetchError.message);
@@ -714,38 +711,22 @@ export async function adminApproveStageAction(orderId: string) {
     );
   }
 
-  const isDesignFirst = (o.workflow_type || "quote_first") === "design_first";
+  const { nextStageAfter, resolveStageOrder } = await import(
+    "@/features/orders/businessOperations"
+  );
+  const businessOp = (o.business_operation as string) || "signage";
   const isJobDonePending = o.stage_status === "Pending Admin Approval: Job Done";
 
-  // Build the next-stage map dynamically based on workflow type
-  const nextStageMap: Record<string, string> = isDesignFirst
-    ? {
-        "Design In Progress":     "Design Approved",
-        "Design Approved":        "Quotation In Progress",
-        "Quotation In Progress":  "Quotation Sent",
-        "Quotation Sent":         "Quotation Negotiation",
-        "Quotation Negotiation":  "Quotation Approved",
-        "Quotation Approved":     "Production",
-        "Production":             "Ready For Installation",
-        "Ready For Installation": "Installation Scheduled",
-        "Installation Scheduled": "Completed",
-        "Completed":              "Closed",
-      }
-    : {
-        "Quotation In Progress":  "Quotation Sent",
-        "Quotation Sent":         "Quotation Negotiation",
-        "Quotation Negotiation":  "Quotation Approved",
-        "Quotation Approved":     "Design In Progress",
-        "Design In Progress":     "Design Approved",
-        "Design Approved":        "Production",
-        "Production":             "Ready For Installation",
-        "Ready For Installation": "Installation Scheduled",
-        "Installation Scheduled": "Completed",
-        "Completed":              "Closed",
-      };
+  // Prefer business-op order; fall back to legacy workflow_type map.
+  const orderStages = resolveStageOrder(businessOp, o.workflow_type);
+  const idx = orderStages.indexOf(o.stage);
+  let nextStage =
+    isJobDonePending
+      ? "Completed"
+      : idx >= 0 && idx < orderStages.length - 1
+        ? orderStages[idx + 1]
+        : nextStageAfter(businessOp, o.stage) || o.stage;
 
-  // Job Done always completes the order (payment review happens in the UI before this action).
-  const nextStage = isJobDonePending ? "Completed" : (nextStageMap[o.stage] || o.stage);
   if (!isJobDonePending && nextStage === o.stage) {
     throw new Error(
       `No next stage configured for "${o.stage}". Cannot approve advancement.`
@@ -754,7 +735,7 @@ export async function adminApproveStageAction(orderId: string) {
   if (o.stage === "Design In Progress" && nextStage === "Design Approved") {
     await assertDesignReadyToLeaveInProgress(supabase, orderUuid);
   }
-  if (o.stage === "Production" && nextStage === "Ready For Installation") {
+  if (o.stage === "Production" && (nextStage === "Ready For Installation" || nextStage === "Completed")) {
     await assertProductionChecklistReady(supabase, orderUuid);
   }
   if (nextStage === "Production") {

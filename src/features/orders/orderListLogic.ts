@@ -22,6 +22,7 @@ export interface OrderListRow {
   assignedEmployees?: string[] | null;
   assignedAdmins?: string[] | null;
   workflow_type?: "quote_first" | "design_first" | null;
+  business_operation?: string | null;
   company_id?: string | null;
 }
 
@@ -67,6 +68,7 @@ export function mapDbOrderToListRow(o: Record<string, any>): OrderListRow {
     orderCode: o.order_id ?? o.orderCode ?? o.id,
     orderId: o.order_id ?? o.orderId ?? o.id,
     workflow_type: o.workflow_type ?? "quote_first",
+    business_operation: o.business_operation ?? "signage",
     company_id: o.company_id ?? o.companyId ?? null,
   };
 }

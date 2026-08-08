@@ -407,6 +407,29 @@ export function recommendHardDeleteWhenReferenced(): boolean {
   return false;
 }
 
+/**
+ * Empty / null business_operations = available for every business op.
+ * Non-empty = only those op ids.
+ */
+export function productAppliesToBusinessOp(
+  product: { business_operations?: string[] | null },
+  opId?: string | null
+): boolean {
+  const ops = product.business_operations;
+  if (!ops || ops.length === 0) return true;
+  if (!opId) return true;
+  return ops.includes(opId);
+}
+
+export function normalizeProductBusinessOperations(
+  value: unknown
+): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((v): v is string => typeof v === "string" && v.trim().length > 0)
+    .map((v) => v.trim());
+}
+
 export function buildCreateProductDefaults(input?: {
   final_prdt?: boolean;
   existing?: Array<Pick<Product, "company_id" | "product_id">>;

@@ -35,6 +35,23 @@ import type { OrderDetailPatch } from "@/features/orders/realtime/orderDetailPat
 import { useQuotationActions } from "./hooks/useQuotationActions";
 import { ensureResolvedSiteLocation } from "@/components/maps/resolveGoogleMapsLocation";
 import type { InvoiceProfile } from "@/features/quotations/types/invoiceProfile";
+import {
+  getPortalStepKeysForOp,
+  getStepIndexForOp,
+} from "@/features/orders/businessOperations";
+
+const PORTAL_STEP_META: Record<
+  string,
+  { label: string; icon: typeof FileText }
+> = {
+  enquiry: { label: "Enquiries", icon: FileText },
+  site_visit: { label: "Site Visit", icon: MapPin },
+  quotation: { label: "Quotations", icon: BarChart3 },
+  design: { label: "Design", icon: Palette },
+  production: { label: "Production", icon: Package },
+  installation: { label: "Installation", icon: Wrench },
+  payments: { label: "Payments", icon: CreditCard },
+};
 
 const TabFallback = () => (
   <div className="flex items-center justify-center py-12 text-sm text-slate-400">
@@ -122,6 +139,7 @@ interface Order {
   orderCode?: string;
   orderId?: string;
   workflow_type?: string;
+  business_operation?: string;
   // New quotation workflow fields
 
   siteVisitItems?: Array<{
@@ -152,23 +170,8 @@ interface PortalClientProps {
   };
 }
 
-// We moved STEPS inside the component to be dynamic
-function getStepIndex(stage: string, workflowType: string = "quote_first"): number {
-  const s = (stage || "").toLowerCase();
-  const isDesignFirst = workflowType === "design_first";
-
-  if (s.includes("site visit")) return 1;
-  if (isDesignFirst) {
-    if (s.includes("design")) return 2;
-    if (s.includes("quotation")) return 3;
-  } else {
-    if (s.includes("quotation")) return 2;
-    if (s.includes("design")) return 3;
-  }
-  // Installation stages before "ready" — "Ready For Installation" contains both.
-  if (s.includes("installation") || s.includes("completed") || s.includes("closed")) return 5;
-  if (s.includes("production") || s.includes("fabricat")) return 4;
-  return 0;
+function getStepIndex(stage: string, businessOperation?: string): number {
+  return getStepIndexForOp(stage, businessOperation || "signage");
 }
 
 export function PortalClient({ customer, orders: initialOrders, quotations = [], initialActiveOrderId, token, appSettings }: PortalClientProps) {
@@ -209,28 +212,16 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
     onPatch: applyPortalPatch,
   });
 
-  const workflowType = activeOrder?.workflow_type || "quote_first";
-  const isDesignFirst = workflowType === "design_first";
+  const businessOperation =
+    activeOrder?.business_operation || "signage";
 
-  const STEPS = isDesignFirst
-    ? [
-      { key: "enquiry", label: "Enquiries", icon: FileText },
-      { key: "site_visit", label: "Site Visit", icon: MapPin },
-      { key: "design", label: "Design", icon: Palette },
-      { key: "quotation", label: "Quotations", icon: BarChart3 },
-      { key: "production", label: "Production", icon: Package },
-      { key: "installation", label: "Installation", icon: Wrench },
-      { key: "payments", label: "Payments", icon: CreditCard },
-    ]
-    : [
-      { key: "enquiry", label: "Enquiries", icon: FileText },
-      { key: "site_visit", label: "Site Visit", icon: MapPin },
-      { key: "quotation", label: "Quotations", icon: BarChart3 },
-      { key: "design", label: "Design", icon: Palette },
-      { key: "production", label: "Production", icon: Package },
-      { key: "installation", label: "Installation", icon: Wrench },
-      { key: "payments", label: "Payments", icon: CreditCard },
-    ];
+  const STEPS = getPortalStepKeysForOp(businessOperation).map((key) => {
+    const meta = PORTAL_STEP_META[key] || {
+      label: key,
+      icon: FileText,
+    };
+    return { key, label: meta.label, icon: meta.icon };
+  });
 
   // Step 4: Establish session cookie on first load (avoids keeping token in URL)
   useEffect(() => {
@@ -297,7 +288,12 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
     setViewerIndex(index);
   };
 
-  const currentStep = activeOrder ? getStepIndex(activeOrder.stage, activeOrder.workflow_type) : 0;
+  const currentStep = activeOrder
+    ? getStepIndex(
+        activeOrder.stage,
+        activeOrder.business_operation || businessOperation
+      )
+    : 0;
 
   const [viewedStep, setViewedStep] = useState<number | null>(null);
   const activeStepToRender = viewedStep !== null ? viewedStep : currentStep;

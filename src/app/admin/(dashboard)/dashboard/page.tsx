@@ -29,6 +29,7 @@ export default async function AdminDashboardPage() {
     dateCreated: o.date_created,
     orderCode: o.order_id || o.id,
     orderId: o.order_id || o.id,
+    business_operation: o.business_operation || "signage",
     quotations: o.quotations,
     payments: o.payments,
     assignedAdmins: o.assigned_admins || [],

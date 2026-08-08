@@ -40,6 +40,7 @@ import {
 } from "@/features/orders/workspace/shared/staffQueueStages";
 import { QueueViewToggle } from "./QueueViewToggle";
 import { MyOrdersStageTabs } from "./MyOrdersStageTabs";
+import { BusinessOperationCaption } from "./BusinessOperationCaption";
 import type { QueueView } from "@/features/orders/workspace/shared/staffQueueStages";
 import type { OrderStage } from "@/features/orders/workspace/shared/types";
 import { CreateServiceTicketModal } from "@/features/service-tickets/components/CreateServiceTicketModal";
@@ -53,10 +54,12 @@ import {
   filterOrders,
   healthMenuActions as healthMenuActionLabels,
   needsAdminApproval,
+  paginateOrders,
   resolveOrderDetailHref,
 } from "@/features/orders/orderListLogic";
 import { resolveSiteVisitMapLink } from "@/features/orders/actions/siteVisitMapper";
 import { isSkippedSiteVisit } from "@/features/orders/workspace/modules/site-visit/siteVisitUiLogic";
+import { ListPagination, LIST_PAGE_SIZE } from "@/components/ui/ListPagination";
 
 const getStatusColor = (status: string) => {
   const colors: Record<string, { bg: string; text: string; label: string }> = {
@@ -194,6 +197,7 @@ export function OrdersManagementDashboard({
   const [dateFilterType, setDateFilterType] = useState<"all" | "range">("range");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [page, setPage] = useState(1);
 
   // Debounce search — 220 ms
   useEffect(() => {
@@ -463,6 +467,27 @@ export function OrdersManagementDashboard({
     [toolbarFilteredOrders, selectedKpi]
   );
 
+  useEffect(() => {
+    setPage(1);
+  }, [
+    debouncedSearch,
+    stageFilter,
+    healthFilter,
+    adminAssignedFilter,
+    selectedKpi,
+    startDate,
+    endDate,
+    dateFilterType,
+    queueView,
+    myOrdersTab,
+  ]);
+
+  const pagedOrders = useMemo(
+    () => paginateOrders(filteredOrders, page, LIST_PAGE_SIZE),
+    [filteredOrders, page]
+  );
+  const pageOrders = pagedOrders.items;
+
   const resetFilters = () => {
     setDateFilterType("range");
     setStartDate("");
@@ -472,6 +497,7 @@ export function OrdersManagementDashboard({
     setAdminAssignedFilter("ALL");
     setSearchTerm("");
     setSelectedKpi(null);
+    setPage(1);
   };
 
   const activeFilterCount = countActiveOrderFilters({
@@ -910,7 +936,7 @@ export function OrdersManagementDashboard({
               No orders found matching your search.
             </div>
           ) : (
-            filteredOrders.map((order) => {
+            pageOrders.map((order) => {
               const isSiteVisitStage = order.stage === "Site Visit Scheduled" || order.stage === "Site Visit Completed";
               const hasNoDate = !order.siteVisitDetails || !order.siteVisitDetails.auditDate;
               const displayStage = (isSiteVisitStage && hasNoDate) ? "Site Visit Pending" : order.stage;
@@ -959,6 +985,9 @@ export function OrdersManagementDashboard({
                               {statusColor.label}
                             </span>
                           </div>
+                          <BusinessOperationCaption
+                            opId={order.business_operation}
+                          />
                           <div className="text-[13px] font-semibold text-slate-800 truncate mt-1">
                             {title}
                           </div>
@@ -1105,7 +1134,7 @@ export function OrdersManagementDashboard({
               </tr>
             </thead>
             <tbody>
-              {filteredOrders.map((order, idx) => {
+              {pageOrders.map((order, idx) => {
                 const isSiteVisitStage = order.stage === "Site Visit Scheduled" || order.stage === "Site Visit Completed";
                 const hasNoDate = !order.siteVisitDetails || !order.siteVisitDetails.auditDate;
                 const displayStage = (isSiteVisitStage && hasNoDate) ? "Site Visit Pending" : order.stage;
@@ -1129,7 +1158,10 @@ export function OrdersManagementDashboard({
                     }}
                   >
                     <td style={{ padding: "16px 20px", fontSize: "13px", color: "#0f172a", fontWeight: "600" }}>
-                      {order.orderCode || order.id}
+                      <div>{order.orderCode || order.id}</div>
+                      <BusinessOperationCaption
+                        opId={order.business_operation}
+                      />
                     </td>
                     <td style={{ padding: "16px 20px", fontSize: "13px", color: "#64748b", fontWeight: "500" }}>
                       {dateStr}
@@ -1326,6 +1358,14 @@ export function OrdersManagementDashboard({
             </tbody>
           </table>
         </div>
+        <ListPagination
+          page={pagedOrders.page}
+          totalPages={pagedOrders.totalPages}
+          total={pagedOrders.total}
+          pageSize={pagedOrders.pageSize}
+          onPageChange={setPage}
+          itemLabel="orders"
+        />
         </div>
         
         {/* Assignment Right Drawer */}

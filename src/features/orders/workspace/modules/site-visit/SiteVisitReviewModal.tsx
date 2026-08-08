@@ -47,7 +47,7 @@ function InfoChip({
     <div className="flex items-start gap-3 bg-slate-50 rounded-xl p-3 border border-slate-200/80">
       <div className="mt-0.5 text-slate-400 shrink-0">{icon}</div>
       <div>
-        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">
+        <p className="text-[10px] text-slate-500 font-medium mb-0.5">
           {label}
         </p>
         {href ? (
@@ -124,7 +124,7 @@ function LocationReviewCard({ loc, index }: { loc: SignLocation; index: number }
             <div>
               <div className="flex items-center gap-1.5 mb-3">
                 <Ruler size={13} className="text-slate-500" />
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                <p className="text-[10px] text-slate-500 font-medium">
                   Dimensions
                 </p>
               </div>
@@ -140,7 +140,7 @@ function LocationReviewCard({ loc, index }: { loc: SignLocation; index: number }
           {/* Notes */}
           {loc.notes && (
             <div className="bg-slate-50 border-l-4 border-slate-300 rounded-r-xl px-4 py-3">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+              <p className="text-[10px] text-slate-500 font-medium mb-1">
                 Location Notes
               </p>
               <p className="text-xs text-slate-700 leading-relaxed">{loc.notes}</p>
@@ -152,7 +152,7 @@ function LocationReviewCard({ loc, index }: { loc: SignLocation; index: number }
             <div>
               <div className="flex items-center gap-1.5 mb-2">
                 <Camera size={13} className="text-slate-500" />
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                <p className="text-[10px] text-slate-500 font-medium">
                   Site Photos ({loc.photos?.length || 0})
                 </p>
               </div>
@@ -179,7 +179,7 @@ function LocationReviewCard({ loc, index }: { loc: SignLocation; index: number }
             <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 space-y-2">
               <div className="flex items-center gap-1.5 mb-1">
                 <Zap size={13} className="text-amber-600" />
-                <p className="text-[10px] font-bold text-amber-500 uppercase tracking-wider">
+                <p className="text-[10px] text-slate-500 font-medium">
                   Electrical Assessment
                 </p>
               </div>
@@ -214,7 +214,7 @@ function LocationReviewCard({ loc, index }: { loc: SignLocation; index: number }
             <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 space-y-2">
               <div className="flex items-center gap-1.5 mb-1">
                 <Building2 size={13} className="text-indigo-600" />
-                <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">
+                <p className="text-[10px] text-slate-500 font-medium">
                   Structural Assessment
                 </p>
               </div>
@@ -304,7 +304,7 @@ export function SiteVisitReviewModal({
         <div className="overflow-y-auto flex-1 px-4 md:px-6 py-4 md:py-5 space-y-5 md:space-y-6">
           {/* Visit Info */}
           <div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">
+            <p className="text-[10px] text-slate-500 font-medium mb-3">
               {skipped ? "Visit Status" : "Scheduled Visit Info"}
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -354,7 +354,7 @@ export function SiteVisitReviewModal({
           {/* Locations */}
           {locations.length > 0 ? (
             <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">
+              <p className="text-[10px] text-slate-500 font-medium mb-3">
                 Sign Items & Measurements ({locations.length})
               </p>
               <div className="space-y-3">
@@ -377,7 +377,7 @@ export function SiteVisitReviewModal({
           {/* ── Installation Requirements ── */}
           {(siteVisit.scaffoldingRequired || siteVisit.craneRequired || siteVisit.overnightInstallation !== undefined) && (
             <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">
+              <p className="text-[10px] text-slate-500 font-medium mb-3">
                 Installation Requirements
               </p>
               <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-wrap gap-2">
@@ -403,7 +403,7 @@ export function SiteVisitReviewModal({
           {/* ── Fabrication Requirements ── */}
           {(siteVisit.extraAnglesRequired !== undefined || siteVisit.extraAcpSheetRequired !== undefined || siteVisit.oldBoardRemovalRequired !== undefined || (!hiddenFields.hideExtraWireRequired && siteVisit.extraWireRequired !== undefined)) && (
             <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">
+              <p className="text-[10px] text-slate-500 font-medium mb-3">
                 Fabrication Requirements
               </p>
               <div className="bg-orange-50 border border-orange-100 rounded-xl p-4 space-y-2">
@@ -427,7 +427,7 @@ export function SiteVisitReviewModal({
           {/* ── Design Inputs ── */}
           {(siteVisit.designBriefAvailable || (!hiddenFields.hideFabricationReq && siteVisit.fabricationRequired !== undefined) || (!hiddenFields.hideCivilWork && siteVisit.civilWorkRequired !== undefined)) && (
             <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">
+              <p className="text-[10px] text-slate-500 font-medium mb-3">
                 Design Inputs
               </p>
               <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 space-y-2">

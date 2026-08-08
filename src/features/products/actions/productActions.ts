@@ -82,6 +82,11 @@ export type Product = {
   qr_code?: string | null;
   default_warehouse_id?: string | null;
   track_inventory?: boolean;
+  /**
+   * Business operation ids this product is available for.
+   * Empty / null = all operations.
+   */
+  business_operations?: string[] | null;
 };
 
 export type CreateProductPayload = {
@@ -112,6 +117,7 @@ export type CreateProductPayload = {
   qr_code?: string | null;
   default_warehouse_id?: string | null;
   track_inventory?: boolean;
+  business_operations?: string[] | null;
 };
 
 export async function getProducts(): Promise<Product[]> {

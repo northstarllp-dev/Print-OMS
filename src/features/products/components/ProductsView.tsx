@@ -22,7 +22,13 @@ import {
   PRODUCT_IMAGE_BUCKET,
   takeProductImageSlots,
   validateProductImageFile,
+  normalizeProductBusinessOperations,
 } from "../productLogic";
+import { loadClientConfig } from "@/config/loadClientConfig";
+import {
+  getBusinessOperation,
+  getBusinessOperationsForTenant,
+} from "@/features/orders/businessOperations";
 
 const PRICING_TYPES = ["Per Sq.Ft", "Per Unit", "Multiple"];
 
@@ -396,6 +402,10 @@ function ProductFormModal({
   const [imagesToDeleteOnSave, setImagesToDeleteOnSave] = useState<string[]>([]);
 
   const tenantCompanyId = product?.company_id ?? allProducts.find((p) => p.company_id)?.company_id;
+  const businessOps = getBusinessOperationsForTenant(
+    loadClientConfig().businessOperations
+  );
+  const showBusinessOpPicker = businessOps.length > 1;
 
   const [form, setForm] = useState<Partial<CreateProductPayload>>(() => {
     const final_prdt = product?.final_prdt ?? false;
@@ -431,6 +441,7 @@ function ProductFormModal({
       gst_rate: product?.gst_rate ?? null,
       barcode: product?.barcode ?? "",
       track_inventory: product?.track_inventory ?? true,
+      business_operations: product?.business_operations ?? [],
     };
   });
 
@@ -463,6 +474,10 @@ function ProductFormModal({
           payloadToSave.pricing_type_below = payloadToSave.pricing_type_below || "per_unit";
           payloadToSave.pricing_type_above = payloadToSave.pricing_type_above || "per_sqft";
         }
+
+        payloadToSave.business_operations = normalizeProductBusinessOperations(
+          payloadToSave.business_operations
+        );
 
         if (isEdit) {
           const res = await updateProduct(product!.id, payloadToSave);
@@ -664,6 +679,54 @@ function ProductFormModal({
             </div>
           </div>
 
+          {showBusinessOpPicker && (
+            <div>
+              <label style={labelStyle}>Business operations</label>
+              <p style={{ fontSize: 11, color: "#64748b", margin: "0 0 8px" }}>
+                Select where this product can be used. Leave none selected to allow all.
+              </p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {businessOps.map((op) => {
+                  const selected = (form.business_operations || []).includes(op.id);
+                  return (
+                    <label
+                      key={op.id}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                        padding: "6px 10px",
+                        borderRadius: 8,
+                        border: `1px solid ${selected ? "var(--color-primary)" : "#e2e8f0"}`,
+                        background: selected ? "var(--color-primary-container, #eff6ff)" : "white",
+                        cursor: "pointer",
+                        fontSize: 12,
+                        fontWeight: 700,
+                        color: "#0f172a",
+                        userSelect: "none",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        onChange={() => {
+                          setForm((f) => {
+                            const current = f.business_operations || [];
+                            const next = selected
+                              ? current.filter((id) => id !== op.id)
+                              : [...current, op.id];
+                            return { ...f, business_operations: next };
+                          });
+                        }}
+                      />
+                      {op.label}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Image Upload */}
           <ProductImageUpload
             images={form.images ?? []}
@@ -736,6 +799,16 @@ function ProductCard({
   }, [images.length]);
 
   const hasPricing = product.price_per_sqft || product.price_per_unit;
+  const businessOps = getBusinessOperationsForTenant(
+    loadClientConfig().businessOperations
+  );
+  const productOpIds = normalizeProductBusinessOperations(product.business_operations);
+  const productOpLabels =
+    businessOps.length > 1 && productOpIds.length > 0
+      ? productOpIds.map((id) => getBusinessOperation(id, businessOps).label)
+      : businessOps.length > 1 && productOpIds.length === 0
+        ? ["All"]
+        : [];
 
   return (
     <div style={{
@@ -812,6 +885,26 @@ function ProductCard({
           <div>
             <div style={{ fontSize: 13, fontWeight: 800, color: "#0f172a", lineHeight: 1.3 }}>{product.name}</div>
             {product.category && <div style={{ fontSize: 10, color: "#64748b", fontWeight: 600, marginTop: 2 }}>{product.category}</div>}
+            {productOpLabels.length > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
+                {productOpLabels.map((label) => (
+                  <span
+                    key={label}
+                    style={{
+                      fontSize: 9,
+                      fontWeight: 700,
+                      color: "#475569",
+                      background: "#f1f5f9",
+                      border: "1px solid #e2e8f0",
+                      borderRadius: 999,
+                      padding: "2px 7px",
+                    }}
+                  >
+                    {label}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
           <span style={{ fontSize: 9, fontWeight: 700, color: "#94a3b8", fontFamily: "monospace", flexShrink: 0 }}>{product.product_id}</span>
         </div>

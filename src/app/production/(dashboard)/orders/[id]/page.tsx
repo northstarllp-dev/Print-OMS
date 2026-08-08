@@ -116,6 +116,7 @@ export default async function ProductionOrderDetailPage({ params }: { params: Pr
     pricing_type_below: p.pricing_type_below ?? null,
     pricing_type_above: p.pricing_type_above ?? null,
     images: Array.isArray(p.images) ? p.images : [],
+    business_operations: Array.isArray(p.business_operations) ? p.business_operations : [],
   }));
 
   return (

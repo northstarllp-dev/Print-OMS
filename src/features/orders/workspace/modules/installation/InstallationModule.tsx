@@ -280,7 +280,7 @@ export function InstallationModule({
             <ArrowLeft size={14} /> Back to Queue
           </button>
           <span className="text-slate-300">/</span>
-          <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">{order.orderCode}</span>
+          <span className="text-slate-400 text-xs font-medium">{order.orderCode}</span>
         </div>
       )}
 
@@ -289,7 +289,7 @@ export function InstallationModule({
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div className="flex flex-wrap gap-8">
             <div>
-              <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
+              <div className="text-[10px] text-slate-500 font-medium mb-1.5">
                 Date Started
               </div>
               <div className="text-sm font-bold text-slate-800">
@@ -303,7 +303,7 @@ export function InstallationModule({
               </div>
             </div>
             <div>
-              <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
+              <div className="text-[10px] text-slate-500 font-medium mb-1.5">
                 Scheduled Install
               </div>
               <div className="text-sm font-bold text-slate-800">
@@ -371,11 +371,11 @@ export function InstallationModule({
           />
           
           {/* CHECKLIST */}
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-6 shadow-sm min-w-0 max-w-full overflow-hidden">
+          <div className="bg-white border border-slate-200/70 rounded-xl p-4 sm:p-6 min-w-0 max-w-full overflow-hidden">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-4 pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2 min-w-0">
                 <CheckCircle size={18} className="text-green-600 shrink-0" />
-                <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider">
+                <h2 className="text-sm font-bold text-slate-800">
                   Installation Checklist
                 </h2>
               </div>
@@ -551,10 +551,10 @@ export function InstallationModule({
 
           {/* DESIGN REFERENCE */}
           {designImage && (
-            <div className="bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-6 shadow-sm min-w-0 max-w-full overflow-hidden">
+            <div className="bg-white border border-slate-200/70 rounded-xl p-4 sm:p-6 min-w-0 max-w-full overflow-hidden">
               <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
                 <Sparkles size={18} className="text-purple-600" />
-                <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider">
+                <h2 className="text-sm font-bold text-slate-800">
                   Design Reference
                 </h2>
               </div>
@@ -575,29 +575,29 @@ export function InstallationModule({
         {!embedded && (
           <div className="space-y-6 lg:sticky lg:top-24 transition-all duration-300">
             {client && (
-              <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm">
+              <div className="bg-white border border-slate-200/70 rounded-xl p-6">
                 <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
                   <Sparkles size={18} className="text-rose-600" />
-                  <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider">
+                  <h2 className="text-sm font-bold text-slate-800">
                     Client Contact
                   </h2>
                 </div>
                 <div className="space-y-4 text-xs">
                   <div>
-                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Client Name</div>
+                    <div className="text-[10px] text-slate-500 font-medium mb-1">Client Name</div>
                     <div className="font-bold text-slate-800 text-sm">{client.name}</div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     {client.phone && (
                       <div>
-                        <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Phone</div>
+                        <div className="text-[10px] text-slate-500 font-medium mb-1">Phone</div>
                         <div className="font-semibold text-slate-700">📞 {client.phone}</div>
                       </div>
                     )}
                     {client.whatsapp && (
                       <div>
-                        <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">WhatsApp</div>
+                        <div className="text-[10px] text-slate-500 font-medium mb-1">WhatsApp</div>
                         <div className="font-semibold text-emerald-600">💬 {client.whatsapp}</div>
                       </div>
                     )}
@@ -605,14 +605,14 @@ export function InstallationModule({
 
                   {client.email && (
                     <div>
-                      <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Email</div>
+                      <div className="text-[10px] text-slate-500 font-medium mb-1">Email</div>
                       <div className="font-semibold text-slate-700">✉️ {client.email}</div>
                     </div>
                   )}
 
                   {installationSiteAddress && (
                     <div className="pt-2 border-t border-slate-100 mt-2">
-                      <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Installation / Shipping Address</div>
+                      <div className="text-[10px] text-slate-500 font-medium mb-1">Installation / Shipping Address</div>
                       {siteMapsLink ? (
                         <a
                           href={siteMapsLink}
