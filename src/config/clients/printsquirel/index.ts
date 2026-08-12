@@ -70,9 +70,9 @@ export const printsquirelConfig: Partial<PrintOMSClientConfig> = {
     },
     {
       id: "flex_printing",
-      label: "Flex Printing",
-      // Enquiries → Design → Quote → Production (no site visit / installation).
-      stages: ["enquiry", "design", "quotation", "production"],
+      label: "Large Format Printing",
+      // Enquiries → Quotation → Design → Production (no site visit / installation).
+      stages: ["enquiry", "quotation", "design", "production"],
     },
   ],
   usesFloorPortals: false,
