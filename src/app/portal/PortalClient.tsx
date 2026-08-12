@@ -170,8 +170,17 @@ interface PortalClientProps {
   };
 }
 
-function getStepIndex(stage: string, businessOperation?: string): number {
-  return getStepIndexForOp(stage, businessOperation || "signage");
+function getStepIndex(
+  stage: string,
+  businessOperation?: string,
+  workflowType?: string | null
+): number {
+  return getStepIndexForOp(
+    stage,
+    businessOperation || "signage",
+    undefined,
+    workflowType
+  );
 }
 
 export function PortalClient({ customer, orders: initialOrders, quotations = [], initialActiveOrderId, token, appSettings }: PortalClientProps) {
@@ -214,8 +223,13 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
 
   const businessOperation =
     activeOrder?.business_operation || "signage";
+  const workflowType = activeOrder?.workflow_type || null;
 
-  const STEPS = getPortalStepKeysForOp(businessOperation).map((key) => {
+  const STEPS = getPortalStepKeysForOp(
+    businessOperation,
+    undefined,
+    workflowType
+  ).map((key) => {
     const meta = PORTAL_STEP_META[key] || {
       label: key,
       icon: FileText,
@@ -291,7 +305,8 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
   const currentStep = activeOrder
     ? getStepIndex(
         activeOrder.stage,
-        activeOrder.business_operation || businessOperation
+        activeOrder.business_operation || businessOperation,
+        activeOrder.workflow_type || workflowType
       )
     : 0;
 

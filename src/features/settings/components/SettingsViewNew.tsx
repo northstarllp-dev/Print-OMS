@@ -600,7 +600,7 @@ export function SettingsViewNew({ initialAppSettings, companyDetails }: Settings
                   Workshop Production Checklist
                 </div>
                 <div style={{ fontSize: "12px", color: "#64748b", marginTop: "2px" }}>
-                  Separate fabrication milestones per business operation
+                  Separate fabrication milestones per business operation. Toggle each step's "Required" setting to control whether it blocks stage advancement.
                 </div>
               </div>
             </div>
@@ -671,9 +671,49 @@ export function SettingsViewNew({ initialAppSettings, companyDetails }: Settings
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", marginBottom: "10px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "#64748b", fontSize: "12px", fontWeight: 700 }}>
-                    <GripVertical size={14} />
-                    Step {index + 1}
+                  <div style={{ display: "flex", alignItems: "center", gap: "12px", color: "#64748b", fontSize: "12px", fontWeight: 700 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <GripVertical size={14} />
+                      Step {index + 1}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateChecklistItem(index, {
+                          required: item.required !== false ? false : true,
+                        })
+                      }
+                      title={
+                        item.required === false
+                          ? "Optional — this step does not block stage advancement. Click to make it required."
+                          : "Required — must be checked before stage advancement. Click to make it optional."
+                      }
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        padding: "3px 9px",
+                        fontSize: "11px",
+                        fontWeight: 700,
+                        borderRadius: "9999px",
+                        border: "1px solid",
+                        borderColor: item.required === false ? "#e2e8f0" : "#bbf7d0",
+                        background: item.required === false ? "#f1f5f9" : "#f0fdf4",
+                        color: item.required === false ? "#64748b" : "#16a34a",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: "7px",
+                          height: "7px",
+                          borderRadius: "50%",
+                          background: item.required === false ? "#94a3b8" : "#22c55e",
+                          flexShrink: 0,
+                        }}
+                      />
+                      {item.required === false ? "Optional" : "Required"}
+                    </button>
                   </div>
                   <div style={{ display: "flex", gap: "6px" }}>
                     <button

@@ -2,6 +2,8 @@ export type ProductionChecklistItem = {
   id: string;
   label: string;
   description: string;
+  /** When false, this step is optional and does not block stage advancement. Defaults to true. */
+  required?: boolean;
 };
 
 /** Checklist items keyed by business operation id (signage, flex_printing, …). */
@@ -107,6 +109,7 @@ export function normalizeProductionChecklistItems(
       id,
       label,
       description: String(row.description || "").trim(),
+      required: row.required !== false,
     });
   }
 
@@ -249,14 +252,16 @@ export function buildProductionChecklistUpdate(
   return payload;
 }
 
-/** True when every workshop checklist milestone is checked. */
+/** True when every required workshop checklist milestone is checked.
+ *  Items marked `required: false` are optional and do not block advancement. */
 export function isProductionChecklistComplete(
   productionDetails: object | null | undefined,
   items: ProductionChecklistItem[] = DEFAULT_PRODUCTION_CHECKLIST_ITEMS
 ): boolean {
-  if (!items.length) return false;
+  const requiredItems = items.filter((item) => item.required !== false);
+  if (!requiredItems.length) return true;
   const progress = resolveChecklistProgress(productionDetails, items);
-  return items.every((item) => !!progress[item.id]);
+  return requiredItems.every((item) => !!progress[item.id]);
 }
 
 export function productionChecklistAdvanceGate(
@@ -268,6 +273,6 @@ export function productionChecklistAdvanceGate(
     ok,
     tooltip: ok
       ? ""
-      : "Complete all workshop production checklist items before requesting approval.",
+      : "Complete all required workshop production checklist items before requesting approval.",
   };
 }

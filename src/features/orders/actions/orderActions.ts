@@ -106,7 +106,8 @@ async function assertSiteVisitReadyToAdvance(
   }
 }
 
-/** Production cannot leave the stage until workshop checklist is fully checked. */
+/** Production cannot leave the stage until all required workshop checklist
+ *  items are checked. Optional items (required: false) do not block advancement. */
 async function assertProductionChecklistReady(
   supabase: Awaited<ReturnType<typeof getSupabase>>,
   orderUuid: string
@@ -147,7 +148,7 @@ async function assertProductionChecklistReady(
 
   if (!isProductionChecklistComplete(mapProductionDetails(prod) || {}, items)) {
     throw new Error(
-      "Complete all workshop production checklist items before requesting approval."
+      "Complete all required workshop production checklist items before requesting approval."
     );
   }
 }
@@ -647,7 +648,12 @@ export async function requestStageAdvancementAction(orderId: string) {
     await assertProductionChecklistReady(supabase, orderUuid);
   }
 
-  nextStatus = pendingApprovalLabelAfter(businessOp, stage);
+  nextStatus = pendingApprovalLabelAfter(
+    businessOp,
+    stage,
+    undefined,
+    current.workflow_type
+  );
   if (nextStatus === "Normal") {
     throw new Error(`No advancement path configured from "${stage}"`);
   }
@@ -705,16 +711,57 @@ export async function adminApproveStageAction(orderId: string) {
       `Cannot advance from "${o.stage}" via generic stage approval. Use Send to Customer or the quotation workflow actions in the Quotation tab.`
     );
   }
-  if ((o.stage || "").startsWith("Site Visit")) {
-    throw new Error(
-      "Cannot advance from Site Visit via generic stage approval. Schedule or skip the visit, then choose workflow (Quote First or Design First) from Site Visit review."
-    );
-  }
 
-  const { nextStageAfter, resolveStageOrder } = await import(
+  const { nextStageAfter, resolveStageOrder, firstStageAfterSiteVisitModule, inferWorkflowTypeForBusinessOp } = await import(
     "@/features/orders/businessOperations"
   );
   const businessOp = (o.business_operation as string) || "signage";
+
+  // Site Visit → next module from business operation (when path is unambiguous).
+  // Ops with both Quote + Design after site visit use the workflow choice modal instead.
+  if ((o.stage || "").startsWith("Site Visit")) {
+    const { canChooseQuoteOrDesignAfterSiteVisit } = await import(
+      "@/features/orders/businessOperations"
+    );
+    if (canChooseQuoteOrDesignAfterSiteVisit(businessOp)) {
+      throw new Error(
+        "Choose Quote First or Design First to leave Site Visit."
+      );
+    }
+    await assertSiteVisitReadyToAdvance(supabase, orderUuid);
+    const nextStage = firstStageAfterSiteVisitModule(businessOp);
+    const workflowType = inferWorkflowTypeForBusinessOp(businessOp);
+    const result = await updateOrder(orderUuid, {
+      stage: nextStage,
+      workflow_type: workflowType,
+      stage_status: "Normal",
+      stage_admin_notes: "",
+    });
+    await insertOrderActivity(supabase, {
+      order_id: o.order_id || orderId,
+      company_id: o.company_id,
+      actor_name: "System",
+      actor_role: "System",
+      content: `Admin approved site visit. Order advanced to ${nextStage} (${businessOp}).`,
+      metadata: {
+        action: "stage_approved",
+        old: o.stage,
+        new: nextStage,
+        business_operation: businessOp,
+        workflow_type: workflowType,
+      },
+    });
+    if (nextStage !== o.stage) {
+      void dispatchWhatsAppForPipelineStage(supabase, orderUuid, nextStage).catch((err) =>
+        console.error("WhatsApp pipeline notify failed:", err)
+      );
+      void notifyOrderStageChange(supabase, orderUuid, nextStage, o.stage).catch((err) =>
+        console.error("Stage change notify failed:", err)
+      );
+    }
+    return result;
+  }
+
   const isJobDonePending = o.stage_status === "Pending Admin Approval: Job Done";
 
   // Prefer business-op order; fall back to legacy workflow_type map.
@@ -725,7 +772,7 @@ export async function adminApproveStageAction(orderId: string) {
       ? "Completed"
       : idx >= 0 && idx < orderStages.length - 1
         ? orderStages[idx + 1]
-        : nextStageAfter(businessOp, o.stage) || o.stage;
+        : nextStageAfter(businessOp, o.stage, undefined, o.workflow_type) || o.stage;
 
   if (!isJobDonePending && nextStage === o.stage) {
     throw new Error(
@@ -920,12 +967,27 @@ export async function setWorkflowTypeAction(
 
 
 export async function updateOrderStageAction(id: string, stage: string) {
-  await assertAdminOnly();
+  // Closing an order stays admin-only. Other stage moves use stage RBAC
+  // (e.g. Marketer scheduling/skipping a site visit → Site Visit Scheduled).
+  if (stage === "Completed" || stage === "Closed") {
+    await assertAdminOnly();
+  } else {
+    const { moduleKeyForPipelineStage } = await import(
+      "@/features/orders/businessOperations"
+    );
+    const mod = moduleKeyForPipelineStage(stage);
+    if (mod && mod !== "enquiry") {
+      await assertStageEditPermission(mod);
+    } else {
+      await assertAdminOnly();
+    }
+  }
+
   const supabase = await getSupabase();
   const orderUuid = await resolveOrderUuid(supabase, id);
   const { data: o, error: fetchError } = await supabase
     .from("orders")
-    .select("stage, order_id, company_id, customer_id")
+    .select("stage, order_id, company_id, customer_id, health")
     .eq("id", orderUuid)
     .single();
   if (fetchError) throw new Error(fetchError.message);
@@ -944,7 +1006,19 @@ export async function updateOrderStageAction(id: string, stage: string) {
   }
 
   const isChanged = stage !== o.stage;
-  const result = await updateOrder(orderUuid, { stage });
+  // Bypass updateOrder()'s admin-only gate — permission already checked above.
+  const { stageProgressPatch } = await import("@/features/orders/lib/orderHealth");
+  const patch = {
+    stage,
+    ...(isChanged ? stageProgressPatch(o.health) : {}),
+  };
+  const { data, error: updateError } = await supabase
+    .from("orders")
+    .update(patch)
+    .eq("id", orderUuid)
+    .select();
+  if (updateError) throw new Error(updateError.message);
+  const result = data;
 
   if (isChanged) {
     await insertOrderActivity(supabase, {
@@ -970,6 +1044,10 @@ export async function updateOrderStageAction(id: string, stage: string) {
           console.error("Portal revoke on order close failed:", err)
         );
     }
+
+    await revalidateStaffQueuePaths();
+    revalidateOrderDetailPaths(o.order_id || id);
+    revalidateOrderDetailPaths(orderUuid);
   }
 
   return result;

@@ -266,7 +266,7 @@ describe('orderActions', () => {
         );
 
       await expect(orderActions.adminApproveStageAction('uuid-1')).rejects.toThrow(
-        /Cannot advance from Site Visit/
+        /Choose Quote First or Design First to leave Site Visit/
       );
       expect(assertAdminOnly).toHaveBeenCalled();
     });

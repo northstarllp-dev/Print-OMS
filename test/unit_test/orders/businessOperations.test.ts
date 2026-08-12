@@ -2,11 +2,16 @@ import { describe, expect, it } from "vitest";
 import type { BusinessOperation } from "@/config/schema/businessOperations";
 import {
   firstPipelineStageForOp,
+  firstStageAfterSiteVisitModule,
+  canChooseQuoteOrDesignAfterSiteVisit,
   getBusinessOperation,
   getPipelineStageOrderForOp,
   getStagesForOp,
+  getWorksheetModuleKeysForOp,
+  inferWorkflowTypeForBusinessOp,
   isPipelineStageInOp,
   isStageInOp,
+  isWorksheetModuleDone,
   moduleKeyForPipelineStage,
   nextStageAfter,
   resolveStageOrder,
@@ -127,10 +132,67 @@ describe("businessOperations", () => {
     expect(isPipelineStageInOp("flex_printing", "Production", OPS)).toBe(true);
   });
 
-  it("resolveStageOrder prefers business op over legacy workflow_type", () => {
+  it("offers quote/design choice when both follow site visit", () => {
+    expect(canChooseQuoteOrDesignAfterSiteVisit("signage", OPS)).toBe(true);
+    expect(canChooseQuoteOrDesignAfterSiteVisit("signage_design_first", OPS)).toBe(
+      true
+    );
+    expect(canChooseQuoteOrDesignAfterSiteVisit("flex_printing", OPS)).toBe(
+      false
+    );
+    expect(
+      canChooseQuoteOrDesignAfterSiteVisit("flex_printing_last", OPS)
+    ).toBe(false);
+  });
+
+  it("picks first stage after site visit from business op", () => {
+    expect(firstStageAfterSiteVisitModule("signage", OPS)).toBe(
+      "Quotation In Progress"
+    );
+    expect(firstStageAfterSiteVisitModule("signage_design_first", OPS)).toBe(
+      "Design In Progress"
+    );
+    expect(inferWorkflowTypeForBusinessOp("signage", OPS)).toBe("quote_first");
+    expect(inferWorkflowTypeForBusinessOp("signage_design_first", OPS)).toBe(
+      "design_first"
+    );
+  });
+
+  it("design_first reorders Quote after Design for signage config", () => {
+    const pipeline = getPipelineStageOrderForOp("signage", OPS, "design_first");
+    expect(pipeline.indexOf("Design In Progress")).toBeLessThan(
+      pipeline.indexOf("Quotation In Progress")
+    );
+    expect(nextStageAfter("signage", "Site Visit Completed", OPS, "design_first")).toBe(
+      "Design In Progress"
+    );
+    expect(nextStageAfter("signage", "Design Approved", OPS, "design_first")).toBe(
+      "Quotation In Progress"
+    );
+  });
+
+  it("resolveStageOrder applies design_first on known ops", () => {
+    const fromOp = resolveStageOrder("signage", "design_first", OPS);
+    expect(fromOp.indexOf("Design In Progress")).toBeLessThan(
+      fromOp.indexOf("Quotation In Progress")
+    );
+  });
+
+  it("resolveStageOrder prefers business op stage list when workflow is quote_first", () => {
     const fromOp = resolveStageOrder("signage_design_first", "quote_first", OPS);
     expect(fromOp.indexOf("Design In Progress")).toBeLessThan(
       fromOp.indexOf("Quotation In Progress")
     );
+  });
+
+  it("design_first worksheet modules put Design before Quote", () => {
+    const modules = getWorksheetModuleKeysForOp("signage", OPS, "design_first");
+    expect(modules.indexOf("design")).toBeLessThan(modules.indexOf("quotation"));
+    expect(
+      isWorksheetModuleDone("quotation", "Design In Progress", "signage", OPS, "design_first")
+    ).toBe(false);
+    expect(
+      isWorksheetModuleDone("site_visit", "Design In Progress", "signage", OPS, "design_first")
+    ).toBe(true);
   });
 });

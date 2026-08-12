@@ -637,8 +637,13 @@ export function ProductionModule({
                       </div>
                     </div>
                     <div>
-                      <div className="text-xs font-bold leading-none mb-1">
-                        {index + 1}. {step.label}
+                      <div className="text-xs font-bold leading-none mb-1 flex items-center gap-2 flex-wrap">
+                        <span>{index + 1}. {step.label}</span>
+                        {step.required === false && (
+                          <span className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200">
+                            Optional
+                          </span>
+                        )}
                       </div>
                       {step.description ? (
                         <div className="text-[10px] text-slate-500 font-semibold">{step.description}</div>

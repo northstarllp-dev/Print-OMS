@@ -118,15 +118,44 @@ export function isStageInOp(
 }
 
 /**
+ * When workflow_type is design_first and both quotation + design exist,
+ * move design before quotation (legacy Quote/Design choice behavior).
+ */
+export function reorderModulesForWorkflowType(
+  modules: BusinessStageKey[],
+  workflowType?: LegacyWorkflowType | string | null
+): BusinessStageKey[] {
+  if (workflowType !== "design_first") return [...modules];
+  const quoteIdx = modules.indexOf("quotation");
+  const designIdx = modules.indexOf("design");
+  if (quoteIdx < 0 || designIdx < 0 || designIdx < quoteIdx) {
+    return [...modules];
+  }
+  const without = modules.filter((m) => m !== "quotation" && m !== "design");
+  const insertAt = Math.min(quoteIdx, designIdx);
+  return [
+    ...without.slice(0, insertAt),
+    "design",
+    "quotation",
+    ...without.slice(insertAt),
+  ];
+}
+
+/**
  * Build the full pipeline stage order for a business op.
  * Module keys expand to their granular PipelineStage strings in the order listed.
  * Terminal Completed/Closed always appear at the end (once).
+ * Optional workflowType reorders Quote vs Design (design_first).
  */
 export function getPipelineStageOrderForOp(
   opId: string | null | undefined,
-  ops?: BusinessOperation[] | null
+  ops?: BusinessOperation[] | null,
+  workflowType?: LegacyWorkflowType | string | null
 ): string[] {
-  const modules = getStagesForOp(opId, ops).filter((m) => m !== "enquiry");
+  const modules = reorderModulesForWorkflowType(
+    getStagesForOp(opId, ops).filter((m) => m !== "enquiry") as BusinessStageKey[],
+    workflowType
+  );
   const order: string[] = [];
   const seen = new Set<string>();
 
@@ -150,8 +179,8 @@ export function getPipelineStageOrderForOp(
 }
 
 /**
- * Prefer business-op stage order. Fall back to legacy workflow_type only when
- * the op id is unknown AND a workflow type is provided.
+ * Prefer business-op stage order, with workflow_type applied for Quote/Design order.
+ * Fall back to legacy workflow_type maps only when the op id is unknown.
  */
 export function resolveStageOrder(
   opId: string | null | undefined,
@@ -163,7 +192,7 @@ export function resolveStageOrder(
   const known = Boolean(normalized && list.some((o) => o.id === normalized));
 
   if (known) {
-    return getPipelineStageOrderForOp(normalized, ops);
+    return getPipelineStageOrderForOp(normalized, ops, legacyWorkflowType);
   }
 
   if (legacyWorkflowType === "design_first") {
@@ -173,16 +202,21 @@ export function resolveStageOrder(
     return [...LEGACY_QUOTE_FIRST];
   }
 
-  return getPipelineStageOrderForOp(normalized || DEFAULT_BUSINESS_OPERATION_ID, ops);
+  return getPipelineStageOrderForOp(
+    normalized || DEFAULT_BUSINESS_OPERATION_ID,
+    ops,
+    legacyWorkflowType
+  );
 }
 
 /** Next pipeline stage after `current`, within the op's stage order. */
 export function nextStageAfter(
   opId: string | null | undefined,
   current: string,
-  ops?: BusinessOperation[] | null
+  ops?: BusinessOperation[] | null,
+  workflowType?: LegacyWorkflowType | string | null
 ): string | null {
-  const order = getPipelineStageOrderForOp(opId, ops);
+  const order = getPipelineStageOrderForOp(opId, ops, workflowType);
   const idx = order.indexOf(current);
   if (idx === -1) return null;
   if (idx >= order.length - 1) return null;
@@ -225,11 +259,61 @@ export function isPipelineStageInOp(
   return isStageInOp(opId, mod, ops);
 }
 
+/** First pipeline stage after the site-visit module for this op (e.g. Quotation / Design). */
+export function firstStageAfterSiteVisitModule(
+  opId: string | null | undefined,
+  ops?: BusinessOperation[] | null
+): string {
+  const order = getPipelineStageOrderForOp(opId, ops);
+  const siteStages = new Set<string>(PIPELINE_STAGES_BY_MODULE.site_visit);
+  let lastSiteIdx = -1;
+  for (let i = 0; i < order.length; i++) {
+    if (siteStages.has(order[i])) lastSiteIdx = i;
+  }
+  if (lastSiteIdx >= 0) {
+    for (let i = lastSiteIdx + 1; i < order.length; i++) {
+      const s = order[i];
+      if (!TERMINAL_STAGES.includes(s as (typeof TERMINAL_STAGES)[number])) {
+        return s;
+      }
+    }
+  }
+  // Op has no site visit — first non-terminal stage
+  const first = order.find(
+    (s) => !TERMINAL_STAGES.includes(s as (typeof TERMINAL_STAGES)[number])
+  );
+  return first || "Quotation In Progress";
+}
+
+/** Infer legacy workflow_type from where the op goes after site visit. */
+export function inferWorkflowTypeForBusinessOp(
+  opId: string | null | undefined,
+  ops?: BusinessOperation[] | null
+): "quote_first" | "design_first" {
+  const next = firstStageAfterSiteVisitModule(opId, ops);
+  return next.startsWith("Design") ? "design_first" : "quote_first";
+}
+
+/**
+ * True when the op includes site visit AND both quotation + design afterward —
+ * admin should pick Quote First vs Design First (legacy workflow modal).
+ */
+export function canChooseQuoteOrDesignAfterSiteVisit(
+  opId: string | null | undefined,
+  ops?: BusinessOperation[] | null
+): boolean {
+  const stages = getStagesForOp(opId, ops);
+  if (!stages.includes("site_visit")) return false;
+  const after = stages.slice(stages.indexOf("site_visit") + 1);
+  return after.includes("quotation") && after.includes("design");
+}
+
 /** Pending admin approval label for advancing FROM `current` under this op. */
 export function pendingApprovalLabelAfter(
   opId: string | null | undefined,
   current: string,
-  ops?: BusinessOperation[] | null
+  ops?: BusinessOperation[] | null,
+  workflowType?: LegacyWorkflowType | string | null
 ): string {
   if (
     current === "Site Visit Pending" ||
@@ -238,7 +322,7 @@ export function pendingApprovalLabelAfter(
     return "Pending Admin Approval: Site Visit Completed";
   }
   if (current === "Site Visit Completed") {
-    const next = nextStageAfter(opId, current, ops);
+    const next = nextStageAfter(opId, current, ops, workflowType);
     if (next?.startsWith("Design")) return "Pending Admin Approval: Design Stage";
     if (next?.startsWith("Quotation")) return "Pending Admin Approval: Quote Stage";
     if (next === "Production") return "Pending Admin Approval: Production Ready";
@@ -252,7 +336,7 @@ export function pendingApprovalLabelAfter(
     return "Pending Admin Approval: Quote Approval";
   }
   if (current === "Quotation Approved") {
-    const next = nextStageAfter(opId, current, ops);
+    const next = nextStageAfter(opId, current, ops, workflowType);
     if (next?.startsWith("Design")) return "Pending Admin Approval: Design Stage";
     if (next === "Production") return "Pending Admin Approval: Production Ready";
     return "Pending Admin Approval: Production Ready";
@@ -261,13 +345,13 @@ export function pendingApprovalLabelAfter(
     return "Pending Admin Approval: Design Approval";
   }
   if (current === "Design Approved") {
-    const next = nextStageAfter(opId, current, ops);
+    const next = nextStageAfter(opId, current, ops, workflowType);
     if (next?.startsWith("Quotation")) return "Pending Admin Approval: Quote Stage";
     if (next === "Production") return "Pending Admin Approval: Production Ready";
     return "Pending Admin Approval: Production Ready";
   }
   if (current === "Production") {
-    const next = nextStageAfter(opId, current, ops);
+    const next = nextStageAfter(opId, current, ops, workflowType);
     if (next === "Completed") {
       return "Pending Admin Approval: Job Done";
     }
@@ -284,9 +368,13 @@ export type PortalStepKey = BusinessStageKey | "payments";
 
 export function getPortalStepKeysForOp(
   opId: string | null | undefined,
-  ops?: BusinessOperation[] | null
+  ops?: BusinessOperation[] | null,
+  workflowType?: LegacyWorkflowType | string | null
 ): PortalStepKey[] {
-  const stages = getStagesForOp(opId, ops);
+  const stages = reorderModulesForWorkflowType(
+    getStagesForOp(opId, ops) as BusinessStageKey[],
+    workflowType
+  );
   const keys: PortalStepKey[] = [...stages];
   if (!keys.includes("payments" as PortalStepKey)) {
     keys.push("payments");
@@ -300,9 +388,10 @@ export function getPortalStepKeysForOp(
 export function getStepIndexForOp(
   pipelineStage: string,
   opId: string | null | undefined,
-  ops?: BusinessOperation[] | null
+  ops?: BusinessOperation[] | null,
+  workflowType?: LegacyWorkflowType | string | null
 ): number {
-  const keys = getPortalStepKeysForOp(opId, ops);
+  const keys = getPortalStepKeysForOp(opId, ops, workflowType);
   const mod = moduleKeyForPipelineStage(pipelineStage);
   if (!mod) {
     const s = (pipelineStage || "").toLowerCase();
@@ -319,11 +408,38 @@ export function getStepIndexForOp(
 /** Worksheet tab module keys (no enquiry/payments). */
 export function getWorksheetModuleKeysForOp(
   opId: string | null | undefined,
-  ops?: BusinessOperation[] | null
+  ops?: BusinessOperation[] | null,
+  workflowType?: LegacyWorkflowType | string | null
 ): BusinessStageKey[] {
-  return getStagesForOp(opId, ops).filter(
-    (s) => s !== "enquiry"
-  ) as BusinessStageKey[];
+  // Derive from pipeline so Quote/Design order always matches resolveStageOrder.
+  const pipeline = getPipelineStageOrderForOp(opId, ops, workflowType);
+  const modules: BusinessStageKey[] = [];
+  for (const stage of pipeline) {
+    const mod = moduleKeyForPipelineStage(stage);
+    if (!mod || mod === "enquiry") continue;
+    if (!modules.includes(mod)) modules.push(mod);
+  }
+  return modules;
+}
+
+/** True when every pipeline stage in this module sits before the order's current stage. */
+export function isWorksheetModuleDone(
+  moduleKey: BusinessStageKey,
+  currentStage: string,
+  opId: string | null | undefined,
+  ops?: BusinessOperation[] | null,
+  workflowType?: LegacyWorkflowType | string | null
+): boolean {
+  const pipeline = getPipelineStageOrderForOp(opId, ops, workflowType);
+  const currentIdx = pipeline.indexOf(currentStage);
+  if (currentIdx < 0) return false;
+  const modStages = PIPELINE_STAGES_BY_MODULE[moduleKey] || [];
+  let lastIdx = -1;
+  for (const s of modStages) {
+    const i = pipeline.indexOf(s);
+    if (i > lastIdx) lastIdx = i;
+  }
+  return lastIdx >= 0 && currentIdx > lastIdx;
 }
 
 export function tabIndexForModule(
