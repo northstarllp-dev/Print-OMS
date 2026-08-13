@@ -42,6 +42,13 @@ export async function POST(req: NextRequest) {
     exp: payload.exp,
   });
 
+  // Rewriting the cookie on every visit forces Next.js to refresh RSC
+  // ("Rendering...") in a loop. Skip if the session is already current.
+  const existing = req.cookies.get(COOKIE_NAME)?.value;
+  if (existing === cookieValue) {
+    return NextResponse.json({ success: true, customerId: payload.customerId });
+  }
+
   const now = Math.floor(Date.now() / 1000);
   const maxAgeSeconds = Math.max(0, payload.exp - now);
 

@@ -6,6 +6,7 @@ import {
   filterOrders,
   healthMenuActions,
   isAllowedHealthTransition,
+  isActionableNeedsAttention,
   isOrderStalledCandidate,
   isValidLostReason,
   requiresLostReasonPrompt,
@@ -76,6 +77,14 @@ describe("order health", () => {
       expect(patch.lost_reason).toBeNull();
       expect(stageProgressPatch("On Hold").health).toBeUndefined();
     });
+
+    it("completing/closing clears health soft flags (inactive pipeline)", () => {
+      const completed = stageProgressPatch("On Hold", "Completed");
+      expect(completed.health).toBe("Active");
+      expect(completed.hold_note).toBeNull();
+      expect(completed.reach_out_at).toBeNull();
+      expect(stageProgressPatch("Needs Attention", "Closed").health).toBe("Active");
+    });
   });
 
   describe("3. Components / filter", () => {
@@ -136,6 +145,18 @@ describe("order health", () => {
           cutoff
         )
       ).toBe(false);
+      expect(
+        isActionableNeedsAttention({
+          health: "Needs Attention",
+          stage: "Completed",
+        })
+      ).toBe(false);
+      expect(
+        isActionableNeedsAttention({
+          health: "Needs Attention",
+          stage: "Production",
+        })
+      ).toBe(true);
     });
   });
 

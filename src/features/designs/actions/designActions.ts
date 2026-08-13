@@ -153,7 +153,7 @@ async function updateOrderStage(supabase: SupabaseClient, orderUuid: string, sta
     const { stageProgressPatch } = await import("@/features/orders/lib/orderHealth");
     const { error: updateError } = await supabase
       .from("orders")
-      .update({ stage, ...stageProgressPatch(o.health) })
+      .update({ stage, ...stageProgressPatch(o.health, stage) })
       .eq("id", orderUuid);
     if (updateError) throw new Error(updateError.message);
 
@@ -196,23 +196,40 @@ export async function updateDesignDetailsAction(
     .maybeSingle();
   if (fetchError) throw new Error(fetchError.message);
 
-  const payload: Record<string, unknown> = {
-    order_id: orderUuid,
-    resources: current?.resources || [],
-    items: current?.items || [],
-    ...details,
-  };
-  payload.order_id = orderUuid;
+  const buildPayload = (base: Record<string, unknown> | null) => {
+    const payload: Record<string, unknown> = {
+      order_id: orderUuid,
+      resources: base?.resources || [],
+      items: base?.items || [],
+      ...details,
+    };
+    payload.order_id = orderUuid;
 
-  // Portal clients only see customer-visible items (staff drafts + production files
-  // stripped). Re-attach staff-only data from the DB so customer feedback/approval
-  // never wipes a designer's in-progress work.
-  if (fromPortal && Array.isArray(details.items)) {
-    payload.items = mergePortalDesignItemsPreservingStaffDrafts(
-      (current?.items as any[]) || [],
-      details.items
-    );
-  }
+    // Portal clients only see customer-visible items (staff drafts + production files
+    // stripped). Re-attach staff-only data from the DB so customer feedback/approval
+    // never wipes a designer's in-progress work.
+    if (fromPortal && Array.isArray(details.items)) {
+      payload.items = mergePortalDesignItemsPreservingStaffDrafts(
+        (base?.items as any[]) || [],
+        details.items
+      );
+    }
+    return payload;
+  };
+
+  const runUpdate = async (
+    base: Record<string, unknown>,
+    expectedAt?: string
+  ) => {
+    let query = supabase
+      .from("designs")
+      .update(buildPayload(base))
+      .eq("order_id", orderUuid);
+    if (expectedAt) {
+      query = query.eq("updated_at", expectedAt);
+    }
+    return query.select().maybeSingle();
+  };
 
   let data: Record<string, unknown> | null = null;
   let error: Error | null = null;
@@ -220,33 +237,50 @@ export async function updateDesignDetailsAction(
   if (!current) {
     const { data: inserted, error: insertError } = await supabase
       .from("designs")
-      .upsert(payload, { onConflict: "order_id" })
+      .upsert(buildPayload(null), { onConflict: "order_id" })
       .select()
       .single();
     data = inserted;
     error = insertError;
   } else {
-    let query = supabase
-      .from("designs")
-      .update(payload)
-      .eq("order_id", orderUuid);
-    if (expectedUpdatedAt) {
-      query = query.eq("updated_at", expectedUpdatedAt);
-    }
-    const { data: updated, error: updateError } = await query
-      .select()
-      .maybeSingle();
+    let { data: updated, error: updateError } = await runUpdate(
+      current,
+      expectedUpdatedAt
+    );
     data = updated;
     error = updateError;
+
+    // Stale client timestamp is common after prior saves / revalidates. Retry once
+    // with the latest updated_at so proof uploads aren't blocked in production.
     if (!updateError && expectedUpdatedAt && !updated) {
-      throw new Error("Design was updated by another user. Please refresh and try again.");
+      const { data: fresh, error: freshError } = await supabase
+        .from("designs")
+        .select("*")
+        .eq("order_id", orderUuid)
+        .maybeSingle();
+      if (freshError) throw new Error(freshError.message);
+      if (!fresh) {
+        throw new Error("Design was updated by another user. Please refresh and try again.");
+      }
+
+      const retry = await runUpdate(fresh, fresh.updated_at as string);
+      data = retry.data;
+      error = retry.error;
+      if (!retry.error && !retry.data) {
+        throw new Error("Design was updated by another user. Please refresh and try again.");
+      }
     }
   }
 
   if (error) throw new Error(error.message);
   if (!data) throw new Error("Failed to update design.");
 
-  await revalidateDesignPaths(orderId, fromPortal);
+  try {
+    await revalidateDesignPaths(orderId, fromPortal);
+  } catch (revalidateErr) {
+    // DB write already succeeded — never fail the upload because a page revalidate blew up.
+    console.error("Design revalidate failed:", revalidateErr);
+  }
   return mapDesignFromDb(data);
 }
 
@@ -354,7 +388,7 @@ export async function adminMarkDesignApprovedAction(orderId: string): Promise<De
       .update({
         stage: "Design Approved",
         stage_status: "Normal",
-        ...stageProgressPatch(order.health),
+        ...stageProgressPatch(order.health, "Design Approved"),
       })
       .eq("id", orderUuid);
     if (stageError) throw new Error(stageError.message);

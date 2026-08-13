@@ -507,9 +507,12 @@ export function DesignTab({ order, customer, siteVisitItems = [], portalToken, o
               )}
             </div>
 
-            <div className={`bg-[#0b1c30] rounded-xl flex items-center justify-center mb-6 relative overflow-hidden group border border-gray-200 shadow-inner p-2 sm:p-4 min-h-[30vh] sm:min-h-[40vh] ${
+            <div className={`bg-slate-100 rounded-xl flex items-center justify-center mb-6 relative overflow-hidden group border border-slate-200 shadow-inner p-2 sm:p-4 min-h-[30vh] sm:min-h-[40vh] ${
               activeVersion.status === "Approved" ? "ring-2 ring-emerald-500/50" : ""
             }`}>
+              <span className="absolute top-3 left-3 z-50 rounded-md bg-white/90 px-2 py-1 text-[10px] font-semibold text-slate-600 border border-slate-200">
+                Preview only — grey is not part of the design
+              </span>
               
               {/* Image Controls (Enlarge & Download) */}
               <div className="absolute top-4 right-4 flex gap-2 z-50">
@@ -525,12 +528,12 @@ export function DesignTab({ order, customer, siteVisitItems = [], portalToken, o
                       alert("Could not open proof.");
                     }
                   }}
-                  className="p-2 bg-white/10 hover:bg-white/20 backdrop-blur text-white rounded-lg transition-colors"
+                  className="p-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-lg transition-colors shadow-sm"
                   title="Enlarge"
                 >
                   <Maximize size={18} />
                 </button>
-                <button onClick={() => handleDownload(activeVersion.proofUrl, `Design_Proof_${activeVersion.versionNumber}`)} className="p-2 bg-white/10 hover:bg-white/20 backdrop-blur text-white rounded-lg transition-colors" title="Download">
+                <button onClick={() => handleDownload(activeVersion.proofUrl, `Design_Proof_${activeVersion.versionNumber}`)} className="p-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-lg transition-colors shadow-sm" title="Download">
                   <Download size={18} />
                 </button>
               </div>
@@ -605,7 +608,9 @@ export function DesignTab({ order, customer, siteVisitItems = [], portalToken, o
                 <button onClick={() => setZoomLevel(v => Math.min(v + 20, 200))} className="p-1 text-slate-500 hover:text-slate-800 bg-gray-100 rounded"><ZoomIn size={14} /></button>
               </div>
             </div>
-
+            <p className="mb-6 -mt-4 text-[11px] font-medium text-slate-500">
+              On-screen preview can look different. Download the file for better colour and print-accurate results.
+            </p>
 
             <div className={`flex flex-col md:flex-row items-center justify-between p-4 rounded-xl border gap-4 ${
               activeVersion.status === "Approved" ? "bg-emerald-50 border-emerald-200" : "bg-gray-50 border-gray-200"

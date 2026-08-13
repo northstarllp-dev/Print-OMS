@@ -579,16 +579,19 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
 
               <div className={`relative rounded-xl flex items-center justify-center p-6 overflow-hidden min-h-[300px] ${
                 activeVersion.status === "Approved" 
-                  ? "bg-slate-900 border-2 border-emerald-500/50 shadow-[0_0_15px_rgba(16,185,129,0.15)]" 
-                  : "bg-slate-900 border border-slate-150"
+                  ? "bg-slate-100 border-2 border-emerald-500/50" 
+                  : "bg-slate-100 border border-slate-200"
               }`}>
+                <span className="absolute top-3 left-3 z-50 rounded-md bg-white/90 px-2 py-1 text-[10px] font-semibold text-slate-600 border border-slate-200">
+                  Preview only — grey is not part of the design
+                </span>
                 
                 {/* Image Controls (Enlarge & Download) */}
                 <div className="absolute top-4 right-4 flex gap-2 z-50">
-                  <button onClick={() => openStoredRef(activeVersion.proofUrl)} className="p-2 bg-white/10 hover:bg-white/20 backdrop-blur text-white rounded-lg transition-colors" title="Enlarge">
+                  <button onClick={() => openStoredRef(activeVersion.proofUrl)} className="p-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-lg transition-colors shadow-sm" title="Enlarge">
                     <Maximize size={18} />
                   </button>
-                  <button onClick={() => handleDownload(activeVersion.proofUrl, `Design_Proof_${activeVersion.versionNumber}`)} className="p-2 bg-white/10 hover:bg-white/20 backdrop-blur text-white rounded-lg transition-colors" title="Download">
+                  <button onClick={() => handleDownload(activeVersion.proofUrl, `Design_Proof_${activeVersion.versionNumber}`)} className="p-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-lg transition-colors shadow-sm" title="Download">
                     <Download size={18} />
                   </button>
                 </div>
@@ -631,6 +634,9 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
                   <button onClick={handleZoomIn} className="p-0.5 text-slate-500 hover:text-slate-800 rounded"><ZoomIn size={12} /></button>
                 </div>
               </div>
+              <p className="text-[11px] font-medium text-slate-500">
+                On-screen preview can look different. Download the file for better colour and print-accurate results.
+              </p>
 
               {/* Action Bar for Active Version */}
               <div className="flex justify-between items-center bg-slate-50 p-3 rounded-lg border border-slate-200">
@@ -647,15 +653,30 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
               </div>
                 {/* Display General Feedback History */}
                 {activeVersion.comments?.some((c: any) => c.isGeneral) && (
-                  <div className="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
-                    <h4 className="text-xs font-bold text-slate-800 uppercase">General Feedback</h4>
+                  <div className="mt-4 p-4 bg-rose-50 border border-rose-200 rounded-xl space-y-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-full bg-rose-100 flex items-center justify-center shrink-0">
+                        <AlertTriangle size={13} className="text-rose-600" />
+                      </div>
+                      <h4 className="text-xs font-bold text-rose-900 uppercase tracking-wide">
+                        General Feedback
+                      </h4>
+                      <span className="ml-auto inline-flex items-center rounded-full border border-rose-300 bg-white px-2 py-0.5 text-[10px] font-bold text-rose-700">
+                        Needs attention
+                      </span>
+                    </div>
                     {activeVersion.comments.filter((c: any) => c.isGeneral).map((comment: any) => (
-                      <div key={comment.id} className="bg-white border border-slate-200 rounded-lg p-3 shadow-sm">
-                        <div className="flex items-center justify-between mb-1">
+                      <div
+                        key={comment.id}
+                        className="bg-white border border-rose-200 rounded-lg p-3 shadow-sm border-l-4 border-l-rose-500"
+                      >
+                        <div className="flex items-center justify-between mb-1 gap-2">
                           <span className="text-xs font-bold text-slate-800">{comment.author}</span>
-                          <span className="text-[10px] text-slate-500" suppressHydrationWarning>{new Date(comment.createdAt).toLocaleString()}</span>
+                          <span className="text-[10px] text-slate-500 shrink-0" suppressHydrationWarning>
+                            {new Date(comment.createdAt).toLocaleString()}
+                          </span>
                         </div>
-                        <p className="text-xs text-slate-600 whitespace-pre-wrap">{comment.content}</p>
+                        <p className="text-xs text-slate-700 whitespace-pre-wrap">{comment.content}</p>
                       </div>
                     ))}
                   </div>
@@ -773,7 +794,7 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
               </button>
             </div>
             
-            <div className="p-4 md:p-6 bg-slate-900 flex flex-col items-center justify-center min-h-[220px] md:min-h-[400px] overflow-auto flex-1">
+            <div className="p-4 md:p-6 bg-slate-100 flex flex-col items-center justify-center min-h-[220px] md:min-h-[400px] overflow-auto flex-1">
               <div className="flex items-center justify-center w-full min-h-[160px] md:min-h-[300px]">
                 <img 
                   src={previewUrl} 

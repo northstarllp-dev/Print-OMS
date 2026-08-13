@@ -23,7 +23,11 @@ export function mapDbOrderToWorksheetOrder(o: Record<string, unknown>): Order {
     customerName: (o.business_name as string) || "",
     orderCode: (o.order_id as string) || (o.id as string),
     orderId: (o.order_id as string) || (o.id as string),
-    health: (o.health as string) || "Active",
+    health:
+      ((o.stage === "Completed" || o.stage === "Closed") &&
+      o.health === "Needs Attention"
+        ? "Active"
+        : (o.health as string) || "Active"),
     lost_reason: o.lost_reason as string | undefined,
     hold_note: (o.hold_note as string | null | undefined) ?? null,
     reach_out_at: (o.reach_out_at as string | null | undefined) ?? null,

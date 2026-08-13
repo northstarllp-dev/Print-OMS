@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useLayoutEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import {
   ShoppingCart,
@@ -110,6 +111,46 @@ export function AdminDashboardClient({
   const [isTicketModalOpen, setIsTicketModalOpen] = useState(false);
   const [enquiryMsgInfo, setEnquiryMsgInfo] = useState<CustomerMessageInfo | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [menuAnchorEl, setMenuAnchorEl] = useState<HTMLElement | null>(null);
+  const [menuCoords, setMenuCoords] = useState<{
+    top: number;
+    left: number;
+    openUp: boolean;
+  } | null>(null);
+
+  const closeMenu = useCallback(() => {
+    setOpenMenuId(null);
+    setMenuAnchorEl(null);
+    setMenuCoords(null);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!openMenuId || !menuAnchorEl) {
+      setMenuCoords(null);
+      return;
+    }
+    const place = () => {
+      const r = menuAnchorEl.getBoundingClientRect();
+      const openUp = r.bottom + 160 > window.innerHeight - 12;
+      const minWidth = 140;
+      const left = Math.max(
+        8,
+        Math.min(r.right - minWidth, window.innerWidth - minWidth - 8)
+      );
+      setMenuCoords({
+        top: openUp ? r.top - 4 : r.bottom + 4,
+        left,
+        openUp,
+      });
+    };
+    place();
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [openMenuId, menuAnchorEl]);
   const [selectedPipelineStage, setSelectedPipelineStage] = useState<string | null>(null);
   const [selectedKpi, setSelectedKpi] = useState<string | null>(null);
   const [startDate, setStartDate] = useState<string>("");
@@ -150,7 +191,11 @@ export function AdminDashboardClient({
   const newEnquiries = enquiries.filter((e) => e.status !== "Converted").length;
   
   const pendingApprovals = orders.filter((o) => needsAdminApproval(o.stageStatus)).length;
-  const needsAttentionOrders = orders.filter((o) => o.health === "Needs Attention").length;
+  const needsAttentionOrders = orders.filter((o) =>
+    o.health === "Needs Attention" &&
+    o.stage !== "Completed" &&
+    o.stage !== "Closed"
+  ).length;
   const lostOrders = orders.filter((o) => o.health === "Lost").length;
 
   let revenue = 0;
@@ -325,7 +370,7 @@ export function AdminDashboardClient({
       return (orderRev - orderRec) > 0;
     }) };
     if (selectedKpi === "lost")       return { type: "orders" as const, data: orders.filter(o => o.health === "Lost") };
-    if (selectedKpi === "needsAttention") return { type: "orders" as const, data: orders.filter(o => o.health === "Needs Attention") };
+    if (selectedKpi === "needsAttention") return { type: "orders" as const, data: orders.filter(o => o.health === "Needs Attention" && o.stage !== "Completed" && o.stage !== "Closed") };
     return { type: "orders" as const, data: orders.slice(0, 5) };
   };
 
@@ -714,36 +759,72 @@ export function AdminDashboardClient({
                       </div>
                       <div className="relative shrink-0">
                         <button
-                          onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === order.id ? null : order.id); }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (openMenuId === order.id) {
+                              closeMenu();
+                            } else {
+                              setMenuAnchorEl(e.currentTarget);
+                              setOpenMenuId(order.id);
+                            }
+                          }}
                           style={{ padding: "4px", background: "none", border: "none", cursor: "pointer", color: "#94A3B8", borderRadius: "4px" }}
                         >
                           <MoreHorizontal size={16} />
                         </button>
-                        {openMenuId === order.id && (
-                          <>
-                            <div style={{ position: "fixed", inset: 0, zIndex: 49 }} onClick={() => setOpenMenuId(null)} />
-                            <div style={{ position: "absolute", right: 0, top: "calc(100% + 4px)", background: "white", border: "1px solid #E2E8F0", borderRadius: "8px", boxShadow: "0 4px 12px rgba(0,0,0,0.08)", zIndex: 50, minWidth: 140, overflow: "hidden" }}>
-                              <button
-                                onClick={() => { setOpenMenuId(null); router.push(`/admin/orders/${order.id}`); }}
-                                style={{ width: "100%", padding: "9px 14px", display: "flex", alignItems: "center", gap: "8px", background: "none", border: "none", fontSize: "12px", fontWeight: "600", color: "#0F172A", cursor: "pointer", textAlign: "left" }}
-                                onMouseEnter={e => e.currentTarget.style.background = "#F8FAFC"}
-                                onMouseLeave={e => e.currentTarget.style.background = "none"}
+                        {openMenuId === order.id &&
+                          menuCoords &&
+                          typeof document !== "undefined" &&
+                          createPortal(
+                            <>
+                              <div
+                                style={{ position: "fixed", inset: 0, zIndex: 99998 }}
+                                onClick={closeMenu}
+                              />
+                              <div
+                                style={{
+                                  position: "fixed",
+                                  top: menuCoords.top,
+                                  left: menuCoords.left,
+                                  transform: menuCoords.openUp ? "translateY(-100%)" : undefined,
+                                  background: "white",
+                                  border: "1px solid #E2E8F0",
+                                  borderRadius: "8px",
+                                  boxShadow: "0 10px 28px rgba(15, 23, 42, 0.18)",
+                                  zIndex: 99999,
+                                  minWidth: 140,
+                                  overflow: "hidden",
+                                  pointerEvents: "auto",
+                                }}
                               >
-                                <Eye size={13} /> View Order
-                              </button>
-                              {canShowAddServiceTicketForOrder(order.stage) && (
-                              <button
-                                onClick={() => { setOpenMenuId(null); setIsTicketModalOpen(true); }}
-                                style={{ width: "100%", padding: "9px 14px", display: "flex", alignItems: "center", gap: "8px", background: "none", border: "none", fontSize: "12px", fontWeight: "600", color: "#0F172A", cursor: "pointer", textAlign: "left" }}
-                                onMouseEnter={e => e.currentTarget.style.background = "#F8FAFC"}
-                                onMouseLeave={e => e.currentTarget.style.background = "none"}
-                              >
-                                <Wrench size={13} /> Add Service Ticket
-                              </button>
-                              )}
-                            </div>
-                          </>
-                        )}
+                                <button
+                                  onClick={() => {
+                                    closeMenu();
+                                    router.push(`/admin/orders/${order.id}`);
+                                  }}
+                                  style={{ width: "100%", padding: "9px 14px", display: "flex", alignItems: "center", gap: "8px", background: "none", border: "none", fontSize: "12px", fontWeight: "600", color: "#0F172A", cursor: "pointer", textAlign: "left" }}
+                                  onMouseEnter={(e) => (e.currentTarget.style.background = "#F8FAFC")}
+                                  onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
+                                >
+                                  <Eye size={13} /> View Order
+                                </button>
+                                {canShowAddServiceTicketForOrder(order.stage) && (
+                                  <button
+                                    onClick={() => {
+                                      closeMenu();
+                                      setIsTicketModalOpen(true);
+                                    }}
+                                    style={{ width: "100%", padding: "9px 14px", display: "flex", alignItems: "center", gap: "8px", background: "none", border: "none", fontSize: "12px", fontWeight: "600", color: "#0F172A", cursor: "pointer", textAlign: "left" }}
+                                    onMouseEnter={(e) => (e.currentTarget.style.background = "#F8FAFC")}
+                                    onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
+                                  >
+                                    <Wrench size={13} /> Add Service Ticket
+                                  </button>
+                                )}
+                              </div>
+                            </>,
+                            document.body
+                          )}
                       </div>
                     </div>
                   );

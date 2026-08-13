@@ -588,12 +588,20 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     const save = async (expectedUpdatedAt?: string) =>
       updateDesignDetailsAction(orderId, details, expectedUpdatedAt);
 
+    const isStaleOrDigested = (err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err);
+      return (
+        message.includes("updated by another user") ||
+        message.includes("Server Components render") ||
+        message.includes("digest")
+      );
+    };
+
     try {
       const updated = await save(orderRef.current.design?.updated_at);
       setOrder((prev) => ({ ...prev, design: updated }));
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      if (message.includes("updated by another user")) {
+      if (isStaleOrDigested(err)) {
         const fresh = await getDesignByOrderId(orderId);
         const updated = await save(fresh?.updated_at);
         setOrder((prev) => ({ ...prev, design: updated }));

@@ -80,16 +80,22 @@ describe("order table", () => {
   describe("1. Business Operations / UI list", () => {
     it("computes KPI cards from toolbar-filtered list", () => {
       expect(computeOrderKpis(sampleRows)).toEqual({
-        active: 2,
+        total: 3,
+        active: 1,
         unassigned: 1,
         approvals: 1,
         completed: 1,
+        onHold: 1,
+        lost: 0,
       });
       expect(computeOrderKpis([])).toEqual({
+        total: 0,
         active: 0,
         unassigned: 0,
         approvals: 0,
         completed: 0,
+        onHold: 0,
+        lost: 0,
       });
     });
 

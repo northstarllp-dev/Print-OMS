@@ -365,7 +365,7 @@ export async function updateOrder(id: string, updates: any) {
       .eq("id", orderUuid)
       .maybeSingle();
     if (current && current.stage !== updates.stage) {
-      patch = { ...patch, ...stageProgressPatch(current.health) };
+      patch = { ...patch, ...stageProgressPatch(current.health, updates.stage) };
     }
   }
 
@@ -1010,7 +1010,7 @@ export async function updateOrderStageAction(id: string, stage: string) {
   const { stageProgressPatch } = await import("@/features/orders/lib/orderHealth");
   const patch = {
     stage,
-    ...(isChanged ? stageProgressPatch(o.health) : {}),
+    ...(isChanged ? stageProgressPatch(o.health, stage) : {}),
   };
   const { data, error: updateError } = await supabase
     .from("orders")
@@ -1282,6 +1282,7 @@ export async function updateOrderHealthAction(
 /** Mark Active orders stalled past the slug threshold as Needs Attention. Idempotent. */
 export async function flagStalledOrdersAction(): Promise<{ flagged: number }> {
   const { loadClientConfig, getDeployCompanyId } = await import("@/config/loadClientConfig");
+  const { isOrderStalledCandidate } = await import("@/features/orders/orderListLogic");
   const config = loadClientConfig();
   const days = config.features.needsAttentionAfterDays ?? 6;
   const companyId = getDeployCompanyId();
@@ -1291,16 +1292,37 @@ export async function flagStalledOrdersAction(): Promise<{ flagged: number }> {
   const cutoffIso = cutoff.toISOString();
 
   const supabase = await getSupabase();
-  const { data: stalled, error } = await supabase
+
+  // Completed/Closed are inactive: never leave them as Needs Attention.
+  await supabase
     .from("orders")
-    .select("id, order_id, company_id")
+    .update({ health: "Active", lost_reason: null, hold_note: null, reach_out_at: null })
+    .eq("company_id", companyId)
+    .eq("health", "Needs Attention")
+    .in("stage", ["Completed", "Closed"]);
+
+  const { data: candidates, error } = await supabase
+    .from("orders")
+    .select("id, order_id, company_id, stage, health, stage_changed_at")
     .eq("company_id", companyId)
     .eq("health", "Active")
-    .not("stage", "in", '("Completed","Closed")')
+    .neq("stage", "Completed")
+    .neq("stage", "Closed")
     .lte("stage_changed_at", cutoffIso);
 
   if (error) throw new Error(error.message);
-  if (!stalled || stalled.length === 0) return { flagged: 0 };
+
+  const stalled = (candidates || []).filter((o) =>
+    isOrderStalledCandidate(
+      {
+        health: o.health,
+        stage: o.stage,
+        stage_changed_at: o.stage_changed_at,
+      },
+      cutoffIso
+    )
+  );
+  if (stalled.length === 0) return { flagged: 0 };
 
   const ids = stalled.map((o) => o.id);
   const { error: updateError } = await supabase
@@ -1469,7 +1491,7 @@ export async function scheduleSiteVisitAction(
   const stagePatch =
     order.stage === "Site Visit Scheduled"
       ? { stage_status: "Normal" as const }
-      : { stage: "Site Visit Scheduled", stage_status: "Normal" as const, ...stageProgressPatch(order.health) };
+      : { stage: "Site Visit Scheduled", stage_status: "Normal" as const, ...stageProgressPatch(order.health, "Site Visit Scheduled") };
 
   const { data: updatedOrderRow, error: updateError } = await supabase
     .from("orders")
@@ -1551,7 +1573,7 @@ export async function approveSiteVisitAction(orderId: string) {
       : {
           stage: "Site Visit Scheduled",
           stage_status: "Pending Admin Approval: Site Visit Schedule",
-          ...stageProgressPatch(order.health),
+          ...stageProgressPatch(order.health, "Site Visit Scheduled"),
         };
 
   const { data: updatedOrderRow, error: updateError } = await supabase

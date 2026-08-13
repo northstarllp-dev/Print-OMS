@@ -26,7 +26,7 @@ import {
   UploadCloud
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
-import { withBasePath } from "@/lib/appBasePath";
+import { establishPortalSession } from "../../establishPortalSession";
 import { scheduleSiteVisitAction } from "@/features/orders/actions/orderActions";
 import { isSkippedSiteVisit } from "@/features/orders/workspace/modules/site-visit/siteVisitUiLogic";
 import {
@@ -185,25 +185,7 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
 
   // Establish HttpOnly portal_session cookie (required for design/quote server actions).
   useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const res = await fetch(withBasePath("/api/portal/session"), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token }),
-        });
-        if (mounted && !res.ok) {
-          const err = await res.json().catch(() => ({}));
-          console.warn("[Portal] Session cookie setup failed:", err.error || res.status);
-        }
-      } catch (e) {
-        console.warn("[Portal] Session cookie setup error:", e);
-      }
-    })();
-    return () => {
-      mounted = false;
-    };
+    establishPortalSession(token);
   }, [token]);
 
   // Follow pipeline forward when staff advances stage (realtime or refresh).

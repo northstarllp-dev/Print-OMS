@@ -144,7 +144,7 @@ export async function scheduleInstallationAction(orderId: string, payload: { sch
     const { stageProgressPatch } = await import("@/features/orders/lib/orderHealth");
     const { error } = await supabase
       .from("orders")
-      .update({ stage: "Installation Scheduled", ...stageProgressPatch(order.health) })
+      .update({ stage: "Installation Scheduled", ...stageProgressPatch(order.health, "Installation Scheduled") })
       .eq("id", orderId);
     if (error) throw new Error(error.message);
   }

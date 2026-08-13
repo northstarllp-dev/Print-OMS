@@ -15,7 +15,7 @@ import {
 import { Logo } from "@/components/ui/Logo";
 import { PlatformMadeWithLove } from "@/components/ui/PlatformMadeWithLove";
 import { OrderImage } from "@/components/storage/OrderImage";
-import { withBasePath } from "@/lib/appBasePath";
+import { establishPortalSession } from "./establishPortalSession";
 import { loadClientConfig } from "@/config/loadClientConfig";
 import { createClient } from "@/utils/supabase/client";
 import { scheduleSiteVisitAction } from "@/features/orders/actions/orderActions";
@@ -186,9 +186,14 @@ function getStepIndex(
 export function PortalClient({ customer, orders: initialOrders, quotations = [], initialActiveOrderId, token, appSettings }: PortalClientProps) {
   const [orders, setOrders] = useState<Order[]>(initialOrders);
 
+  const initialOrdersKey = initialOrders
+    .map((o) => `${o.id}:${o.stage}:${o.stageStatus}`)
+    .join("|");
   useEffect(() => {
     setOrders(initialOrders);
-  }, [initialOrders]);
+    // Only apply a new server snapshot when pipeline fields actually change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialOrdersKey]);
 
   const initialOrder = initialOrders.find(
     o => o.id === initialActiveOrderId || o.orderId === initialActiveOrderId || o.orderCode === initialActiveOrderId
@@ -239,23 +244,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
 
   // Step 4: Establish session cookie on first load (avoids keeping token in URL)
   useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const res = await fetch(withBasePath("/api/portal/session"), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token }),
-        });
-        if (mounted && !res.ok) {
-          const err = await res.json().catch(() => ({}));
-          console.warn("[Portal] Session cookie setup failed:", err.error || res.status);
-        }
-      } catch (e) {
-        console.warn("[Portal] Session cookie setup error:", e);
-      }
-    })();
-    return () => { mounted = false; };
+    establishPortalSession(token);
   }, [token]);
 
   // Site Visit scheduling states
@@ -343,14 +332,14 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
     };
   }, [mountedStepKeys, products.length]);
 
-  // Reset viewed step when order changes
+  // Reset viewed step only when switching orders — not on every stage/key change
+  // (that remounted Design and looked like a constant refresh).
   useEffect(() => {
     setViewedStep(null);
-    // Keep current stage mounted after order switch/reset; otherwise the stage panel
-    // can render blank until the user manually clicks a step.
-    setMountedStepKeys(() => (activeStepKey ? new Set([activeStepKey]) : new Set()));
+    setMountedStepKeys(activeStepKey ? new Set([activeStepKey]) : new Set());
     prevCurrentStepRef.current = currentStep;
-  }, [activeOrderId, activeStepKey, currentStep]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only reset on order switch
+  }, [activeOrderId]);
 
   // When staff advances the pipeline, follow the new current step (clear history browse).
   useEffect(() => {

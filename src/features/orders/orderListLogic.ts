@@ -52,14 +52,20 @@ export interface OrderFilterOptions {
 
 /** Map DB / page-mapped order → table view shape. */
 export function mapDbOrderToListRow(o: Record<string, any>): OrderListRow {
+  const stage = o.stage;
+  let health = o.health || "Active";
+  // Completed/Closed are inactive — never surface Needs Attention there.
+  if (isTerminalOrderStage(stage) && health === "Needs Attention") {
+    health = "Active";
+  }
   return {
     id: o.id,
     clientName: o.client_name ?? o.clientName,
     businessName: o.business_name ?? o.businessName ?? "",
     customerId: o.customer_id ?? o.customerId,
-    stage: o.stage,
+    stage,
     stageStatus: o.stage_status ?? o.stageStatus ?? "Normal",
-    health: o.health || "Active",
+    health,
     lost_reason: o.lost_reason ?? o.lostReason ?? null,
     assignedEmployees: o.assigned_employees ?? o.assignedEmployees ?? [],
     assignedAdmins: o.assigned_admins ?? o.assignedAdmins ?? [],
@@ -170,6 +176,34 @@ export function requiresHoldFollowUpPrompt(health: string): boolean {
   return health === "On Hold";
 }
 
+/** Hover copy for On Hold badges: note + reach-out date. */
+export function formatOnHoldHoverText(input: {
+  health?: string | null;
+  hold_note?: string | null;
+  holdNote?: string | null;
+  reach_out_at?: string | null;
+  reachOutAt?: string | null;
+}): string | null {
+  if ((input.health || "") !== "On Hold") return null;
+  const note = (input.hold_note ?? input.holdNote ?? "").trim();
+  const rawDate = input.reach_out_at ?? input.reachOutAt ?? null;
+  let dateLabel = "";
+  if (rawDate) {
+    const d = new Date(rawDate.includes("T") ? rawDate : `${rawDate}T00:00:00`);
+    dateLabel = Number.isNaN(d.getTime())
+      ? String(rawDate)
+      : d.toLocaleDateString("en-IN", {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+        });
+  }
+  if (note && dateLabel) return `${note} · Reach out ${dateLabel}`;
+  if (note) return note;
+  if (dateLabel) return `Reach out ${dateLabel}`;
+  return "On Hold";
+}
+
 export function isValidHoldFollowUp(note?: string | null, reachOutAt?: string | null): boolean {
   return Boolean(note?.trim() && reachOutAt);
 }
@@ -234,8 +268,12 @@ export function filterOrders<T extends OrderListRow>(
 
     if (!matchesStageGroup(order.stage || "", stageFilter)) return false;
 
-    if (healthFilter !== "ALL" && normalizeOrderHealth(order.health) !== healthFilter) {
-      return false;
+    if (healthFilter !== "ALL") {
+      if (healthFilter === "Needs Attention") {
+        if (!isActionableNeedsAttention(order)) return false;
+      } else if (normalizeOrderHealth(order.health) !== healthFilter) {
+        return false;
+      }
     }
 
     if (opts.userRole === "Employee") {
@@ -255,21 +293,46 @@ export function filterOrders<T extends OrderListRow>(
       if (!order.assignedAdmins?.includes(opts.currentUserId)) return false;
     }
 
-    if (selectedKpi === "active" && !isActivePipelineOrder(order)) return false;
+    if (selectedKpi === "active" && !isWorkingPipelineOrder(order)) return false;
     if (selectedKpi === "unassigned" && !isUnassignedActiveOrder(order)) return false;
     if (selectedKpi === "approvals" && !needsAdminApproval(order.stageStatus)) return false;
     if (selectedKpi === "completed" && !isTerminalOrderStage(order.stage)) return false;
+    if (selectedKpi === "onHold" && normalizeOrderHealth(order.health) !== "On Hold") return false;
+    if (selectedKpi === "lost" && normalizeOrderHealth(order.health) !== "Lost") return false;
 
     return true;
   });
 }
 
+export function isActionableNeedsAttention(order: {
+  stage?: string | null;
+  health?: string | null;
+}): boolean {
+  return (
+    normalizeOrderHealth(order.health) === "Needs Attention" &&
+    isActivePipelineOrder(order)
+  );
+}
+
+/** Open pipeline and not On Hold / Lost. */
+export function isWorkingPipelineOrder(order: {
+  stage?: string | null;
+  health?: string | null;
+}): boolean {
+  if (!isActivePipelineOrder(order)) return false;
+  const h = normalizeOrderHealth(order.health);
+  return h !== "On Hold" && h !== "Lost";
+}
+
 export function computeOrderKpis(orders: OrderListRow[]) {
   return {
-    active: orders.filter(isActivePipelineOrder).length,
+    total: orders.length,
+    active: orders.filter(isWorkingPipelineOrder).length,
     unassigned: orders.filter(isUnassignedActiveOrder).length,
     approvals: orders.filter((o) => needsAdminApproval(o.stageStatus)).length,
     completed: orders.filter((o) => isTerminalOrderStage(o.stage)).length,
+    onHold: orders.filter((o) => normalizeOrderHealth(o.health) === "On Hold").length,
+    lost: orders.filter((o) => normalizeOrderHealth(o.health) === "Lost").length,
   };
 }
 
