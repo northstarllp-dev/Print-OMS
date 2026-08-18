@@ -53,7 +53,8 @@ export const printsquirelConfig: Partial<PrintOMSClientConfig> = {
     needsAttentionAfterDays: 6,
     siteVisit: {
       hideElectricalAssessment: true,
-    }
+    },
+    enableCustomerPickup: true,
   },
   businessOperations: [
     {
@@ -79,6 +80,7 @@ export const printsquirelConfig: Partial<PrintOMSClientConfig> = {
   stageGrantsByRole: {
     Designer: { ...view("site_visit"), ...edit("design", "quotation", "invoice") },
     Marketer: edit("enquiry", "site_visit", "design", "quotation", "invoice"),
+    Sales: { ...edit("site_visit", "quotation"), ...view("design", "production", "installation") },
     "Production & Installation": { ...view("site_visit"), ...edit("production", "installation", "service_tickets") },
   },
   whatsappTemplatePrefix: "printsquirel_",

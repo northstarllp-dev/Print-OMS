@@ -33,5 +33,7 @@ export function mapDbOrderToWorksheetOrder(o: Record<string, unknown>): Order {
     reach_out_at: (o.reach_out_at as string | null | undefined) ?? null,
     workflow_type: ((o.workflow_type as Order["workflow_type"]) || "quote_first"),
     business_operation: (o.business_operation as string) || "signage",
+    delivery_method: (o.delivery_method as string) || "installation",
+    pickup_confirmed_at: (o.pickup_confirmed_at as string | null) ?? null,
   };
 }

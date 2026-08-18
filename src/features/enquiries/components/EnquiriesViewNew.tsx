@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { createPortal } from "react-dom";
-import { Search, Filter, Plus, AlertCircle, CheckCircle, Clock, Phone, X, Check, Calendar, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
+import { Search, Filter, Plus, AlertCircle, CheckCircle, Clock, Phone, X, Check, Calendar, ChevronLeft, ChevronRight, RefreshCw, Pencil, Trash2 } from "lucide-react";
 import { AddEnquiryModal, EnquiryFormData } from "./AddEnquiryModal";
 import { ConvertEnquiryModal } from "./ConvertEnquiryModal";
 import { AssignTeamModal } from "./AssignTeamModal";
@@ -25,7 +25,7 @@ import {
 import { shouldOpenAssignTeamAfterConvert } from "@/features/enquiries/enquiryAssignLogic";
 import { getBusinessOperation } from "@/features/orders/businessOperations";
 import { BusinessOperationCaption } from "@/features/orders/components/BusinessOperationCaption";
-import { createEnquiry, convertEnquiryToOrderAction, updateEnquiryHealthAction } from "@/features/enquiries/actions/enquiryActions";
+import { createEnquiry, updateEnquiry, deleteEnquiryAction, convertEnquiryToOrderAction, updateEnquiryHealthAction } from "@/features/enquiries/actions/enquiryActions";
 import { CustomerMessageModal, CustomerMessageInfo } from "@/features/notifications/customer-message/CustomerMessageModal";
 import type { CustomerMessageKey } from "@/features/notifications/customer-message/templates";
 
@@ -207,6 +207,81 @@ export function EnquiriesViewNew({
   // Lost reason modal state
   const [lostReasonModalData, setLostReasonModalData] = useState<{enquiryId: string} | null>(null);
   const [holdModalEnquiryId, setHoldModalEnquiryId] = useState<string | null>(null);
+  const [editingEnquiry, setEditingEnquiry] = useState<{ id: string; formData: EnquiryFormData } | null>(null);
+  const [deletingEnquiryId, setDeletingEnquiryId] = useState<string | null>(null);
+
+  const canEditEnquiry = (enq: any) => canEdit && !enq.orderId && enq.status !== "Converted";
+  const canDeleteEnquiry = (enq: any) => canEdit && !enq.orderId && enq.status !== "Converted";
+
+  const openEditModal = (enq: any) => {
+    setEditingEnquiry({
+      id: enq.id,
+      formData: {
+        businessName: enq.businessName || "",
+        leadName: enq.leadName || "",
+        phone: enq.phone || "",
+        whatsappNumber: enq.whatsapp || "",
+        email: enq.email || "",
+        primaryMode: (enq.primaryCommunicationMode === "MAIL" ? "email" : "whatsapp") as any,
+        source: enq.source || "Meta Ads",
+        notes: enq.notes || "",
+        location: enq.location || "",
+        businessOperation: enq.businessOperation || "signage",
+      },
+    });
+  };
+
+  const handleEditEnquiry = async (data: EnquiryFormData) => {
+    if (!editingEnquiry) return;
+    try {
+      const payload: Record<string, unknown> = {
+        lead_name: data.leadName,
+        business_name: data.businessName,
+        phone: data.phone.replace(/\s/g, ""),
+        whatsapp: data.whatsappNumber.replace(/\s/g, ""),
+        email: data.email,
+        source: data.source,
+        notes: data.notes,
+        primary_communication_mode: data.primaryMode === "whatsapp" ? "WHATSAPP" : "MAIL",
+        location: data.location,
+        business_operation: data.businessOperation || "signage",
+      };
+      await updateEnquiry(editingEnquiry.id, payload);
+      setEnquiries((prev) =>
+        prev.map((e) =>
+          e.id === editingEnquiry.id
+            ? {
+                ...e,
+                leadName: data.leadName,
+                businessName: data.businessName,
+                phone: data.phone,
+                whatsapp: data.whatsappNumber,
+                email: data.email,
+                source: data.source,
+                notes: data.notes,
+                primaryCommunicationMode: data.primaryMode === "whatsapp" ? "WHATSAPP" : "MAIL",
+                location: data.location,
+                businessOperation: data.businessOperation,
+              }
+            : e
+        )
+      );
+      setEditingEnquiry(null);
+    } catch (err: any) {
+      alert(err.message || "Failed to update enquiry");
+    }
+  };
+
+  const handleDeleteEnquiry = async (id: string) => {
+    try {
+      await deleteEnquiryAction(id);
+      setEnquiries((prev) => prev.filter((e) => e.id !== id));
+      setDeletingEnquiryId(null);
+    } catch (err: any) {
+      alert(err.message || "Failed to delete enquiry");
+      setDeletingEnquiryId(null);
+    }
+  };
 
   const handleAddEnquiry = async (data: EnquiryFormData) => {
     try {
@@ -854,6 +929,24 @@ export function EnquiriesViewNew({
                         {enq.source ? <span>· {enq.source}</span> : null}
                       </div>
                       <div className="mt-2.5 flex flex-wrap gap-2">
+                        {canEditEnquiry(enq) && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => openEditModal(enq)}
+                              className="px-2.5 py-1.5 rounded-md text-[12px] font-semibold text-slate-600 bg-slate-100 border border-slate-200 whitespace-nowrap inline-flex items-center gap-1"
+                            >
+                              <Pencil size={12} /> Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDeletingEnquiryId(enq.id)}
+                              className="px-2.5 py-1.5 rounded-md text-[12px] font-semibold text-red-600 bg-red-50 border border-red-200 whitespace-nowrap inline-flex items-center gap-1"
+                            >
+                              <Trash2 size={12} /> Delete
+                            </button>
+                          </>
+                        )}
                         {canConvertEnquiry(enq.status) ? (
                           canEdit ? (
                             <div className="flex gap-2">
@@ -1003,6 +1096,26 @@ export function EnquiriesViewNew({
                     </td>
                     <td style={{ padding: "16px 20px", textAlign: "right" }}>
                       <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", alignItems: "center" }}>
+                        {canEditEnquiry(enq) && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => openEditModal(enq)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11px] font-semibold text-slate-600 bg-slate-100 border border-slate-200 hover:bg-slate-200 transition-colors"
+                              title="Edit enquiry"
+                            >
+                              <Pencil size={12} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDeletingEnquiryId(enq.id)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11px] font-semibold text-red-600 bg-red-50 border border-red-200 hover:bg-red-100 transition-colors"
+                              title="Delete enquiry"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </>
+                        )}
                         {canConvertEnquiry(enq.status) ? (
                           canEdit ? (
                           <button 
@@ -1219,6 +1332,52 @@ export function EnquiriesViewNew({
           void applyEnquiryHealth(id, "On Hold", undefined, payload);
         }}
       />
+
+      {editingEnquiry && (
+        <AddEnquiryModal
+          isOpen
+          onClose={() => setEditingEnquiry(null)}
+          onSubmit={handleEditEnquiry}
+          initialData={editingEnquiry.formData}
+        />
+      )}
+
+      {deletingEnquiryId &&
+        createPortal(
+          <div className="fixed inset-0 z-[200] flex items-center justify-center">
+            <div
+              className="absolute inset-0 bg-slate-900/40 backdrop-blur-[4px]"
+              onClick={() => setDeletingEnquiryId(null)}
+              aria-hidden
+            />
+            <div className="relative z-[201] w-full max-w-[380px] mx-4 bg-white rounded-2xl shadow-2xl p-6 text-center">
+              <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-red-50 flex items-center justify-center">
+                <Trash2 size={28} className="text-red-500" />
+              </div>
+              <h3 className="text-lg font-extrabold text-slate-900 mb-2">Delete Enquiry?</h3>
+              <p className="text-sm text-slate-500 mb-5">
+                This action cannot be undone. The enquiry will be permanently removed.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setDeletingEnquiryId(null)}
+                  className="flex-1 py-2.5 rounded-lg bg-slate-100 border border-slate-200 text-sm font-semibold text-slate-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDeleteEnquiry(deletingEnquiryId)}
+                  className="flex-1 py-2.5 rounded-lg bg-red-600 text-sm font-semibold text-white hover:bg-red-700 transition-colors"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

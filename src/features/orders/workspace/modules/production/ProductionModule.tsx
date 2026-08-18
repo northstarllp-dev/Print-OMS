@@ -3,14 +3,16 @@
 import React, { useEffect, useState } from "react";
 import {
   ArrowLeft, CheckSquare, FileText,
-  AlertOctagon, Check, Image as ImageIcon, Sparkles, Loader2, Save, Timer, Shield
+  AlertOctagon, Check, Image as ImageIcon, Sparkles, Loader2, Save, Timer, Shield, Plus, X
 } from "lucide-react";
 import type { StageModuleProps } from "../../shared/types";
 import { getAppSettings } from "@/features/settings/actions/settingsActions";
 import {
   buildProductionChecklistUpdate,
+  createCustomProductionChecklistItemId,
   DEFAULT_PRODUCTION_CHECKLIST_ITEMS,
   getChecklistForBusinessOp,
+  readCustomProductionChecklistItems,
   resolveChecklistProgress,
   type ProductionChecklistItem,
 } from "@/features/settings/productionChecklist";
@@ -109,6 +111,7 @@ export function ProductionModule({
 
   const [saving, setSaving] = useState(false);
   const [alert, setAlert] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [newCustomLabel, setNewCustomLabel] = useState("");
   const [checklistItems, setChecklistItems] = useState<ProductionChecklistItem[]>(
     DEFAULT_PRODUCTION_CHECKLIST_ITEMS
   );
@@ -134,8 +137,48 @@ export function ProductionModule({
     installation_deadline: null,
   };
   const checklistProgress = resolveChecklistProgress(pd, checklistItems);
+  const customChecklistItems = readCustomProductionChecklistItems(pd);
+  const customItemMeta = customChecklistItems.map(({ id, label }) => ({ id, label }));
   const deadlineIso = pd.installation_deadline ?? pd.deadline ?? null;
   const deadlineCountdown = getInstallationDeadlineCountdown(deadlineIso);
+
+  const persistChecklist = async (
+    nextProgress: Record<string, boolean>,
+    nextCustomMeta: Array<{ id: string; label: string }>,
+    successMessage: string
+  ) => {
+    if (!canEdit || saving) return;
+    setAlert(null);
+
+    const payload = buildProductionChecklistUpdate(
+      nextProgress,
+      checklistItems,
+      {},
+      nextCustomMeta
+    );
+    const updatedPd = { ...pd, ...payload };
+
+    setOrder((prev: any) => ({
+      ...prev,
+      productionDetails: updatedPd,
+    }));
+    setSaving(true);
+
+    try {
+      await updateProductionDetails(order.id, payload);
+      setAlert({ message: successMessage, type: "success" });
+    } catch (err: any) {
+      console.error(err);
+      setOrder((prev: any) => ({
+        ...prev,
+        productionDetails: pd,
+      }));
+      setAlert({ message: err.message || "Failed to update checklist.", type: "error" });
+    } finally {
+      setSaving(false);
+      setTimeout(() => setAlert(null), 3000);
+    }
+  };
 
   const [editingDeadline, setEditingDeadline] = useState(false);
   const [deadlineValue, setDeadlineValue] = useState(
@@ -181,44 +224,48 @@ export function ProductionModule({
   const dd = order.designDetails || order.design || { proofUrl: "", status: "Draft" };
   const mockImage = order.imageMockup || dd.proofUrl;
 
-  const handleCheckboxChange = async (key: string) => {
-    if (!canEdit || saving) return;
-    setAlert(null);
-
-    const nextProgress = {
-      ...checklistProgress,
-      [key]: !checklistProgress[key],
-    };
-    const updatedPd = {
-      ...pd,
-      ...buildProductionChecklistUpdate(nextProgress, checklistItems),
-    };
-
-    // Optimistically update local state immediately
-    setOrder((prev: any) => ({
-      ...prev,
-      productionDetails: updatedPd
-    }));
-    setSaving(true);
-
-    try {
-      await updateProductionDetails(
-        order.id,
-        buildProductionChecklistUpdate(nextProgress, checklistItems)
-      );
-      setAlert({ message: "Fabrication milestone updated successfully.", type: "success" });
-    } catch (err: any) {
-      console.error(err);
-      // Revert local state
-      setOrder((prev: any) => ({
-        ...prev,
-        productionDetails: pd
-      }));
-      setAlert({ message: err.message || "Failed to update milestone.", type: "error" });
-    } finally {
-      setSaving(false);
-      setTimeout(() => setAlert(null), 3000);
+  const progressWithCustom = () => {
+    const next: Record<string, boolean> = { ...checklistProgress };
+    for (const item of customChecklistItems) {
+      next[item.id] = item.checked;
     }
+    return next;
+  };
+
+  const handleCheckboxChange = async (key: string) => {
+    const base = progressWithCustom();
+    await persistChecklist(
+      { ...base, [key]: !base[key] },
+      customItemMeta,
+      "Fabrication milestone updated successfully."
+    );
+  };
+
+  const handleAddCustomCheck = async () => {
+    const label = newCustomLabel.trim();
+    if (!label || !canEdit || saving) return;
+    const id = createCustomProductionChecklistItemId([
+      ...checklistItems.map((item) => item.id),
+      ...customChecklistItems.map((item) => item.id),
+    ]);
+    const base = progressWithCustom();
+    await persistChecklist(
+      { ...base, [id]: false },
+      [...customItemMeta, { id, label }],
+      "Custom check added."
+    );
+    setNewCustomLabel("");
+  };
+
+  const handleRemoveCustomCheck = async (id: string) => {
+    if (!canEdit || saving) return;
+    const base = progressWithCustom();
+    delete base[id];
+    await persistChecklist(
+      base,
+      customItemMeta.filter((item) => item.id !== id),
+      "Custom check removed."
+    );
   };
 
   const signageOptions = quotation?.signage_options || [];
@@ -652,7 +699,89 @@ export function ProductionModule({
                   </div>
                 );
               })}
+
+              {customChecklistItems.map((step, index) => {
+                const isChecked = step.checked;
+                const displayIndex = checklistItems.length + index + 1;
+                return (
+                  <div
+                    key={step.id}
+                    onClick={() => canEdit && handleCheckboxChange(step.id)}
+                    className={`p-4 border rounded-xl flex items-start gap-3 select-none transition-all duration-200 touch-manipulation ${
+                      canEdit ? "cursor-pointer" : "cursor-not-allowed opacity-70"
+                    } ${
+                      isChecked
+                        ? "bg-emerald-50/50 border-emerald-200 text-emerald-950"
+                        : "bg-white border-slate-200 hover:border-slate-300 text-slate-800"
+                    }`}
+                  >
+                    <div className="mt-0.5">
+                      <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all ${
+                        isChecked
+                          ? "bg-emerald-600 border-emerald-600 text-white"
+                          : "border-slate-300 bg-white"
+                      }`}>
+                        {isChecked && <Check size={12} strokeWidth={3} />}
+                      </div>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-bold leading-none mb-1 flex items-center gap-2 flex-wrap">
+                        <span>{displayIndex}. {step.label}</span>
+                        <span className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200">
+                          Extra
+                        </span>
+                      </div>
+                    </div>
+                    {canEdit && (
+                      <button
+                        type="button"
+                        title="Remove this check"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void handleRemoveCustomCheck(step.id);
+                        }}
+                        className="mt-0.5 p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50"
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
+
+            {canEdit && (
+              <div className="mt-4 pt-4 border-t border-slate-100 space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                  Add extra check
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newCustomLabel}
+                    onChange={(e) => setNewCustomLabel(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        void handleAddCustomCheck();
+                      }
+                    }}
+                    placeholder="e.g. Touch up paint on edges"
+                    disabled={saving}
+                    className="flex-1 min-w-0 text-xs px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handleAddCustomCheck()}
+                    disabled={saving || !newCustomLabel.trim()}
+                    className="inline-flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Plus size={14} />
+                    Add
+                  </button>
+                </div>
+              </div>
+            )}
 
             {saving && (
               <div className="flex items-center justify-center gap-2 text-xs text-slate-400 font-bold mt-4">

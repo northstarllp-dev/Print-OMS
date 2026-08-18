@@ -6,6 +6,16 @@ export type ProductionChecklistItem = {
   required?: boolean;
 };
 
+/** Floor-added extras on a single order (not part of admin settings template). */
+export type CustomProductionChecklistItem = {
+  id: string;
+  label: string;
+  checked: boolean;
+};
+
+/** Reserved key inside productions.checklist jsonb for custom item labels. */
+export const CUSTOM_CHECKLIST_META_KEY = "__custom_items__";
+
 /** Checklist items keyed by business operation id (signage, flex_printing, …). */
 export type ProductionChecklistsByOp = Record<string, ProductionChecklistItem[]>;
 
@@ -232,22 +242,69 @@ export function resolveChecklistProgress(
   return progress;
 }
 
+/** Per-order custom checks added by production on the workshop floor. */
+export function readCustomProductionChecklistItems(
+  productionDetails: object | null | undefined
+): CustomProductionChecklistItem[] {
+  const pd = (productionDetails || {}) as Record<string, unknown>;
+  const cl = pd.checklist;
+  if (!cl || typeof cl !== "object" || Array.isArray(cl)) return [];
+  const map = cl as Record<string, unknown>;
+  const meta = map[CUSTOM_CHECKLIST_META_KEY];
+  if (!Array.isArray(meta)) return [];
+
+  const items: CustomProductionChecklistItem[] = [];
+  for (const entry of meta) {
+    if (!entry || typeof entry !== "object") continue;
+    const row = entry as Record<string, unknown>;
+    const id = String(row.id || "").trim();
+    const label = String(row.label || "").trim();
+    if (!id || !label || id === CUSTOM_CHECKLIST_META_KEY) continue;
+    items.push({ id, label, checked: map[id] === true });
+  }
+  return items;
+}
+
+export function createCustomProductionChecklistItemId(
+  existingIds: string[]
+): string {
+  const used = new Set(existingIds);
+  let n = 1;
+  while (used.has(`custom_${n}`)) n += 1;
+  return `custom_${n}`;
+}
+
 /**
  * Build productions update payload:
- * - checklist jsonb (all items)
+ * - checklist jsonb (all items + optional custom item labels)
  * - stage1–stage4 columns for the first four milestones (by order)
  */
 export function buildProductionChecklistUpdate(
   progress: Record<string, boolean>,
   items: ProductionChecklistItem[] = DEFAULT_PRODUCTION_CHECKLIST_ITEMS,
-  extra: Record<string, unknown> = {}
+  extra: Record<string, unknown> = {},
+  customItems?: Array<{ id: string; label: string }>
 ): Record<string, unknown> {
+  const cleanProgress: Record<string, boolean> = {};
+  for (const [key, value] of Object.entries(progress)) {
+    if (key === CUSTOM_CHECKLIST_META_KEY) continue;
+    cleanProgress[key] = !!value;
+  }
+
+  const checklist: Record<string, unknown> = { ...cleanProgress };
+  if (customItems && customItems.length > 0) {
+    checklist[CUSTOM_CHECKLIST_META_KEY] = customItems.map(({ id, label }) => ({
+      id,
+      label,
+    }));
+  }
+
   const payload: Record<string, unknown> = {
-    checklist: progress,
+    checklist,
     ...extra,
   };
   items.slice(0, 4).forEach((item, index) => {
-    payload[STAGE_COLUMN_IDS[index]] = !!progress[item.id];
+    payload[STAGE_COLUMN_IDS[index]] = !!cleanProgress[item.id];
   });
   return payload;
 }

@@ -615,6 +615,7 @@ export async function requestStageAdvancementAction(orderId: string) {
     "Production": "production",
     "Ready For Installation": "installation",
     "Installation Scheduled": "installation",
+    "Customer Pickup": "installation",
     "Completed": "installation",
     "Closed": "installation",
   };
@@ -1660,4 +1661,92 @@ export async function freezeSiteVisitAction(orderId: string) {
   revalidatePath(`/staff/orders/${order.order_id || orderId}`);
 
   return { success: true, updatedOrder };
+}
+
+// ── Customer Pickup ──────────────────────────────────────────────────
+
+export async function markOrderAsCustomerPickup(orderId: string) {
+  await assertStageEditPermission("installation");
+  const supabase = await getSupabase();
+  const orderUuid = await resolveOrderUuid(supabase, orderId);
+
+  const { data: o, error: fetchErr } = await supabase
+    .from("orders")
+    .select("stage, order_id, company_id, health")
+    .eq("id", orderUuid)
+    .single();
+  if (fetchErr) throw new Error(fetchErr.message);
+
+  if (o.stage !== "Ready For Installation") {
+    throw new Error(`Order must be at "Ready For Installation" to mark as customer pickup.`);
+  }
+
+  const { stageProgressPatch } = await import("@/features/orders/lib/orderHealth");
+
+  const result = await updateOrder(orderUuid, {
+    delivery_method: "customer_pickup",
+    stage: "Customer Pickup",
+    stage_status: "Normal",
+    ...stageProgressPatch(o.health, "Customer Pickup"),
+  });
+
+  await insertOrderActivity(supabase, {
+    order_id: o.order_id || orderId,
+    company_id: o.company_id,
+    actor_name: "System",
+    actor_role: "System",
+    content: "Delivery method set to Customer Pickup. Awaiting customer collection.",
+    metadata: { action: "customer_pickup_set", old_stage: o.stage },
+  });
+
+  await revalidateStaffQueuePaths();
+  return result;
+}
+
+export async function confirmCustomerPickup(orderId: string) {
+  await assertStageEditPermission("installation");
+  const supabase = await getSupabase();
+  const orderUuid = await resolveOrderUuid(supabase, orderId);
+
+  const { data: o, error: fetchErr } = await supabase
+    .from("orders")
+    .select("stage, order_id, company_id, health, delivery_method")
+    .eq("id", orderUuid)
+    .single();
+  if (fetchErr) throw new Error(fetchErr.message);
+
+  if (o.stage !== "Customer Pickup") {
+    throw new Error(`Order must be at "Customer Pickup" stage to confirm collection.`);
+  }
+
+  const { getPaymentBalanceSummary } = await import(
+    "@/features/payments/actions/paymentActions"
+  );
+  const balance = await getPaymentBalanceSummary(orderUuid);
+  if (balance.outstanding > 0) {
+    throw new Error(
+      `Cannot confirm pickup: ₹${balance.outstanding.toLocaleString("en-IN")} is still outstanding. Confirm all payments first.`
+    );
+  }
+
+  const { stageProgressPatch } = await import("@/features/orders/lib/orderHealth");
+
+  const result = await updateOrder(orderUuid, {
+    stage: "Completed",
+    stage_status: "Normal",
+    pickup_confirmed_at: new Date().toISOString(),
+    ...stageProgressPatch(o.health, "Completed"),
+  });
+
+  await insertOrderActivity(supabase, {
+    order_id: o.order_id || orderId,
+    company_id: o.company_id,
+    actor_name: "System",
+    actor_role: "System",
+    content: "Customer has collected the order. Marked as Completed.",
+    metadata: { action: "customer_pickup_confirmed" },
+  });
+
+  await revalidateStaffQueuePaths();
+  return result;
 }

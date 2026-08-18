@@ -7,6 +7,7 @@ import { getAppSettings } from "@/features/settings/actions/settingsActions";
 import {
   buildProductionChecklistUpdate,
   DEFAULT_PRODUCTION_CHECKLIST_ITEMS,
+  readCustomProductionChecklistItems,
   resolveChecklistProgress,
   type ProductionChecklistItem,
 } from "@/features/settings/productionChecklist";
@@ -77,9 +78,20 @@ export const ProductionModule: React.FC<ProductionModuleProps> = ({
                   checked={checked}
                   onChange={() => {
                     const next = { ...progress, [item.id]: !checked };
+                    for (const custom of readCustomProductionChecklistItems(pd)) {
+                      next[custom.id] = custom.checked;
+                    }
+                    const customMeta = readCustomProductionChecklistItems(pd).map(
+                      ({ id, label }) => ({ id, label })
+                    );
                     updateProductionDetails(
                       order.id,
-                      buildProductionChecklistUpdate(next, items) as Partial<ProductionDetails>
+                      buildProductionChecklistUpdate(
+                        next,
+                        items,
+                        {},
+                        customMeta
+                      ) as Partial<ProductionDetails>
                     );
                   }}
                   disabled={isReadOnly || (isEmployee && order.stageStatus?.includes("Pending"))}

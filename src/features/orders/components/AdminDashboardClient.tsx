@@ -42,6 +42,7 @@ const STAGE_LABEL: Record<string, { label: string; dot: string }> = {
   "Production":            { label: "In Production", dot: "#3B82F6" },
   "Ready For Installation":{ label: "Ready to Install", dot: "#0EA5E9" },
   "Installation Scheduled":{ label: "Installation", dot: "#0EA5E9" },
+  "Customer Pickup":       { label: "Pickup",      dot: "#D97706" },
   "Completed":             { label: "Closed",      dot: "#22C55E" },
   "Closed":                { label: "Closed",      dot: "#22C55E" },
 };
@@ -79,7 +80,7 @@ const PIPELINE_STAGE_GROUPS: Record<string, string[]> = {
   "Quotation Sent": ["Quotation In Progress", "Quotation Sent", "Quotation Negotiation", "Quotation Approved"],
   "Design Approved": ["Design In Progress", "Design Approved"],
   "Production": ["Production"],
-  "Installation Scheduled": ["Ready For Installation", "Installation Scheduled"],
+  "Installation Scheduled": ["Ready For Installation", "Installation Scheduled", "Customer Pickup"],
   "Completed": ["Completed", "Closed"],
 };
 

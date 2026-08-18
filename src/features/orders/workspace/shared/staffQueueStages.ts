@@ -18,6 +18,7 @@ export const PIPELINE_STAGE_ORDER = [
   "Production",
   "Ready For Installation",
   "Installation Scheduled",
+  "Customer Pickup",
   "Completed",
   "Closed",
 ] as const;
@@ -36,6 +37,7 @@ export const PIPELINE_STAGE_ORDER_DESIGN_FIRST = [
   "Production",
   "Ready For Installation",
   "Installation Scheduled",
+  "Customer Pickup",
   "Completed",
   "Closed",
 ] as const;
@@ -57,7 +59,7 @@ const CURRENT_STAGES_BY_QUEUE: Record<OrderStage, readonly string[]> = {
   invoice: [], // Not an order queue — dedicated /staff/invoices list
   design: ["Design In Progress", "Design Approved"],
   production: ["Production"],
-  installation: ["Ready For Installation", "Installation Scheduled"],
+  installation: ["Ready For Installation", "Installation Scheduled", "Customer Pickup"],
   service_tickets: [], // Service tickets don't use order status pipeline
 };
 

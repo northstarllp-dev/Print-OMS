@@ -76,6 +76,7 @@ const getStatusColor = (status: string) => {
     "Production":             { bg: "#dbeafe", text: "#0284c7", label: "Production" },
     "Ready For Installation": { bg: "#dbeafe", text: "#0284c7", label: "Ready For Installation" },
     "Installation Scheduled": { bg: "#dbeafe", text: "#0284c7", label: "Installation Scheduled" },
+    "Customer Pickup":        { bg: "#fef3c7", text: "#d97706", label: "Customer Pickup" },
     "Completed":              { bg: "#dcfce7", text: "#22c55e", label: "Completed" },
     "Closed":                 { bg: "#dcfce7", text: "#22c55e", label: "Closed" },
   };

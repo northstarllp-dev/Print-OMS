@@ -14,7 +14,7 @@ import { revalidateStaffQueuePaths } from "@/features/orders/actions/orderAction
 import { insertOrderActivity } from "@/features/orders/activity/logOrderActivity";
 import { getCurrentUser } from "@/features/auth/actions/authActions";
 import { resolveStagePermission } from "@/features/orders/workspace/shared/permissions";
-import { assertStageEditPermission } from "@/features/orders/workspace/shared/serverPermissions";
+import { assertStageEditPermission, assertAdminOnly } from "@/features/orders/workspace/shared/serverPermissions";
 import {
   buildCustomerInsertFromEnquiry,
   buildCustomerMatchOrClauses,
@@ -260,13 +260,72 @@ export async function resendEnquiryWhatsAppAction(enquiryId: string) {
   });
 }
 
-export async function updateEnquiry(id: string, updates: any) {
+const ENQUIRY_EDITABLE_FIELDS = new Set([
+  "lead_name",
+  "business_name",
+  "phone",
+  "whatsapp",
+  "email",
+  "source",
+  "notes",
+  "primary_communication_mode",
+  "location",
+  "business_operation",
+]);
+
+export async function updateEnquiry(id: string, updates: Record<string, unknown>) {
   await assertStageEditPermission("enquiry");
   const supabase = await getSupabase();
-  const { data, error } = await supabase.from("enquiries").update(updates).eq("id", id).select();
+
+  const { data: existing, error: fetchErr } = await supabase
+    .from("enquiries")
+    .select("order_id, status")
+    .eq("id", id)
+    .single();
+  if (fetchErr) throw new Error(fetchErr.message);
+  if (shouldBlockConvert(existing || {})) throw new Error("Cannot edit a converted enquiry");
+
+  const sanitised: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(updates)) {
+    if (ENQUIRY_EDITABLE_FIELDS.has(key)) sanitised[key] = value;
+  }
+  if (Object.keys(sanitised).length === 0) throw new Error("No valid fields to update");
+
+  const { data, error } = await supabase.from("enquiries").update(sanitised).eq("id", id).select();
   if (error) throw new Error(error.message);
   revalidateEnquiryPaths();
   return data;
+}
+
+export async function deleteEnquiryAction(id: string) {
+  await assertAdminOnly();
+  const admin = await createAdminClient();
+
+  const { data: existing, error: fetchErr } = await admin
+    .from("enquiries")
+    .select("id, order_id, status, customer_id")
+    .eq("id", id)
+    .single();
+  if (fetchErr) throw new Error(fetchErr.message);
+  if (shouldBlockConvert(existing || {})) throw new Error("Cannot delete a converted enquiry");
+
+  const customerId = existing?.customer_id as string | null;
+
+  const { error } = await admin.from("enquiries").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+
+  // Delete the linked customer if they have no orders
+  if (customerId) {
+    const { count } = await admin
+      .from("orders")
+      .select("id", { count: "exact", head: true })
+      .eq("customerId", customerId);
+    if (count === 0) {
+      await admin.from("customers").delete().eq("id", customerId);
+    }
+  }
+
+  revalidateEnquiryPaths();
 }
 
 export async function getAdmins() {

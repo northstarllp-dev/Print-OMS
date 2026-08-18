@@ -41,6 +41,7 @@ export const defaultConfig: PrintOMSClientConfig = {
     enableAdminAssignment: false,
     needsAttentionAfterDays: 6,
     enquiryNeedsAttentionAfterDays: 5,
+    enableCustomerPickup: true,
   },
   businessOperations: [
     {

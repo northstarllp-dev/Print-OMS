@@ -18,6 +18,7 @@ interface AddEnquiryModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (data: EnquiryFormData) => void | Promise<void>;
+  initialData?: EnquiryFormData | null;
 }
 
 const fieldClass =
@@ -25,7 +26,8 @@ const fieldClass =
 const labelClass =
   "block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1.5";
 
-export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalProps) {
+export function AddEnquiryModal({ isOpen, onClose, onSubmit, initialData }: AddEnquiryModalProps) {
+  const isEditMode = !!initialData;
   const businessOps = useMemo(
     () => getBusinessOperationsForTenant(loadClientConfig().businessOperations),
     []
@@ -37,6 +39,14 @@ export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalPr
     ...EMPTY_ENQUIRY_FORM,
     businessOperation: defaultOpId,
   });
+
+  React.useEffect(() => {
+    if (isOpen && initialData) {
+      setFormData(initialData);
+    } else if (isOpen && !initialData) {
+      setFormData({ ...EMPTY_ENQUIRY_FORM, businessOperation: defaultOpId });
+    }
+  }, [isOpen, initialData, defaultOpId]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [syncWhatsapp, setSyncWhatsapp] = useState(false);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
@@ -86,8 +96,10 @@ export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalPr
       businessOperation: formData.businessOperation || defaultOpId,
     });
     setIsSubmitting(false);
-    setFormData({ ...EMPTY_ENQUIRY_FORM, businessOperation: defaultOpId });
-    setSyncWhatsapp(false);
+    if (!isEditMode) {
+      setFormData({ ...EMPTY_ENQUIRY_FORM, businessOperation: defaultOpId });
+      setSyncWhatsapp(false);
+    }
     setErrors({});
   };
 
@@ -110,10 +122,10 @@ export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalPr
         <div className="shrink-0 flex items-start justify-between gap-3 px-4 py-4 sm:px-6 bg-slate-50 border-b border-slate-200">
           <div className="min-w-0">
             <h2 id="add-enquiry-title" className="text-[17px] sm:text-lg font-extrabold text-slate-900 m-0">
-              New Lead Enquiry
+              {isEditMode ? "Edit Enquiry" : "New Lead Enquiry"}
             </h2>
             <p className="text-xs text-slate-500 mt-1 mb-0">
-              Enter the client&apos;s details to log a new enquiry.
+              {isEditMode ? "Update the enquiry details below." : "Enter the client\u2019s details to log a new enquiry."}
             </p>
           </div>
           <button
@@ -343,7 +355,7 @@ export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalPr
               ) : (
                 <Send size={16} />
               )}
-              {isSubmitting ? "Creating..." : "Create Enquiry"}
+              {isSubmitting ? (isEditMode ? "Saving..." : "Creating...") : (isEditMode ? "Save Changes" : "Create Enquiry")}
             </button>
           </div>
         </form>

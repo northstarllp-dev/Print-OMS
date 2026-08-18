@@ -182,8 +182,9 @@ export interface ProductionDetails {
   stage2?: boolean;
   stage3?: boolean;
   stage4?: boolean;
-  /** Dynamic workshop checklist progress keyed by settings item id. */
-  checklist?: Record<string, boolean>;
+  /** Dynamic workshop checklist progress keyed by settings item id.
+   *  May also include per-order custom checks and a `__custom_items__` label list. */
+  checklist?: Record<string, boolean | Array<{ id: string; label: string }>>;
   /** Admin-set installation deadline (DB: productions.installation_deadline). */
   installation_deadline?: string | null;
   /** @deprecated Use installation_deadline */
@@ -235,6 +236,8 @@ export interface Order {
    * Drives which pipeline stages apply and their order.
    */
   business_operation?: string;
+  delivery_method?: string;
+  pickup_confirmed_at?: string | null;
 }
 
 /** Payment tracking statuses (financial record only — no workflow). */

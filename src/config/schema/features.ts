@@ -21,4 +21,6 @@ export interface FeaturesConfig {
     /** When set, site-visit UI only applies for these business operation ids. */
     businessOperations?: string[];
   };
+  /** Show "Customer Pickup / Self Receive" as an alternative to installation. */
+  enableCustomerPickup?: boolean;
 }

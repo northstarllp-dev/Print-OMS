@@ -13,6 +13,7 @@ import type { OrderStage } from "@/features/orders/workspace/shared/types";
 const INSTALLATION_STAGES = [
   "Ready For Installation",
   "Installation Scheduled",
+  "Customer Pickup",
   "Completed",
   "Closed",
 ];

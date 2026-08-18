@@ -69,6 +69,7 @@ export const PIPELINE_STAGES_BY_MODULE: Record<BusinessStageKey, readonly string
   installation: [
     "Ready For Installation",
     "Installation Scheduled",
+    "Customer Pickup",
     "Completed",
     "Closed",
   ],
@@ -358,6 +359,9 @@ export function pendingApprovalLabelAfter(
     return "Pending Admin Approval: Production Ready";
   }
   if (current === "Installation Scheduled") {
+    return "Pending Admin Approval: Job Done";
+  }
+  if (current === "Customer Pickup") {
     return "Pending Admin Approval: Job Done";
   }
   return "Normal";

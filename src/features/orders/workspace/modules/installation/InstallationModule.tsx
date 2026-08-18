@@ -10,6 +10,10 @@ import { getSignedReadUrl } from "@/utils/storage/signedReadCache";
 import { OrderImage } from "@/components/storage/OrderImage";
 import { resolveSiteVisitInstallationAddress, buildGoogleMapsSearchUrl } from "@/features/orders/actions/siteVisitMapper";
 import { OverlayPortal } from "@/components/ui/OverlayPortal";
+import { DeliveryMethodChooser } from "@/features/installations/components/DeliveryMethodChooser";
+import { CustomerPickupModule } from "@/features/installations/components/CustomerPickupModule";
+import { loadClientConfig } from "@/config/loadClientConfig";
+import { getPaymentBalanceSummary } from "@/features/payments/actions/paymentActions";
 import type { StageModuleProps } from "../../shared/types";
 
 export interface InstallationModuleData {
@@ -57,13 +61,21 @@ export function InstallationModule({
     "Installation In Progress",
     "Installation Pending",
     "Installation",
+    "Customer Pickup",
   ].includes(order.stage);
+
+  const enableCustomerPickup = loadClientConfig().features.enableCustomerPickup === true;
+  const isReadyForInstallation = order.stage === "Ready For Installation";
+  const isCustomerPickup = order.stage === "Customer Pickup";
+  const [showScheduleForm, setShowScheduleForm] = useState(false);
   const baseFrozen = !isInstallationStage;
   const canEdit = (permission?.canEdit ?? true) && (!baseFrozen || adminOverrideUnlocked);
 
   const [saving, setSaving] = useState(false);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [alert, setAlert] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [outstandingAmount, setOutstandingAmount] = useState<number>(0);
+  const [loadingOutstanding, setLoadingOutstanding] = useState(false);
 
   const client = customers.find(c => c.id === order.customerId);
   const svDetails = order.siteVisitDetails || {};
@@ -98,6 +110,26 @@ export function InstallationModule({
   );
   const [viewerPhotos, setViewerPhotos] = useState<string[]>([]);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoadingOutstanding(true);
+    void getPaymentBalanceSummary(order.id)
+      .then((balance) => {
+        if (!cancelled) {
+          setOutstandingAmount(balance.outstanding || 0);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setOutstandingAmount(0);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingOutstanding(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [order.id]);
 
   const openPhotoViewer = (index: number) => {
     setViewerPhotos(afterPhotos);
@@ -354,12 +386,58 @@ export function InstallationModule({
 
 
 
+      {isCustomerPickup ? (
+        <div className="space-y-4">
+          <div className="bg-rose-50 border border-rose-200 rounded-xl p-4">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-rose-700 mb-1">
+              Outstanding Amount
+            </div>
+            <div className="text-xl font-black text-rose-900">
+              {loadingOutstanding ? "Loading..." : `₹${outstandingAmount.toLocaleString("en-IN")}`}
+            </div>
+            <div className="text-xs text-rose-700 mt-1">
+              Amount pending before marking order as completed.
+            </div>
+          </div>
+          <CustomerPickupModule
+            orderId={order.id}
+            orderNo={order.orderId || order.order_id || order.id}
+            customerName={client?.name || client?.businessName || "Customer"}
+            businessName={order.businessName || client?.businessName || ""}
+            phone={client?.phone || ""}
+            email={client?.email || ""}
+            productType={order.productType || ""}
+            pickupConfirmedAt={order.pickupConfirmedAt || order.pickup_confirmed_at || null}
+          />
+        </div>
+      ) : (
       <div className={embedded ? "space-y-8" : "grid grid-cols-1 lg:grid-cols-3 gap-8 items-start"}>
 
         {/* Work column — full width when embedded */}
         <div className={embedded ? "space-y-8" : "lg:col-span-2 space-y-8"}>
+          <div className="bg-rose-50 border border-rose-200 rounded-xl p-4">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-rose-700 mb-1">
+              Outstanding Amount
+            </div>
+            <div className="text-xl font-black text-rose-900">
+              {loadingOutstanding ? "Loading..." : `₹${outstandingAmount.toLocaleString("en-IN")}`}
+            </div>
+            <div className="text-xs text-rose-700 mt-1">
+              Amount pending to be paid by customer.
+            </div>
+          </div>
 
-          {/* SCHEDULE INSTALLATION */}
+          {/* Delivery method chooser (when enabled and at Ready For Installation) */}
+          {enableCustomerPickup && isReadyForInstallation && !showScheduleForm ? (
+            <div className="bg-white border border-slate-200/70 rounded-xl p-4 sm:p-6">
+              <DeliveryMethodChooser
+                orderId={order.id}
+                onChooseInstallation={() => setShowScheduleForm(true)}
+                onPickupConfirmed={() => window.location.reload()}
+              />
+            </div>
+          ) : (
+          /* SCHEDULE INSTALLATION */
           <InstallationScheduleModule 
             orderId={order.id}
             initialScheduledDate={installationDetails.scheduledDate}
@@ -369,6 +447,7 @@ export function InstallationModule({
             locationText={siteAddress}
             onScheduled={onInstallationScheduled}
           />
+          )}
           
           {/* CHECKLIST */}
           <div className="bg-white border border-slate-200/70 rounded-xl p-4 sm:p-6 min-w-0 max-w-full overflow-hidden">
@@ -634,6 +713,7 @@ export function InstallationModule({
         )}
 
       </div>
+      )}
     </div>
 
     {viewerIndex !== null && viewerPhotos.length > 0 && (
