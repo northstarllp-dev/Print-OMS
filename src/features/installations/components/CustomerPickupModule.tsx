@@ -38,8 +38,17 @@ export function CustomerPickupModule({
     try {
       await confirmCustomerPickup(orderId);
       setPickupConfirmedAt(new Date().toISOString());
-    } catch (err: any) {
-      setError(err.message || "Failed to confirm pickup");
+    } catch (err: unknown) {
+      const raw = err instanceof Error ? err.message : "Failed to confirm pickup";
+      // Next.js digests real Server Action errors in production builds.
+      const isDigest =
+        /Server Components render|digest property/i.test(raw) ||
+        /An error occurred in the Server Components/i.test(raw);
+      setError(
+        isDigest
+          ? "Could not confirm pickup. Check that all payments are cleared, then try again. If it keeps failing, ask an admin to check server logs."
+          : raw
+      );
     } finally {
       setConfirming(false);
     }

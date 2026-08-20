@@ -474,12 +474,13 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
           
           {/* Row 1 on mobile: Logo + Order Switcher */}
           <div className="flex items-center justify-between gap-3 w-full sm:w-auto min-w-0">
-            <div className="min-w-0 shrink">
+            <div className="min-w-0 shrink max-w-[110px] sm:max-w-[160px]">
               <div className="sm:hidden">
-                <Logo width={140} height={32} align="left" />
+                {/* applyScale=false: tenant logoScale can blow up mobile header */}
+                <Logo width={96} height={22} align="left" applyScale={false} />
               </div>
               <div className="hidden sm:block">
-                <Logo width={180} height={40} align="left" />
+                <Logo width={140} height={32} align="left" applyScale={false} />
               </div>
             </div>
             

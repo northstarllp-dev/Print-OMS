@@ -409,8 +409,8 @@ function PortalError({ title, message }: { title: string; message: string }) {
           boxShadow: "0 8px 24px rgba(0, 0, 0, 0.08)",
         }}
       >
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: "24px" }}>
-          <Logo height={48} />
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: "16px", maxWidth: 140, marginLeft: "auto", marginRight: "auto" }}>
+          <Logo height={28} width={120} applyScale={false} />
         </div>
         <div
           style={{
