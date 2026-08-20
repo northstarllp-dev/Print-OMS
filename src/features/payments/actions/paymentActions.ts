@@ -98,7 +98,8 @@ export type PaymentBalanceSummary = {
 };
 
 export async function getPaymentBalanceSummary(
-  orderId: string
+  orderId: string,
+  preloadedPayments?: Payment[]
 ): Promise<PaymentBalanceSummary> {
   const supabase = await getSupabase();
   const orderUuid = await resolveOrderUuid(orderId);
@@ -120,7 +121,7 @@ export async function getPaymentBalanceSummary(
     (Number(quotation?.grand_total) || totalBeforeTax + gst) * 100
   ) / 100;
 
-  const payments = await getPaymentsByOrder(orderUuid);
+  const payments = preloadedPayments ?? (await getPaymentsByOrder(orderUuid));
   const expectedTotal = Math.round(
     payments
       .filter((p) => p.status === "expected")
@@ -145,6 +146,16 @@ export async function getPaymentBalanceSummary(
     receivedTotal,
     outstanding,
   };
+}
+
+/** Single round-trip for portal Payments tab (avoids duplicate payments query). */
+export async function getPortalPaymentsTabData(orderId: string): Promise<{
+  payments: Payment[];
+  balance: PaymentBalanceSummary;
+}> {
+  const payments = await getPaymentsByOrder(orderId);
+  const balance = await getPaymentBalanceSummary(orderId, payments);
+  return { payments, balance };
 }
 
 export async function calculatePaymentAmount(

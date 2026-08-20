@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, startTransition } from "react";
+import dynamic from "next/dynamic";
 import {
   ArrowLeft,
   MapPin,
@@ -25,43 +26,78 @@ import {
   UploadCloud
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
-import { withBasePath } from "@/lib/appBasePath";
-import { scheduleSiteVisitAction, revalidateOrderPathsAction } from "@/features/orders/actions/orderActions";
-import { formatSiteMeasurementLabel } from "@/features/orders/actions/siteVisitMapper";
+import { establishPortalSession } from "../../establishPortalSession";
+import { scheduleSiteVisitAction } from "@/features/orders/actions/orderActions";
+import { isSkippedSiteVisit } from "@/features/orders/workspace/modules/site-visit/siteVisitUiLogic";
 import {
   mergeOrderDetailPatch,
   useOrderDetailSync,
 } from "@/features/orders/realtime/useOrderDetailSync";
 import type { OrderDetailPatch } from "@/features/orders/realtime/orderDetailPatch";
-import { QuotationTab } from "@/app/portal/components/QuotationTab";
-import { InvoiceTab } from "@/app/portal/components/InvoiceTab";
 import { useQuotationActions } from "@/app/portal/hooks/useQuotationActions";
-import { GoogleMap, useJsApiLoader } from "@react-google-maps/api";
-import { AdvancedMapMarker } from "@/components/maps/AdvancedMapMarker";
-import { PlaceAutocompleteInput } from "@/components/maps/PlaceAutocompleteInput";
-import { DesignTab } from "@/app/portal/components/DesignTab";
-import { PaymentsTab } from "@/app/portal/components/PaymentsTab";
 import {
   didStageAdvance,
+  getDetailTabPipeline,
   getTabForStage,
 } from "@/app/portal/utils/portalStageNavigation";
-import {
-  GOOGLE_MAPS_API_VERSION,
-  GOOGLE_MAPS_DEFAULT_OPTIONS,
-  GOOGLE_MAPS_LIBRARIES,
-  GOOGLE_MAPS_SCRIPT_ID,
-} from "@/components/maps/googleMapsConfig";
-import { isGoogleMapsUrl } from "@/components/maps/mapsUrl";
-import {
-  ensureResolvedSiteLocation,
-  resolveGoogleMapsLocation,
-} from "@/components/maps/resolveGoogleMapsLocation";
+import { ensureResolvedSiteLocation } from "@/components/maps/resolveGoogleMapsLocation";
 import type { InvoiceProfile } from "@/features/quotations/types/invoiceProfile";
+import { getStagesForOp, reorderModulesForWorkflowType } from "@/features/orders/businessOperations";
+import type { BusinessStageKey } from "@/config/schema/businessOperations";
 
-const containerStyle = {
-  width: "100%",
-  height: "100%"
+const DETAIL_TAB_META: Record<
+  string,
+  { label: string; icon: typeof MapPin }
+> = {
+  site_visit: { label: "Site Visit", icon: MapPin },
+  quotation: { label: "Quotation", icon: FileCheck },
+  design: { label: "Design", icon: Layout },
+  payments: { label: "Payments", icon: CreditCard },
+  billing: { label: "Invoice", icon: FileCheck },
 };
+
+const STAGE_LABELS: Record<string, string> = {
+  enquiry: "Enquiries",
+  site_visit: "Site Visit",
+  quotation: "Quotations",
+  design: "Design",
+  production: "Production",
+  installation: "Installation",
+};
+
+const TabFallback = () => (
+  <div className="flex items-center justify-center py-16 text-sm text-slate-400">
+    <Loader2 size={18} className="animate-spin mr-2" /> Loading…
+  </div>
+);
+
+const QuotationTab = dynamic(
+  () => import("@/app/portal/components/QuotationTab").then((m) => m.QuotationTab),
+  { ssr: false, loading: TabFallback }
+);
+const InvoiceTab = dynamic(
+  () => import("@/app/portal/components/InvoiceTab").then((m) => m.InvoiceTab),
+  { ssr: false, loading: TabFallback }
+);
+const DesignTab = dynamic(
+  () => import("@/app/portal/components/DesignTab").then((m) => m.DesignTab),
+  { ssr: false, loading: TabFallback }
+);
+const PaymentsTab = dynamic(
+  () => import("@/app/portal/components/PaymentsTab").then((m) => m.PaymentsTab),
+  { ssr: false, loading: TabFallback }
+);
+const SiteVisitLocationPicker = dynamic(
+  () =>
+    import("@/app/portal/components/SiteVisitLocationPicker").then(
+      (m) => m.SiteVisitLocationPicker
+    ),
+  { ssr: false, loading: () => (
+    <div className="h-40 rounded-xl border border-gray-200 bg-gray-50 flex items-center justify-center text-xs text-slate-500">
+      Loading map…
+    </div>
+  ) }
+);
 
 // Default center: India/Bangalore as an example
 const defaultCenter = {
@@ -105,6 +141,7 @@ interface Order {
   orderCode?: string;
   orderId?: string;
   workflow_type?: string;
+  business_operation?: string;
 }
 
 interface OrderDetailClientProps {
@@ -116,34 +153,28 @@ interface OrderDetailClientProps {
 }
 
 export function OrderDetailClient({ customer, order: initialOrder, siteVisitItems = [], token, invoiceProfile = null }: OrderDetailClientProps) {
-  const workflowType = initialOrder.workflow_type || "quote_first";
-  const isDesignFirst = workflowType === "design_first";
+  const [order, setOrder] = useState(initialOrder);
+  const businessOperation = order.business_operation || "signage";
+  const workflowType = order.workflow_type || null;
 
-  const stages = isDesignFirst 
-    ? ["Enquiries", "Site Visit", "Design", "Quotations", "Production", "Installation"]
-    : ["Enquiries", "Site Visit", "Quotations", "Design", "Production", "Installation"];
+  const stages = reorderModulesForWorkflowType(
+    getStagesForOp(businessOperation) as BusinessStageKey[],
+    workflowType
+  ).map((key) => STAGE_LABELS[key] || key);
 
-  const tabs = isDesignFirst
-    ? [
-        { id: "site_visit", label: "Site Visit", icon: MapPin },
-        { id: "design", label: "Design", icon: Layout },
-        { id: "quotation", label: "Quotation", icon: FileCheck },
-        { id: "payments", label: "Payments", icon: CreditCard },
-        { id: "billing", label: "Invoice", icon: FileCheck },
-      ]
-    : [
-        { id: "site_visit", label: "Site Visit", icon: MapPin },
-        { id: "quotation", label: "Quotation", icon: FileCheck },
-        { id: "design", label: "Design", icon: Layout },
-        { id: "payments", label: "Payments", icon: CreditCard },
-        { id: "billing", label: "Invoice", icon: FileCheck },
-      ];
+  const tabs = getDetailTabPipeline(businessOperation, workflowType).map((id) => {
+    const meta = DETAIL_TAB_META[id] || { label: id, icon: FileCheck };
+    return { id, label: meta.label, icon: meta.icon };
+  });
 
   // Initial tab follows server-rendered stage; realtime advances switch forward only (below).
   const [activeTab, setActiveTab] = useState(() =>
-    getTabForStage(initialOrder.stage || "", workflowType)
+    getTabForStage(
+      initialOrder.stage || "",
+      initialOrder.business_operation || "signage",
+      initialOrder.workflow_type
+    )
   );
-  const [order, setOrder] = useState(initialOrder);
   const orderRef = useRef(order);
   orderRef.current = order;
   const prevStageRef = useRef(order.stage);
@@ -154,38 +185,31 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
 
   // Establish HttpOnly portal_session cookie (required for design/quote server actions).
   useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const res = await fetch(withBasePath("/api/portal/session"), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token }),
-        });
-        if (mounted && !res.ok) {
-          const err = await res.json().catch(() => ({}));
-          console.warn("[Portal] Session cookie setup failed:", err.error || res.status);
-        }
-      } catch (e) {
-        console.warn("[Portal] Session cookie setup error:", e);
-      }
-    })();
-    return () => {
-      mounted = false;
-    };
+    establishPortalSession(token);
   }, [token]);
 
   // Follow pipeline forward when staff advances stage (realtime or refresh).
   useEffect(() => {
     const prevStage = prevStageRef.current || "";
     const nextStage = order.stage || "";
-    if (!didStageAdvance(prevStage, nextStage, workflowType)) {
+    const op = order.business_operation || businessOperation;
+    const wt = order.workflow_type || workflowType;
+    if (!didStageAdvance(prevStage, nextStage, op, wt)) {
       prevStageRef.current = nextStage;
       return;
     }
     prevStageRef.current = nextStage;
-    setActiveTab(getTabForStage(nextStage, workflowType));
-  }, [order.stage, workflowType]);
+    const nextTab = getTabForStage(nextStage, op, wt);
+    startTransition(() => {
+      setActiveTab(nextTab);
+      setMountedTabs((prev) => {
+        if (prev.has(nextTab)) return prev;
+        const next = new Set(prev);
+        next.add(nextTab);
+        return next;
+      });
+    });
+  }, [order.stage, order.business_operation, order.workflow_type, businessOperation, workflowType]);
 
   const applyPortalPatch = useCallback((patch: OrderDetailPatch) => {
     setOrder((prev) => mergeOrderDetailPatch(prev, patch));
@@ -203,6 +227,16 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
 
   const [products, setProducts] = useState<any[]>([]);
   const [selectedProductInfo, setSelectedProductInfo] = useState<any | null>(null);
+  const [mountedTabs, setMountedTabs] = useState<Set<string>>(
+    () =>
+      new Set([
+        getTabForStage(
+          initialOrder.stage || "",
+          initialOrder.business_operation || "signage",
+          initialOrder.workflow_type
+        ),
+      ])
+  );
 
   const {
     quoteFeedback,
@@ -215,14 +249,34 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
     handleDeclineQuote,
   } = useQuotationActions(order?.id ?? "", customer.name, setOrder, token);
 
-  useEffect(() => {
-    const supabase = createClient();
-    async function loadProducts() {
-      const { data } = await supabase.from("products").select("*").eq("is_active", true);
-      if (data) setProducts(data);
-    }
-    loadProducts();
+  const selectTab = useCallback((tabId: string) => {
+    startTransition(() => {
+      setActiveTab(tabId);
+      setMountedTabs((prev) => {
+        if (prev.has(tabId)) return prev;
+        const next = new Set(prev);
+        next.add(tabId);
+        return next;
+      });
+    });
   }, []);
+
+  // Only fetch products when quotation tab is opened (not on every portal load).
+  useEffect(() => {
+    if (!mountedTabs.has("quotation") || products.length > 0) return;
+    const supabase = createClient();
+    let cancelled = false;
+    void supabase
+      .from("products")
+      .select("*")
+      .eq("is_active", true)
+      .then(({ data }) => {
+        if (!cancelled && data) setProducts(data);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [mountedTabs, products.length]);
   
   // Site Visit scheduling states
   const [selectedDate, setSelectedDate] = useState("");
@@ -231,92 +285,16 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
   const [gpsCoords, setGpsCoords] = useState("12.9716, 77.5946");
   const [isRescheduling, setIsRescheduling] = useState(false);
   const [schedulingLoading, setSchedulingLoading] = useState(false);
-  const [mapsSearching, setMapsSearching] = useState(false);
 
   const [markerPosition, setMarkerPosition] = useState(defaultCenter);
   const [mapCenter, setMapCenter] = useState(defaultCenter);
-  const [map, setMap] = useState<google.maps.Map | null>(null);
-  const geocoder = useRef<any>(null);
-
-  const { isLoaded } = useJsApiLoader({
-    id: GOOGLE_MAPS_SCRIPT_ID,
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
-    libraries: GOOGLE_MAPS_LIBRARIES,
-    version: GOOGLE_MAPS_API_VERSION,
-  });
 
   const applyLocation = useCallback((lat: number, lng: number, address?: string) => {
     setMarkerPosition({ lat, lng });
     setMapCenter({ lat, lng });
     setGpsCoords(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
-    if (address && !isGoogleMapsUrl(address)) setSiteAddress(address);
+    if (address) setSiteAddress(address);
   }, []);
-
-  const tryResolveMapsLink = useCallback(
-    async (value: string) => {
-      if (!isGoogleMapsUrl(value)) return;
-      setMapsSearching(true);
-      try {
-        const resolved = await resolveGoogleMapsLocation(value);
-        if (!resolved) {
-          alert("Could not open that Google Maps link. Paste a full Maps URL or search for the address.");
-          return;
-        }
-        applyLocation(resolved.lat, resolved.lng, resolved.address);
-      } catch (err) {
-        console.error("[PortalOrder] Maps link resolve failed:", err);
-        alert("Could not open that Google Maps link. Please try again.");
-      } finally {
-        setMapsSearching(false);
-      }
-    },
-    [applyLocation]
-  );
-
-  useEffect(() => {
-    if (isLoaded && !geocoder.current) {
-      geocoder.current = new window.google.maps.Geocoder();
-    }
-  }, [isLoaded]);
-
-  const reverseGeocode = (lat: number, lng: number) => {
-    if (!geocoder.current) return;
-    geocoder.current.geocode({ location: { lat, lng } }, (results: any, status: any) => {
-      if (status === "OK" && results[0]) {
-        setSiteAddress(results[0].formatted_address);
-      }
-    });
-  };
-
-  const onMapClick = useCallback((e: google.maps.MapMouseEvent) => {
-    if (!e.latLng) return;
-    const lat = e.latLng.lat();
-    const lng = e.latLng.lng();
-    applyLocation(lat, lng);
-    reverseGeocode(lat, lng);
-  }, [applyLocation]);
-
-  const handleCurrentLocation = () => {
-    setMapsSearching(true);
-    if ("geolocation" in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const lat = position.coords.latitude;
-          const lng = position.coords.longitude;
-          applyLocation(lat, lng);
-          reverseGeocode(lat, lng);
-          setMapsSearching(false);
-        },
-        () => {
-          alert("Could not detect your location. Please check your browser permissions.");
-          setMapsSearching(false);
-        }
-      );
-    } else {
-      alert("Geolocation is not supported by your browser.");
-      setMapsSearching(false);
-    }
-  };
 
   // Make sure we map the order stage to our stages array
   const stageMapping: Record<string, string> = {
@@ -465,7 +443,7 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
               return (
                 <React.Fragment key={idx}>
                   <button
-                    onClick={() => setActiveTab(targetTab)}
+                    onClick={() => selectTab(targetTab)}
                     className="flex flex-col items-center gap-1.5 sm:gap-2 focus:outline-none focus:ring-4 focus:ring-blue-200 rounded-xl p-1.5 sm:p-2 shrink-0"
                     style={{ cursor: "pointer" }}
                   >
@@ -513,7 +491,7 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
+                  onClick={() => selectTab(tab.id)}
                   className={`px-3 sm:px-5 py-2.5 sm:py-3 rounded-lg text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 whitespace-nowrap shrink-0 ${
                     activeTab === tab.id
                       ? "bg-blue-50 text-blue-600 border border-blue-200"
@@ -533,7 +511,17 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
       <main className="max-w-7xl mx-auto px-3 sm:px-6 py-5 sm:py-8 pb-24">
         {activeTab === "site_visit" && (
           <div className="space-y-6">
-            {(!sv.auditDate || isRescheduling) ? (
+            {isSkippedSiteVisit(sv) ? (
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 text-center">
+                <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <CheckCircle size={24} className="text-amber-600" />
+                </div>
+                <h2 className="text-xl font-black text-amber-900 mb-2">Site Visit Skipped</h2>
+                <p className="text-sm text-amber-700 max-w-md mx-auto">
+                  The site visit has been skipped by our team. We will directly proceed with adding measurements for your project.
+                </p>
+              </div>
+            ) : (!sv.auditDate || isRescheduling) ? (
               <div className="space-y-6">
                 <div>
                   <h2 className="text-xl font-black text-gray-900 mb-1.5">
@@ -605,61 +593,14 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
                     <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
                       Choose Location in Maps
                     </label>
-                    {isLoaded ? (
-                      <PlaceAutocompleteInput
-                        isLoaded={isLoaded}
-                        required
-                        value={siteAddress}
-                        onChange={setSiteAddress}
-                        onPlaceSelect={({ address, lat, lng }) => applyLocation(lat, lng, address)}
-                        onMapsUrl={(url) => void tryResolveMapsLink(url)}
-                        placeholder="Search address or paste a Google Maps link..."
-                        className="w-full p-3 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none bg-gray-50 focus:bg-white transition-all"
-                      />
-                    ) : (
-                      <input
-                        type="text"
-                        required
-                        value={siteAddress}
-                        onChange={e => setSiteAddress(e.target.value)}
-                        placeholder="Full address where signage will be installed"
-                        className="w-full p-3 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none bg-gray-50 focus:bg-white transition-all"
-                      />
-                    )}
-
-                    {/* Map visual */}
-                    <div className="mt-2 border border-gray-200 rounded-xl overflow-hidden bg-gray-50">
-                      <div className="h-40 bg-[#e8edf2] relative">
-                        {isLoaded ? (
-                          <GoogleMap
-                            mapContainerStyle={containerStyle}
-                            center={mapCenter}
-                            zoom={14}
-                            onClick={onMapClick}
-                            onLoad={setMap}
-                            onUnmount={() => setMap(null)}
-                            options={GOOGLE_MAPS_DEFAULT_OPTIONS}
-                          >
-                            <AdvancedMapMarker map={map} position={markerPosition} />
-                          </GoogleMap>
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-xs text-slate-500">
-                            Loading Map...
-                          </div>
-                        )}
-                      </div>
-                      <div className="px-3 py-2 bg-white border-t border-gray-200 flex items-center justify-between">
-                        <span className="text-[10px] font-mono font-semibold text-gray-600">📍 {gpsCoords}</span>
-                        <button
-                          type="button"
-                          onClick={handleCurrentLocation}
-                          className="flex items-center gap-1 text-[10px] font-bold text-blue-600 hover:underline cursor-pointer"
-                        >
-                          {mapsSearching ? <Loader2 size={10} className="animate-spin" /> : null}
-                          {mapsSearching ? "Detecting..." : "Auto-detect"}
-                        </button>
-                      </div>
-                    </div>
+                    <SiteVisitLocationPicker
+                      siteAddress={siteAddress}
+                      onAddressChange={setSiteAddress}
+                      gpsCoords={gpsCoords}
+                      onLocationChange={applyLocation}
+                      markerPosition={markerPosition}
+                      mapCenter={mapCenter}
+                    />
                   </div>
 
                   <div className="flex items-center gap-3 pt-2">
@@ -843,37 +784,53 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
             )}
           </div>
         )}
-        {activeTab === "quotation" && (
-          <QuotationTab
-            order={order}
-            products={products}
-            siteVisitItems={siteVisitItems}
-            setSelectedProductInfo={setSelectedProductInfo}
-            showQuoteDeclineInput={showQuoteDeclineInput}
-            setShowQuoteDeclineInput={setShowQuoteDeclineInput}
-            quoteFeedback={quoteFeedback}
-            setQuoteFeedback={setQuoteFeedback}
-            updatingStatus={updatingStatus}
-            actionError={actionError}
-            handleApproveQuote={handleApproveQuote}
-            handleDeclineQuote={handleDeclineQuote}
-            invoiceProfile={invoiceProfile}
-            billingAddress={customer.billingAddress}
-            customerCity={customer.city}
-          />
+        {mountedTabs.has("quotation") && (
+          <div hidden={activeTab !== "quotation"}>
+            <QuotationTab
+              order={order}
+              products={products}
+              siteVisitItems={siteVisitItems}
+              setSelectedProductInfo={setSelectedProductInfo}
+              showQuoteDeclineInput={showQuoteDeclineInput}
+              setShowQuoteDeclineInput={setShowQuoteDeclineInput}
+              quoteFeedback={quoteFeedback}
+              setQuoteFeedback={setQuoteFeedback}
+              updatingStatus={updatingStatus}
+              actionError={actionError}
+              handleApproveQuote={handleApproveQuote}
+              handleDeclineQuote={handleDeclineQuote}
+              invoiceProfile={invoiceProfile}
+              billingAddress={customer.billingAddress}
+              customerCity={customer.city}
+            />
+          </div>
         )}
-        {activeTab === "design" && (
-          <DesignTab order={order} customer={customer} siteVisitItems={siteVisitItems} portalToken={token} />
+        {mountedTabs.has("design") && (
+          <div hidden={activeTab !== "design"}>
+            <DesignTab
+              order={order}
+              customer={customer}
+              siteVisitItems={siteVisitItems}
+              portalToken={token}
+              onDesignUpdated={(design) => setOrder((prev) => ({ ...prev, design }))}
+            />
+          </div>
         )}
-        {activeTab === "payments" && <PaymentsTab orderId={order.id} />}
-        {activeTab === "billing" && (
-          <InvoiceTab
-            order={order}
-            invoiceDetails={order.invoiceDetails}
-            invoiceProfile={invoiceProfile}
-            billingAddress={customer.billingAddress}
-            customerCity={customer.city}
-          />
+        {mountedTabs.has("payments") && (
+          <div hidden={activeTab !== "payments"}>
+            <PaymentsTab orderId={order.id} />
+          </div>
+        )}
+        {mountedTabs.has("billing") && (
+          <div hidden={activeTab !== "billing"}>
+            <InvoiceTab
+              order={order}
+              invoiceDetails={order.invoiceDetails}
+              invoiceProfile={invoiceProfile}
+              billingAddress={customer.billingAddress}
+              customerCity={customer.city}
+            />
+          </div>
         )}
       </main>
 

@@ -18,6 +18,9 @@ import {
   ChevronUp,
 } from "lucide-react";
 import { SiteVisitDetails, SignLocation } from "@/types";
+import { loadClientConfig } from "@/config/loadClientConfig";
+import { OrderImage } from "@/components/storage/OrderImage";
+import { isSkippedSiteVisit, SKIPPED_SITE_VISIT_LANDMARK } from "@/features/orders/workspace/modules/site-visit/siteVisitUiLogic";
 
 interface SiteVisitReviewModalProps {
   siteVisit: SiteVisitDetails;
@@ -44,7 +47,7 @@ function InfoChip({
     <div className="flex items-start gap-3 bg-slate-50 rounded-xl p-3 border border-slate-200/80">
       <div className="mt-0.5 text-slate-400 shrink-0">{icon}</div>
       <div>
-        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">
+        <p className="text-[10px] text-slate-500 font-medium mb-0.5">
           {label}
         </p>
         {href ? (
@@ -85,8 +88,10 @@ function Tag({ text }: { text: string }) {
 }
 
 function LocationReviewCard({ loc, index }: { loc: SignLocation; index: number }) {
+  const config = loadClientConfig();
+  const hiddenFields = config.features.siteVisit || {};
   const [open, setOpen] = useState(true);
-  const hasMeasurements = loc.width || loc.height || loc.depth || loc.groundClearance;
+  const hasMeasurements = loc.width || loc.height || (!hiddenFields.hideDepth && loc.depth) || (!hiddenFields.hideGroundClearance && loc.groundClearance);
   const hasElectrical = loc.powerAvailable !== undefined || loc.distanceToPowerSource || loc.electricalNotes;
   const hasStructural = loc.wallType || loc.mountingMethod || loc.surfaceCondition || (loc.obstacles?.length ?? 0) > 0 || loc.structuralNotes;
 
@@ -119,15 +124,15 @@ function LocationReviewCard({ loc, index }: { loc: SignLocation; index: number }
             <div>
               <div className="flex items-center gap-1.5 mb-3">
                 <Ruler size={13} className="text-slate-500" />
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                <p className="text-[10px] text-slate-500 font-medium">
                   Dimensions
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <StatPill label="Width" value={loc.width ? `${loc.width} ${loc.widthUnit || 'ft'}` : null} />
                 <StatPill label="Height" value={loc.height ? `${loc.height} ${loc.heightUnit || 'ft'}` : null} />
-                <StatPill label="Depth" value={loc.depth ? `${loc.depth} ${loc.depthUnit || 'ft'}` : null} />
-                <StatPill label="Ground Clr." value={loc.groundClearance ? `${loc.groundClearance} ${loc.groundClearanceUnit || 'ft'}` : null} />
+                {!hiddenFields.hideDepth && <StatPill label="Depth" value={loc.depth ? `${loc.depth} ${loc.depthUnit || 'ft'}` : null} />}
+                {!hiddenFields.hideGroundClearance && <StatPill label="Ground Clr." value={loc.groundClearance ? `${loc.groundClearance} ${loc.groundClearanceUnit || 'ft'}` : null} />}
               </div>
             </div>
           )}
@@ -135,7 +140,7 @@ function LocationReviewCard({ loc, index }: { loc: SignLocation; index: number }
           {/* Notes */}
           {loc.notes && (
             <div className="bg-slate-50 border-l-4 border-slate-300 rounded-r-xl px-4 py-3">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+              <p className="text-[10px] text-slate-500 font-medium mb-1">
                 Location Notes
               </p>
               <p className="text-xs text-slate-700 leading-relaxed">{loc.notes}</p>
@@ -147,25 +152,23 @@ function LocationReviewCard({ loc, index }: { loc: SignLocation; index: number }
             <div>
               <div className="flex items-center gap-1.5 mb-2">
                 <Camera size={13} className="text-slate-500" />
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                <p className="text-[10px] text-slate-500 font-medium">
                   Site Photos ({loc.photos?.length || 0})
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
                 {loc.photos?.map((url, i) => (
-                  <a
+                  <div
                     key={i}
-                    href={url}
-                    target="_blank"
-                    rel="noopener noreferrer"
                     className="block w-16 h-16 rounded-xl overflow-hidden border border-slate-200 hover:opacity-90 transition-opacity shrink-0"
                   >
-                    <img
+                    <OrderImage
                       src={url}
+                      width={200}
                       alt={`Photo ${i + 1}`}
                       className="w-full h-full object-cover"
                     />
-                  </a>
+                  </div>
                 ))}
               </div>
             </div>
@@ -176,7 +179,7 @@ function LocationReviewCard({ loc, index }: { loc: SignLocation; index: number }
             <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 space-y-2">
               <div className="flex items-center gap-1.5 mb-1">
                 <Zap size={13} className="text-amber-600" />
-                <p className="text-[10px] font-bold text-amber-500 uppercase tracking-wider">
+                <p className="text-[10px] text-slate-500 font-medium">
                   Electrical Assessment
                 </p>
               </div>
@@ -211,7 +214,7 @@ function LocationReviewCard({ loc, index }: { loc: SignLocation; index: number }
             <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 space-y-2">
               <div className="flex items-center gap-1.5 mb-1">
                 <Building2 size={13} className="text-indigo-600" />
-                <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">
+                <p className="text-[10px] text-slate-500 font-medium">
                   Structural Assessment
                 </p>
               </div>
@@ -236,28 +239,31 @@ function LocationReviewCard({ loc, index }: { loc: SignLocation; index: number }
   );
 }
 
-export const SiteVisitReviewModal: React.FC<SiteVisitReviewModalProps> = ({
+export function SiteVisitReviewModal({
   siteVisit,
   orderName,
   onConfirm,
   onClose,
-  mode = "admin_lock",
-}) => {
-  const [confirming, setConfirming] = useState(false);
+  mode = "staff_push",
+}: SiteVisitReviewModalProps) {
+  const config = loadClientConfig();
+  const hiddenFields = config.features.siteVisit || {};
+  const [isConfirming, setIsConfirming] = useState(false);
   const isStaffPush = mode === "staff_push";
 
   const handleConfirm = async () => {
-    setConfirming(true);
+    setIsConfirming(true);
     try {
       await onConfirm();
     } finally {
-      setConfirming(false);
+      setIsConfirming(false);
     }
   };
 
   const scheduledDate = siteVisit.auditDate || siteVisit.preferredDate;
   const scheduledTime = siteVisit.auditTime || siteVisit.preferredTime;
   const locations = siteVisit.locations || [];
+  const skipped = isSkippedSiteVisit(siteVisit);
 
   return (
     <OverlayPortal>
@@ -298,27 +304,37 @@ export const SiteVisitReviewModal: React.FC<SiteVisitReviewModalProps> = ({
         <div className="overflow-y-auto flex-1 px-4 md:px-6 py-4 md:py-5 space-y-5 md:space-y-6">
           {/* Visit Info */}
           <div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">
-              Scheduled Visit Info
+            <p className="text-[10px] text-slate-500 font-medium mb-3">
+              {skipped ? "Visit Status" : "Scheduled Visit Info"}
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <InfoChip
-                icon={<Calendar size={15} />}
-                label="Date"
-                value={scheduledDate}
-              />
-              <InfoChip
-                icon={<Clock size={15} />}
-                label="Time"
-                value={scheduledTime}
-              />
+              {skipped ? (
+                <InfoChip
+                  icon={<CheckCircle2 size={15} />}
+                  label="Status"
+                  value="Site visit skipped"
+                />
+              ) : (
+                <>
+                  <InfoChip
+                    icon={<Calendar size={15} />}
+                    label="Date"
+                    value={scheduledDate}
+                  />
+                  <InfoChip
+                    icon={<Clock size={15} />}
+                    label="Time"
+                    value={scheduledTime}
+                  />
+                </>
+              )}
               <InfoChip
                 icon={<MapPin size={15} />}
-                label="Site Address"
+                label={skipped ? "Installation Location" : "Site Address"}
                 value={siteVisit.customerAddress}
-                href={siteVisit.customerAddress ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(siteVisit.customerAddress)}` : undefined}
+                href={siteVisit.customerAddress && !siteVisit.customerAddress.startsWith("Skipped") ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(siteVisit.customerAddress)}` : undefined}
               />
-              {siteVisit.landmark && (
+              {siteVisit.landmark && siteVisit.landmark !== SKIPPED_SITE_VISIT_LANDMARK && (
                 <InfoChip
                   icon={<MapPin size={15} />}
                   label="Landmark"
@@ -338,7 +354,7 @@ export const SiteVisitReviewModal: React.FC<SiteVisitReviewModalProps> = ({
           {/* Locations */}
           {locations.length > 0 ? (
             <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">
+              <p className="text-[10px] text-slate-500 font-medium mb-3">
                 Sign Items & Measurements ({locations.length})
               </p>
               <div className="space-y-3">
@@ -361,7 +377,7 @@ export const SiteVisitReviewModal: React.FC<SiteVisitReviewModalProps> = ({
           {/* ── Installation Requirements ── */}
           {(siteVisit.scaffoldingRequired || siteVisit.craneRequired || siteVisit.overnightInstallation !== undefined) && (
             <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">
+              <p className="text-[10px] text-slate-500 font-medium mb-3">
                 Installation Requirements
               </p>
               <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-wrap gap-2">
@@ -385,9 +401,9 @@ export const SiteVisitReviewModal: React.FC<SiteVisitReviewModalProps> = ({
           )}
 
           {/* ── Fabrication Requirements ── */}
-          {(siteVisit.extraAnglesRequired !== undefined || siteVisit.extraAcpSheetRequired !== undefined || siteVisit.oldBoardRemovalRequired !== undefined || siteVisit.extraWireRequired !== undefined) && (
+          {(siteVisit.extraAnglesRequired !== undefined || siteVisit.extraAcpSheetRequired !== undefined || siteVisit.oldBoardRemovalRequired !== undefined || (!hiddenFields.hideExtraWireRequired && siteVisit.extraWireRequired !== undefined)) && (
             <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">
+              <p className="text-[10px] text-slate-500 font-medium mb-3">
                 Fabrication Requirements
               </p>
               <div className="bg-orange-50 border border-orange-100 rounded-xl p-4 space-y-2">
@@ -395,8 +411,8 @@ export const SiteVisitReviewModal: React.FC<SiteVisitReviewModalProps> = ({
                   { label: "Extra Angles Required", value: siteVisit.extraAnglesRequired, extra: siteVisit.extraAnglesRequired && siteVisit.extraAnglesLength ? ` (${siteVisit.extraAnglesLength})` : "" },
                   { label: "Extra ACP Sheet to Cover Gap", value: siteVisit.extraAcpSheetRequired },
                   { label: "Old Board Removal", value: siteVisit.oldBoardRemovalRequired },
-                  { label: "Extra Wire Required", value: siteVisit.extraWireRequired },
-                ].filter(item => item.value !== undefined).map(item => (
+                  !hiddenFields.hideExtraWireRequired ? { label: "Extra Wire Required", value: siteVisit.extraWireRequired } : null,
+                ].filter((item): item is {label: string, value: boolean, extra?: string} => item !== null && item.value !== undefined).map(item => (
                   <div key={item.label} className="flex items-center justify-between text-xs">
                     <span className="font-medium text-orange-800">{item.label}{"extra" in item ? item.extra : ""}</span>
                     <span className={`font-bold px-2 py-0.5 rounded-full border text-[10px] ${item.value ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-500 border-slate-200"}`}>
@@ -409,9 +425,9 @@ export const SiteVisitReviewModal: React.FC<SiteVisitReviewModalProps> = ({
           )}
 
           {/* ── Design Inputs ── */}
-          {(siteVisit.designBriefAvailable || siteVisit.fabricationRequired !== undefined || siteVisit.civilWorkRequired !== undefined) && (
+          {(siteVisit.designBriefAvailable || (!hiddenFields.hideFabricationReq && siteVisit.fabricationRequired !== undefined) || (!hiddenFields.hideCivilWork && siteVisit.civilWorkRequired !== undefined)) && (
             <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">
+              <p className="text-[10px] text-slate-500 font-medium mb-3">
                 Design Inputs
               </p>
               <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 space-y-2">
@@ -423,7 +439,7 @@ export const SiteVisitReviewModal: React.FC<SiteVisitReviewModalProps> = ({
                     </span>
                   </div>
                 )}
-                {siteVisit.fabricationRequired !== undefined && (
+                {!hiddenFields.hideFabricationReq && siteVisit.fabricationRequired !== undefined && (
                   <div className="flex items-center justify-between text-xs">
                     <span className="font-medium text-indigo-800">Fabrication Required</span>
                     <span className={`font-bold px-2 py-0.5 rounded-full border text-[10px] ${siteVisit.fabricationRequired ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-500 border-slate-200"}`}>
@@ -431,7 +447,7 @@ export const SiteVisitReviewModal: React.FC<SiteVisitReviewModalProps> = ({
                     </span>
                   </div>
                 )}
-                {siteVisit.civilWorkRequired !== undefined && (
+                {!hiddenFields.hideCivilWork && siteVisit.civilWorkRequired !== undefined && (
                   <div className="flex items-center justify-between text-xs">
                     <span className="font-medium text-indigo-800">Civil Work Required</span>
                     <span className={`font-bold px-2 py-0.5 rounded-full border text-[10px] ${siteVisit.civilWorkRequired ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-500 border-slate-200"}`}>
@@ -459,17 +475,17 @@ export const SiteVisitReviewModal: React.FC<SiteVisitReviewModalProps> = ({
           <div className="flex flex-col-reverse md:flex-row items-stretch md:items-center justify-end gap-2 md:gap-3">
             <button
               onClick={onClose}
-              disabled={confirming}
+              disabled={isConfirming}
               className="px-5 py-2.5 text-sm font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors cursor-pointer disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               onClick={handleConfirm}
-              disabled={confirming}
+              disabled={isConfirming}
               className="flex items-center justify-center gap-2 px-4 md:px-6 py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors cursor-pointer disabled:opacity-60 shadow-sm shadow-emerald-200"
             >
-              {confirming ? (
+              {isConfirming ? (
                 <>
                   <svg className="animate-spin w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />

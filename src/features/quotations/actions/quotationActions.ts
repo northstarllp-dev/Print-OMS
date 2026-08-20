@@ -314,7 +314,7 @@ export async function sendQuotationToCustomer(
   const { stageProgressPatch } = await import("@/features/orders/lib/orderHealth");
   await supabase
     .from("orders")
-    .update({ stage: "Quotation Sent", ...stageProgressPatch(orderRow?.health) })
+    .update({ stage: "Quotation Sent", ...stageProgressPatch(orderRow?.health, "Quotation Sent") })
     .eq("id", qt.order_id);
   if (!orderRow?.company_id) {
     throw new Error("company_id is required to log quotation activity");
@@ -363,7 +363,7 @@ export async function adminMarkQuotationApprovedAction(orderId: string) {
   const { stageProgressPatch } = await import("@/features/orders/lib/orderHealth");
   const { error: oErr } = await supabase
     .from("orders")
-    .update({ stage: "Quotation Approved", stage_status: "Normal", ...stageProgressPatch(health) })
+    .update({ stage: "Quotation Approved", stage_status: "Normal", ...stageProgressPatch(health, "Quotation Approved") })
     .eq("id", uuid);
   if (oErr) throw new Error(oErr.message);
 
@@ -418,7 +418,7 @@ export async function customerApproveQuotation(
   const { stageProgressPatch } = await import("@/features/orders/lib/orderHealth");
   const { error: oErr } = await admin
     .from("orders")
-    .update({ stage: "Quotation Approved", ...stageProgressPatch(health) })
+    .update({ stage: "Quotation Approved", ...stageProgressPatch(health, "Quotation Approved") })
     .eq("id", uuid);
   if (oErr) throw new Error(oErr.message);
 
@@ -481,7 +481,7 @@ export async function customerRequestRevision(
   const { stageProgressPatch } = await import("@/features/orders/lib/orderHealth");
   const { error: oErr } = await admin
     .from("orders")
-    .update({ stage: "Quotation Negotiation", ...stageProgressPatch(health) })
+    .update({ stage: "Quotation Negotiation", ...stageProgressPatch(health, "Quotation Negotiation") })
     .eq("id", uuid);
   if (oErr) throw new Error(oErr.message);
 

@@ -56,8 +56,13 @@ export default async function OrderDetailPage({
     orderId: order.order_id || order.id,
     health: order.health || "Active",
     lost_reason: order.lost_reason,
+    hold_note: order.hold_note || null,
+    reach_out_at: order.reach_out_at || null,
     workflow_type: (order.workflow_type as "quote_first" | "design_first") || "quote_first",
-
+    business_operation: (order as { business_operation?: string }).business_operation || "signage",
+    delivery_method: (order as { delivery_method?: string }).delivery_method || "installation",
+    pickup_confirmed_at: (order as { pickup_confirmed_at?: string | null }).pickup_confirmed_at ?? null,
+    pickupConfirmedAt: (order as { pickup_confirmed_at?: string | null }).pickup_confirmed_at ?? null,
   };
 
   const mappedCustomers = customersData?.map((c) => ({
@@ -99,6 +104,7 @@ export default async function OrderDetailPage({
     orderCode: o.order_id || o.id,
     orderId: o.order_id || o.id,
     assignedEmployees: o.assigned_employees || [],
+    business_operation: o.business_operation || "signage",
   }));
 
   const mappedProducts = (productsData || []).map((p: any) => ({
@@ -110,7 +116,11 @@ export default async function OrderDetailPage({
     is_active: p.is_active,
     price_per_sqft: p.price_per_sqft != null ? Number(p.price_per_sqft) : null,
     price_per_unit: p.price_per_unit != null ? Number(p.price_per_unit) : null,
+    unit_price_max_sqft: p.unit_price_max_sqft != null ? Number(p.unit_price_max_sqft) : null,
+    pricing_type_below: p.pricing_type_below ?? null,
+    pricing_type_above: p.pricing_type_above ?? null,
     images: Array.isArray(p.images) ? p.images : [],
+    business_operations: Array.isArray(p.business_operations) ? p.business_operations : [],
   }));
 
   return (

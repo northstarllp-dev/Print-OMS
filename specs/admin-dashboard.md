@@ -81,7 +81,7 @@ Method: Server Action (`updateOrderHealthAction`)
 Behavior: Sets health to one of Active / Needs Attention / On Hold / Lost. Lost requires reason. Optional call remarks written to timeline.
 
 ### Update Order Assignment
-Method: Server Action (`assignEmployeeToOrder`)
+Method: Server Action (`assignTeamToOrder`)
 Behavior: Upserts `order_assignments` table.
 
 ## UI Components
@@ -103,7 +103,8 @@ Filters:
 
 ## File Structure
 
-* `src/app/admin/(dashboard)/page.tsx`
+* `src/app/admin/(dashboard)/dashboard/page.tsx` (Dashboard view calling `flagStalledOrdersAction`)
+* `src/app/admin/(dashboard)/layout.tsx` (Layout wrapper loading `getAdminSidebarCounts` for sidebar badges)
 * `src/features/order-detail/components/admin/AdminControlModule.tsx`
 * `src/features/orders/actions/orderActions.ts`
 

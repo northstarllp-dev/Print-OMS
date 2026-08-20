@@ -66,6 +66,9 @@ export default async function ProductionOrderDetailPage({ params }: { params: Pr
     health: order.health || "Active",
     lost_reason: order.lost_reason,
     workflow_type: (order.workflow_type as "quote_first" | "design_first") || "quote_first",
+    delivery_method: (order as { delivery_method?: string }).delivery_method || "installation",
+    pickup_confirmed_at: (order as { pickup_confirmed_at?: string | null }).pickup_confirmed_at ?? null,
+    pickupConfirmedAt: (order as { pickup_confirmed_at?: string | null }).pickup_confirmed_at ?? null,
   };
 
   const mappedCustomers = (customersData || []).map((c: any) => ({
@@ -112,7 +115,11 @@ export default async function ProductionOrderDetailPage({ params }: { params: Pr
     is_active: p.is_active,
     price_per_sqft: p.price_per_sqft != null ? Number(p.price_per_sqft) : null,
     price_per_unit: p.price_per_unit != null ? Number(p.price_per_unit) : null,
+    unit_price_max_sqft: p.unit_price_max_sqft != null ? Number(p.unit_price_max_sqft) : null,
+    pricing_type_below: p.pricing_type_below ?? null,
+    pricing_type_above: p.pricing_type_above ?? null,
     images: Array.isArray(p.images) ? p.images : [],
+    business_operations: Array.isArray(p.business_operations) ? p.business_operations : [],
   }));
 
   return (

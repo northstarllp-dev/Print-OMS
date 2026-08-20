@@ -27,6 +27,9 @@ interface PlaceAutocompleteInputProps {
   placeholder?: string;
   required?: boolean;
   className?: string;
+  style?: React.CSSProperties;
+  onFocus?: (e: React.FocusEvent<HTMLInputElement>) => void;
+  onBlur?: (e: React.FocusEvent<HTMLInputElement>) => void;
   regionCodes?: string[];
 }
 
@@ -45,6 +48,9 @@ export function PlaceAutocompleteInput({
   required,
   className =
     "w-full p-3 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none bg-slate-50 focus:bg-white transition-all",
+  style,
+  onFocus,
+  onBlur,
   regionCodes = DEFAULT_REGION_CODES,
 }: PlaceAutocompleteInputProps) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -56,16 +62,22 @@ export function PlaceAutocompleteInput({
     null
   );
   const sessionTokenRef = useRef<google.maps.places.AutocompleteSessionToken | null>(null);
+  const sessionTokenCreatedAtRef = useRef<number>(0);
   const requestIdRef = useRef(0);
   const skipFetchRef = useRef(false);
   const lastEmittedMapsUrlRef = useRef<string | null>(null);
   const regionKey = regionCodes.join(",");
 
   const refreshSessionToken = useCallback(async () => {
-    const { AutocompleteSessionToken } = (await google.maps.importLibrary(
-      "places"
-    )) as google.maps.PlacesLibrary;
-    sessionTokenRef.current = new AutocompleteSessionToken();
+    try {
+      const { AutocompleteSessionToken } = (await google.maps.importLibrary(
+        "places"
+      )) as google.maps.PlacesLibrary;
+      sessionTokenRef.current = new AutocompleteSessionToken();
+      sessionTokenCreatedAtRef.current = Date.now();
+    } catch (e) {
+      console.warn("[PlaceAutocomplete] failed to initialize session token:", e);
+    }
   }, []);
 
   const updateMenuPosition = useCallback(() => {
@@ -107,6 +119,9 @@ export function PlaceAutocompleteInput({
     const q = value.trim();
     if (q.length < 2 || isGoogleMapsUrl(q)) {
       clearSuggestions();
+      if (q.length === 0) {
+        void refreshSessionToken();
+      }
       return;
     }
 
@@ -118,8 +133,10 @@ export function PlaceAutocompleteInput({
       try {
         const { AutocompleteSuggestion, AutocompleteSessionToken } =
           (await google.maps.importLibrary("places")) as google.maps.PlacesLibrary;
-        if (!sessionTokenRef.current) {
+        const isSessionExpired = Date.now() - sessionTokenCreatedAtRef.current > 3 * 60 * 1000;
+        if (!sessionTokenRef.current || isSessionExpired) {
           sessionTokenRef.current = new AutocompleteSessionToken();
+          sessionTokenCreatedAtRef.current = Date.now();
         }
         const { suggestions: rows } =
           await AutocompleteSuggestion.fetchAutocompleteSuggestions({
@@ -201,11 +218,12 @@ export function PlaceAutocompleteInput({
         required={required}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        onFocus={() => {
+        onFocus={(e) => {
           if (suggestions.length > 0) {
             setOpen(true);
             updateMenuPosition();
           }
+          onFocus?.(e);
         }}
         onPaste={(e) => {
           const pasted = e.clipboardData.getData("text");
@@ -216,13 +234,15 @@ export function PlaceAutocompleteInput({
             setOpen(false);
           }
         }}
-        onBlur={() => {
+        onBlur={(e) => {
           // Delay so suggestion click registers first.
           window.setTimeout(() => setOpen(false), 180);
           if (isGoogleMapsUrl(value)) emitMapsUrl(value);
+          onBlur?.(e);
         }}
         placeholder={placeholder}
         className={className}
+        style={style}
         autoComplete="off"
       />
       {loading && (

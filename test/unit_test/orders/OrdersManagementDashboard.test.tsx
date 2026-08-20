@@ -87,8 +87,8 @@ describe('OrdersManagementDashboard', () => {
     expect(screen.getAllByText('Client A')[0]).toBeInTheDocument();
     expect(screen.getAllByText('Client B')[0]).toBeInTheDocument();
 
-    // KPI: Total Active (excludes Completed)
-    expect(screen.getAllByText('TOTAL ACTIVE')[0]).toBeInTheDocument();
+    // KPI: Total / Active (excludes Completed)
+    expect(screen.getAllByText('TOTAL / ACTIVE')[0]).toBeInTheDocument();
     
     // KPI: Unassigned (ord-1 is unassigned)
     const unassignedKpi = screen.getAllByText('UNASSIGNED')[0];

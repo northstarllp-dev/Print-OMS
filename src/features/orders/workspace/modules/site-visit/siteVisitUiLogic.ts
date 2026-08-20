@@ -13,9 +13,34 @@ export function parseGpsMapCenter(gpsLocation?: string | null): GpsLatLng | null
   return { lat, lng };
 }
 
-/** Skip flow stores addresses that start with "Skipped". */
+/** Skip flow historically stored addresses that start with "Skipped". */
 export function isSkippedSiteVisitAddress(address?: string | null): boolean {
   return typeof address === "string" && address.startsWith("Skipped");
+}
+
+/** Landmark marker when site visit is skipped but an installation location was collected. */
+export const SKIPPED_SITE_VISIT_LANDMARK = "SKIPPED_SITE_VISIT";
+
+/** True when the visit was skipped (new landmark flag or legacy "Skipped…" address). */
+export function isSkippedSiteVisit(details?: {
+  landmark?: string | null;
+  customerAddress?: string | null;
+} | null): boolean {
+  if (!details) return false;
+  if (details.landmark === SKIPPED_SITE_VISIT_LANDMARK) return true;
+  return isSkippedSiteVisitAddress(details.customerAddress);
+}
+
+/** True when a real schedule exists or the visit was explicitly skipped. */
+export function isSiteVisitScheduledOrSkipped(details?: {
+  auditDate?: string | null;
+  auditTime?: string | null;
+  landmark?: string | null;
+  customerAddress?: string | null;
+} | null): boolean {
+  if (!details) return false;
+  if (isSkippedSiteVisit(details)) return true;
+  return !!(details.auditDate && details.auditTime);
 }
 
 /**
@@ -46,21 +71,51 @@ export function isSiteVisitUiFrozen(input: {
   return (baseFrozen && !input.adminOverrideUnlocked) || !input.canEdit;
 }
 
+/**
+ * When a server snapshot arrives (router.refresh / getOrderById), keep
+ * in-progress location items that have not been saved yet.
+ */
+export function mergeIncomingSiteVisitDetails<
+  T extends { locations?: unknown[] | null },
+>(
+  local: T | null | undefined,
+  incoming: T | null | undefined
+): T | undefined {
+  if (!incoming && !local) return undefined;
+  if (!incoming) return local as T;
+  if (!local) return incoming;
+  const localCount = Array.isArray(local.locations) ? local.locations.length : 0;
+  const incomingCount = Array.isArray(incoming.locations)
+    ? incoming.locations.length
+    : 0;
+  if (localCount > incomingCount) {
+    return { ...incoming, locations: local.locations };
+  }
+  return incoming;
+}
+
 /** Staff/admin advance gate on the site visit tab. */
 export function canAdvanceSiteVisitAudit(details: {
   auditDate?: string | null;
   auditTime?: string | null;
+  landmark?: string | null;
+  customerAddress?: string | null;
   locations?: unknown[] | null;
 }): { ok: boolean; tooltip: string } {
-  const scheduled = !!(details.auditDate && details.auditTime);
+  if (!isSiteVisitScheduledOrSkipped(details)) {
+    return {
+      ok: false,
+      tooltip: "Schedule or skip the site visit before advancing.",
+    };
+  }
   const hasLocations = !!(details.locations && details.locations.length > 0);
-  const ok = scheduled && hasLocations;
-  return {
-    ok,
-    tooltip: ok
-      ? ""
-      : "Schedule the visit and add at least one location item to unlock approval.",
-  };
+  if (!hasLocations) {
+    return {
+      ok: false,
+      tooltip: "Add at least one location item to unlock approval.",
+    };
+  }
+  return { ok: true, tooltip: "" };
 }
 
 /**

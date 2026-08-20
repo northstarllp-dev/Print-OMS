@@ -8,21 +8,19 @@
 
 ## Workflow
 
-1. **Lead Capture**: An enquiry is received either via external integration (e.g., webhook from website/Meta) or manual entry by staff.
-2. **Order Creation**: A new `Order` record is created with the initial stage `Enquiry` or `Lead`.
-3. **Staff Assignment**: The Admin or Sales Manager assigns a sales representative to the order.
-4. **Initial Contact**: Sales rep contacts the customer, logs chat history or notes.
-5. **Stage Progression**: 
-   * If the project requires a site visit, the stage is moved to `Site Visit`.
-   * If the customer provides details directly, the stage is moved to `Quotation` or `Design` depending on the `workflow_type`.
-   * If the lead goes cold, it is marked as `Lost` with a corresponding `lost_reason`.
+1. **Lead Capture**: An enquiry is received either via external integration or manual entry by staff on the `/staff/enquiries` page.
+2. **Enquiry Creation**: A new record is created in the `enquiries` table, holding the customer's contact details, source, and initial notes.
+3. **Customer Association**: If a matching customer is found, they are linked. Otherwise, a new customer record is automatically generated.
+4. **Action / Conversion**: Staff contacts the customer. If the lead is qualified, the staff member clicks "Convert to Order". 
+5. **Stage Progression**: Converting creates an actual order in the `orders` table, moving the project to a pipeline stage like `Site Visit`, `Quotation`, or `Design`.
 
 ## Workflow States
 
-| State | Description | Next Allowed States |
-| ----- | ----------- | ------------------- |
-| Enquiry / Lead | Initial capture of customer interest | Site Visit, Quotation, Design, Lost |
-| Lost | Customer decided not to proceed | Enquiry (if resurrected) |
+| State (Status) | Description | Next Allowed States |
+| -------------- | ----------- | ------------------- |
+| Pending | Initial capture of customer interest | Converted, Lost |
+| Converted | Lead became a paying order | - |
+| Lost | Customer decided not to proceed | Pending |
 
 ## Business Rules
 
@@ -68,20 +66,20 @@ Permissions:
 
 ### Tables
 
-#### orders
+#### enquiries
 
 | Column | Type | Description |
 | ------ | ---- | ----------- |
 | id | uuid (PK) | Unique internal ID |
-| order_id | varchar | Friendly display ID (e.g., ORD-1001) |
+| enquire_id | varchar | Friendly display ID (e.g., ENQ-1001) |
 | company_id | uuid (FK) | Tenant isolation |
-| project_name | text | Name of the project |
-| customer_id | text | Reference to customer record/phone |
-| stage | text | Current pipeline stage (e.g., "Enquiry") |
-| health | text | Status indicator (Active, Needs Attention, On Hold, Lost) |
-| lost_reason | text | Reason if the order is marked lost |
-| stage_changed_at | timestamptz | Last pipeline stage change (stall clock) |
-| workflow_type | text | "quote_first" or "design_first" |
+| lead_name | text | Name of the lead |
+| business_name | text | Company Name |
+| phone | text | Contact number |
+| email | text | Email |
+| status | text | "Pending", "Converted", "Lost" |
+| order_id | uuid (FK) | Links to created order on conversion |
+| customer_id | uuid (FK) | Links to customer record |
 
 #### order_activity
 
@@ -103,24 +101,20 @@ Permissions:
 
 ## API Endpoints
 
-### Create Order
+### Create Enquiry
 
-Method: Server Action (Next.js)
-Route: `createOrder(formData: any)`
+Method: Server Action
+Route: `createEnquiry(formData: any)`
 
-Request (FormData):
-```json
-{
-  "project_name": "string",
-  "customer_id": "string",
-  "stage": "Enquiry",
-  "workflow_type": "quote_first"
-}
-```
+Request Payload includes:
+* `lead_name`, `business_name`, `phone`, `email`
+* `source` (e.g., "Website", "Walk-ins")
+* `notes`
 
 Validation Rules:
-* Authenticated user session required.
-* Associates user's `company_id` to the order automatically.
+* Server validates edit grants.
+* Public form (`/quote`) can create without session, utilizing default deployment `company_id`.
+* Associates user's `company_id` to the enquiry automatically if authenticated.
 
 ## UI Components
 
@@ -140,11 +134,11 @@ Fields:
 ## Data Flow
 
 UI Form 
-→ Server Action `createOrder`
+→ Server Action `createEnquiry`
 → Look up current user's `company_id`
-→ Insert into `orders` table
-→ Insert timeline event into `order_activity`
-→ Revalidate paths `/admin/orders` and `/staff/orders`
+→ Check if Customer exists (create if not)
+→ Insert into `enquiries` table
+→ Revalidate paths `/admin/enquire` and `/staff/enquiries`
 
 ## Error Handling
 

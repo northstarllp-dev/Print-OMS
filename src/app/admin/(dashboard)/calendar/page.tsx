@@ -6,6 +6,9 @@ import { scheduleSiteVisitAction } from "@/features/orders/actions/orderActions"
 import { scheduleInstallationAction } from "@/features/installations/actions/installationActions";
 import type { PaymentOutstandingMap } from "@/features/calendar/types";
 import { getTasks } from "@/features/tasks/actions/taskActions";
+import { getEnquiries } from "@/features/enquiries/actions/enquiryActions";
+import { listCalendarReminders } from "@/features/calendar/actions/reminderActions";
+import { getCurrentUser } from "@/features/auth/actions/authActions";
 
 export const metadata = {
   title: "Calendar | Admin",
@@ -37,12 +40,16 @@ function buildPaymentMap(orders: any[]): PaymentOutstandingMap {
 }
 
 export default async function AdminCalendarPage() {
-  const [ordersData, customersData, employeesData, tasksData] = await Promise.all([
-    getOrders(),
-    getCustomers(),
-    getEmployees(),
-    getTasks(),
-  ]);
+  const profile = await getCurrentUser();
+  const [ordersData, customersData, employeesData, tasksData, enquiriesData, remindersData] =
+    await Promise.all([
+      getOrders(),
+      getCustomers(),
+      getEmployees(),
+      getTasks(),
+      getEnquiries().catch(() => []),
+      listCalendarReminders().catch(() => []),
+    ]);
 
   const paymentMap = buildPaymentMap(ordersData || []);
 
@@ -53,6 +60,9 @@ export default async function AdminCalendarPage() {
       businessName: o.business_name || "",
       customerId: o.customer_id,
       stage: o.stage,
+      health: o.health || "Active",
+      holdNote: o.hold_note || null,
+      reachOutAt: o.reach_out_at || null,
       assignedEmployees: o.assigned_employees || [],
       orderCode: o.order_id || o.id,
       orderId: o.order_id || o.id,
@@ -66,6 +76,7 @@ export default async function AdminCalendarPage() {
       id: c.id,
       name: c.name,
       phone: c.phone || "",
+      email: c.email || "",
       shippingAddress: c.shipping_address || "",
     })) || [];
 
@@ -87,6 +98,30 @@ export default async function AdminCalendarPage() {
       orderCode: task.order_code || null,
     })) || [];
 
+  const mappedEnquiries =
+    enquiriesData?.map((e: any) => ({
+      id: e.id,
+      enquireId: e.enquire_id || e.id,
+      leadName: e.lead_name,
+      businessName: e.business_name || e.lead_name,
+      phone: e.phone,
+      email: e.email,
+      health: e.health || "Active",
+      holdNote: e.hold_note || null,
+      reachOutAt: e.reach_out_at || null,
+      status: e.status,
+    })) || [];
+
+  const mappedReminders =
+    remindersData?.map((r) => ({
+      id: r.id,
+      title: r.title,
+      note: r.note,
+      reminderDate: r.reminder_date,
+      createdBy: r.created_by,
+      viewerIds: r.viewer_ids || [],
+    })) || [];
+
   return (
     <div className="flex-1 bg-slate-50 min-h-screen">
       <CompanyCalendarView
@@ -95,9 +130,14 @@ export default async function AdminCalendarPage() {
         employees={mappedEmployees}
         paymentMap={paymentMap}
         tasks={mappedTasks}
+        enquiries={mappedEnquiries}
+        reminders={mappedReminders}
+        includeHoldFollowups
+        currentUserId={profile?.id}
         title="Company Calendar"
-        subtitle="View all site visits, installations, and production deadlines across the team."
+        subtitle="Site visits, installations, hold follow-ups, tasks, and reminders."
         orderDetailBasePath="/admin/orders"
+        enquiryDetailBasePath="/admin/enquire"
         taskDetailBasePath="/admin/tasks"
         showEmployeeFilter
         isAdmin

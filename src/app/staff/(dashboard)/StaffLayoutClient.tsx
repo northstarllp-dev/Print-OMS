@@ -16,6 +16,7 @@ import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { signOut, updateUserPassword } from "@/features/auth/actions/authActions";
 import { IdleSessionGuard } from "@/features/auth/components/IdleSessionGuard";
 import { createClient } from "@/utils/supabase/client";
+import { ensureRealtimeAuth } from "@/utils/supabase/ensureRealtimeAuth";
 import {
   markNotificationRead,
   markAllNotificationsRead,
@@ -107,7 +108,9 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
 
   useEffect(() => {
     const supabase = createClient();
-    
+    let cancelled = false;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
     const fetchNotifs = async () => {
       const { data, error } = await supabase
         .from("notifications")
@@ -129,46 +132,56 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
       }
     };
 
-    fetchNotifs();
+    void fetchNotifs();
 
     const userId = profile.id;
-    const channel = supabase
-      .channel("notifications_channel_" + userId)
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "notifications" },
-        (payload) => {
-          if (payload.new?.user_id !== userId) return;
-          setNotifications((prev) => [payload.new, ...prev]);
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "notifications" },
-        (payload) => {
-          if (payload.new?.user_id !== userId) return;
-          setNotifications((prev) =>
-            prev.map((n) => (n.id === payload.new.id ? payload.new : n))
-          );
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "DELETE", schema: "public", table: "notifications" },
-        (payload) => {
-          setNotifications((prev) => prev.filter((n) => n.id !== payload.old.id));
-        }
-      )
-      .subscribe((status, err) => {
-        if (status === 'SUBSCRIBED') {
-          console.log('Successfully subscribed to notifications realtime');
-        } else if (status === 'CHANNEL_ERROR') {
-          console.error('Realtime channel error:', err);
-        }
-      });
+    void (async () => {
+      await ensureRealtimeAuth(supabase);
+      if (cancelled) return;
+
+      channel = supabase
+        .channel("notifications_channel_" + userId)
+        .on(
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "notifications" },
+          (payload) => {
+            if (payload.new?.user_id !== userId) return;
+            setNotifications((prev) => [payload.new, ...prev]);
+          }
+        )
+        .on(
+          "postgres_changes",
+          { event: "UPDATE", schema: "public", table: "notifications" },
+          (payload) => {
+            if (payload.new?.user_id !== userId) return;
+            setNotifications((prev) =>
+              prev.map((n) => (n.id === payload.new.id ? payload.new : n))
+            );
+          }
+        )
+        .on(
+          "postgres_changes",
+          { event: "DELETE", schema: "public", table: "notifications" },
+          (payload) => {
+            setNotifications((prev) => prev.filter((n) => n.id !== payload.old.id));
+          }
+        )
+        .subscribe((status, err) => {
+          if (status === "SUBSCRIBED") return;
+          if (status === "CHANNEL_ERROR") {
+            const msg = err instanceof Error ? err.message : String(err ?? "");
+            if (msg.includes("1006")) {
+              console.warn("[notifications] realtime socket closed (will retry on next auth sync)");
+              return;
+            }
+            console.error("Realtime channel error:", err);
+          }
+        });
+    })();
 
     return () => {
-      supabase.removeChannel(channel);
+      cancelled = true;
+      if (channel) supabase.removeChannel(channel);
     };
   }, [profile.id]);
 

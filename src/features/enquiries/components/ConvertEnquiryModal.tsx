@@ -9,6 +9,14 @@ import {
   filterProductsByName,
   isConvertSubmitDisabled,
 } from "@/features/enquiries/enquiryConvertLogic";
+import {
+  productAppliesToBusinessOp,
+  normalizeProductBusinessOperations,
+} from "@/features/products/productLogic";
+import {
+  getBusinessOperation,
+  getBusinessOperationsForTenant,
+} from "@/features/orders/businessOperations";
 
 interface ConvertEnquiryModalProps {
   isOpen: boolean;
@@ -17,20 +25,37 @@ interface ConvertEnquiryModalProps {
   defaultClientName: string;
   defaultBusinessName: string;
   defaultRequirements?: string;
+  /** Business operation label from the enquiry (read-only). */
+  businessOperationLabel?: string;
+  /** Business operation id — used to filter / tag products. */
+  businessOperationId?: string;
 }
 
-export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultClientName, defaultBusinessName, defaultRequirements = "" }: ConvertEnquiryModalProps) {
+export function ConvertEnquiryModal({
+  isOpen,
+  onClose,
+  onSubmit,
+  defaultClientName,
+  defaultBusinessName,
+  defaultRequirements = "",
+  businessOperationLabel,
+  businessOperationId,
+}: ConvertEnquiryModalProps) {
   const [clientName, setClientName] = useState(defaultClientName);
   const [businessName, setBusinessName] = useState(defaultBusinessName);
   const [productType, setProductType] = useState("");
   const [requirements, setRequirements] = useState(defaultRequirements);
-  const [products, setProducts] = useState<{ id: string; name: string }[]>([]);
+  const [products, setProducts] = useState<
+    { id: string; name: string; business_operations?: string[] | null }[]
+  >([]);
   const [admins, setAdmins] = useState<{ id: string; name: string }[]>([]);
   const [selectedAdmins, setSelectedAdmins] = useState<string[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const clientConfig = loadClientConfig();
+  const tenantOps = getBusinessOperationsForTenant(clientConfig.businessOperations);
+  const showOpTags = tenantOps.length > 1;
 
   useEffect(() => {
     if (isOpen) {
@@ -39,7 +64,13 @@ export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultClientNa
       setRequirements(defaultRequirements);
       setSelectedAdmins([]);
       getActiveProducts().then((data) => {
-        setProducts(data.map((p) => ({ id: p.id, name: p.name })));
+        setProducts(
+          data.map((p) => ({
+            id: p.id,
+            name: p.name,
+            business_operations: p.business_operations,
+          }))
+        );
       }).catch(console.error);
       getAdmins().then(data => {
         setAdmins(data.map((a: any) => ({ id: a.id, name: a.name })));
@@ -57,7 +88,20 @@ export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultClientNa
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Show every active product in search; tags come from products.business_operations.
+  // (Do not hide products by enquiry op — users still need to pick freely.)
   const filteredProducts = filterProductsByName(products, productType);
+
+  const formatOpTags = (ops?: string[] | null) => {
+    const ids = normalizeProductBusinessOperations(ops);
+    if (ids.length === 0) return "All";
+    return ids
+      .map((id) => getBusinessOperation(id, tenantOps).label)
+      .join(", ");
+  };
+
+  const productMatchesEnquiryOp = (ops?: string[] | null) =>
+    productAppliesToBusinessOp({ business_operations: ops }, businessOperationId);
 
   if (!isOpen) return null;
 
@@ -97,6 +141,11 @@ export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultClientNa
           <div>
             <h2 style={{ fontSize: "18px", fontWeight: "700", color: "#0f172a", margin: 0 }}>Convert to Order</h2>
             <p style={{ fontSize: "13px", color: "#64748b", margin: "4px 0 0 0" }}>Set up the initial project details.</p>
+            {businessOperationLabel ? (
+              <p style={{ fontSize: "12px", color: "#475569", margin: "8px 0 0 0", fontWeight: 600 }}>
+                Business operation: {businessOperationLabel}
+              </p>
+            ) : null}
           </div>
           <button 
             onClick={onClose}
@@ -267,7 +316,9 @@ export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultClientNa
                 zIndex: 50,
               }}>
                 {filteredProducts.length > 0 ? (
-                  filteredProducts.map((p) => (
+                  filteredProducts.map((p) => {
+                    const matchesOp = productMatchesEnquiryOp(p.business_operations);
+                    return (
                     <div
                       key={p.id}
                       onClick={() => {
@@ -279,14 +330,23 @@ export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultClientNa
                         fontSize: "14px",
                         color: "#0f172a",
                         cursor: "pointer",
-                        borderBottom: "1px solid #f1f5f9"
+                        borderBottom: "1px solid #f1f5f9",
+                        opacity: matchesOp ? 1 : 0.55,
                       }}
                       onMouseEnter={(e) => e.currentTarget.style.background = "#f8fafc"}
                       onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
                     >
-                      {p.name}
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                        <span>{p.name}</span>
+                        {showOpTags && (
+                          <span style={{ fontSize: 10, fontWeight: 700, color: "#64748b", flexShrink: 0 }}>
+                            {formatOpTags(p.business_operations)}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  ))
+                    );
+                  })
                 ) : (
                   <div style={{ padding: "10px 12px", fontSize: "14px", color: "#94a3b8", textAlign: "center" }}>
                     No products found matching "{productType}"

@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { Search, Filter, Plus, MoreVertical, Users, Star, Clock, AlertCircle, Edit, Trash2, Briefcase, BarChart2, Key, X, RefreshCw, Shield, Ban, CircleCheck } from "lucide-react";
 import { Employee } from "@/types";
 import { EmployeeModal } from "./EmployeeModal";
@@ -20,9 +21,11 @@ import {
   filterEmployeesCatalog,
   isEmployeeArchived,
   isEmployeeFrozen,
+  paginateEmployees,
   resetEmployeeFilters,
   validatePasswordPolicy,
 } from "@/features/employees/employeeLogic";
+import { ListPagination, LIST_PAGE_SIZE } from "@/components/ui/ListPagination";
 
 interface EmployeesViewNewProps {
   initialEmployees: Employee[];
@@ -56,10 +59,47 @@ export function EmployeesViewNew({
   const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "Active" | "Inactive" | "Archived">("ALL");
+  const [page, setPage] = useState(1);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | undefined>(undefined);
   const [actionDropdownId, setActionDropdownId] = useState<string | null>(null);
+  const [actionMenuPos, setActionMenuPos] = useState<{ top: number; left: number } | null>(null);
+
+  const closeActionMenu = () => {
+    setActionDropdownId(null);
+    setActionMenuPos(null);
+  };
+
+  const openActionMenu = (empId: string, anchor: HTMLElement) => {
+    if (actionDropdownId === empId) {
+      closeActionMenu();
+      return;
+    }
+    const rect = anchor.getBoundingClientRect();
+    const menuWidth = 176;
+    const left = Math.max(8, Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 8));
+    // Prefer opening below the button; flip up if near bottom of viewport.
+    const estimatedHeight = 180;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const top =
+      spaceBelow < estimatedHeight && rect.top > estimatedHeight
+        ? rect.top - estimatedHeight - 4
+        : rect.bottom + 4;
+    setActionMenuPos({ top, left });
+    setActionDropdownId(empId);
+  };
+
+  useEffect(() => {
+    if (!actionDropdownId) return;
+    const onScrollOrResize = () => closeActionMenu();
+    window.addEventListener("scroll", onScrollOrResize, true);
+    window.addEventListener("resize", onScrollOrResize);
+    return () => {
+      window.removeEventListener("scroll", onScrollOrResize, true);
+      window.removeEventListener("resize", onScrollOrResize);
+    };
+  }, [actionDropdownId]);
 
   const [resetModalEmpId, setResetModalEmpId] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState("");
@@ -101,14 +141,14 @@ export function EmployeesViewNew({
   const handleEditEmployee = (emp: Employee) => {
     setEditingEmployee(emp);
     setIsModalOpen(true);
-    setActionDropdownId(null);
+    closeActionMenu();
   };
 
   const handleArchiveEmployee = async (emp: Employee) => {
     const gate = canArchiveEmployeeWithJobs(emp.jobsAssigned || 0);
     if (!gate.ok) {
       alert(gate.reason);
-      setActionDropdownId(null);
+      closeActionMenu();
       return;
     }
     if (
@@ -116,7 +156,7 @@ export function EmployeesViewNew({
         `Archive ${emp.name}? They will lose login access. This does not permanently delete their history.`
       )
     ) {
-      setActionDropdownId(null);
+      closeActionMenu();
       return;
     }
     try {
@@ -130,12 +170,12 @@ export function EmployeesViewNew({
       console.error(err);
       alert(err?.message || "Failed to archive employee.");
     }
-    setActionDropdownId(null);
+    closeActionMenu();
   };
 
   const handleRestoreEmployee = async (emp: Employee) => {
     if (!confirm(`Restore ${emp.name} to Active?`)) {
-      setActionDropdownId(null);
+      closeActionMenu();
       return;
     }
     try {
@@ -149,18 +189,18 @@ export function EmployeesViewNew({
       console.error(err);
       alert(err?.message || "Failed to restore employee.");
     }
-    setActionDropdownId(null);
+    closeActionMenu();
   };
 
   const handleToggleFreeze = async (emp: Employee) => {
     if (isEmployeeArchived(emp.status)) {
-      setActionDropdownId(null);
+      closeActionMenu();
       return;
     }
     const nextStatus = isEmployeeFrozen(emp.status) ? "Active" : "Inactive";
     const label = nextStatus === "Inactive" ? "freeze" : "unfreeze";
     if (!confirm(`Are you sure you want to ${label} ${emp.name}?`)) {
-      setActionDropdownId(null);
+      closeActionMenu();
       return;
     }
     try {
@@ -174,7 +214,7 @@ export function EmployeesViewNew({
       console.error(err);
       alert(err?.message || `Failed to ${label} employee.`);
     }
-    setActionDropdownId(null);
+    closeActionMenu();
   };
 
   const handleModalSubmit = async (empData: Omit<Employee, "id">) => {
@@ -278,10 +318,21 @@ export function EmployeesViewNew({
     statusFilter,
   });
 
+  useEffect(() => {
+    setPage(1);
+  }, [searchTerm, statusFilter]);
+
+  const pagedEmployees = useMemo(
+    () => paginateEmployees(filteredEmployees, page, LIST_PAGE_SIZE),
+    [filteredEmployees, page]
+  );
+  const pageEmployees = pagedEmployees.items;
+
   const resetFilters = () => {
     const defaults = resetEmployeeFilters();
     setSearchTerm(defaults.search);
     setStatusFilter(defaults.statusFilter as "ALL" | "Active" | "Inactive" | "Archived");
+    setPage(1);
   };
 
   const activeFilterCount = [statusFilter !== "ALL"].filter(Boolean).length;
@@ -560,7 +611,7 @@ export function EmployeesViewNew({
               No employees found.
             </div>
           ) : (
-            filteredEmployees.map((emp) => {
+            pageEmployees.map((emp) => {
               const frozen = isEmployeeFrozen(emp.status);
               const archived = isEmployeeArchived(emp.status);
               return (
@@ -684,7 +735,7 @@ export function EmployeesViewNew({
               </tr>
             </thead>
             <tbody>
-              {filteredEmployees.map((emp) => {
+              {pageEmployees.map((emp) => {
                 const frozen = isEmployeeFrozen(emp.status);
                 const archived = isEmployeeArchived(emp.status);
                 return (
@@ -718,81 +769,15 @@ export function EmployeesViewNew({
                       </span>
                     </td>
                     <td style={{ padding: "16px 20px", textAlign: "center", position: "relative" }}>
-                      <button 
-                        onClick={() => setActionDropdownId(actionDropdownId === emp.id ? null : emp.id)}
-                        style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", padding: "4px 8px", transition: "all 0.2s" }} 
+                      <button
+                        type="button"
+                        onClick={(e) => openActionMenu(emp.id, e.currentTarget)}
+                        style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", padding: "4px 8px", transition: "all 0.2s" }}
+                        aria-label="Employee actions"
+                        aria-expanded={actionDropdownId === emp.id}
                       >
                         <MoreVertical size={16} />
                       </button>
-                      
-                      {actionDropdownId === emp.id && (
-                        <>
-                          <div 
-                            style={{ position: "fixed", inset: 0, zIndex: 49 }} 
-                            onClick={() => setActionDropdownId(null)} 
-                          />
-                          <div style={{ position: "absolute", right: "40px", top: "50%", transform: "translateY(-50%)", background: "white", border: "1px solid #e2e8f0", borderRadius: "8px", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)", zIndex: 50, overflow: "hidden", minWidth: "168px", whiteSpace: "nowrap" }}>
-                            <button 
-                              onClick={() => handleEditEmployee(emp)}
-                              style={{ display: "flex", alignItems: "center", gap: "8px", width: "100%", padding: "10px 16px", background: "none", border: "none", borderBottom: "1px solid #f1f5f9", cursor: "pointer", fontSize: "13px", color: "#475569", textAlign: "left", whiteSpace: "nowrap" }}
-                            >
-                              <Edit size={14} className="shrink-0" /> Edit
-                            </button>
-                            {!archived && (
-                              <button 
-                                onClick={() => {
-                                  setResetModalEmpId(emp.id);
-                                  setNewPassword("");
-                                  setResetStatus("idle");
-                                  setResetErrorMsg("");
-                                  setActionDropdownId(null);
-                                }}
-                                style={{ display: "flex", alignItems: "center", gap: "8px", width: "100%", padding: "10px 16px", background: "none", border: "none", borderBottom: "1px solid #f1f5f9", cursor: "pointer", fontSize: "13px", color: "#f59e0b", textAlign: "left", whiteSpace: "nowrap" }}
-                              >
-                                <Key size={14} className="shrink-0" /> Reset Password
-                              </button>
-                            )}
-                            {!archived && (
-                              <button
-                                onClick={() => handleToggleFreeze(emp)}
-                                style={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: "8px",
-                                  width: "100%",
-                                  padding: "10px 16px",
-                                  background: "none",
-                                  border: "none",
-                                  borderBottom: "1px solid #f1f5f9",
-                                  cursor: "pointer",
-                                  fontSize: "13px",
-                                  color: frozen ? "#059669" : "#475569",
-                                  textAlign: "left",
-                                  whiteSpace: "nowrap",
-                                }}
-                              >
-                                {frozen ? <CircleCheck size={14} className="shrink-0" /> : <Ban size={14} className="shrink-0" />}
-                                {frozen ? "Unfreeze" : "Freeze"}
-                              </button>
-                            )}
-                            {archived ? (
-                              <button 
-                                onClick={() => handleRestoreEmployee(emp)}
-                                style={{ display: "flex", alignItems: "center", gap: "8px", width: "100%", padding: "10px 16px", background: "none", border: "none", cursor: "pointer", fontSize: "13px", color: "#059669", textAlign: "left", whiteSpace: "nowrap" }}
-                              >
-                                <CircleCheck size={14} className="shrink-0" /> Restore
-                              </button>
-                            ) : (
-                              <button 
-                                onClick={() => handleArchiveEmployee(emp)}
-                                style={{ display: "flex", alignItems: "center", gap: "8px", width: "100%", padding: "10px 16px", background: "none", border: "none", cursor: "pointer", fontSize: "13px", color: "#ef4444", textAlign: "left", whiteSpace: "nowrap" }}
-                              >
-                                <Trash2 size={14} className="shrink-0" /> Archive
-                              </button>
-                            )}
-                          </div>
-                        </>
-                      )}
                     </td>
                   </tr>
                 );
@@ -800,9 +785,134 @@ export function EmployeesViewNew({
             </tbody>
           </table>
         </div>
+        <ListPagination
+          page={pagedEmployees.page}
+          totalPages={pagedEmployees.totalPages}
+          total={pagedEmployees.total}
+          pageSize={pagedEmployees.pageSize}
+          onPageChange={setPage}
+          itemLabel="employees"
+        />
       </div>
       </>
       )}
+
+      {typeof document !== "undefined" &&
+        actionDropdownId &&
+        actionMenuPos &&
+        (() => {
+          const emp = employees.find((e) => e.id === actionDropdownId);
+          if (!emp) return null;
+          const frozen = isEmployeeFrozen(emp.status);
+          const archived = isEmployeeArchived(emp.status);
+          const itemStyle: React.CSSProperties = {
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            width: "100%",
+            padding: "10px 16px",
+            background: "none",
+            border: "none",
+            borderBottom: "1px solid #f1f5f9",
+            cursor: "pointer",
+            fontSize: "13px",
+            textAlign: "left",
+            whiteSpace: "nowrap",
+          };
+          return createPortal(
+            <>
+              <div
+                style={{ position: "fixed", inset: 0, zIndex: 9998 }}
+                onClick={closeActionMenu}
+                aria-hidden
+              />
+              <div
+                role="menu"
+                style={{
+                  position: "fixed",
+                  top: actionMenuPos.top,
+                  left: actionMenuPos.left,
+                  background: "white",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "8px",
+                  boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.15)",
+                  zIndex: 9999,
+                  overflow: "hidden",
+                  minWidth: "176px",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    closeActionMenu();
+                    handleEditEmployee(emp);
+                  }}
+                  style={{ ...itemStyle, color: "#475569" }}
+                >
+                  <Edit size={14} className="shrink-0" /> Edit
+                </button>
+                {!archived && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setResetModalEmpId(emp.id);
+                      setNewPassword("");
+                      setResetStatus("idle");
+                      setResetErrorMsg("");
+                      closeActionMenu();
+                    }}
+                    style={{ ...itemStyle, color: "#f59e0b" }}
+                  >
+                    <Key size={14} className="shrink-0" /> Reset Password
+                  </button>
+                )}
+                {!archived && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      closeActionMenu();
+                      void handleToggleFreeze(emp);
+                    }}
+                    style={{ ...itemStyle, color: frozen ? "#059669" : "#475569" }}
+                  >
+                    {frozen ? <CircleCheck size={14} className="shrink-0" /> : <Ban size={14} className="shrink-0" />}
+                    {frozen ? "Unfreeze" : "Freeze"}
+                  </button>
+                )}
+                {archived ? (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      closeActionMenu();
+                      void handleRestoreEmployee(emp);
+                    }}
+                    style={{ ...itemStyle, borderBottom: "none", color: "#059669" }}
+                  >
+                    <CircleCheck size={14} className="shrink-0" /> Restore
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      closeActionMenu();
+                      void handleArchiveEmployee(emp);
+                    }}
+                    style={{ ...itemStyle, borderBottom: "none", color: "#ef4444" }}
+                  >
+                    <Trash2 size={14} className="shrink-0" /> Archive
+                  </button>
+                )}
+              </div>
+            </>,
+            document.body
+          );
+        })()}
 
       <EmployeeModal
         isOpen={isModalOpen}

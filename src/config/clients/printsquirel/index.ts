@@ -51,11 +51,36 @@ export const printsquirelConfig: Partial<PrintOMSClientConfig> = {
   features: {
     enableAdminAssignment: false,
     needsAttentionAfterDays: 6,
+    siteVisit: {
+      hideElectricalAssessment: true,
+    },
+    enableCustomerPickup: true,
   },
+  businessOperations: [
+    {
+      id: "signage",
+      label: "Signage",
+      stages: [
+        "enquiry",
+        "site_visit",
+        "quotation",
+        "design",
+        "production",
+        "installation",
+      ],
+    },
+    {
+      id: "flex_printing",
+      label: "Large Format Printing",
+      // Enquiries → Quotation → Design → Production (no site visit / installation).
+      stages: ["enquiry", "quotation", "design", "production"],
+    },
+  ],
   usesFloorPortals: false,
   stageGrantsByRole: {
     Designer: { ...view("site_visit"), ...edit("design", "quotation", "invoice") },
     Marketer: edit("enquiry", "site_visit", "design", "quotation", "invoice"),
+    Sales: { ...edit("site_visit", "quotation"), ...view("design", "production", "installation") },
     "Production & Installation": { ...view("site_visit"), ...edit("production", "installation", "service_tickets") },
   },
   whatsappTemplatePrefix: "printsquirel_",

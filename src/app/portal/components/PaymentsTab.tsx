@@ -1,11 +1,10 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { CreditCard, IndianRupee } from "lucide-react";
 import { Payment } from "@/types";
 import {
-  getPaymentsByOrder,
-  getPaymentBalanceSummary,
+  getPortalPaymentsTabData,
   type PaymentBalanceSummary,
 } from "@/features/payments/actions/paymentActions";
 import { PrintomsLoading } from "@/components/ui/PrintomsLoading";
@@ -18,18 +17,36 @@ function amountOf(p: Payment): number {
   return Number(p.calculated_amount ?? p.amount ?? 0);
 }
 
-export function PaymentsTab({ orderId }: PaymentsTabProps) {
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [balance, setBalance] = useState<PaymentBalanceSummary | null>(null);
-  const [loading, setLoading] = useState(true);
+type CacheEntry = {
+  payments: Payment[];
+  balance: PaymentBalanceSummary;
+};
 
-  const load = useCallback(async () => {
+/** Survives hide/show keep-alive and brief remounts within the same session. */
+const paymentsTabCache = new Map<string, CacheEntry>();
+
+export function PaymentsTab({ orderId }: PaymentsTabProps) {
+  const cached = paymentsTabCache.get(orderId);
+  const [payments, setPayments] = useState<Payment[]>(cached?.payments ?? []);
+  const [balance, setBalance] = useState<PaymentBalanceSummary | null>(
+    cached?.balance ?? null
+  );
+  const [loading, setLoading] = useState(!cached);
+  const loadedFor = useRef<string | null>(cached ? orderId : null);
+
+  const load = useCallback(async (force = false) => {
+    if (!force && loadedFor.current === orderId && paymentsTabCache.has(orderId)) {
+      const hit = paymentsTabCache.get(orderId)!;
+      setPayments(hit.payments);
+      setBalance(hit.balance);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
-      const [data, bal] = await Promise.all([
-        getPaymentsByOrder(orderId),
-        getPaymentBalanceSummary(orderId),
-      ]);
+      const { payments: data, balance: bal } = await getPortalPaymentsTabData(orderId);
+      paymentsTabCache.set(orderId, { payments: data, balance: bal });
+      loadedFor.current = orderId;
       setPayments(data);
       setBalance(bal);
     } catch {
@@ -41,10 +58,10 @@ export function PaymentsTab({ orderId }: PaymentsTabProps) {
   }, [orderId]);
 
   useEffect(() => {
-    load();
+    void load();
   }, [load]);
 
-  if (loading) {
+  if (loading && !balance) {
     return <PrintomsLoading />;
   }
 

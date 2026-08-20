@@ -18,6 +18,9 @@ export default async function ProductsPage() {
     created_at: p.created_at ?? null,
     price_per_sqft: p.price_per_sqft != null ? Number(p.price_per_sqft) : null,
     price_per_unit: p.price_per_unit != null ? Number(p.price_per_unit) : null,
+    unit_price_max_sqft: p.unit_price_max_sqft != null ? Number(p.unit_price_max_sqft) : null,
+    pricing_type_below: p.pricing_type_below ?? null,
+    pricing_type_above: p.pricing_type_above ?? null,
     images: Array.isArray(p.images) ? p.images : [],
     final_prdt: p.final_prdt ?? false,
     unit: p.unit ?? null,
@@ -32,6 +35,9 @@ export default async function ProductsPage() {
     qr_code: p.qr_code ?? null,
     default_warehouse_id: p.default_warehouse_id ?? null,
     track_inventory: p.track_inventory ?? true,
+    business_operations: Array.isArray(p.business_operations)
+      ? p.business_operations
+      : [],
   }));
 
   const mappedCategories = (categoriesData || []).map((c: any) => ({

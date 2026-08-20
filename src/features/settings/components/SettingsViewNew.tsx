@@ -3,7 +3,7 @@
 import React, { useMemo, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { Save, Palette, MessageCircle, Calendar, Key, X, FileText, CheckSquare, Plus, Trash2, GripVertical } from "lucide-react";
+import { Save, Palette, MessageCircle, Calendar, Key, X, FileText, CheckSquare, Plus, Trash2, GripVertical, Layers } from "lucide-react";
 import {
   updateAppSettings,
   updateInvoiceProfile,
@@ -11,7 +11,17 @@ import {
   updateCompanyDetails,
 } from "@/features/settings/actions/settingsActions";
 import type { AppSettings, CompanyDetails } from "@/features/settings/settingsTypes";
+import {
+  WORKFLOW_AUTO_APPROVAL_STAGE_KEYS,
+  WORKFLOW_AUTO_APPROVAL_STAGE_LABELS,
+  WORKFLOW_AUTO_APPROVAL_STAGE_DESCRIPTIONS,
+  type WorkflowAutoApprovalMap,
+  type WorkflowAutoApprovalStageKey,
+} from "@/features/settings/settingsTypes";
 import { updateUserPassword } from "@/features/auth/actions/authActions";
+import { loadClientConfig } from "@/config/loadClientConfig";
+import { getBusinessOperationsForTenant } from "@/features/orders/businessOperations";
+import type { BusinessStageKey } from "@/config/schema/businessOperations";
 import {
   EMPTY_INVOICE_PROFILE,
   type InvoiceProfile,
@@ -26,9 +36,20 @@ import {
 } from "@/features/invoices/types/invoiceNumbering";
 import {
   createProductionChecklistItemId,
-  normalizeProductionChecklistItems,
+  getChecklistForBusinessOp,
+  normalizeProductionChecklistsByOp,
   type ProductionChecklistItem,
+  type ProductionChecklistsByOp,
 } from "@/features/settings/productionChecklist";
+
+const STAGE_LABELS: Record<BusinessStageKey, string> = {
+  enquiry: "Enquiry",
+  site_visit: "Site Visit",
+  quotation: "Quotation",
+  design: "Design",
+  production: "Production",
+  installation: "Installation",
+};
 
 const SettingsAddressInput = dynamic(
   () =>
@@ -72,12 +93,49 @@ export function SettingsViewNew({ initialAppSettings, companyDetails }: Settings
     "idle" | "saving" | "saved" | "error"
   >("idle");
 
-  const initialChecklist = useMemo(
-    () => normalizeProductionChecklistItems(initialAppSettings?.productionChecklistItems),
-    [initialAppSettings?.productionChecklistItems]
+  const businessOperations = useMemo(
+    () => getBusinessOperationsForTenant(loadClientConfig().businessOperations),
+    []
   );
-  const [checklistItems, setChecklistItems] = useState<ProductionChecklistItem[]>(initialChecklist);
-  const [initialChecklistItems, setInitialChecklistItems] = useState<ProductionChecklistItem[]>(initialChecklist);
+  const opIds = useMemo(
+    () => businessOperations.map((op) => op.id),
+    [businessOperations]
+  );
+
+  const initialChecklistsByOp = useMemo(
+    () =>
+      normalizeProductionChecklistsByOp(
+        initialAppSettings?.productionChecklistsByOp ??
+          initialAppSettings?.productionChecklistItems,
+        opIds
+      ),
+    [
+      initialAppSettings?.productionChecklistsByOp,
+      initialAppSettings?.productionChecklistItems,
+      opIds,
+    ]
+  );
+  const [checklistsByOp, setChecklistsByOp] =
+    useState<ProductionChecklistsByOp>(initialChecklistsByOp);
+  const [activeChecklistOpId, setActiveChecklistOpId] = useState(
+    () => opIds[0] || "signage"
+  );
+
+  const [workflowAutoApproval, setWorkflowAutoApproval] =
+    useState<WorkflowAutoApprovalMap>(
+      () =>
+        initialAppSettings?.workflowAutoApproval ?? {
+          site_visit: false,
+          quotation: false,
+          design: false,
+          production: false,
+          installation: false,
+        }
+    );
+
+  const checklistItems =
+    checklistsByOp[activeChecklistOpId] ||
+    getChecklistForBusinessOp(checklistsByOp, activeChecklistOpId);
 
   const hasUnsavedChanges = isDirty;
 
@@ -224,39 +282,57 @@ export function SettingsViewNew({ initialAppSettings, companyDetails }: Settings
     patch: Partial<ProductionChecklistItem>
   ) => {
     markDirty();
-    setChecklistItems((prev) =>
-      prev.map((item, i) => (i === index ? { ...item, ...patch } : item))
-    );
+    setChecklistsByOp((prev) => {
+      const list = [...(prev[activeChecklistOpId] || checklistItems)];
+      list[index] = { ...list[index], ...patch };
+      return { ...prev, [activeChecklistOpId]: list };
+    });
+  };
+
+  const toggleWorkflowAutoApproval = (key: WorkflowAutoApprovalStageKey) => {
+    markDirty();
+    setWorkflowAutoApproval((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   const addChecklistItem = () => {
     markDirty();
-    const label = `New step ${checklistItems.length + 1}`;
+    const current = checklistsByOp[activeChecklistOpId] || checklistItems;
+    const label = `New step ${current.length + 1}`;
     const id = createProductionChecklistItemId(
       label,
-      checklistItems.map((item) => item.id)
+      current.map((item) => item.id)
     );
-    setChecklistItems((prev) => [
+    setChecklistsByOp((prev) => ({
       ...prev,
-      { id, label, description: "" },
-    ]);
+      [activeChecklistOpId]: [
+        ...(prev[activeChecklistOpId] || current),
+        { id, label, description: "" },
+      ],
+    }));
   };
 
   const removeChecklistItem = (index: number) => {
-    if (checklistItems.length <= 1) return;
+    const current = checklistsByOp[activeChecklistOpId] || checklistItems;
+    if (current.length <= 1) return;
     markDirty();
-    setChecklistItems((prev) => prev.filter((_, i) => i !== index));
+    setChecklistsByOp((prev) => ({
+      ...prev,
+      [activeChecklistOpId]: (prev[activeChecklistOpId] || current).filter(
+        (_, i) => i !== index
+      ),
+    }));
   };
 
   const moveChecklistItem = (index: number, direction: -1 | 1) => {
+    const current = checklistsByOp[activeChecklistOpId] || checklistItems;
     const next = index + direction;
-    if (next < 0 || next >= checklistItems.length) return;
+    if (next < 0 || next >= current.length) return;
     markDirty();
-    setChecklistItems((prev) => {
-      const copy = [...prev];
+    setChecklistsByOp((prev) => {
+      const copy = [...(prev[activeChecklistOpId] || current)];
       const [item] = copy.splice(index, 1);
       copy.splice(next, 0, item);
-      return copy;
+      return { ...prev, [activeChecklistOpId]: copy };
     });
   };
 
@@ -269,11 +345,11 @@ export function SettingsViewNew({ initialAppSettings, companyDetails }: Settings
           siteVisitSchedulingEnabled: settings.siteVisitSchedulingEnabled,
           installationSchedulingEnabled: settings.installationSchedulingEnabled,
           googleReviewLink: settings.googleReviewLink,
-          productionChecklistItems: checklistItems,
+          productionChecklistsByOp: checklistsByOp,
+          workflowAutoApproval,
         }),
       ]);
       setInitialSettings(settings);
-      setInitialChecklistItems(checklistItems);
       setIsDirty(false);
       setSaveStatus("saved");
       setTimeout(() => setSaveStatus("idle"), 3000);
@@ -459,7 +535,167 @@ export function SettingsViewNew({ initialAppSettings, companyDetails }: Settings
           </div>
         ))}
 
-        {/* Workshop production checklist */}
+        {/* Workflow Approvals (per-stage auto-approval) */}
+        <div
+          style={{
+            background: "white",
+            border: "1px solid #e2e8f0",
+            borderRadius: "12px",
+            padding: "24px",
+            marginBottom: "20px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "20px", paddingBottom: "16px", borderBottom: "1px solid #e2e8f0" }}>
+            <div style={{ width: "40px", height: "40px", background: "#fff7ed", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", color: "#ea580c" }}>
+              <CheckSquare size={20} />
+            </div>
+            <div>
+              <div style={{ fontSize: "16px", fontWeight: "700", color: "#0f172a" }}>
+                Workflow Approvals
+              </div>
+              <div style={{ fontSize: "12px", color: "#64748b", marginTop: "2px" }}>
+                Toggle auto-approval per pipeline stage. When ON, staff stage-advancement requests for that stage skip the admin approval queue and advance automatically.
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gap: "14px" }}>
+            {WORKFLOW_AUTO_APPROVAL_STAGE_KEYS.map((key) => {
+              const enabled = workflowAutoApproval[key];
+              return (
+                <div
+                  key={key}
+                  style={{
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "10px",
+                    padding: "14px 16px",
+                    background: "#f8fafc",
+                    display: "flex",
+                    alignItems: "flex-start",
+                    justifyContent: "space-between",
+                    gap: "16px",
+                  }}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a", marginBottom: "4px" }}>
+                      {WORKFLOW_AUTO_APPROVAL_STAGE_LABELS[key]}
+                    </div>
+                    <div style={{ fontSize: "12px", color: "#64748b", lineHeight: 1.5 }}>
+                      {WORKFLOW_AUTO_APPROVAL_STAGE_DESCRIPTIONS[key]}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => toggleWorkflowAutoApproval(key)}
+                    aria-pressed={enabled}
+                    aria-label={`Toggle auto-approval for ${WORKFLOW_AUTO_APPROVAL_STAGE_LABELS[key]}`}
+                    title={enabled ? "Auto-approval ON — click to require admin approval" : "Admin approval required — click to enable auto-approval"}
+                    style={{
+                      position: "relative",
+                      flexShrink: 0,
+                      width: "48px",
+                      height: "26px",
+                      background: enabled ? "var(--color-primary)" : "#cbd5e1",
+                      border: "none",
+                      borderRadius: "9999px",
+                      cursor: "pointer",
+                      transition: "background 0.3s ease",
+                      padding: 0,
+                      outline: "none",
+                      display: "flex",
+                      alignItems: "center",
+                    }}
+                  >
+                    <div
+                      style={{
+                        position: "absolute",
+                        left: enabled ? "24px" : "2px",
+                        width: "22px",
+                        height: "22px",
+                        background: "white",
+                        borderRadius: "50%",
+                        transition: "left 0.3s cubic-bezier(0.4, 0.0, 0.2, 1)",
+                        boxShadow: "0 1px 3px rgba(0,0,0,0.15), 0 1px 2px rgba(0,0,0,0.1)",
+                      }}
+                    />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Business operations (from client config) */}
+        <div
+          style={{
+            background: "white",
+            border: "1px solid #e2e8f0",
+            borderRadius: "12px",
+            padding: "24px",
+            marginBottom: "20px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "20px", paddingBottom: "16px", borderBottom: "1px solid #e2e8f0" }}>
+            <div style={{ width: "40px", height: "40px", background: "#f1f5f9", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-primary)" }}>
+              <Layers size={20} />
+            </div>
+            <div>
+              <div style={{ fontSize: "16px", fontWeight: "700", color: "#0f172a" }}>
+                Business Operations
+              </div>
+              <div style={{ fontSize: "12px", color: "#64748b", marginTop: "2px" }}>
+                Pipelines available when creating enquiries. Chosen op controls which stages appear.
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gap: "12px" }}>
+            {businessOperations.map((op) => (
+              <div
+                key={op.id}
+                style={{
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "10px",
+                  padding: "14px 16px",
+                  background: "#f8fafc",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "12px", marginBottom: "10px", flexWrap: "wrap" }}>
+                  <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>
+                    {op.label}
+                  </div>
+                  <code style={{ fontSize: "11px", color: "#64748b", background: "#e2e8f0", padding: "2px 8px", borderRadius: "999px" }}>
+                    {op.id}
+                  </code>
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", alignItems: "center" }}>
+                  {op.stages.map((stage, i) => (
+                    <React.Fragment key={stage}>
+                      {i > 0 && (
+                        <span style={{ fontSize: "11px", color: "#94a3b8", fontWeight: 600 }}>→</span>
+                      )}
+                      <span
+                        style={{
+                          fontSize: "11px",
+                          fontWeight: 700,
+                          color: "#334155",
+                          background: "white",
+                          border: "1px solid #e2e8f0",
+                          borderRadius: "999px",
+                          padding: "4px 10px",
+                        }}
+                      >
+                        {STAGE_LABELS[stage] || stage}
+                      </span>
+                    </React.Fragment>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Workshop production checklist (per business operation) */}
         <div
           style={{
             background: "white",
@@ -479,7 +715,7 @@ export function SettingsViewNew({ initialAppSettings, companyDetails }: Settings
                   Workshop Production Checklist
                 </div>
                 <div style={{ fontSize: "12px", color: "#64748b", marginTop: "2px" }}>
-                  Customize fabrication milestones shown on the Production stage
+                  Separate fabrication milestones per business operation. Toggle each step's "Required" setting to control whether it blocks stage advancement.
                 </div>
               </div>
             </div>
@@ -504,6 +740,40 @@ export function SettingsViewNew({ initialAppSettings, companyDetails }: Settings
             </button>
           </div>
 
+          {businessOperations.length > 1 && (
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "8px",
+                marginBottom: "16px",
+              }}
+            >
+              {businessOperations.map((op) => {
+                const active = op.id === activeChecklistOpId;
+                return (
+                  <button
+                    key={op.id}
+                    type="button"
+                    onClick={() => setActiveChecklistOpId(op.id)}
+                    style={{
+                      padding: "8px 12px",
+                      borderRadius: "8px",
+                      border: active ? "1px solid #1d4ed8" : "1px solid #e2e8f0",
+                      background: active ? "#eff6ff" : "white",
+                      color: active ? "#1d4ed8" : "#475569",
+                      fontSize: "12px",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {op.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           <div style={{ display: "grid", gap: "12px" }}>
             {checklistItems.map((item, index) => (
               <div
@@ -516,9 +786,49 @@ export function SettingsViewNew({ initialAppSettings, companyDetails }: Settings
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", marginBottom: "10px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "#64748b", fontSize: "12px", fontWeight: 700 }}>
-                    <GripVertical size={14} />
-                    Step {index + 1}
+                  <div style={{ display: "flex", alignItems: "center", gap: "12px", color: "#64748b", fontSize: "12px", fontWeight: 700 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <GripVertical size={14} />
+                      Step {index + 1}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateChecklistItem(index, {
+                          required: item.required !== false ? false : true,
+                        })
+                      }
+                      title={
+                        item.required === false
+                          ? "Optional — this step does not block stage advancement. Click to make it required."
+                          : "Required — must be checked before stage advancement. Click to make it optional."
+                      }
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        padding: "3px 9px",
+                        fontSize: "11px",
+                        fontWeight: 700,
+                        borderRadius: "9999px",
+                        border: "1px solid",
+                        borderColor: item.required === false ? "#e2e8f0" : "#bbf7d0",
+                        background: item.required === false ? "#f1f5f9" : "#f0fdf4",
+                        color: item.required === false ? "#64748b" : "#16a34a",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: "7px",
+                          height: "7px",
+                          borderRadius: "50%",
+                          background: item.required === false ? "#94a3b8" : "#22c55e",
+                          flexShrink: 0,
+                        }}
+                      />
+                      {item.required === false ? "Optional" : "Required"}
+                    </button>
                   </div>
                   <div style={{ display: "flex", gap: "6px" }}>
                     <button

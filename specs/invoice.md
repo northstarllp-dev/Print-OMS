@@ -98,6 +98,7 @@ Server mutations call `assertStageEditPermission("invoice")`. List requires view
 | `quotation_row_id` | FK → quotations.id (source) |
 | `company_id`, `customer_id` | Tenant + customer |
 | `status` | Draft / Sent / Paid / Void |
+| `invoice_type` | Tax Invoice, Proforma, Credit Note, etc. |
 | `signage_options` | jsonb sections + lines (same shape as quotations) |
 | `subtotal`, `discount`, `tax`, `shipping`, `grand_total` | Server-recomputed on upsert |
 | `notes`, `terms` | text |

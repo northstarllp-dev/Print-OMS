@@ -5,6 +5,7 @@ import { PortalClient } from "./PortalClient";
 import React from "react";
 import { mapSiteVisitFromDb, mapSiteVisitMeasurementFromDb } from "@/features/orders/actions/siteVisitMapper";
 import { mapDesignFromDb } from "@/features/designs/actions/designMapper";
+import { mapProductionDetails } from "@/features/orders/actions/productionMapper";
 import { toCustomerVisibleDesign } from "@/features/designs/utils/customerVisibleDesign";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { isQuotationVisibleToCustomer } from "@/features/quotations/utils/lineAmount";
@@ -214,8 +215,10 @@ export default async function PortalPage({
   // If orderId is provided, perform an explicit IDOR verification check:
   // ensure the requested order_id belongs to the validated customer_id.
   if (payload.orderId) {
-    const hasOrder = ordersData.some((o) => o.order_id === payload.orderId || o.id === payload.orderId);
-    if (!hasOrder) {
+    const linkedOrder = (ordersData || []).find(
+      (o) => o.order_id === payload.orderId || o.id === payload.orderId
+    );
+    if (!linkedOrder) {
       return (
         <PortalError
           title="Access Denied"
@@ -223,6 +226,26 @@ export default async function PortalPage({
         />
       );
     }
+    if (linkedOrder.stage === "Completed" || linkedOrder.stage === "Closed") {
+      return (
+        <PortalError
+          title="Portal Link Inactive"
+          message="This order has been closed. The customer portal link is no longer active. Please contact us if you need help."
+        />
+      );
+    }
+  } else if (
+    (ordersData || []).length > 0 &&
+    (ordersData || []).every(
+      (o) => o.stage === "Completed" || o.stage === "Closed"
+    )
+  ) {
+    return (
+      <PortalError
+        title="Portal Link Inactive"
+        message="All linked orders have been closed. The customer portal link is no longer active. Please contact us if you need help."
+      />
+    );
   }
 
   // ── Map to camelCase for frontend ──
@@ -283,6 +306,7 @@ export default async function PortalPage({
       versionHistory: o.version_history || [],
       chatHistory: o.chat_history || [],
       workflow_type: o.workflow_type,
+      business_operation: o.business_operation || "signage",
       siteVisitDetails: mapSiteVisitFromDb(
         Array.isArray(o.site_visits)
           ? (o.site_visits.length > 0 ? o.site_visits[0] : null)
@@ -316,7 +340,9 @@ export default async function PortalPage({
             ? mapDesignFromDb(o.designs)
             : null
       ),
-      productionDetails: Array.isArray(o.productions) && o.productions.length > 0 ? o.productions[0] : (o.productions || null),
+      productionDetails: mapProductionDetails(
+        Array.isArray(o.productions) && o.productions.length > 0 ? o.productions[0] : (o.productions || null)
+      ),
       installationDetails: Array.isArray(o.installations) && o.installations.length > 0 ? o.installations[0] : (o.installations || null),
       stageStatus: o.stage_status || null,
       stageAdminNotes: o.stage_admin_notes || null,

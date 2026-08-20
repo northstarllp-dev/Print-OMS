@@ -74,18 +74,24 @@ export function buildOrderInsertFromConvert(
   companyId: string,
   customerId: string,
   input: ConvertFormInput,
-  customerNameFallback: string
+  customerNameFallback: string,
+  options?: {
+    businessOperation?: string | null;
+    /** First pipeline stage for the business op (defaults to Site Visit Pending). */
+    stage?: string;
+  }
 ) {
   return {
     company_id: companyId,
     client_name: input.clientName,
     business_name: input.businessName || customerNameFallback,
     customer_id: customerId,
-    stage: "Site Visit Pending",
+    stage: options?.stage || "Site Visit Pending",
     health: "Active",
     product_type: input.productType || "",
     requirements: input.requirements || "",
     assigned_admins: input.assignedAdmins || [],
+    business_operation: options?.businessOperation || "signage",
   };
 }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { createPortal } from "react-dom";
 import { Search, Filter, MapPin, Mail, Phone, X, ShoppingBag, ExternalLink, Share2, Pencil, RefreshCw } from "lucide-react";
@@ -17,8 +17,10 @@ import {
   isClosedOrderStage,
   isCustomerPortalExpired,
   linkedOrdersForCustomer,
+  paginateCustomers,
   resetCustomerFilters,
 } from "@/features/customers/customerLogic";
+import { ListPagination, LIST_PAGE_SIZE } from "@/components/ui/ListPagination";
 
 export function CustomersViewNew({ 
   initialCustomers, 
@@ -31,6 +33,7 @@ export function CustomersViewNew({
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [page, setPage] = useState(1);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [copiedCustomerId, setCopiedCustomerId] = useState<string | null>(null);
   const [copiedOrderId, setCopiedOrderId] = useState<string | null>(null);
@@ -163,10 +166,21 @@ export function CustomersViewNew({
     statusFilter,
   });
 
+  useEffect(() => {
+    setPage(1);
+  }, [searchTerm, statusFilter]);
+
+  const pagedCustomers = useMemo(
+    () => paginateCustomers(filteredCustomers, page, LIST_PAGE_SIZE),
+    [filteredCustomers, page]
+  );
+  const pageCustomers = pagedCustomers.items;
+
   const resetFilters = () => {
     const defaults = resetCustomerFilters();
     setSearchTerm(defaults.search);
     setStatusFilter(defaults.statusFilter);
+    setPage(1);
   };
 
   const activeFilterCount = [statusFilter !== "ALL"].filter(Boolean).length;
@@ -397,7 +411,7 @@ export function CustomersViewNew({
                 No customers found.
               </div>
             ) : (
-              filteredCustomers.map((cust) => {
+              pageCustomers.map((cust) => {
                 const statusColor = getCustomerStatusColor(cust.status);
                 const count = initialOrders.filter(o => o.customerId === cust.id).length;
                 return (
@@ -477,7 +491,7 @@ export function CustomersViewNew({
                 </tr>
               </thead>
               <tbody>
-                {filteredCustomers.map((cust) => {
+                {pageCustomers.map((cust) => {
                   const statusColor = getCustomerStatusColor(cust.status);
                   const isSelected = selectedCustomerId === cust.id;
                   const count = initialOrders.filter(o => o.customerId === cust.id).length;
@@ -554,6 +568,14 @@ export function CustomersViewNew({
               </tbody>
             </table>
           </div>
+          <ListPagination
+            page={pagedCustomers.page}
+            totalPages={pagedCustomers.totalPages}
+            total={pagedCustomers.total}
+            pageSize={pagedCustomers.pageSize}
+            onPageChange={setPage}
+            itemLabel="customers"
+          />
         </div>
 
         {/* Right Hand: Selected Customer Detail Panel */}

@@ -50,14 +50,21 @@ function normalizeLinkUrl(url: string): string {
 }
 
 function appendLink(text: string, url: string): string {
-  const withCta = text.replace(/using the button below\.?/, "using the link below:");
+  const withCta = text.replace(
+    /using the (?:button|link) below[:.]?/g,
+    "using the link below:"
+  );
   return `${withCta.trimEnd()}\n\n${normalizeLinkUrl(url)}`;
 }
 
 function dropCtaLine(text: string): string {
   return text
     .split("\n")
-    .filter((line) => !line.includes("using the button below"))
+    .filter(
+      (line) =>
+        !line.includes("using the button below") &&
+        !line.includes("using the link below")
+    )
     .join("\n")
     .trimEnd();
 }

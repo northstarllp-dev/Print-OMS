@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState, useTransition, useCallback } from "react";
+import React, { useMemo, useState, useTransition, useCallback, useRef } from "react";
 import Link from "next/link";
 import {
   IndianRupee,
@@ -29,6 +29,10 @@ import type { PaymentAmountType } from "@/types";
 
 function formatINR(n: number) {
   return `₹${n.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+}
+
+function formatMoneyInput(n: number): string {
+  return (Math.round((Number(n) || 0) * 100) / 100).toFixed(2);
 }
 
 function formatDate(iso: string | null) {
@@ -722,10 +726,11 @@ function RecordReceiptModal({
 }) {
   const [name, setName] = useState(() => nextInstallmentName(0));
   const [amountType, setAmountType] = useState<PaymentAmountType | "rest">("fixed");
-  const [value, setValue] = useState(String(order.outstanding));
+  const [value, setValue] = useState(() => formatMoneyInput(order.outstanding));
   const [notes, setNotes] = useState("");
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const lastPercentRef = useRef("50");
 
   const handleSubmit = useCallback(() => {
     startTransition(async () => {
@@ -738,15 +743,15 @@ function RecordReceiptModal({
         let percentage: number | null = null;
 
         if (amountType === "rest") {
-          amount = order.outstanding;
+          amount = Math.round(order.outstanding * 100) / 100;
         } else if (amountType === "fixed") {
-          amount = parseFloat(value);
+          amount = Math.round((parseFloat(value) || 0) * 100) / 100;
           if (!Number.isFinite(amount) || amount <= 0) throw new Error("Enter a valid amount.");
         } else {
           const pct = parseFloat(value);
           if (!Number.isFinite(pct) || pct <= 0 || pct > 100)
             throw new Error("Percentage must be 1–100.");
-          percentage = pct;
+          percentage = Math.round(pct * 100) / 100;
         }
 
         await createPayment(order.orderId, {
@@ -819,8 +824,8 @@ function RecordReceiptModal({
                     checked={amountType === key}
                     onChange={() => {
                       setAmountType(key);
-                      if (key === "rest") setValue(String(order.outstanding));
-                      else if (key === "percentage") setValue("50");
+                      if (key === "rest") setValue(formatMoneyInput(order.outstanding));
+                      else if (key === "percentage") setValue(lastPercentRef.current || "50");
                     }}
                   />
                   {label}
@@ -834,17 +839,43 @@ function RecordReceiptModal({
               Amount
             </label>
             <input
-              type="number"
-              min="0"
-              step="0.01"
+              type="text"
+              inputMode="decimal"
               value={value}
-              onChange={(e) => setValue(e.target.value)}
+              onChange={(e) => {
+                const raw = e.target.value;
+                if (amountType === "percentage") {
+                  if (raw === "" || /^\d{0,3}(\.\d{0,2})?$/.test(raw)) {
+                    const num = parseFloat(raw);
+                    if (raw !== "" && Number.isFinite(num) && num > 100) return;
+                    setValue(raw);
+                    if (Number.isFinite(num) && num >= 0 && num <= 100) {
+                      lastPercentRef.current = Number.isInteger(num)
+                        ? String(num)
+                        : String(Math.round(num * 100) / 100);
+                    }
+                  }
+                  return;
+                }
+                if (raw === "" || /^\d*\.?\d{0,2}$/.test(raw)) {
+                  setValue(raw);
+                }
+              }}
               disabled={amountType === "rest"}
               className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg bg-white font-mono disabled:bg-slate-50 disabled:text-slate-500"
             />
             {amountType === "rest" && (
               <p className="text-[10px] font-semibold text-slate-400 mt-1">
                 Outstanding: {formatINR(order.outstanding)}
+              </p>
+            )}
+            {amountType === "percentage" && (
+              <p className="text-[10px] font-semibold text-slate-400 mt-1">
+                ≈{" "}
+                {formatINR(
+                  Math.round(order.quoteTotal * ((parseFloat(value) || 0) / 100) * 100) / 100
+                )}{" "}
+                of quote total
               </p>
             )}
           </div>

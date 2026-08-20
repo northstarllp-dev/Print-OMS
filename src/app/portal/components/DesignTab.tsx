@@ -23,8 +23,12 @@ import {
 } from "@/features/designs/actions/designActions";
 import { areAllDesignItemsApproved } from "@/features/designs/utils/designApproval";
 import { toCustomerVisibleDesign } from "@/features/designs/utils/customerVisibleDesign";
-import { uploadFileViaPortalApi } from "@/utils/supabase/uploadStorageFile";
+import { uploadFiles } from "@/utils/storage/uploadClient";
+import { parseStoredRef } from "@/utils/storage/storageRef";
+import { OrderImage } from "@/components/storage/OrderImage";
+import { deletePortalStorageFileAction } from "@/features/orders/actions/portalStorageActions";
 import { getServerActionErrorMessage } from "@/lib/serverActionError";
+import { getSignedReadUrl } from "@/utils/storage/signedReadCache";
 import { OverlayPortal } from "@/components/ui/OverlayPortal";
 import { insertOrderActivity } from "@/features/orders/activity/logOrderActivity";
 
@@ -59,6 +63,8 @@ export interface DesignTabProps {
   customer: Customer;
   siteVisitItems?: Array<{ id: string; name: string }>;
   portalToken?: string;
+  /** Keep portal order state in sync after design mutations (upload/delete resources, feedback). */
+  onDesignUpdated?: (design: DesignRecord) => void;
 }
 
 function friendlyPortalError(error: unknown): string {
@@ -87,7 +93,7 @@ async function resolveOrderCompanyId(
   return data.company_id;
 }
 
-export function DesignTab({ order, customer, siteVisitItems = [], portalToken }: DesignTabProps) {
+export function DesignTab({ order, customer, siteVisitItems = [], portalToken, onDesignUpdated }: DesignTabProps) {
   const isLocked =
     Boolean(order.stageStatus && order.stageStatus !== "Normal") &&
     (order.stage === "Design In Progress" || order.stage === "Design Approved");
@@ -147,7 +153,8 @@ export function DesignTab({ order, customer, siteVisitItems = [], portalToken }:
       return item;
     });
 
-    await updateDesignDetailsAction(order.id, { items: updatedItems }, dd.updated_at, portalToken);
+    const updated = await updateDesignDetailsAction(order.id, { items: updatedItems }, dd.updated_at, portalToken);
+    onDesignUpdated?.(toCustomerVisibleDesign(updated) || updated);
 
     if (updateStage) {
       await transitionDesignOrderStageAction(order.id, updateStage, portalToken);
@@ -159,29 +166,44 @@ export function DesignTab({ order, customer, siteVisitItems = [], portalToken }:
     if (!files || files.length === 0) return;
     setUploading(true);
     try {
-      const newResources = [];
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const { url, name } = await uploadFileViaPortalApi(
-          file,
-          order.id,
-          "design_resource",
-          portalToken
-        );
-
-        newResources.push({
-          id: (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36),
-          url,
-          name,
-          type: "file" as const,
-          uploadedBy: "Customer" as const,
-          createdAt: new Date().toISOString()
-        });
+      const { ok, failed } = await uploadFiles(Array.from(files), {
+        orderId: order.id,
+        purpose: "design_resource",
+        channel: "portal",
+        portalToken,
+        concurrency: 3,
+      });
+      if (failed.length) {
+        alert(`${failed.length} file(s) failed to upload: ${failed[0].error}`);
       }
-      
-      await updateDesignDetailsAction(order.id, {
-        resources: [...(dd.resources || []), ...newResources]
-      }, dd.updated_at, portalToken);
+
+      const newResources = ok.map((o) => ({
+        id: (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36),
+        url: `${o.bucket}/${o.path}`,
+        name: o.fileName,
+        type: "file" as const,
+        uploadedBy: "Customer" as const,
+        createdAt: new Date().toISOString()
+      }));
+
+      if (newResources.length) {
+        try {
+          const updated = await updateDesignDetailsAction(order.id, {
+            resources: [...(dd.resources || []), ...newResources]
+          }, dd.updated_at, portalToken);
+          onDesignUpdated?.(toCustomerVisibleDesign(updated) || updated);
+        } catch (dbErr) {
+          // Roll back storage so we don't orphan objects when the DB write fails.
+          for (const o of ok) {
+            await deletePortalStorageFileAction({
+              orderId: order.id,
+              portalToken,
+              refOrUrl: `${o.bucket}/${o.path}`,
+            }).catch(() => {});
+          }
+          throw dbErr;
+        }
+      }
     } catch (err: unknown) {
       console.error("Upload error:", err);
       alert("Upload failed: " + friendlyPortalError(err));
@@ -195,12 +217,16 @@ export function DesignTab({ order, customer, siteVisitItems = [], portalToken }:
     if (!confirm("Are you sure you want to delete this file?")) return;
     try {
       const updatedResources = (dd.resources || []).filter((r: any) => r.id !== resourceId);
-      await updateDesignDetailsAction(order.id, { resources: updatedResources }, dd.updated_at, portalToken);
+      const updated = await updateDesignDetailsAction(order.id, { resources: updatedResources }, dd.updated_at, portalToken);
+      onDesignUpdated?.(toCustomerVisibleDesign(updated) || updated);
 
-      const pathPart = resourceUrl.split("/public/site-visit-photos/")[1];
-      if (pathPart) {
-        await supabase.storage.from("site-visit-photos").remove([pathPart]);
-      }
+      await deletePortalStorageFileAction({
+        orderId: order.id,
+        portalToken,
+        refOrUrl: resourceUrl,
+      }).catch(() => {
+        /* best-effort storage cleanup */
+      });
     } catch (err: any) {
       console.error("Delete error:", err);
       alert("Failed to delete file.");
@@ -217,7 +243,12 @@ export function DesignTab({ order, customer, siteVisitItems = [], portalToken }:
 
   const handleDownload = async (url: string, filename: string) => {
     try {
-      const response = await fetch(url);
+      let fetchUrl = url;
+      const parsed = parseStoredRef(url);
+      if (parsed) {
+        fetchUrl = await getSignedReadUrl(parsed.bucket, parsed.path);
+      }
+      const response = await fetch(fetchUrl);
       const blob = await response.blob();
       const blobUrl = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -265,11 +296,10 @@ export function DesignTab({ order, customer, siteVisitItems = [], portalToken }:
         status: "Changes Requested" 
       } : v
     );
-    
-    await handleUpdateItemVersions(updatedVersions, "Design In Progress");
-    
+
     setCommentingOn(null);
     setCommentText("");
+    await handleUpdateItemVersions(updatedVersions, "Design In Progress");
   };
 
   const handleGeneralFeedbackSubmit = async () => {
@@ -373,7 +403,7 @@ export function DesignTab({ order, customer, siteVisitItems = [], portalToken }:
           <label className="w-full sm:w-auto px-4 py-2.5 sm:py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-xs font-bold cursor-pointer hover:bg-gray-100 flex items-center justify-center gap-2">
             {uploading ? <Loader2 size={14} className="animate-spin" /> : <UploadCloud size={14} />}
             {uploading ? "Uploading..." : "Upload File"}
-            <input type="file" multiple onChange={handleResourceUpload} accept="image/*,.pdf,.png,.jpg,.jpeg,.heic,.heif,.cdr,.ai,.psd,.svg" className="hidden" disabled={uploading} />
+            <input type="file" multiple onChange={handleResourceUpload} accept="image/*,.pdf,.png,.jpg,.jpeg,.heic,.heif,.cdr,.ai,.eps,.psd,.svg" className="hidden" disabled={uploading} />
           </label>
         </div>
         )}
@@ -382,15 +412,37 @@ export function DesignTab({ order, customer, siteVisitItems = [], portalToken }:
           <div className="mb-6 flex gap-3 flex-wrap">
             {dd.resources.map((res: any) => (
               <div key={res.id} className="flex items-center gap-2 p-2 bg-blue-50 border border-blue-100 rounded-lg text-blue-700 max-w-full">
-                <a href={res.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:underline min-w-0">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const parsed = parseStoredRef(res.url);
+                      const href = parsed
+                        ? await getSignedReadUrl(parsed.bucket, parsed.path)
+                        : res.url;
+                      window.open(href, "_blank", "noopener,noreferrer");
+                    } catch {
+                      alert("Could not open file.");
+                    }
+                  }}
+                  className="flex items-center gap-2 hover:underline min-w-0 text-left"
+                >
                   <FileCheck size={14} className="shrink-0" />
                   <span className="text-xs font-medium truncate max-w-[120px] sm:max-w-[150px]">{res.name}</span>
-                </a>
+                </button>
                 {!isLocked && (
                   <button onClick={() => handleDeleteResource(res.id, res.url)} className="p-1 hover:bg-blue-200 rounded text-red-500 ml-1 transition-colors shrink-0" title="Delete file">
                     <Trash size={12} />
                   </button>
                 )}
+                <button
+                  type="button"
+                  onClick={() => void handleDownload(res.url, res.name)}
+                  className="p-1 hover:bg-blue-200 rounded text-blue-600 ml-0.5 transition-colors shrink-0"
+                  title="Download file"
+                >
+                  <Download size={12} />
+                </button>
               </div>
             ))}
           </div>
@@ -455,16 +507,33 @@ export function DesignTab({ order, customer, siteVisitItems = [], portalToken }:
               )}
             </div>
 
-            <div className={`bg-[#0b1c30] rounded-xl flex items-center justify-center mb-6 relative overflow-hidden group border border-gray-200 shadow-inner p-2 sm:p-4 min-h-[30vh] sm:min-h-[40vh] ${
+            <div className={`bg-slate-100 rounded-xl flex items-center justify-center mb-6 relative overflow-hidden group border border-slate-200 shadow-inner p-2 sm:p-4 min-h-[30vh] sm:min-h-[40vh] ${
               activeVersion.status === "Approved" ? "ring-2 ring-emerald-500/50" : ""
             }`}>
+              <span className="absolute top-3 left-3 z-50 rounded-md bg-white/90 px-2 py-1 text-[10px] font-semibold text-slate-600 border border-slate-200">
+                Preview only — grey is not part of the design
+              </span>
               
               {/* Image Controls (Enlarge & Download) */}
               <div className="absolute top-4 right-4 flex gap-2 z-50">
-                <button onClick={() => window.open(activeVersion.proofUrl, '_blank')} className="p-2 bg-white/10 hover:bg-white/20 backdrop-blur text-white rounded-lg transition-colors" title="Enlarge">
+                <button
+                  onClick={async () => {
+                    try {
+                      const parsed = parseStoredRef(activeVersion.proofUrl);
+                      const href = parsed
+                        ? await getSignedReadUrl(parsed.bucket, parsed.path)
+                        : activeVersion.proofUrl;
+                      window.open(href, "_blank", "noopener,noreferrer");
+                    } catch {
+                      alert("Could not open proof.");
+                    }
+                  }}
+                  className="p-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-lg transition-colors shadow-sm"
+                  title="Enlarge"
+                >
                   <Maximize size={18} />
                 </button>
-                <button onClick={() => handleDownload(activeVersion.proofUrl, `Design_Proof_${activeVersion.versionNumber}`)} className="p-2 bg-white/10 hover:bg-white/20 backdrop-blur text-white rounded-lg transition-colors" title="Download">
+                <button onClick={() => handleDownload(activeVersion.proofUrl, `Design_Proof_${activeVersion.versionNumber}`)} className="p-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-lg transition-colors shadow-sm" title="Download">
                   <Download size={18} />
                 </button>
               </div>
@@ -479,8 +548,9 @@ export function DesignTab({ order, customer, siteVisitItems = [], portalToken }:
                   </div>
                 )}
 
-                <img
+                <OrderImage
                   src={activeVersion.proofUrl}
+                  format="origin"
                   alt="Design Proof"
                   className="max-h-[60vh] object-contain transition-all relative z-0"
                   onClick={handleImageClick}
@@ -538,7 +608,9 @@ export function DesignTab({ order, customer, siteVisitItems = [], portalToken }:
                 <button onClick={() => setZoomLevel(v => Math.min(v + 20, 200))} className="p-1 text-slate-500 hover:text-slate-800 bg-gray-100 rounded"><ZoomIn size={14} /></button>
               </div>
             </div>
-
+            <p className="mb-6 -mt-4 text-[11px] font-medium text-slate-500">
+              On-screen preview can look different. Download the file for better colour and print-accurate results.
+            </p>
 
             <div className={`flex flex-col md:flex-row items-center justify-between p-4 rounded-xl border gap-4 ${
               activeVersion.status === "Approved" ? "bg-emerald-50 border-emerald-200" : "bg-gray-50 border-gray-200"

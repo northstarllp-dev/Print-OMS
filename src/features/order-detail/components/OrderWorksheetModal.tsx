@@ -18,6 +18,17 @@ import {
 } from "@/types";
 import { SiteVisitModule } from "@/features/orders/workspace/modules/site-visit/SiteVisitModule";
 import { SiteVisitReviewModal } from "@/features/orders/workspace/modules/site-visit/SiteVisitReviewModal";
+import {
+  canAdvanceSiteVisitAudit,
+  mergeIncomingSiteVisitDetails,
+} from "@/features/orders/workspace/modules/site-visit/siteVisitUiLogic";
+import {
+  businessOpNeedsWorkflowChoice,
+  impliedWorkflowTypeForOp,
+} from "@/features/orders/workflowSelectionLogic";
+import { productionChecklistAdvanceGate, getChecklistForBusinessOp, type ProductionChecklistsByOp } from "@/features/settings/productionChecklist";
+import { getAppSettings } from "@/features/settings/actions/settingsActions";
+import { RequirementsNotesBanner } from "@/features/orders/workspace/shared/RequirementsNotesBanner";
 import { QuotationModule } from "@/features/orders/workspace/modules/quotation/QuotationModule";
 import { DesignModule } from "@/features/orders/workspace/modules/design/DesignModule";
 import { AdminControlModule } from "./admin/AdminControlModule";
@@ -27,8 +38,10 @@ import { WorkflowChoiceModal } from "./WorkflowChoiceModal";
 import { ProductionModule } from "@/features/orders/workspace/modules/production/ProductionModule";
 import { InstallationModule } from "@/features/orders/workspace/modules/installation/InstallationModule";
 import { InstallationPaymentApprovalModal } from "./InstallationPaymentApprovalModal";
+import { ProductionAdvanceModal } from "./ProductionAdvanceModal";
 import { withBasePath } from "@/lib/appBasePath";
 import { copyTextToClipboard } from "@/lib/clipboard";
+import { BusinessOperationCaption } from "@/features/orders/components/BusinessOperationCaption";
 
 import {
   isTimelineStageAccessible,
@@ -36,6 +49,17 @@ import {
 } from "@/features/orders/workspace/shared/permissions";
 import type { OrderStage, StagePermission } from "@/features/orders/workspace/shared/types";
 import { isStaffQueueCompleted } from "@/features/orders/workspace/shared/staffQueueStages";
+import {
+  getWorksheetModuleKeysForOp,
+  getStagesForOp,
+  isWorksheetModuleDone,
+  moduleKeyForPipelineStage,
+  tabIndexForModule,
+  moduleForTabIndex,
+  nextStageAfter,
+  pendingApprovalLabelAfter,
+  type BusinessStageKey,
+} from "@/features/orders/businessOperations";
 import {
   updateSiteVisitDetailsAction,
   updateProductionDetailsAction,
@@ -68,7 +92,7 @@ import {
   mergeOrderDetailPatch,
   useOrderDetailSync,
 } from "@/features/orders/realtime/useOrderDetailSync";
-import { areAllDesignItemsApproved } from "@/features/designs/utils/designApproval";
+import { areAllDesignItemsApproved, getDesignItemsWithVersions } from "@/features/designs/utils/designApproval";
 import { CustomerMessageModal } from "@/features/notifications/customer-message/CustomerMessageModal";
 import { CustomerMessageTemplatePicker } from "@/features/notifications/customer-message/CustomerMessageTemplatePicker";
 import { getScheduleExtrasForTemplate } from "@/features/notifications/customer-message/stageTemplates";
@@ -109,127 +133,60 @@ const ADMIN_TAB = 99;
 
 function computePendingStageStatus(
   stage: string,
-  workflowType: "quote_first" | "design_first" = "quote_first"
+  businessOp?: string | null,
+  workflowType?: string | null
 ): string {
-  const isDesignFirst = workflowType === "design_first";
-  if (stage === "Site Visit Pending" || stage === "Site Visit Scheduled") {
-    return "Pending Admin Approval: Site Visit Completed";
-  }
-  if (stage === "Site Visit Completed") {
-    return isDesignFirst
-      ? "Pending Admin Approval: Design Stage"
-      : "Pending Admin Approval: Quote Stage";
-  }
-  if (stage === "Quotation In Progress" || stage === "Quotation Sent" || stage === "Quotation Negotiation") {
-    return "Pending Admin Approval: Quote Approval";
-  }
-  if (stage === "Quotation Approved") {
-    return isDesignFirst
-      ? "Pending Admin Approval: Production Ready"
-      : "Pending Admin Approval: Design Stage";
-  }
-  if (stage === "Design In Progress") {
-    return "Pending Admin Approval: Design Approval";
-  }
-  if (stage === "Design Approved") {
-    return isDesignFirst
-      ? "Pending Admin Approval: Quote Stage"
-      : "Pending Admin Approval: Production Ready";
-  }
-  if (stage === "Production") {
-    return "Pending Admin Approval: Production Ready";
-  }
-  if (stage === "Installation Scheduled") {
-    return "Pending Admin Approval: Job Done";
-  }
-  return "Normal";
+  return pendingApprovalLabelAfter(
+    businessOp || "signage",
+    stage,
+    undefined,
+    workflowType
+  );
 }
 
-const WORKFLOW_STEPS = [
-  { label: "Enquiry", tab: -1, icon: "📋" },
-  { label: "Site Visit", tab: 0, icon: "📍" },
-  { label: "Quote", tab: 1, icon: "📄" },
-  { label: "Design", tab: 2, icon: "🎨" },
-  { label: "Production", tab: 3, icon: "🏭" },
-  { label: "Installation", tab: 4, icon: "🔧" },
-];
+const WORKFLOW_STEP_META: Record<
+  string,
+  { label: string; icon: typeof MapPin; title: string }
+> = {
+  site_visit: { label: "Site Visit", icon: MapPin, title: "Site Visit Audit" },
+  quotation: { label: "Quote", icon: BarChart3, title: "Product Quote" },
+  design: { label: "Design", icon: Palette, title: "Design Workflow" },
+  production: { label: "Production", icon: Package, title: "Fabrication Checklist" },
+  installation: { label: "Installation", icon: Wrench, title: "Field Installation" },
+};
 
-function stageToTabIndex(stage: PipelineStage, workflowType: "quote_first" | "design_first" = "quote_first"): number {
-  if (workflowType === "design_first") {
-    switch (stage) {
-      case "Site Visit Pending":
-      case "Site Visit Scheduled":
-      case "Site Visit Completed":
-        return 0;
-      case "Design In Progress":
-      case "Design Approved":
-        return 1;
-      case "Quotation In Progress":
-      case "Quotation Sent":
-      case "Quotation Negotiation":
-      case "Quotation Approved":
-        return 2;
-      case "Production":
-        return 3;
-      case "Ready For Installation":
-      case "Installation Scheduled":
-      case "Completed":
-      case "Closed":
-        return 4;
-      default:
-        return 0;
-    }
-  }
-  // Default: quote_first
-  switch (stage) {
-    case "Site Visit Pending":
-    case "Site Visit Scheduled":
-    case "Site Visit Completed":
-      return 0;
-    case "Quotation In Progress":
-    case "Quotation Sent":
-    case "Quotation Negotiation":
-    case "Quotation Approved":
-      return 1;
-    case "Design In Progress":
-    case "Design Approved":
-      return 2;
-    case "Production":
-      return 3;
-    case "Ready For Installation":
-    case "Installation Scheduled":
-    case "Completed":
-    case "Closed":
-      return 4;
-    default:
-      return 0;
-  }
+function stageToTabIndex(
+  stage: PipelineStage,
+  businessOp?: string | null,
+  workflowType?: string | null
+): number {
+  const modules = getWorksheetModuleKeysForOp(businessOp, undefined, workflowType);
+  const mod = moduleKeyForPipelineStage(stage);
+  if (!mod) return 0;
+  const idx = tabIndexForModule(modules, mod);
+  return idx >= 0 ? idx : 0;
 }
 
 /** Maps a workflow step tabIndex to its OrderStage (for RBAC timeline lock). Null for non-stage tabs. */
-function tabIndexToOrderStage(tabIndex: number, workflowType: "quote_first" | "design_first" = "quote_first"): OrderStage | null {
-  const isDesignFirst = workflowType === "design_first";
-  switch (tabIndex) {
-    case 0: return "site_visit";
-    case 1: return isDesignFirst ? "design" : "quotation";
-    case 2: return isDesignFirst ? "quotation" : "design";
-    case 3: return "production";
-    case 4: return "installation";
-    default: return null;
-  }
+function tabIndexToOrderStage(
+  tabIndex: number,
+  businessOp?: string | null,
+  workflowType?: string | null
+): OrderStage | null {
+  const modules = getWorksheetModuleKeysForOp(businessOp, undefined, workflowType);
+  const mod = moduleForTabIndex(modules, tabIndex);
+  return (mod as OrderStage | null) ?? null;
 }
 
 /** Reverse of tabIndexToOrderStage — used to land on the entryStage's tab when queue-scoped. */
-function orderStageToTabIndex(stage: OrderStage, workflowType: "quote_first" | "design_first" = "quote_first"): number {
-  const isDesignFirst = workflowType === "design_first";
-  switch (stage) {
-    case "site_visit": return 0;
-    case "quotation": return isDesignFirst ? 2 : 1;
-    case "design": return isDesignFirst ? 1 : 2;
-    case "production": return 3;
-    case "installation": return 4;
-    default: return 0;
-  }
+function orderStageToTabIndex(
+  stage: OrderStage,
+  businessOp?: string | null,
+  workflowType?: string | null
+): number {
+  const modules = getWorksheetModuleKeysForOp(businessOp, undefined, workflowType);
+  const idx = tabIndexForModule(modules, stage as BusinessStageKey);
+  return idx >= 0 ? idx : 0;
 }
 
 /* ─── Props ─────────────────────────────────────────────────────── */
@@ -242,6 +199,9 @@ interface Product {
   is_active: boolean;
   price_per_sqft?: number | null;
   price_per_unit?: number | null;
+  unit_price_max_sqft?: number | null;
+  pricing_type_below?: string | null;
+  pricing_type_above?: string | null;
   images?: string[];
 }
 
@@ -302,8 +262,16 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     initialStepTab != null
       ? initialStepTab
       : entryStage != null
-        ? orderStageToTabIndex(entryStage, initialOrder.workflow_type)
-        : stageToTabIndex(initialOrder.stage, initialOrder.workflow_type)
+        ? orderStageToTabIndex(
+            entryStage,
+            initialOrder.business_operation,
+            initialOrder.workflow_type
+          )
+        : stageToTabIndex(
+            initialOrder.stage,
+            initialOrder.business_operation,
+            initialOrder.workflow_type
+          )
   );
   const [showCustomerPanel, setShowCustomerPanel] = useState(false);
   const [activeRightPanel, setActiveRightPanel] = useState<"timeline" | null>(null);
@@ -311,7 +279,10 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   const [siteVisitReviewMode, setSiteVisitReviewMode] = useState<"staff_push" | "admin_lock">("admin_lock");
   const [isWorkflowChoiceOpen, setIsWorkflowChoiceOpen] = useState(false);
   const [isInstallationPaymentModalOpen, setIsInstallationPaymentModalOpen] = useState(false);
+  const [isProductionAdvanceModalOpen, setIsProductionAdvanceModalOpen] = useState(false);
   const [adminOverrideUnlocked, setAdminOverrideUnlocked] = useState(false);
+  const [productionChecklistsByOp, setProductionChecklistsByOp] =
+    useState<ProductionChecklistsByOp | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [showLostReasonDropdown, setShowLostReasonDropdown] = useState(false);
@@ -338,6 +309,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   /** Sync ref so Save Draft always sends the latest locations, not a stale render snapshot. */
   const siteVisitDetailsRef = useRef(initialOrder.siteVisitDetails);
   const [quotationRealtimeRow, setQuotationRealtimeRow] = useState<Record<string, unknown> | null>(null);
+  const userNavigatedRef = useRef(false);
 
   const triggerLocalAlert = useCallback((
     message: string,
@@ -367,8 +339,12 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
 
       if (freshOrder) {
         const mapped = mapDbOrderToWorksheetOrder(freshOrder as Record<string, unknown>);
-        setOrder(mapped);
-        siteVisitDetailsRef.current = mapped.siteVisitDetails;
+        const mergedSv = mergeIncomingSiteVisitDetails(
+          siteVisitDetailsRef.current,
+          mapped.siteVisitDetails
+        );
+        setOrder({ ...mapped, siteVisitDetails: mergedSv });
+        siteVisitDetailsRef.current = mergedSv;
       }
 
       if (freshQuotation) {
@@ -394,18 +370,35 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   const lockInitialTabRef = useRef(initialStepTab != null);
 
   useEffect(() => {
-    setOrder(initialOrder);
-    siteVisitDetailsRef.current = initialOrder.siteVisitDetails;
+    const mergedSv = mergeIncomingSiteVisitDetails(
+      siteVisitDetailsRef.current,
+      initialOrder.siteVisitDetails
+    );
+    setOrder({ ...initialOrder, siteVisitDetails: mergedSv });
+    siteVisitDetailsRef.current = mergedSv;
   }, [initialOrder]);
   useEffect(() => {
     if (entryStageRef.current != null) return;
     if (lockInitialTabRef.current) return;
-    setActiveStepTab(stageToTabIndex(order.stage, order.workflow_type));
-  }, [order.stage, order.workflow_type]);
+    if (userNavigatedRef.current) return;
+    setActiveStepTab(
+      stageToTabIndex(order.stage, order.business_operation, order.workflow_type)
+    );
+  }, [order.stage, order.business_operation, order.workflow_type]);
 
   useEffect(() => {
     moduleBodyScrollRef.current?.scrollTo({ top: 0 });
   }, [activeStepTab]);
+
+  useEffect(() => {
+    getAppSettings()
+      .then((settings) => {
+        if (settings?.productionChecklistsByOp) {
+          setProductionChecklistsByOp(settings.productionChecklistsByOp);
+        }
+      })
+      .catch(console.error);
+  }, []);
 
   useEffect(() => {
     if (!isOpen || !companyId) return;
@@ -424,7 +417,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
 
   // Load which customer message templates were already shared for this order.
   useEffect(() => {
-    if (!isOpen || currentUserRole !== "Admin") return;
+    if (!isOpen) return;
     let cancelled = false;
     void listCustomerMessageShares(order.id, order.orderId).then((res) => {
       if (cancelled || "error" in res) return;
@@ -433,7 +426,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [isOpen, order.id, order.orderId, currentUserRole, templatePickerOpen]);
+  }, [isOpen, order.id, order.orderId, templatePickerOpen]);
 
   useOrderDetailSync({
     orderId: order.id,
@@ -518,12 +511,11 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   const client = customers.find((c) => c.id === order.customerId);
   const isEmployee = currentUserRole === "Employee";
 
-  /* Customer message popup — admin portal only */
+  /* Customer message popup — staff and admin (Meta WhatsApp is off; this is the share path). */
   const openCustomerMessage = (
     key: CustomerMessageKey,
     extra?: { date?: string; time?: string }
   ) => {
-    if (currentUserRole !== "Admin") return;
     setCustomerMsg({
       key,
       ...extra,
@@ -535,7 +527,30 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     if (key) openCustomerMessage(key);
   };
   const isStaffOrAdmin = currentUserRole === "Employee" || currentUserRole === "Admin";
-  const currentStageIndex = stageToTabIndex(order.stage, order.workflow_type);
+  const businessOp = order.business_operation || "signage";
+  const workflowType =
+    order.workflow_type === "design_first" || order.workflow_type === "quote_first"
+      ? order.workflow_type
+      : null;
+  const currentStageIndex = stageToTabIndex(order.stage, businessOp, workflowType);
+  const worksheetModules = getWorksheetModuleKeysForOp(
+    businessOp,
+    undefined,
+    workflowType
+  );
+  const siteVisitTab = tabIndexForModule(worksheetModules, "site_visit");
+  const quoteTab = tabIndexForModule(worksheetModules, "quotation");
+  const designTab = tabIndexForModule(worksheetModules, "design");
+  const productionTab = tabIndexForModule(worksheetModules, "production");
+  const installationTab = tabIndexForModule(worksheetModules, "installation");
+  // Quote vs Design picker only when the op has both modules after site visit.
+  const opStages = getStagesForOp(businessOp);
+  const stagesAfterSiteVisit = opStages.includes("site_visit")
+    ? opStages.slice(opStages.indexOf("site_visit") + 1)
+    : [];
+  const needsSiteVisitWorkflowChoice = businessOpNeedsWorkflowChoice(
+    stagesAfterSiteVisit
+  );
   const actor = {
     role: currentUserRole === "Admin" ? "admin" : "staff",
     staff_role: currentEmployee?.role ?? null,
@@ -552,13 +567,16 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   };
   /**
    * Workflow progression gate (Phase 6): separate from resolveStagePermission (RBAC).
-   * A staff member's granted stage only becomes accessible once the order has actually
-   * reached (or passed) it. Admin bypasses, consistent with their existing ability to
-   * freely preview any stage.
+   * A stage only becomes accessible once the order has actually reached (or passed)
+   * it — for staff AND admins. Later stages are fully locked (no tab click, lock
+   * screen, no footer actions) until the order advances into them. Past stages stay
+   * open and retain their God Mode (adminOverrideUnlocked) override behavior.
    */
   const hasStageBeenReached = (stage: OrderStage): boolean => {
-    if (actor.role === "admin") return true;
-    return orderStageToTabIndex(stage, order.workflow_type) <= currentStageIndex;
+    return (
+      orderStageToTabIndex(stage, order.business_operation, workflowType) <=
+      currentStageIndex
+    );
   };
 
   /* ── Local State Wrappers ── */
@@ -585,12 +603,20 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     const save = async (expectedUpdatedAt?: string) =>
       updateDesignDetailsAction(orderId, details, expectedUpdatedAt);
 
+    const isStaleOrDigested = (err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err);
+      return (
+        message.includes("updated by another user") ||
+        message.includes("Server Components render") ||
+        message.includes("digest")
+      );
+    };
+
     try {
       const updated = await save(orderRef.current.design?.updated_at);
       setOrder((prev) => ({ ...prev, design: updated }));
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      if (message.includes("updated by another user")) {
+      if (isStaleOrDigested(err)) {
         const fresh = await getDesignByOrderId(orderId);
         const updated = await save(fresh?.updated_at);
         setOrder((prev) => ({ ...prev, design: updated }));
@@ -669,7 +695,13 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
       stageAdminNotes: "",
     }));
     if (nextStage) {
-      setActiveStepTab(stageToTabIndex(nextStage, order.workflow_type || "quote_first"));
+      setActiveStepTab(
+        stageToTabIndex(
+          nextStage,
+          order.business_operation || "signage",
+          order.workflow_type
+        )
+      );
     }
     startTransition(() => router.refresh());
     triggerLocalAlert(
@@ -693,19 +725,49 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
         await handleSaveDraft({ suppressCustomerPopup: true, silent: true });
       }
       // On Site Visit tab with normal status, open review modal first.
-      if (activeStepTab === 0 && order.stageStatus === "Normal") {
+      if (activeStepTab === siteVisitTab && siteVisitTab >= 0 && order.stageStatus === "Normal") {
+        const gate = canAdvanceSiteVisitAudit(sv);
+        if (!gate.ok) {
+          alert(gate.tooltip);
+          setIsProcessing(false);
+          return;
+        }
         setSiteVisitReviewMode("admin_lock");
         setIsReviewModalOpen(true);
         setIsProcessing(false);
         return;
       }
       // Leaving Site Visit with pending admin approval → choose workflow path
+      // (skipped when business_operation fixes stage order).
       if (
         order.stage.startsWith("Site Visit") &&
         order.stageStatus &&
         order.stageStatus !== "Normal"
       ) {
-        setIsWorkflowChoiceOpen(true);
+        const gate = canAdvanceSiteVisitAudit(sv);
+        if (!gate.ok) {
+          alert(gate.tooltip);
+          setIsProcessing(false);
+          return;
+        }
+        if (needsSiteVisitWorkflowChoice) {
+          setIsWorkflowChoiceOpen(true);
+          setIsProcessing(false);
+          return;
+        }
+        const workflowType = impliedWorkflowTypeForOp(
+          getStagesForOp(order.business_operation)
+        );
+        await setWorkflowTypeAction(order.id, workflowType);
+        setOrder((prev) => ({
+          ...prev,
+          workflow_type: workflowType,
+          stage:
+            workflowType === "design_first"
+              ? "Design In Progress"
+              : "Quotation In Progress",
+          stageStatus: "Normal",
+        }));
         setIsProcessing(false);
         return;
       }
@@ -717,6 +779,31 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           order.stageStatus === "Normal")
       ) {
         setIsInstallationPaymentModalOpen(true);
+        setIsProcessing(false);
+        return;
+      }
+      if (order.stage === "Production") {
+        const gate = productionChecklistAdvanceGate(
+          order.productionDetails,
+          getChecklistForBusinessOp(productionChecklistsByOp, order.business_operation)
+        );
+        if (!gate.ok) {
+          alert(gate.tooltip);
+          setIsProcessing(false);
+          return;
+        }
+        // Flex (and any op where Production is last): payment review → Completed.
+        if (nextStageAfter(businessOp, "Production", undefined, workflowType) === "Completed") {
+          setIsInstallationPaymentModalOpen(true);
+          setIsProcessing(false);
+          return;
+        }
+      }
+      // Gate: moving into Production requires installation deadline (+ payment reminder).
+      const advancesToProduction =
+        nextStageAfter(businessOp, order.stage, undefined, workflowType) === "Production";
+      if (advancesToProduction) {
+        setIsProductionAdvanceModalOpen(true);
         setIsProcessing(false);
         return;
       }
@@ -742,10 +829,6 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     } finally { setIsProcessing(false); }
   };
   const handleRequestAdvancement = async () => {
-    const workflowType = order.workflow_type || "quote_first";
-    const isDesignFirst = workflowType === "design_first";
-    const designTabIndex = isDesignFirst ? 1 : 2;
-
     // Gate by order stage (not active tab) so Quote/other tabs cannot skip design readiness.
     if (order.stage === "Design In Progress") {
       const itemsList = (order.design as DesignRecord)?.items || [];
@@ -759,18 +842,33 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
       }
     }
 
-    if ((activeStepTab === 0 || activeStepTab === designTabIndex) && !canAdvanceSiteVisit) {
+    if (order.stage === "Production") {
+      const gate = productionChecklistAdvanceGate(
+        order.productionDetails,
+        getChecklistForBusinessOp(productionChecklistsByOp, order.business_operation)
+      );
+      if (!gate.ok) {
+        alert(gate.tooltip);
+        return;
+      }
+    }
+
+    if (
+      ((siteVisitTab >= 0 && activeStepTab === siteVisitTab) ||
+        (designTab >= 0 && activeStepTab === designTab)) &&
+      !canAdvanceSiteVisit
+    ) {
       alert(siteVisitAdvanceTooltip);
       return;
     }
 
     setIsProcessing(true);
     try {
-      if (activeStepTab !== designTabIndex) {
+      if (designTab < 0 || activeStepTab !== designTab) {
         await handleSaveDraft({ silent: true });
       }
       // Site Visit: show summary confirmation first (push only — no lock).
-      if (activeStepTab === 0) {
+      if (siteVisitTab >= 0 && activeStepTab === siteVisitTab) {
         setSiteVisitReviewMode("staff_push");
         setIsReviewModalOpen(true);
         setIsProcessing(false);
@@ -778,7 +876,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
       }
 
       // Installation: submit job-done package (checklist / photos / notes) for admin payment review.
-      if (activeStepTab === 4) {
+      if (installationTab >= 0 && activeStepTab === installationTab) {
         if (
           !window.confirm(
             "Submit installation to admin for review? The order will stay open until admin confirms payments and marks it completed."
@@ -801,7 +899,27 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
         return;
       }
 
-      const nextStatus = computePendingStageStatus(order.stage, workflowType);
+      // Production is last stage (e.g. Flex Printing): request completion → admin payment review.
+      if (
+        productionTab >= 0 &&
+        activeStepTab === productionTab &&
+        nextStageAfter(businessOp, "Production", undefined, workflowType) === "Completed"
+      ) {
+        if (
+          !window.confirm(
+            "Submit production as complete? Admin will review payments and close the order."
+          )
+        ) {
+          setIsProcessing(false);
+          return;
+        }
+      }
+
+      const nextStatus = computePendingStageStatus(
+        order.stage,
+        businessOp,
+        workflowType
+      );
       const previousStatus = order.stageStatus;
       setOrder((prev) => ({ ...prev, stageStatus: nextStatus, stageAdminNotes: "" }));
       try {
@@ -839,7 +957,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     }
   };
 
-  /** Quotation tab: staff requests approval; admin advances to Design/Production. */
+  /** Quotation tab: staff requests approval; admin advances to Design or (design-first) fabrication gate. */
   const handleQuotationAdvance = async () => {
     if (isEmployee) {
       await handleRequestAdvancement();
@@ -861,6 +979,17 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
         }));
       }
 
+      // Next stage is Production → must set installation deadline first.
+      if (
+        nextStageAfter(businessOp, "Quotation Approved", undefined, workflowType) ===
+        "Production"
+      ) {
+        setIsProductionAdvanceModalOpen(true);
+        setIsProcessing(false);
+        return;
+      }
+
+      // Otherwise Quotation Approved → next pipeline stage (often Design)
       await executeAdminApprove();
       setIsProcessing(false);
     } catch (err: any) {
@@ -868,12 +997,68 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
       setIsProcessing(false);
     }
   };
-  const handleUpdateHealth = async (health: string, reason?: string, callRemarks?: string) => {
+
+  /** Design tab: admin force-approves proofs (no portal). Does not start fabrication yet. */
+  const handleDesignAdvanceWithoutCustomer = async () => {
+    const nextAfterDesign = nextStageAfter(
+      businessOp,
+      "Design Approved",
+      undefined,
+      workflowType
+    );
+    const goesToQuote = Boolean(nextAfterDesign?.startsWith("Quotation"));
+    const confirmMsg = goesToQuote
+      ? "Approve this design without waiting for the customer?\n\nThis only marks the design approved so you can continue to Quotation. The installation deadline is set later — just before fabrication starts."
+      : "Approve this design without waiting for the customer?\n\nThis only marks the design approved. Next: upload production files, then use “Set deadline & start fabrication” when you are ready for the workshop.";
+
+    if (!window.confirm(confirmMsg)) {
+      return;
+    }
+
     setIsProcessing(true);
     try {
-      const res = await updateOrderHealthAction(order.id, health, reason, callRemarks);
+      const { adminMarkDesignApprovedAction } = await import(
+        "@/features/designs/actions/designActions"
+      );
+      const updatedDesign = await adminMarkDesignApprovedAction(order.id);
+      setOrder((prev) => ({
+        ...prev,
+        stage: "Design Approved" as PipelineStage,
+        stageStatus: "Normal",
+        design: updatedDesign,
+      }));
+      if (designTab >= 0) setActiveStepTab(designTab);
+      triggerLocalAlert(
+        goesToQuote
+          ? "Design approved. Continue to Quotation when ready."
+          : "Design approved. Upload production files, then set the deadline to start fabrication.",
+        "success"
+      );
+      startTransition(() => router.refresh());
+      setIsProcessing(false);
+    } catch (err: any) {
+      triggerLocalAlert(err?.message || "Failed to approve design.", "error");
+      setIsProcessing(false);
+    }
+  };
+  const handleUpdateHealth = async (
+    health: string,
+    reason?: string,
+    callRemarks?: string,
+    hold?: { note?: string | null; reachOutAt?: string | null } | null
+  ) => {
+    setIsProcessing(true);
+    try {
+      const res = await updateOrderHealthAction(order.id, health, reason, callRemarks, hold);
       if (res && res.length > 0) {
-        setOrder((prev) => ({ ...prev, health: res[0].health, lost_reason: res[0].lost_reason, chatHistory: res[0].chat_history }));
+        setOrder((prev) => ({
+          ...prev,
+          health: res[0].health,
+          lost_reason: res[0].lost_reason,
+          hold_note: res[0].hold_note,
+          reach_out_at: res[0].reach_out_at,
+          chatHistory: res[0].chat_history,
+        }));
         triggerLocalAlert(`Order health set to ${health}.`, "success");
         router.refresh();
       }
@@ -917,16 +1102,10 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
 
   const handleSaveDraft = async (opts?: { suppressCustomerPopup?: boolean; silent?: boolean }) => {
     if (!opts?.silent) setIsProcessing(true);
-    const workflowType = order.workflow_type || "quote_first";
-    // Tab indices depend on workflow:
-    // quote_first:  0=SiteVisit, 1=Quote, 2=Design, 3=Production, 4=Installation
-    // design_first:  0=SiteVisit, 1=Design, 2=Quote,  3=Production, 4=Installation
-    const isDesignFirst = workflowType === "design_first";
-    const designTab = isDesignFirst ? 1 : 2;
-    const quoteTab = isDesignFirst ? 2 : 1;
     try {
       switch (activeStepTab) {
-        case 0: { // Site Visit
+        case siteVisitTab: { // Site Visit
+          if (siteVisitTab < 0) break;
           const details =
             siteVisitDetailsRef.current ||
             orderRef.current.siteVisitDetails;
@@ -961,13 +1140,13 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
             }
           }
           break;
-        case 3: // Production
-          if (order.productionDetails) {
+        case productionTab: // Production
+          if (productionTab >= 0 && order.productionDetails) {
             await updateProductionDetailsAction(order.id, order.productionDetails);
           }
           break;
-        case 4: // Installation
-          if (order.installationDetails) {
+        case installationTab: // Installation
+          if (installationTab >= 0 && order.installationDetails) {
             await updateInstallationDetailsAction(order.id, order.installationDetails);
           }
           break;
@@ -986,16 +1165,10 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   };
 
   /* ── Module fallbacks ── */
-  const sv = order.siteVisitDetails || { width: 0, height: 0, depth: 0, auditDate: "", auditTime: "", sitePersonnel: "", photos: [], completed: false, notes: "", locations: [] };
+  const sv = siteVisitDetailsRef.current || order.siteVisitDetails || { width: 0, height: 0, depth: 0, auditDate: "", auditTime: "", sitePersonnel: "", photos: [], completed: false, notes: "", locations: [] };
   const dd = (order.design as DesignRecord) || { resources: [], items: [], payment_verified: false };
   const pd = order.productionDetails || { stage1: false, stage2: false, stage3: false, stage4: false, checklist: {} };
   const inst = order.installationDetails || { photoUrl: "", customerSignature: "", paymentCode: "" };
-
-  // Compute workflow-aware tab assignments
-  const workflowType = order.workflow_type || "quote_first";
-  const isDesignFirst = workflowType === "design_first";
-  const designTab = isDesignFirst ? 1 : 2;
-  const quoteTab  = isDesignFirst ? 2 : 1;
 
   const isDesignPending =
     Boolean(order.stageStatus && order.stageStatus !== "Normal") &&
@@ -1014,24 +1187,31 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
 
   const isDesignFrozen =
     isOrderClosed ||
-    ((currentStageIndex > designTab || isDesignPending) &&
+    ((designTab >= 0 && (currentStageIndex > designTab || isDesignPending)) &&
     !effectiveAdminOverrideUnlocked);
 
   const isCurrentTabFrozen =
     isOrderClosed ||
     isStaffQueueReadOnly ||
-    (activeStepTab === 0 && isSiteVisitFrozen) ||
-    (activeStepTab === designTab && isDesignFrozen);
+    (siteVisitTab >= 0 && activeStepTab === siteVisitTab && isSiteVisitFrozen) ||
+    (designTab >= 0 && activeStepTab === designTab && isDesignFrozen);
 
-  // Strict Site Visit Validations
-  const isSiteVisitScheduled = !!(sv.auditDate && sv.auditTime);
-  const hasSiteVisitLocations = !!(sv.locations && sv.locations.length > 0);
+  // Strict Site Visit Validations — must schedule or skip (+ locations) before advance.
+  const siteVisitAdvanceGate = canAdvanceSiteVisitAudit(sv);
+  const productionChecklistItems = getChecklistForBusinessOp(
+    productionChecklistsByOp,
+    order.business_operation
+  );
+  const productionAdvanceGate = productionChecklistAdvanceGate(
+    pd,
+    productionChecklistItems
+  );
   let canAdvanceSiteVisit = true;
   let siteVisitAdvanceTooltip = "";
-  if (activeStepTab === 0) {
-    canAdvanceSiteVisit = isSiteVisitScheduled && hasSiteVisitLocations;
-    siteVisitAdvanceTooltip = !canAdvanceSiteVisit ? "Schedule the visit and add at least one location item to unlock approval." : "";
-  } else if (activeStepTab === designTab) {
+  if (siteVisitTab >= 0 && activeStepTab === siteVisitTab) {
+    canAdvanceSiteVisit = siteVisitAdvanceGate.ok;
+    siteVisitAdvanceTooltip = siteVisitAdvanceGate.tooltip;
+  } else if (designTab >= 0 && activeStepTab === designTab) {
     const itemsList = dd.items || [];
     const allDesignItemsApproved = areAllDesignItemsApproved(itemsList as any);
     const hasProductionFiles = itemsList.some((item: any) => item.productionFiles && item.productionFiles.length > 0);
@@ -1042,15 +1222,36 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
       : !hasProductionFiles
         ? "Final production files must be uploaded for at least one design item."
         : "";
+  } else if (productionTab >= 0 && activeStepTab === productionTab) {
+    canAdvanceSiteVisit = productionAdvanceGate.ok;
+    siteVisitAdvanceTooltip = productionAdvanceGate.tooltip;
   }
 
   const designItemsForGate = ((order.design as DesignRecord)?.items || []) as any[];
+  const hasDesignProofsForGate = getDesignItemsWithVersions(designItemsForGate as any).length > 0;
+  const isDesignApprovedForGate = areAllDesignItemsApproved(designItemsForGate);
+  const hasProductionFilesForGate = designItemsForGate.some(
+    (item: any) => item.productionFiles && item.productionFiles.length > 0
+  );
   const isDesignAdvanceReady =
-    areAllDesignItemsApproved(designItemsForGate) &&
-    designItemsForGate.some((item: any) => item.productionFiles && item.productionFiles.length > 0);
+    isDesignApprovedForGate && hasProductionFilesForGate;
+  const willAdvanceToProduction =
+    nextStageAfter(businessOp, order.stage, undefined, workflowType) === "Production";
+  const willCompleteFromProduction =
+    order.stage === "Production" &&
+    nextStageAfter(businessOp, "Production", undefined, workflowType) === "Completed";
+  const showAdminDesignOverrideButton =
+    !isEmployee &&
+    currentUserRole === "Admin" &&
+    designTab >= 0 &&
+    activeStepTab === designTab &&
+    order.stage === "Design In Progress" &&
+    hasDesignProofsForGate &&
+    !isDesignApprovedForGate;
   const isJobDonePending = order.stageStatus === "Pending Admin Approval: Job Done";
   const isInstallationStageTab =
-    activeStepTab === 4 &&
+    installationTab >= 0 &&
+    activeStepTab === installationTab &&
     (order.stage === "Ready For Installation" || order.stage === "Installation Scheduled");
   const showAdminInstallationComplete =
     !isEmployee &&
@@ -1058,12 +1259,16 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     order.stage === "Installation Scheduled" &&
     (order.stageStatus === "Normal" || isJobDonePending);
   // Stage-page Approve when Normal; installation tab also supports admin completion (with or without staff push).
+  // Site Visit: hide until scheduled/skipped. Production: hide until checklist complete.
+  const effectiveStageStatus = order.stageStatus || "Normal";
   const showAdminApproveButton =
     !isEmployee &&
     currentStageIndex === activeStepTab &&
+    !(siteVisitTab >= 0 && activeStepTab === siteVisitTab && !canAdvanceSiteVisit) &&
+    !(productionTab >= 0 && activeStepTab === productionTab && !productionAdvanceGate.ok) &&
     (
       (
-        order.stageStatus === "Normal" &&
+        effectiveStageStatus === "Normal" &&
         !(order.stage === "Design In Progress" && !isDesignAdvanceReady) &&
         (!isInstallationStageTab || order.stage === "Ready For Installation")
       ) ||
@@ -1077,7 +1282,11 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
 
   // Whether the active tab's stage is inaccessible to this actor (RBAC + workflow progress)
   const isActiveStageInaccessible = (() => {
-    const activeStage = tabIndexToOrderStage(activeStepTab, order.workflow_type);
+    const activeStage = tabIndexToOrderStage(
+      activeStepTab,
+      order.business_operation,
+      workflowType
+    );
     if (activeStage == null) return false; // Admin/Payments tabs — handled separately
     return !isTimelineStageAccessible(activeStage, actor, entryStage) || !hasStageBeenReached(activeStage);
   })();
@@ -1096,7 +1305,11 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
 
   /* ── Module content ── */
   const renderModule = () => {
-    const activeStage = tabIndexToOrderStage(activeStepTab, order.workflow_type);
+    const activeStage = tabIndexToOrderStage(
+      activeStepTab,
+      order.business_operation,
+      workflowType
+    );
     if (activeStage != null && (!isTimelineStageAccessible(activeStage, actor, entryStage) || !hasStageBeenReached(activeStage))) {
       return (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "64px 24px", color: "#94A3B8", gap: "8px" }}>
@@ -1123,36 +1336,67 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
         [],
     };
 
-    // Map tab indices to module based on workflow
-    const tabToModule: Record<number, React.ReactElement | null> = {
-      0: (
+    // Map tab indices to modules from business-op stage list
+    const tabToModule: Record<number, React.ReactElement | null> = {};
+
+    if (siteVisitTab >= 0) {
+      tabToModule[siteVisitTab] = (
         <SiteVisitModule
           order={order} customers={customers} employees={employees}
           currentUserRole={currentUserRole} currentEmployee={currentEmployee}
-          onClose={onClose} onUpdate={(d) => updateSiteVisitDetails(order.id, d)}
+          onClose={onClose}
+          onUpdate={async (d) => {
+            siteVisitDetailsRef.current = d as SiteVisitDetails;
+            setOrder((prev) => ({
+              ...prev,
+              siteVisitDetails: d as SiteVisitDetails,
+            }));
+          }}
           onSubmitForApproval={handleRequestAdvancement}
           onAdminApprove={async (): Promise<void> => { await handleAdminApprove(); }}
-          onCustomerMessage={currentUserRole === "Admin" ? openCustomerMessage : undefined}
-          onSkipSiteVisit={async () => {
+          onCustomerMessage={openCustomerMessage}
+          onSkipSiteVisit={async (location) => {
             if (!getStagePermissionInContext("site_visit", actor, entryStage).canEdit) return;
-            const now = new Date().toISOString();
+            const { SKIPPED_SITE_VISIT_LANDMARK } = await import(
+              "@/features/orders/workspace/modules/site-visit/siteVisitUiLogic"
+            );
+            // Clear schedule fields — auditTime must not store "skipped at HH:MM" (looks like an appointment).
+            const previous = siteVisitDetailsRef.current || order.siteVisitDetails || {};
             const newDetails = {
-              ...(order.siteVisitDetails || {}),
-              auditDate: now.split("T")[0],
-              auditTime: now.split("T")[1].substring(0, 5),
-              customerAddress: "Skipped - Direct Measurement (Manual Entry)",
-              gpsLocation: "N/A"
+              ...previous,
+              auditDate: null,
+              auditTime: null,
+              preferredDate: null,
+              preferredTime: null,
+              customerAddress: location.customerAddress,
+              gpsLocation: location.gpsLocation,
+              landmark: SKIPPED_SITE_VISIT_LANDMARK,
             };
-            await updateSiteVisitDetailsAction(order.id, newDetails);
-            setOrder(prev => ({ ...prev, siteVisitDetails: newDetails as any }));
-            await handleUpdateOrderStage(order.id, "Site Visit Scheduled");
+            const result = await updateSiteVisitDetailsAction(order.id, newDetails);
+            const saved = (result?.siteVisitDetails || newDetails) as SiteVisitDetails;
+            const merged = mergeIncomingSiteVisitDetails(
+              siteVisitDetailsRef.current,
+              saved
+            ) as SiteVisitDetails;
+            siteVisitDetailsRef.current = merged;
+            setOrder((prev) => ({
+              ...prev,
+              siteVisitDetails: merged,
+              stage:
+                prev.stage === "Site Visit Pending"
+                  ? ("Site Visit Scheduled" as PipelineStage)
+                  : prev.stage,
+            }));
           }}
           adminOverrideUnlocked={effectiveAdminOverrideUnlocked}
-          setAdminOverrideUnlocked={godModeSetterForTab(0)}
+          setAdminOverrideUnlocked={godModeSetterForTab(siteVisitTab)}
           permission={getStagePermissionInContext("site_visit", actor, entryStage)}
         />
-      ),
-      [quoteTab]: (
+      );
+    }
+
+    if (quoteTab >= 0) {
+      tabToModule[quoteTab] = (
         <QuotationModule
           order={{
             id: order.id,
@@ -1164,6 +1408,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
             stage: order.stage,
             stageStatus: order.stageStatus,
             workflow_type: order.workflow_type,
+            business_operation: order.business_operation,
           }}
           isEmployee={isStaffOrAdmin}
           currentUserRole={currentUserRole}
@@ -1172,15 +1417,18 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           initialQuotation={initialQuotation}
           siteVisitItems={siteVisitItems}
           onRequestAdvance={handleQuotationAdvance}
-          onCustomerMessage={currentUserRole === "Admin" ? openCustomerMessage : undefined}
+          onCustomerMessage={openCustomerMessage}
           externalRealtime
           realtimeQuotation={quotationRealtimeRow}
           adminOverrideUnlocked={effectiveAdminOverrideUnlocked}
           setAdminOverrideUnlocked={godModeSetterForTab(quoteTab)}
           permission={getStagePermissionInContext("quotation", actor, entryStage)}
         />
-      ),
-      [designTab]: (
+      );
+    }
+
+    if (designTab >= 0) {
+      tabToModule[designTab] = (
         <DesignModule
           order={order}
           isEmployee={isStaffOrAdmin}
@@ -1198,8 +1446,11 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           currentUserRole={currentUserRole}
           permission={getStagePermissionInContext("design", actor, entryStage)}
         />
-      ),
-      3: (
+      );
+    }
+
+    if (productionTab >= 0) {
+      tabToModule[productionTab] = (
         <ProductionModule
           embedded
           data={{
@@ -1216,11 +1467,14 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
             onBack: () => {},
           }}
           adminOverrideUnlocked={effectiveAdminOverrideUnlocked}
-          setAdminOverrideUnlocked={godModeSetterForTab(3)}
+          setAdminOverrideUnlocked={godModeSetterForTab(productionTab)}
           currentUserRole={currentUserRole}
         />
-      ),
-      4: (
+      );
+    }
+
+    if (installationTab >= 0) {
+      tabToModule[installationTab] = (
         <InstallationModule
           embedded
           data={{
@@ -1242,7 +1496,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                   scheduledTime,
                 } as InstallationDetails,
               }));
-              setActiveStepTab(4);
+              setActiveStepTab(installationTab);
               router.refresh();
               triggerLocalAlert("Installation scheduled — stage advanced.", "success");
               openCustomerMessage("installation_scheduled", {
@@ -1252,11 +1506,11 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
             },
           }}
           adminOverrideUnlocked={effectiveAdminOverrideUnlocked}
-          setAdminOverrideUnlocked={godModeSetterForTab(4)}
+          setAdminOverrideUnlocked={godModeSetterForTab(installationTab)}
           currentUserRole={currentUserRole}
         />
-      ),
-    };
+      );
+    }
 
     if (activeStepTab === ADMIN_TAB) {
       return (
@@ -1267,7 +1521,12 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           onAdminApprove={handleAdminApprove}
           onAdminReject={handleAdminReject}
           onApproveWithWorkflowChoice={async () => {
-            // Staff push may leave site visit unlocked — lock before workflow choice.
+            const gate = canAdvanceSiteVisitAudit(sv);
+            if (!gate.ok) {
+              alert(gate.tooltip);
+              return;
+            }
+            // Staff push may leave site visit unlocked — lock before workflow choice / approve.
             if (order.stage.startsWith("Site Visit") && !sv.completed) {
               setIsProcessing(true);
               try {
@@ -1285,11 +1544,15 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
               }
               setIsProcessing(false);
             }
-            setIsWorkflowChoiceOpen(true);
+            if (needsSiteVisitWorkflowChoice) {
+              setIsWorkflowChoiceOpen(true);
+              return;
+            }
+            await handleAdminApprove();
           }}
           updateSiteVisitDetails={updateSiteVisitDetails}
           updateOrderStage={handleUpdateOrderStage}
-          onUpdateHealth={handleUpdateHealth}
+          onUpdateHealth={isOrderClosed ? undefined : handleUpdateHealth}
           onReopen={handleReopen}
         />
       );
@@ -1319,39 +1582,36 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   };
 
   /* ── Workflow steps for middle panel (Payments is a header tab, not a pipeline step) ── */
-  const workflowSteps = isDesignFirst
-    ? [
-        ...(isEmployee ? [] : [{ label: "Enquiries", tabIndex: -1, done: true, icon: FileText }]),
-        ...(isEmployee ? [] : [{ label: "Admin Controls", tabIndex: ADMIN_TAB, done: false, icon: Lock }]),
-        { label: "Site Visit", tabIndex: 0, done: currentStageIndex > 0, icon: MapPin },
-        { label: "Design",    tabIndex: 1, done: currentStageIndex > 1, icon: Palette },
-        { label: "Quote",     tabIndex: 2, done: currentStageIndex > 2, icon: BarChart3 },
-        { label: "Production",  tabIndex: 3, done: currentStageIndex > 3, icon: Package },
-        { label: "Installation", tabIndex: 4, done: currentStageIndex > 4, icon: Wrench },
-      ]
-    : [
-        ...(isEmployee ? [] : [{ label: "Enquiries", tabIndex: -1, done: true, icon: FileText }]),
-        ...(isEmployee ? [] : [{ label: "Admin Controls", tabIndex: ADMIN_TAB, done: false, icon: Lock }]),
-        { label: "Site Visit",  tabIndex: 0, done: currentStageIndex > 0, icon: MapPin },
-        { label: "Quote",       tabIndex: 1, done: currentStageIndex > 1, icon: BarChart3 },
-        { label: "Design",      tabIndex: 2, done: currentStageIndex > 2, icon: Palette },
-        { label: "Production",  tabIndex: 3, done: currentStageIndex > 3, icon: Package },
-        { label: "Installation", tabIndex: 4, done: currentStageIndex > 4, icon: Wrench },
-      ];
+  const workflowSteps = [
+    ...(isEmployee ? [] : [{ label: "Enquiries", tabIndex: -1, done: true, icon: FileText }]),
+    ...(isEmployee ? [] : [{ label: "Admin Controls", tabIndex: ADMIN_TAB, done: false, icon: Lock }]),
+    ...worksheetModules.map((mod, idx) => {
+      const meta = WORKFLOW_STEP_META[mod] || {
+        label: mod,
+        icon: FileText,
+        title: mod,
+      };
+      return {
+        label: meta.label,
+        tabIndex: idx,
+        moduleKey: mod,
+        done: isWorksheetModuleDone(
+          mod,
+          order.stage,
+          businessOp,
+          undefined,
+          workflowType
+        ),
+        icon: meta.icon,
+      };
+    }),
+  ];
 
   const getModuleTitle = () => {
     if (activeStepTab === ADMIN_TAB) return "Admin Control Panel";
     if (activeStepTab === PAYMENTS_TAB) return "Payment Milestones";
-    if (activeStepTab === 0) return "Site Visit Audit";
-    if (isDesignFirst) {
-      if (activeStepTab === 1) return "Design Workflow";
-      if (activeStepTab === 2) return "Product Quote";
-    } else {
-      if (activeStepTab === 1) return "Product Quote";
-      if (activeStepTab === 2) return "Design Workflow";
-    }
-    if (activeStepTab === 3) return "Fabrication Checklist";
-    if (activeStepTab === 4) return "Field Installation";
+    const mod = moduleForTabIndex(worksheetModules, activeStepTab);
+    if (mod && WORKFLOW_STEP_META[mod]) return WORKFLOW_STEP_META[mod].title;
     return "Order Details";
   };
   const activeModuleTitle = getModuleTitle();
@@ -1440,7 +1700,23 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                 const displayStage = (isSiteVisitStage && hasNoDate) ? "Site Visit Pending" : o.stage;
                 const stageInfo = STAGE_LABEL[displayStage] || { label: displayStage, color: "#94A3B8" };
 
-                const progress = Math.round(((stageToTabIndex(displayStage) + 1) / 5) * 100);
+                const progress = Math.round(
+                  ((stageToTabIndex(
+                    displayStage,
+                    o.business_operation,
+                    o.workflow_type
+                  ) +
+                    1) /
+                    Math.max(
+                      1,
+                      getWorksheetModuleKeysForOp(
+                        o.business_operation,
+                        undefined,
+                        o.workflow_type
+                      ).length
+                    )) *
+                    100
+                );
 
                 return (
                   <div
@@ -1457,11 +1733,14 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                     onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = "#F8FAFC"; }}
                     onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = "white"; }}
                   >
-                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "4px", marginBottom: "3px" }}>
+                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "6px", marginBottom: "3px" }}>
                       <span style={{ fontSize: "13px", fontWeight: "700", color: "#0F172A", lineHeight: 1.3, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {o.clientName}
                       </span>
-
+                      <BusinessOperationCaption
+                        opId={o.business_operation}
+                        className="text-[10px] font-semibold text-slate-500 shrink-0 leading-tight"
+                      />
                     </div>
                     <div style={{ fontSize: "11px", color: "#94A3B8", marginBottom: "6px" }}>
                       {o.orderCode} • {o.businessName || o.customerName || "—"}
@@ -1497,35 +1776,116 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           {/* Customer Strip & Horizontal Timeline Header */}
           <div className="px-3 sm:px-4 md:px-6" style={{ background: "white", flexShrink: 0 }}>
 
-            <div className="py-3 sm:py-4 border-b border-slate-100 space-y-3">
-              {/* Row 1: Back + icon actions */}
-              <div className="flex items-center justify-between gap-2">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  title="Back"
-                  aria-label="Back to orders"
-                  className="inline-flex items-center justify-center gap-1.5 h-10 px-3 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-colors shrink-0"
-                >
-                  <ArrowLeft size={16} className="shrink-0" />
-                  <span className="text-[12px] font-bold">Back</span>
-                </button>
+            <div className="py-3 border-b border-slate-100">
+              <div className="flex items-center justify-between gap-2 sm:gap-3 min-w-0">
+                <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    title="Back"
+                    aria-label="Back to orders"
+                    className="inline-flex items-center justify-center gap-1.5 h-9 w-9 sm:w-auto sm:px-2.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-colors shrink-0"
+                  >
+                    <ArrowLeft size={15} className="shrink-0" />
+                    <span className="hidden sm:inline text-[12px] font-bold">Back</span>
+                  </button>
 
-                <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[15px] sm:text-lg font-extrabold text-slate-900 leading-tight truncate">
+                      {order.businessName || "—"}
+                    </div>
+                    <div className="mt-0.5 flex items-center gap-1.5 min-w-0 text-[11px] text-slate-500">
+                      <span className="font-semibold tracking-wide text-slate-400 uppercase shrink-0">
+                        {order.orderCode}
+                      </span>
+                      <BusinessOperationCaption
+                        opId={order.business_operation}
+                        className="min-w-0 truncate text-[11px] font-medium text-slate-500 leading-none normal-case tracking-normal before:content-['·'] before:mr-1.5 before:text-slate-300"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+                  {!isEmployee && (
+                    <div className="hidden sm:flex items-center gap-1.5">
+                      {([
+                        {
+                          key: "portal",
+                          label: copiedLink ? "Copied!" : "Portal",
+                          shortLabel: copiedLink ? "Copied!" : "Portal",
+                          icon: Share2,
+                          onClick: handleCopyMagicLink,
+                          active: false,
+                          badge: null as React.ReactNode,
+                        },
+                        {
+                          key: "admin",
+                          label: "Admin Controls",
+                          shortLabel: "Admin",
+                          icon: Lock,
+                          onClick: () => {
+                            userNavigatedRef.current = true;
+                            setActiveStepTab(ADMIN_TAB);
+                          },
+                          active: activeStepTab === ADMIN_TAB,
+                          badge:
+                            order.stageStatus && order.stageStatus !== "Normal" ? (
+                              <span className="flex items-center justify-center w-3.5 h-3.5 shrink-0 text-[9px] font-bold text-white bg-red-500 rounded-full animate-pulse shadow-sm">
+                                1
+                              </span>
+                            ) : null,
+                        },
+                        {
+                          key: "payments",
+                          label: "Payments",
+                          shortLabel: "Pay",
+                          icon: CreditCard,
+                          onClick: () => {
+                            userNavigatedRef.current = true;
+                            setActiveStepTab(PAYMENTS_TAB);
+                          },
+                          active: activeStepTab === PAYMENTS_TAB,
+                          badge: null as React.ReactNode,
+                        },
+                      ] as const).map((btn) => {
+                        const Icon = btn.icon;
+                        return (
+                          <button
+                            key={btn.key}
+                            type="button"
+                            onClick={btn.onClick}
+                            title={btn.label}
+                            className={`h-9 inline-flex items-center justify-center gap-1.5 px-2 lg:px-2.5 rounded-lg text-[11px] font-semibold border transition-colors ${
+                              btn.active
+                                ? "bg-slate-900 text-white border-slate-900 shadow-sm"
+                                : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300 hover:text-slate-900"
+                            }`}
+                          >
+                            <Icon size={13} className="shrink-0" />
+                            <span className="hidden lg:inline whitespace-nowrap">{btn.label}</span>
+                            <span className="lg:hidden whitespace-nowrap">{btn.shortLabel}</span>
+                            {btn.badge}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
                   <button
                     type="button"
                     onClick={() => void handleRefreshOrder()}
                     disabled={isRefreshing}
                     title="Refresh order"
                     aria-label="Refresh order"
-                    className={`inline-flex items-center justify-center w-10 h-10 rounded-lg border transition-all ${
+                    className={`inline-flex items-center justify-center w-9 h-9 rounded-lg border transition-all ${
                       isRefreshing
                         ? "border-[var(--color-secondary)]/25 bg-[var(--color-secondary)]/5 text-[var(--color-secondary)]"
-                        : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                        : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300"
                     }`}
                   >
                     <RefreshCw
-                      size={16}
+                      size={15}
                       className={isRefreshing ? "animate-[spin_0.85s_linear_infinite]" : ""}
                     />
                   </button>
@@ -1535,13 +1895,13 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                     title="Order timeline"
                     aria-label="Order timeline"
                     aria-pressed={activeRightPanel === "timeline"}
-                    className={`relative inline-flex items-center justify-center w-10 h-10 rounded-lg border transition-colors ${
+                    className={`relative inline-flex items-center justify-center w-9 h-9 rounded-lg border transition-colors ${
                       activeRightPanel === "timeline"
                         ? "border-transparent bg-[var(--color-secondary)] text-white"
-                        : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                        : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300"
                     }`}
                   >
-                    <History size={16} />
+                    <History size={15} />
                     {timelineCount > 0 && (
                       <span
                         className={`absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold inline-flex items-center justify-center text-white border-2 border-white ${
@@ -1557,98 +1917,73 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                     onClick={() => setShowCustomerPanel(true)}
                     title="Customer details"
                     aria-label="Customer details"
-                    className="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-colors"
+                    className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-colors"
                   >
-                    <User size={16} />
+                    <User size={15} />
                   </button>
                 </div>
               </div>
 
-              {/* Row 2: Order identity + Portal/Admin/Payments (parallel to business name) */}
-              <div className="min-w-0">
-                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                  {order.orderCode}
+              {!isEmployee && (
+                <div className="sm:hidden mt-2.5 grid grid-cols-3 gap-1.5">
+                  {([
+                    {
+                      key: "portal",
+                      label: copiedLink ? "Copied!" : "Portal",
+                      icon: Share2,
+                      onClick: handleCopyMagicLink,
+                      active: false,
+                      badge: null as React.ReactNode,
+                    },
+                    {
+                      key: "admin",
+                      label: "Admin",
+                      icon: Lock,
+                      onClick: () => {
+                        userNavigatedRef.current = true;
+                        setActiveStepTab(ADMIN_TAB);
+                      },
+                      active: activeStepTab === ADMIN_TAB,
+                      badge:
+                        order.stageStatus && order.stageStatus !== "Normal" ? (
+                          <span className="flex items-center justify-center w-3.5 h-3.5 shrink-0 text-[9px] font-bold text-white bg-red-500 rounded-full animate-pulse shadow-sm">
+                            1
+                          </span>
+                        ) : null,
+                    },
+                    {
+                      key: "payments",
+                      label: "Payments",
+                      icon: CreditCard,
+                      onClick: () => {
+                        userNavigatedRef.current = true;
+                        setActiveStepTab(PAYMENTS_TAB);
+                      },
+                      active: activeStepTab === PAYMENTS_TAB,
+                      badge: null as React.ReactNode,
+                    },
+                  ] as const).map((btn) => {
+                    const Icon = btn.icon;
+                    return (
+                      <button
+                        key={btn.key}
+                        type="button"
+                        onClick={btn.onClick}
+                        title={btn.label === "Admin" ? "Admin Controls" : btn.label}
+                        className={`h-9 inline-flex items-center justify-center gap-1 px-1.5 rounded-lg text-[11px] font-semibold border transition-colors overflow-hidden ${
+                          btn.active
+                            ? "bg-slate-900 text-white border-slate-900 shadow-sm"
+                            : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300 hover:text-slate-900"
+                        }`}
+                      >
+                        <Icon size={13} className="shrink-0" />
+                        <span className="truncate">{btn.label}</span>
+                        {btn.badge}
+                      </button>
+                    );
+                  })}
                 </div>
-
-                <div className="mt-1 flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="text-base sm:text-lg font-extrabold text-slate-900 leading-snug truncate">
-                      {order.businessName || "—"}
-                    </div>
-                    <div className="mt-0.5 text-sm text-slate-500 truncate">
-                      Lead: {order.clientName || "—"}
-                    </div>
-                  </div>
-
-                  {!isEmployee && (
-                    <div className="grid grid-cols-3 gap-1.5 w-full sm:w-auto sm:shrink-0 sm:min-w-[260px] md:min-w-[320px]">
-                      {([
-                        {
-                          key: "portal",
-                          label: copiedLink ? "Copied!" : "Portal",
-                          shortLabel: copiedLink ? "Copied!" : "Portal",
-                          icon: Share2,
-                          onClick: handleCopyMagicLink,
-                          active: false,
-                          show: true,
-                          badge: null as React.ReactNode,
-                        },
-                        {
-                          key: "admin",
-                          label: "Admin Controls",
-                          shortLabel: "Admin",
-                          icon: Lock,
-                          onClick: () => setActiveStepTab(ADMIN_TAB),
-                          active: activeStepTab === ADMIN_TAB,
-                          show: true,
-                          badge:
-                            order.stageStatus && order.stageStatus !== "Normal" ? (
-                              <span className="flex items-center justify-center w-3.5 h-3.5 shrink-0 text-[9px] font-bold text-white bg-red-500 rounded-full animate-pulse shadow-sm">
-                                1
-                              </span>
-                            ) : null,
-                        },
-                        {
-                          key: "payments",
-                          label: "Payments",
-                          shortLabel: "Payments",
-                          icon: CreditCard,
-                          onClick: () => setActiveStepTab(PAYMENTS_TAB),
-                          active: activeStepTab === PAYMENTS_TAB,
-                          show: true,
-                          badge: null as React.ReactNode,
-                        },
-                      ] as const)
-                        .filter((btn) => btn.show)
-                        .map((btn) => {
-                          const Icon = btn.icon;
-                          return (
-                            <button
-                              key={btn.key}
-                              type="button"
-                              onClick={btn.onClick}
-                              title={btn.label}
-                              className="min-w-0 h-9 sm:h-10 inline-flex items-center justify-center gap-1 px-1.5 sm:px-2 rounded-lg text-[11px] font-semibold transition-all overflow-hidden"
-                              style={{
-                                background: btn.active ? "#0F172A" : "transparent",
-                                border: btn.active ? "none" : "1px solid #E2E8F0",
-                                color: btn.active ? "white" : "#475569",
-                                boxShadow: btn.active ? "0 1px 2px rgba(0,0,0,0.05)" : "none",
-                              }}
-                            >
-                              <Icon size={13} className="shrink-0" />
-                              <span className="truncate min-w-0">
-                                <span className="sm:hidden">{btn.shortLabel}</span>
-                                <span className="hidden sm:inline">{btn.label}</span>
-                              </span>
-                              {btn.badge}
-                            </button>
-                          );
-                        })}
-                    </div>
-                  )}
-                </div>
-              </div>
+              )}
             </div>
 
             {/* Horizontal Timeline */}
@@ -1658,16 +1993,21 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                 (s) => s.tabIndex !== ADMIN_TAB && s.tabIndex !== PAYMENTS_TAB
               );
               return (
-                <div className="py-3">
+                <div className="py-2">
                   {/* Workflow stages — toggleable bar like site-visit items */}
                   <div
+                    key={`timeline-${order.id}-${workflowType || "default"}-${worksheetModules.join("-")}`}
                     className="flex items-center gap-1 overflow-x-auto p-1 bg-slate-100 border border-slate-200/60 rounded-xl w-full max-w-full"
                     style={{ WebkitOverflowScrolling: "touch", scrollbarWidth: "none", msOverflowStyle: "none" }}
                   >
                     {visibleSteps.map((step) => {
                       const isActive = activeStepTab === step.tabIndex;
-                      const isDone = step.done || step.tabIndex < currentStageIndex;
-                      const stageForStep = tabIndexToOrderStage(step.tabIndex, order.workflow_type);
+                      const isDone = Boolean(step.done);
+                      const stageForStep = tabIndexToOrderStage(
+                        step.tabIndex,
+                        order.business_operation,
+                        workflowType
+                      );
                       const isLocked =
                         stageForStep != null &&
                         (!isTimelineStageAccessible(stageForStep, actor, entryStage) ||
@@ -1680,10 +2020,13 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                           type="button"
                           title={step.label}
                           onClick={() => {
-                            if (canSelect) setActiveStepTab(step.tabIndex);
+                            if (canSelect) {
+                              userNavigatedRef.current = true;
+                              setActiveStepTab(step.tabIndex);
+                            }
                           }}
                           disabled={!canSelect}
-                          className={`shrink-0 min-w-[5.5rem] md:flex-1 md:min-w-0 flex items-center justify-center gap-1 rounded-lg px-2.5 py-2 text-[12px] font-semibold transition-all focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed ${
+                          className={`shrink-0 min-w-[4.75rem] sm:min-w-[5.5rem] md:flex-1 md:min-w-0 flex items-center justify-center gap-1 rounded-lg px-2 sm:px-2.5 py-2 text-[11px] sm:text-[12px] font-semibold transition-all focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed ${
                             isActive
                               ? "bg-white text-[var(--color-secondary)] shadow-[0_1px_3px_rgba(0,0,0,0.1)] ring-1 ring-slate-900/5"
                               : isDone
@@ -1707,7 +2050,15 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
             <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
               {(activeStepTab === ADMIN_TAB || activeStepTab === PAYMENTS_TAB) && (
                 <button
-                  onClick={() => setActiveStepTab(stageToTabIndex(order.stage, order.workflow_type))}
+                  onClick={() =>
+                    setActiveStepTab(
+                      stageToTabIndex(
+                        order.stage,
+                        order.business_operation,
+                        workflowType
+                      )
+                    )
+                  }
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -1804,6 +2155,9 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
 
             <div style={{ background: "white", border: "1px solid #E2E8F0", borderTop: "none", borderBottomLeftRadius: "12px", borderBottomRightRadius: "12px", borderTopRightRadius: "12px", overflowX: "hidden", minHeight: "100%", minWidth: 0, borderTopLeftRadius: activeStepTab === ADMIN_TAB || activeStepTab === PAYMENTS_TAB ? "12px" : "0px", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.05)" }}>
               <div className="p-3 sm:p-4 md:p-6 min-w-0">
+                {activeStepTab !== ADMIN_TAB && activeStepTab !== PAYMENTS_TAB && (
+                  <RequirementsNotesBanner requirements={order.requirements} />
+                )}
                 {renderModule()}
               </div>
             </div>
@@ -1851,7 +2205,11 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                     {!isCurrentTabFrozen && (
                       <>
                         {(() => {
-                          const activeStageForPerm = tabIndexToOrderStage(activeStepTab, order.workflow_type);
+                          const activeStageForPerm = tabIndexToOrderStage(
+                            activeStepTab,
+                            order.business_operation,
+                            workflowType
+                          );
                           const stageCanEdit = activeStageForPerm
                             ? getStagePermissionInContext(activeStageForPerm, actor, entryStage).canEdit
                             : true;
@@ -1895,9 +2253,14 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                               </button>
 
                               {isEmployee ? (
-                                !hideStaffAdvanceRequest && (() => {
+                                !hideStaffAdvanceRequest &&
+                                !(siteVisitTab >= 0 && activeStepTab === siteVisitTab && !canAdvanceSiteVisit) &&
+                                !(productionTab >= 0 && activeStepTab === productionTab && !productionAdvanceGate.ok) &&
+                                (() => {
                                   const advanceBlocked =
-                                    (activeStepTab === 0 || activeStepTab === designTab) &&
+                                    ((siteVisitTab >= 0 && activeStepTab === siteVisitTab) ||
+                                      (designTab >= 0 && activeStepTab === designTab) ||
+                                      (productionTab >= 0 && activeStepTab === productionTab)) &&
                                     !canAdvanceSiteVisit;
                                   const designNeedsCustomerApproval =
                                     activeStepTab === designTab &&
@@ -1944,27 +2307,74 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                                   );
                                 })()
                               ) : (
-                                showAdminApproveButton && (
+                                <>
+                                  {showAdminDesignOverrideButton && (
+                                    <div className="flex-1 sm:flex-none min-w-0">
+                                      <button
+                                        type="button"
+                                        onClick={() => void handleDesignAdvanceWithoutCustomer()}
+                                        disabled={isProcessing}
+                                        className="w-full justify-center"
+                                        style={{
+                                          padding: "10px 16px",
+                                          background: "#D97706",
+                                          border: "none",
+                                          color: "white",
+                                          borderRadius: "8px",
+                                          fontSize: "12px",
+                                          fontWeight: "700",
+                                          cursor: isProcessing ? "not-allowed" : "pointer",
+                                          opacity: isProcessing ? 0.7 : 1,
+                                          display: "flex",
+                                          alignItems: "center",
+                                          gap: "6px",
+                                        }}
+                                      >
+                                        <Check size={13} className="shrink-0" />
+                                        <span className="md:hidden">Approve design</span>
+                                        <span className="hidden md:inline">
+                                          Approve design (skip customer)
+                                        </span>
+                                      </button>
+                                    </div>
+                                  )}
+                                  {showAdminApproveButton && (
                                   <div className="flex-1 sm:flex-none min-w-0">
                                     <button onClick={() => {
-                                      if ((activeStepTab === 0 || activeStepTab === designTab) && !canAdvanceSiteVisit) {
+                                      if (
+                                        ((siteVisitTab >= 0 && activeStepTab === siteVisitTab) ||
+                                          (designTab >= 0 && activeStepTab === designTab) ||
+                                          (productionTab >= 0 && activeStepTab === productionTab)) &&
+                                        !canAdvanceSiteVisit
+                                      ) {
                                         alert(siteVisitAdvanceTooltip);
                                         return;
                                       }
                                       handleAdminApprove();
                                     }} className="w-full justify-center" style={{ padding: "10px 16px", background: "#22C55E", border: "none", color: "white", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
                                       <Check size={13} />
-                                      {showAdminInstallationComplete ? (
+                                      {showAdminInstallationComplete || willCompleteFromProduction ? (
                                         <>
                                           <span className="md:hidden">Complete Order</span>
                                           <span className="hidden md:inline">Review Payments &amp; Complete</span>
+                                        </>
+                                      ) : willAdvanceToProduction ? (
+                                        <>
+                                          <span className="md:hidden">Start fabrication</span>
+                                          <span className="hidden md:inline">Set deadline &amp; start fabrication</span>
+                                        </>
+                                      ) : order.stage === "Design In Progress" ? (
+                                        <>
+                                          <span className="md:hidden">Mark approved</span>
+                                          <span className="hidden md:inline">Mark design approved</span>
                                         </>
                                       ) : (
                                         "Approve & Advance"
                                       )}
                                     </button>
                                   </div>
-                                )
+                                  )}
+                                </>
                               )}
                             </>
                           );
@@ -1985,23 +2395,31 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
         <WorkflowChoiceModal
           isOpen={isWorkflowChoiceOpen}
           onClose={() => setIsWorkflowChoiceOpen(false)}
-          onChoose={async (workflowType) => {
+          onChoose={async (chosenWorkflowType) => {
             setIsWorkflowChoiceOpen(false);
             setIsProcessing(true);
             try {
-              await setWorkflowTypeAction(order.id, workflowType);
+              await setWorkflowTypeAction(order.id, chosenWorkflowType);
+              const nextStage =
+                chosenWorkflowType === "design_first"
+                  ? ("Design In Progress" as PipelineStage)
+                  : ("Quotation In Progress" as PipelineStage);
               setOrder((prev) => ({
                 ...prev,
-                workflow_type: workflowType,
-                stage:
-                  workflowType === "design_first"
-                    ? "Design In Progress"
-                    : "Quotation In Progress",
+                workflow_type: chosenWorkflowType,
+                stage: nextStage,
                 stageStatus: "Normal",
               }));
+              setActiveStepTab(
+                stageToTabIndex(
+                  nextStage,
+                  order.business_operation || "signage",
+                  chosenWorkflowType
+                )
+              );
               router.refresh();
               triggerLocalAlert(
-                `Workflow set to "${workflowType === "design_first" ? "Design First" : "Quote First"}". Order advanced.`,
+                `Workflow set to "${chosenWorkflowType === "design_first" ? "Design First" : "Quote First"}". Order advanced.`,
                 "success"
               );
             } catch (err: any) {
@@ -2022,9 +2440,17 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           onClose={() => setIsReviewModalOpen(false)}
           onConfirm={async () => {
             try {
+              const gate = canAdvanceSiteVisitAudit(sv);
+              if (!gate.ok) {
+                triggerLocalAlert(gate.tooltip, "error");
+                return;
+              }
               if (siteVisitReviewMode === "staff_push") {
-                const workflowType = order.workflow_type || "quote_first";
-                const nextStatus = computePendingStageStatus(order.stage, workflowType);
+                const nextStatus = computePendingStageStatus(
+        order.stage,
+        businessOp,
+        workflowType
+      );
                 const previousStatus = order.stageStatus;
                 setOrder((prev) => ({ ...prev, stageStatus: nextStatus, stageAdminNotes: "" }));
                 setIsReviewModalOpen(false);
@@ -2052,7 +2478,11 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
               openCustomerMessage("site_visit_completed");
               setIsReviewModalOpen(false);
               router.refresh();
-              setIsWorkflowChoiceOpen(true);
+              if (needsSiteVisitWorkflowChoice) {
+                setIsWorkflowChoiceOpen(true);
+                return;
+              }
+              await handleAdminApprove();
             } catch (err: any) {
               console.error(err);
               triggerLocalAlert(
@@ -2071,6 +2501,12 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
         <InstallationPaymentApprovalModal
           orderId={order.id}
           orderLabel={`${order.businessName || ""} - ${order.clientName || ""}`.trim() || order.orderId || ""}
+          description={
+            order.stage === "Production" ||
+            nextStageAfter(businessOp, "Production", undefined, workflowType) === "Completed"
+              ? "Production is complete. Confirm payment status before marking this order as completed."
+              : "Installation is complete. Confirm payment status before marking this order as completed."
+          }
           onClose={() => setIsInstallationPaymentModalOpen(false)}
           onConfirm={async () => {
             setIsProcessing(true);
@@ -2080,6 +2516,48 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
             } finally {
               setIsProcessing(false);
             }
+          }}
+        />
+      )}
+
+      {isProductionAdvanceModalOpen && (
+        <ProductionAdvanceModal
+          orderLabel={`${order.businessName || ""} - ${order.clientName || ""}`.trim() || order.orderId || ""}
+          initialDeadline={
+            order.productionDetails?.installation_deadline ||
+            order.productionDetails?.deadline ||
+            null
+          }
+          hasDesignProofs={hasDesignProofsForGate}
+          isDesignApproved={isDesignApprovedForGate}
+          hasProductionFiles={hasProductionFilesForGate}
+          onClose={() => setIsProductionAdvanceModalOpen(false)}
+          onConfirm={async (installationDeadline) => {
+            setIsProcessing(true);
+            try {
+              await updateProductionDetails(order.id, {
+                installation_deadline: installationDeadline,
+                deadline: installationDeadline,
+              });
+              await executeAdminApprove();
+              setIsProductionAdvanceModalOpen(false);
+            } finally {
+              setIsProcessing(false);
+            }
+          }}
+          onGoToPayments={async (installationDeadline) => {
+            if (installationDeadline) {
+              await updateProductionDetails(order.id, {
+                installation_deadline: installationDeadline,
+                deadline: installationDeadline,
+              });
+            }
+            setIsProductionAdvanceModalOpen(false);
+            setActiveStepTab(PAYMENTS_TAB);
+          }}
+          onGoToDesign={() => {
+            setIsProductionAdvanceModalOpen(false);
+            setActiveStepTab(designTab);
           }}
         />
       )}
@@ -2127,11 +2605,24 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           onClose={() => setShowCustomerPanel(false)}
           customer={client}
           orderId={initialOrder.id}
+          leadName={order.clientName}
+          installationAddress={
+            order.siteVisitDetails?.customerAddress &&
+            !String(order.siteVisitDetails.customerAddress).startsWith("Skipped")
+              ? order.siteVisitDetails.customerAddress
+              : null
+          }
+          installationGps={
+            order.siteVisitDetails?.gpsLocation &&
+            order.siteVisitDetails.gpsLocation !== "N/A"
+              ? order.siteVisitDetails.gpsLocation
+              : null
+          }
         />
       )}
 
-      {/* Catch-up WhatsApp FAB — admin only, when auto popup was skipped */}
-      {currentUserRole === "Admin" && !customerMsg && !templatePickerOpen && (
+      {/* Catch-up WhatsApp FAB — when auto popup was skipped */}
+      {isStaffOrAdmin && !customerMsg && !templatePickerOpen && (
         <button
           type="button"
           onClick={() => setTemplatePickerOpen(true)}
@@ -2159,7 +2650,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
         </button>
       )}
 
-      {currentUserRole === "Admin" && (
+      {isStaffOrAdmin && (
         <CustomerMessageTemplatePicker
           isOpen={templatePickerOpen}
           onClose={() => setTemplatePickerOpen(false)}

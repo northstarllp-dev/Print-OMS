@@ -75,10 +75,12 @@ describe("convert", () => {
         business_name: "Gourmet",
         customer_id: "cust-uuid",
         stage: "Site Visit Pending",
+        business_operation: "signage",
         health: "Active",
         product_type: "ACP Board",
         requirements: "Need fascia",
         assigned_admins: ["admin-1"],
+        business_operation: "signage",
       });
     });
 

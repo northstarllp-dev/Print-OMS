@@ -1,30 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { GoogleMap, useJsApiLoader, Autocomplete } from "@react-google-maps/api";
-import { AdvancedMapMarker } from "@/components/maps/AdvancedMapMarker";
-import {
-  GOOGLE_MAPS_DEFAULT_OPTIONS,
-  GOOGLE_MAPS_LIBRARIES,
-  GOOGLE_MAPS_SCRIPT_ID,
-} from "@/components/maps/googleMapsConfig";
-import { isGoogleMapsUrl } from "@/components/maps/mapsUrl";
-import {
-  ensureResolvedSiteLocation,
-  resolveGoogleMapsLocation,
-} from "@/components/maps/resolveGoogleMapsLocation";
-
-const containerStyle = {
-  width: "100%",
-  height: "100%"
-};
-
-// Default center: India/Bangalore as an example
-const defaultCenter = {
-  lat: 12.9716,
-  lng: 77.5946
-};
+import React, { useState, useEffect, useRef, useCallback, useMemo, startTransition } from "react";
+import dynamic from "next/dynamic";
 import {
   Printer, MapPin, FileText, CheckSquare, CheckCircle2,
   ZoomIn, ZoomOut, Check, X, Info,
@@ -36,7 +14,8 @@ import {
 } from "lucide-react";
 import { Logo } from "@/components/ui/Logo";
 import { PlatformMadeWithLove } from "@/components/ui/PlatformMadeWithLove";
-import { withBasePath } from "@/lib/appBasePath";
+import { OrderImage } from "@/components/storage/OrderImage";
+import { establishPortalSession } from "./establishPortalSession";
 import { loadClientConfig } from "@/config/loadClientConfig";
 import { createClient } from "@/utils/supabase/client";
 import { scheduleSiteVisitAction } from "@/features/orders/actions/orderActions";
@@ -47,17 +26,76 @@ import {
   type ProductionChecklistItem,
 } from "@/features/settings/productionChecklist";
 import { formatSiteMeasurementLabel } from "@/features/orders/actions/siteVisitMapper";
+import { isSkippedSiteVisit } from "@/features/orders/workspace/modules/site-visit/siteVisitUiLogic";
 import {
   mergeOrderDetailPatch,
   useOrderDetailSync,
 } from "@/features/orders/realtime/useOrderDetailSync";
 import type { OrderDetailPatch } from "@/features/orders/realtime/orderDetailPatch";
-import { PaymentsTab } from "./components/PaymentsTab";
-import { QuotationTab } from "./components/QuotationTab";
 import { useQuotationActions } from "./hooks/useQuotationActions";
-import { InstallationScheduleModule } from "@/features/installations/components/InstallationScheduleModule";
-import { DesignTab } from "./components/DesignTab";
+import { ensureResolvedSiteLocation } from "@/components/maps/resolveGoogleMapsLocation";
 import type { InvoiceProfile } from "@/features/quotations/types/invoiceProfile";
+import {
+  getPortalStepKeysForOp,
+  getStepIndexForOp,
+} from "@/features/orders/businessOperations";
+
+const PORTAL_STEP_META: Record<
+  string,
+  { label: string; icon: typeof FileText }
+> = {
+  enquiry: { label: "Enquiries", icon: FileText },
+  site_visit: { label: "Site Visit", icon: MapPin },
+  quotation: { label: "Quotations", icon: BarChart3 },
+  design: { label: "Design", icon: Palette },
+  production: { label: "Production", icon: Package },
+  installation: { label: "Installation", icon: Wrench },
+  payments: { label: "Payments", icon: CreditCard },
+};
+
+const TabFallback = () => (
+  <div className="flex items-center justify-center py-12 text-sm text-slate-400">
+    <Loader2 size={18} className="animate-spin mr-2" /> Loading…
+  </div>
+);
+
+const PaymentsTab = dynamic(
+  () => import("./components/PaymentsTab").then((m) => m.PaymentsTab),
+  { ssr: false, loading: TabFallback }
+);
+const QuotationTab = dynamic(
+  () => import("./components/QuotationTab").then((m) => m.QuotationTab),
+  { ssr: false, loading: TabFallback }
+);
+const DesignTab = dynamic(
+  () => import("./components/DesignTab").then((m) => m.DesignTab),
+  { ssr: false, loading: TabFallback }
+);
+const InstallationScheduleModule = dynamic(
+  () =>
+    import("@/features/installations/components/InstallationScheduleModule").then(
+      (m) => m.InstallationScheduleModule
+    ),
+  { ssr: false, loading: TabFallback }
+);
+const SiteVisitLocationPicker = dynamic(
+  () =>
+    import("./components/SiteVisitLocationPicker").then((m) => m.SiteVisitLocationPicker),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-40 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center text-xs text-slate-500">
+        Loading map…
+      </div>
+    ),
+  }
+);
+
+// Default center: India/Bangalore as an example
+const defaultCenter = {
+  lat: 12.9716,
+  lng: 77.5946
+};
 
 interface Customer {
   id: string;
@@ -101,6 +139,7 @@ interface Order {
   orderCode?: string;
   orderId?: string;
   workflow_type?: string;
+  business_operation?: string;
   // New quotation workflow fields
 
   siteVisitItems?: Array<{
@@ -131,31 +170,30 @@ interface PortalClientProps {
   };
 }
 
-// We moved STEPS inside the component to be dynamic
-function getStepIndex(stage: string, workflowType: string = "quote_first"): number {
-  const s = (stage || "").toLowerCase();
-  const isDesignFirst = workflowType === "design_first";
-
-  if (s.includes("site visit")) return 1;
-  if (isDesignFirst) {
-    if (s.includes("design")) return 2;
-    if (s.includes("quotation")) return 3;
-  } else {
-    if (s.includes("quotation")) return 2;
-    if (s.includes("design")) return 3;
-  }
-  // Installation stages before "ready" — "Ready For Installation" contains both.
-  if (s.includes("installation") || s.includes("completed") || s.includes("closed")) return 5;
-  if (s.includes("production") || s.includes("fabricat")) return 4;
-  return 0;
+function getStepIndex(
+  stage: string,
+  businessOperation?: string,
+  workflowType?: string | null
+): number {
+  return getStepIndexForOp(
+    stage,
+    businessOperation || "signage",
+    undefined,
+    workflowType
+  );
 }
 
 export function PortalClient({ customer, orders: initialOrders, quotations = [], initialActiveOrderId, token, appSettings }: PortalClientProps) {
   const [orders, setOrders] = useState<Order[]>(initialOrders);
 
+  const initialOrdersKey = initialOrders
+    .map((o) => `${o.id}:${o.stage}:${o.stageStatus}`)
+    .join("|");
   useEffect(() => {
     setOrders(initialOrders);
-  }, [initialOrders]);
+    // Only apply a new server snapshot when pipeline fields actually change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialOrdersKey]);
 
   const initialOrder = initialOrders.find(
     o => o.id === initialActiveOrderId || o.orderId === initialActiveOrderId || o.orderCode === initialActiveOrderId
@@ -188,48 +226,25 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
     onPatch: applyPortalPatch,
   });
 
-  const workflowType = activeOrder?.workflow_type || "quote_first";
-  const isDesignFirst = workflowType === "design_first";
+  const businessOperation =
+    activeOrder?.business_operation || "signage";
+  const workflowType = activeOrder?.workflow_type || null;
 
-  const STEPS = isDesignFirst
-    ? [
-      { key: "enquiry", label: "Enquiries", icon: FileText },
-      { key: "site_visit", label: "Site Visit", icon: MapPin },
-      { key: "design", label: "Design", icon: Palette },
-      { key: "quotation", label: "Quotations", icon: BarChart3 },
-      { key: "production", label: "Production", icon: Package },
-      { key: "installation", label: "Installation", icon: Wrench },
-      { key: "payments", label: "Payments", icon: CreditCard },
-    ]
-    : [
-      { key: "enquiry", label: "Enquiries", icon: FileText },
-      { key: "site_visit", label: "Site Visit", icon: MapPin },
-      { key: "quotation", label: "Quotations", icon: BarChart3 },
-      { key: "design", label: "Design", icon: Palette },
-      { key: "production", label: "Production", icon: Package },
-      { key: "installation", label: "Installation", icon: Wrench },
-      { key: "payments", label: "Payments", icon: CreditCard },
-    ];
+  const STEPS = getPortalStepKeysForOp(
+    businessOperation,
+    undefined,
+    workflowType
+  ).map((key) => {
+    const meta = PORTAL_STEP_META[key] || {
+      label: key,
+      icon: FileText,
+    };
+    return { key, label: meta.label, icon: meta.icon };
+  });
 
   // Step 4: Establish session cookie on first load (avoids keeping token in URL)
   useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const res = await fetch(withBasePath("/api/portal/session"), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token }),
-        });
-        if (mounted && !res.ok) {
-          const err = await res.json().catch(() => ({}));
-          console.warn("[Portal] Session cookie setup failed:", err.error || res.status);
-        }
-      } catch (e) {
-        console.warn("[Portal] Session cookie setup error:", e);
-      }
-    })();
-    return () => { mounted = false; };
+    establishPortalSession(token);
   }, [token]);
 
   // Site Visit scheduling states
@@ -239,108 +254,16 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
   const [gpsCoords, setGpsCoords] = useState("12.9716, 77.5946");
   const [isRescheduling, setIsRescheduling] = useState(false);
   const [schedulingLoading, setSchedulingLoading] = useState(false);
-  const [mapsSearching, setMapsSearching] = useState(false);
-  const [activeTab, setActiveTab] = useState<"site" | "quote" | "design" | "production" | "installation">("site");
 
   const [markerPosition, setMarkerPosition] = useState(defaultCenter);
   const [mapCenter, setMapCenter] = useState(defaultCenter);
-  const [map, setMap] = useState<google.maps.Map | null>(null);
-  const geocoder = useRef<any>(null);
-
-  const { isLoaded } = useJsApiLoader({
-    id: GOOGLE_MAPS_SCRIPT_ID,
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
-    libraries: GOOGLE_MAPS_LIBRARIES,
-  });
-
-  const autocompleteRef = useRef<any>(null);
 
   const applyLocation = useCallback((lat: number, lng: number, address?: string) => {
     setMarkerPosition({ lat, lng });
     setMapCenter({ lat, lng });
     setGpsCoords(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
-    if (address && !isGoogleMapsUrl(address)) setSiteAddress(address);
+    if (address) setSiteAddress(address);
   }, []);
-
-  const onPlaceChanged = () => {
-    try {
-      const place = autocompleteRef.current?.getPlace?.();
-      const location = place?.geometry?.location;
-      if (!location) return;
-      const lat = typeof location.lat === "function" ? location.lat() : location.lat;
-      const lng = typeof location.lng === "function" ? location.lng() : location.lng;
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
-      applyLocation(lat, lng, place.formatted_address || place.name || undefined);
-    } catch (err) {
-      console.warn("[Portal] onPlaceChanged ignored incomplete place:", err);
-    }
-  };
-
-  const tryResolveMapsLink = useCallback(
-    async (value: string) => {
-      if (!isGoogleMapsUrl(value)) return;
-      setMapsSearching(true);
-      try {
-        const resolved = await resolveGoogleMapsLocation(value);
-        if (!resolved) {
-          alert("Could not open that Google Maps link. Paste a full Maps URL or search for the address.");
-          return;
-        }
-        applyLocation(resolved.lat, resolved.lng, resolved.address);
-      } catch (err) {
-        console.error("[Portal] Maps link resolve failed:", err);
-        alert("Could not open that Google Maps link. Please try again.");
-      } finally {
-        setMapsSearching(false);
-      }
-    },
-    [applyLocation]
-  );
-
-  useEffect(() => {
-    if (isLoaded && !geocoder.current) {
-      geocoder.current = new window.google.maps.Geocoder();
-    }
-  }, [isLoaded]);
-
-  const reverseGeocode = (lat: number, lng: number) => {
-    if (!geocoder.current) return;
-    geocoder.current.geocode({ location: { lat, lng } }, (results: any, status: any) => {
-      if (status === "OK" && results[0]) {
-        setSiteAddress(results[0].formatted_address);
-      }
-    });
-  };
-
-  const onMapClick = useCallback((e: google.maps.MapMouseEvent) => {
-    if (!e.latLng) return;
-    const lat = e.latLng.lat();
-    const lng = e.latLng.lng();
-    applyLocation(lat, lng);
-    reverseGeocode(lat, lng);
-  }, [applyLocation]);
-
-  const handleCurrentLocation = () => {
-    setMapsSearching(true);
-    if ("geolocation" in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const lat = position.coords.latitude;
-          const lng = position.coords.longitude;
-          applyLocation(lat, lng);
-          reverseGeocode(lat, lng);
-          setMapsSearching(false);
-        },
-        () => {
-          alert("Could not detect your location. Please check your browser permissions.");
-          setMapsSearching(false);
-        }
-      );
-    } else {
-      alert("Geolocation is not supported by your browser.");
-      setMapsSearching(false);
-    }
-  };
 
   const {
     quoteFeedback,
@@ -357,15 +280,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
 
   const [products, setProducts] = useState<any[]>([]);
   const [selectedProductInfo, setSelectedProductInfo] = useState<any | null>(null);
-
-  useEffect(() => {
-    const supabase = createClient();
-    async function loadProducts() {
-      const { data } = await supabase.from("products").select("*").eq("is_active", true);
-      if (data) setProducts(data);
-    }
-    loadProducts();
-  }, []);
+  const [mountedStepKeys, setMountedStepKeys] = useState<Set<string>>(() => new Set());
 
   // Photo viewer states for Customer Portal
   const [viewerPhotos, setViewerPhotos] = useState<string[]>([]);
@@ -376,16 +291,54 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
     setViewerIndex(index);
   };
 
-  const currentStep = activeOrder ? getStepIndex(activeOrder.stage, activeOrder.workflow_type) : 0;
+  const currentStep = activeOrder
+    ? getStepIndex(
+        activeOrder.stage,
+        activeOrder.business_operation || businessOperation,
+        activeOrder.workflow_type || workflowType
+      )
+    : 0;
 
   const [viewedStep, setViewedStep] = useState<number | null>(null);
   const activeStepToRender = viewedStep !== null ? viewedStep : currentStep;
+  const activeStepKey = STEPS[activeStepToRender]?.key;
   const prevCurrentStepRef = useRef(currentStep);
 
-  // Reset viewed step when order changes
+  // Track which heavy steps have been opened (keep-alive).
+  useEffect(() => {
+    if (!activeStepKey) return;
+    setMountedStepKeys((prev) => {
+      if (prev.has(activeStepKey)) return prev;
+      const next = new Set(prev);
+      next.add(activeStepKey);
+      return next;
+    });
+  }, [activeStepKey]);
+
+  // Only fetch products when quotation is opened.
+  useEffect(() => {
+    if (!mountedStepKeys.has("quotation") || products.length > 0) return;
+    const supabase = createClient();
+    let cancelled = false;
+    void supabase
+      .from("products")
+      .select("*")
+      .eq("is_active", true)
+      .then(({ data }) => {
+        if (!cancelled && data) setProducts(data);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [mountedStepKeys, products.length]);
+
+  // Reset viewed step only when switching orders — not on every stage/key change
+  // (that remounted Design and looked like a constant refresh).
   useEffect(() => {
     setViewedStep(null);
+    setMountedStepKeys(activeStepKey ? new Set([activeStepKey]) : new Set());
     prevCurrentStepRef.current = currentStep;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only reset on order switch
   }, [activeOrderId]);
 
   // When staff advances the pipeline, follow the new current step (clear history browse).
@@ -468,15 +421,21 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
     DEFAULT_PRODUCTION_CHECKLIST_ITEMS
   );
 
+  // Checklist settings only needed on Production step.
   useEffect(() => {
+    if (!mountedStepKeys.has("production")) return;
+    let cancelled = false;
     getAppSettings()
       .then((settings) => {
-        if (settings?.productionChecklistItems?.length) {
+        if (!cancelled && settings?.productionChecklistItems?.length) {
           setProductionChecklistItems(settings.productionChecklistItems);
         }
       })
       .catch(() => {});
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [mountedStepKeys]);
 
   const productionChecklistProgress = resolveChecklistProgress(pd, productionChecklistItems);
 
@@ -494,10 +453,9 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
   }
 
   return (
-    <div className="min-h-screen bg-[#f4f6fb] font-sans">
+    <div className="h-[100dvh] max-h-[100dvh] flex flex-col overflow-hidden bg-[#f4f6fb] font-sans">
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
-        * { font-family: 'Inter', sans-serif; }
+        html, body { overflow: hidden !important; height: 100% !important; height: 100dvh !important; margin: 0; padding: 0; }
         .portal-stepper-line { transition: width 0.6s cubic-bezier(0.4,0,0.2,1); }
         .scope-item { transition: all 0.2s ease; }
         .portal-scroll::-webkit-scrollbar { width: 4px; }
@@ -511,7 +469,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
       `}</style>
 
       {/* --- TOP HEADER --- */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-20">
+      <header className="bg-white border-b border-slate-200 z-20 shrink-0">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2.5 sm:py-3 flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
           
           {/* Row 1 on mobile: Logo + Order Switcher */}
@@ -582,6 +540,9 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
         </div>
       </header>
 
+      {/* --- SCROLL REGION: stepper + stage content --- */}
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+
       {/* --- PROGRESS STEPPER --- */}
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3 sm:py-5">
@@ -609,7 +570,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                   className={`flex flex-col items-center text-center relative z-10 shrink-0 sm:flex-1 min-w-[3rem] sm:min-w-0 px-1 sm:px-0 snap-start ${canOpen ? 'cursor-pointer hover:opacity-80 active:opacity-70' : ''}`}
                   onClick={() => {
                     if (canOpen) {
-                      setViewedStep(idx);
+                      startTransition(() => setViewedStep(idx));
                     }
                   }}
                 >
@@ -635,7 +596,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
       </div>
 
       {/* --- MAIN CONTENT --- */}
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6 pb-24">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6 w-full">
         <div className="grid grid-cols-1 gap-6">
 
           {/* --- LEFT: Stage Content --- */}
@@ -699,7 +660,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                 {/* ------ SITE VISIT STAGE ------ */}
                 {STEPS[activeStepToRender]?.key === "site_visit" && (
                   <>
-                    {sv.customerAddress?.startsWith("Skipped") ? (
+                    {isSkippedSiteVisit(sv) ? (
                       <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 text-center">
                         <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-3">
                           <CheckCircle2 size={24} className="text-amber-600" />
@@ -783,75 +744,14 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                               <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
                                 Choose Location in Maps
                               </label>
-                              {isLoaded ? (
-                                <Autocomplete
-                                  onLoad={autocomplete => (autocompleteRef.current = autocomplete)}
-                                  onPlaceChanged={onPlaceChanged}
-                                >
-                                  <input
-                                    type="text"
-                                    required
-                                    value={siteAddress}
-                                    onChange={e => setSiteAddress(e.target.value)}
-                                    onPaste={(e) => {
-                                      const pasted = e.clipboardData.getData("text");
-                                      if (isGoogleMapsUrl(pasted)) {
-                                        e.preventDefault();
-                                        setSiteAddress(pasted.trim());
-                                        void tryResolveMapsLink(pasted);
-                                      }
-                                    }}
-                                    onBlur={() => {
-                                      void tryResolveMapsLink(siteAddress);
-                                    }}
-                                    placeholder="Search address or paste a Google Maps link..."
-                                    className="w-full p-3 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none bg-slate-50 focus:bg-white transition-all"
-                                  />
-                                </Autocomplete>
-                              ) : (
-                                <input
-                                  type="text"
-                                  required
-                                  value={siteAddress}
-                                  onChange={e => setSiteAddress(e.target.value)}
-                                  placeholder="Full address where signage will be installed"
-                                  className="w-full p-3 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none bg-slate-50 focus:bg-white transition-all"
-                                />
-                              )}
-
-                              {/* Map visual */}
-                              <div className="mt-2 border border-slate-200 rounded-xl overflow-hidden bg-slate-50">
-                                <div className="h-40 bg-[#e8edf2] relative">
-                                  {isLoaded ? (
-                                    <GoogleMap
-                                      mapContainerStyle={containerStyle}
-                                      center={mapCenter}
-                                      zoom={14}
-                                      onClick={onMapClick}
-                                      onLoad={setMap}
-                                      onUnmount={() => setMap(null)}
-                                      options={GOOGLE_MAPS_DEFAULT_OPTIONS}
-                                    >
-                                      <AdvancedMapMarker map={map} position={markerPosition} />
-                                    </GoogleMap>
-                                  ) : (
-                                    <div className="w-full h-full flex items-center justify-center text-xs text-slate-500">
-                                      Loading Map...
-                                    </div>
-                                  )}
-                                </div>
-                                <div className="px-3 py-2 bg-white border-t border-slate-200 flex items-center justify-between">
-                                  <span className="text-[10px] font-mono font-semibold text-slate-600">📍 {gpsCoords}</span>
-                                  <button
-                                    type="button"
-                                    onClick={handleCurrentLocation}
-                                    className="flex items-center gap-1 text-[10px] font-bold text-[#1E40AF] hover:underline cursor-pointer"
-                                  >
-                                    {mapsSearching ? <Loader2 size={10} className="animate-spin" /> : null}
-                                    {mapsSearching ? "Detecting..." : "Auto-detect"}
-                                  </button>
-                                </div>
-                              </div>
+                              <SiteVisitLocationPicker
+                                siteAddress={siteAddress}
+                                onAddressChange={setSiteAddress}
+                                gpsCoords={gpsCoords}
+                                onLocationChange={applyLocation}
+                                markerPosition={markerPosition}
+                                mapCenter={mapCenter}
+                              />
                             </div>
 
                             <div className="flex items-center gap-3 pt-2">
@@ -1073,8 +973,8 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                 )}
 
                 {/* ------ QUOTATION STAGE ------ */}
-                {STEPS[activeStepToRender]?.key === "quotation" && (
-                  <div className="space-y-6">
+                {mountedStepKeys.has("quotation") && (
+                  <div className="space-y-6" hidden={activeStepKey !== "quotation"}>
                     {/* Header */}
                     <div>
                       <h2 className="text-xl font-black text-[#0b1c30] mb-1">Quotation</h2>
@@ -1107,8 +1007,20 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                 )}
 
                 {/* ------ DESIGN STAGE ------ */}
-                {STEPS[activeStepToRender]?.key === "design" && (
-                  <DesignTab order={activeOrder as any} customer={customer} siteVisitItems={activeOrder?.siteVisitItems || []} portalToken={token} />
+                {mountedStepKeys.has("design") && (
+                  <div hidden={activeStepKey !== "design"}>
+                    <DesignTab
+                      order={activeOrder as any}
+                      customer={customer}
+                      siteVisitItems={activeOrder?.siteVisitItems || []}
+                      portalToken={token}
+                      onDesignUpdated={(design) =>
+                        setOrders((prev) =>
+                          prev.map((o) => (o.id === activeOrderId ? { ...o, design } : o))
+                        )
+                      }
+                    />
+                  </div>
                 )}
 
                 {/* ------ PRODUCTION STAGE ------ */}
@@ -1185,8 +1097,9 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                                   key={`${url}-${index}`}
                                   className="border border-slate-200 rounded-xl overflow-hidden aspect-video bg-slate-100"
                                 >
-                                  <img
+                                  <OrderImage
                                     src={url}
+                                    width={640}
                                     alt={`Installation photo ${index + 1}`}
                                     className="w-full h-full object-cover"
                                   />
@@ -1220,8 +1133,8 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                   </div>
                 )}
 
-                {STEPS[activeStepToRender]?.key === "payments" && activeOrder && (
-                  <div className="p-4 sm:p-6">
+                {mountedStepKeys.has("payments") && activeOrder && (
+                  <div className="p-4 sm:p-6" hidden={activeStepKey !== "payments"}>
                     <PaymentsTab orderId={activeOrder.id} />
                   </div>
                 )}
@@ -1234,25 +1147,16 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
           </div>
 
         </div>
-
-        <div style={{
-          position: "fixed",
-          bottom: 0,
-          left: 0,
-          textAlign: "center",
-          padding: "8px 0 calc(8px + env(safe-area-inset-bottom, 0px))",
-          borderTop: "1px solid #E2E8F0",
-          color: "#94A3B8",
-          fontSize: "13px",
-          fontWeight: "600",
-          width: "100%",
-          background: "#f4f6fb",
-          zIndex: 40,
-          pointerEvents: "none",
-        }}>
-          <PlatformMadeWithLove variant="portal" />
-        </div>
       </div>
+      </div>
+
+      {/* --- FOOTER (in-flow, pinned at the bottom of the app shell) --- */}
+      <footer
+        className="shrink-0 w-full text-center text-slate-400 text-[13px] font-semibold bg-[#f4f6fb] border-t border-slate-200"
+        style={{ padding: "8px 0 calc(8px + env(safe-area-inset-bottom, 0px))" }}
+      >
+        <PlatformMadeWithLove variant="portal" />
+      </footer>
 
 
 

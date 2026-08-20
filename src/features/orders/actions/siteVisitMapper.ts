@@ -39,6 +39,59 @@ export function mapSiteVisitMeasurementFromDb(m: any): SignLocation {
   };
 }
 
+/** Normalize linear unit labels from site-visit UI / DB. */
+export function normalizeLinearUnit(unit?: string | null): "ft" | "in" | "m" | "cm" | "mm" {
+  const u = (unit || "ft").trim().toLowerCase();
+  if (u === "in" || u === "inch" || u === "inches" || u === "\"") return "in";
+  if (u === "m" || u === "meter" || u === "metre" || u === "meters" || u === "metres") return "m";
+  if (u === "cm" || u === "centimeter" || u === "centimetre" || u === "centimeters") return "cm";
+  if (u === "mm" || u === "millimeter" || u === "millimetre" || u === "millimeters") return "mm";
+  // ft, feet, foot, '
+  return "ft";
+}
+
+/** Convert one linear dimension to feet. */
+export function linearToFeet(value: number, unit?: string | null): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  switch (normalizeLinearUnit(unit)) {
+    case "in":
+      return n / 12;
+    case "m":
+      return n / 0.3048;
+    case "cm":
+      return n / 30.48;
+    case "mm":
+      return n / 304.8;
+    default:
+      return n;
+  }
+}
+
+/**
+ * Area in square feet for quotation qty (Per Sq.Ft).
+ * Handles mixed units (e.g. width in inch, height in ft).
+ * Returns 0 when width/height missing or non-positive.
+ */
+export function siteMeasurementAreaSqFt(item: {
+  width?: number | null;
+  height?: number | null;
+  widthUnit?: string | null;
+  heightUnit?: string | null;
+  width_unit?: string | null;
+  height_unit?: string | null;
+} | null | undefined): number {
+  if (!item) return 0;
+  const w = Number(item.width);
+  const h = Number(item.height);
+  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return 0;
+  const wFt = linearToFeet(w, item.widthUnit || item.width_unit);
+  const hFt = linearToFeet(h, item.heightUnit || item.height_unit);
+  const area = wFt * hFt;
+  // Quotation qty should be a simple whole sq ft.
+  return Math.round(area);
+}
+
 /** Label shown under signage items on quotation pages. */
 export function formatSiteMeasurementLabel(item: {
   width?: number | null;
@@ -97,6 +150,50 @@ export function buildGoogleMapsSearchUrl(query?: string | null): string | null {
   const trimmed = typeof query === "string" ? query.trim() : "";
   if (!trimmed || trimmed === "N/A" || trimmed.startsWith("Skipped")) return null;
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(trimmed)}`;
+}
+
+/**
+ * Location link for list/table cells.
+ * Never uses legacy "Skipped…" placeholder text as the link label — prefers real
+ * address, then GPS, then an explicit gmap link.
+ */
+export function resolveSiteVisitMapLink(
+  details?: {
+    customerAddress?: string | null;
+    customer_address?: string | null;
+    siteAddress?: string | null;
+    site_address?: string | null;
+    gpsLocation?: string | null;
+    gps_location?: string | null;
+    gmapLink?: string | null;
+    gmap_link?: string | null;
+  } | null
+): { href: string; label: string } | null {
+  if (!details) return null;
+
+  const gmap =
+    (typeof details.gmapLink === "string" && details.gmapLink.trim()) ||
+    (typeof details.gmap_link === "string" && details.gmap_link.trim()) ||
+    "";
+  if (gmap) {
+    const address = resolveSiteVisitInstallationAddress(details);
+    return { href: gmap, label: address || "Open map location" };
+  }
+
+  const address = resolveSiteVisitInstallationAddress(details);
+  if (address) {
+    const href = buildGoogleMapsSearchUrl(address);
+    if (href) return { href, label: address };
+  }
+
+  const gpsRaw = details.gpsLocation ?? details.gps_location;
+  const gps = typeof gpsRaw === "string" ? gpsRaw.trim() : "";
+  if (gps && gps !== "N/A") {
+    const href = buildGoogleMapsSearchUrl(gps);
+    if (href) return { href, label: gps };
+  }
+
+  return null;
 }
 
 export function mapSiteVisitFromDb(sv: any): SiteVisitDetails | null {

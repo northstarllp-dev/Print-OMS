@@ -58,17 +58,32 @@ export default function ServiceTicketPublicClient() {
     setFiles(files.filter((_, index) => index !== indexToRemove));
   };
 
+  const sanitizePhone = (val: string) => {
+    let digits = val.replace(/\D/g, "");
+    if (digits.length === 12 && digits.startsWith("91")) {
+      digits = digits.slice(2);
+    } else if (digits.length === 11 && digits.startsWith("0")) {
+      digits = digits.slice(1);
+    }
+    return digits.slice(0, 10);
+  };
+
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const sanitized = sanitizePhone(e.target.value);
+    setPhone(sanitized);
+    if (error) setError(null);
+  };
+
   const getFormattedPhone = () => {
-    let p = phone.replace(/\s+/g, "");
-    if (p.startsWith('+91')) return p;
-    if (p.startsWith('91') && p.length === 12) return '+' + p;
-    if (p.startsWith('0') && p.length === 11) return '+91' + p.substring(1);
-    return '+91' + p;
+    return '+91' + phone;
   };
 
   async function handleLookup(e?: React.FormEvent) {
     if (e) e.preventDefault();
-    if (!phone.trim()) return;
+    if (phone.length !== 10) {
+      setError("Please enter a valid 10-digit mobile number.");
+      return;
+    }
     setLoadingLookup(true);
     setError(null);
     try {
@@ -86,9 +101,10 @@ export default function ServiceTicketPublicClient() {
         );
       }
       setCustomerId(payload.customer?.id || "");
-      setOrders(payload.orders || []);
-      setOrderId("");
-      if (!payload.customer || (payload.orders || []).length === 0) {
+      const nextOrders: LookupOrder[] = payload.orders || [];
+      setOrders(nextOrders);
+      setOrderId(nextOrders.length === 1 ? nextOrders[0].id : "");
+      if (!payload.customer || nextOrders.length === 0) {
         setError("No orders found with this number.");
       }
     } catch (err: unknown) {
@@ -223,41 +239,56 @@ export default function ServiceTicketPublicClient() {
             <form onSubmit={orders.length === 0 ? handleLookup : handleSubmit}>
               <div style={{ marginBottom: "24px" }}>
             <label className="text-label-caps" style={{ display: "block", marginBottom: "8px", color: "var(--color-on-surface-variant)" }}>Mobile Number</label>
-            <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-              <div style={{ position: "relative", flex: "1 1 200px", display: "flex", alignItems: "center" }}>
-                <div style={{ 
-                  position: "absolute", 
-                  left: "12px", 
-                  display: "flex", 
-                  alignItems: "center", 
-                  gap: "6px",
-                  color: "var(--color-on-surface-variant)",
-                  pointerEvents: "none"
-                }}>
-                  <Phone size={18} />
-                  <span style={{ fontSize: "14px", fontWeight: 500 }}>+91</span>
+            <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "flex-start" }}>
+              <div style={{ position: "relative", flex: "1 1 200px" }}>
+                <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                  <div style={{ 
+                    position: "absolute", 
+                    left: "12px", 
+                    display: "flex", 
+                    alignItems: "center", 
+                    gap: "6px",
+                    color: "var(--color-on-surface-variant)",
+                    pointerEvents: "none"
+                  }}>
+                    <Phone size={18} />
+                    <span style={{ fontSize: "14px", fontWeight: 500 }}>+91</span>
+                  </div>
+                  <input
+                    className="prt-input"
+                    type="tel"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={10}
+                    value={phone}
+                    onChange={handlePhoneChange}
+                    placeholder="98765 43210"
+                    style={{ paddingLeft: "76px" }}
+                  />
                 </div>
-                <input
-                  className="prt-input"
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="98765 43210"
-                  style={{ paddingLeft: "76px" }}
-                />
+                {phone.length > 0 && phone.length < 10 && (
+                  <p style={{ marginTop: "6px", fontSize: "12px", color: "#d97706", fontWeight: 500 }}>
+                    Please enter a 10-digit mobile number ({phone.length}/10 digits)
+                  </p>
+                )}
+                {phone.length === 10 && (
+                  <p style={{ marginTop: "6px", fontSize: "12px", color: "#059669", fontWeight: 500, display: "flex", alignItems: "center", gap: "4px" }}>
+                    <CheckCircle2 size={13} /> Valid 10-digit mobile number
+                  </p>
+                )}
               </div>
               <button
                 type="button"
-                className={`prt-btn ${phone.trim() ? 'prt-btn-primary' : 'prt-btn-secondary'}`}
+                className={`prt-btn ${phone.length === 10 ? 'prt-btn-primary' : 'prt-btn-secondary'}`}
                 onClick={handleLookup}
-                disabled={loadingLookup || !phone.trim()}
+                disabled={loadingLookup || phone.length !== 10}
                 style={{ 
                   height: "42px",
                   justifyContent: "center",
                   minWidth: "140px",
                   flex: "0 0 auto",
-                  opacity: (!phone.trim() || loadingLookup) ? 0.6 : 1,
-                  cursor: (!phone.trim() || loadingLookup) ? "not-allowed" : "pointer"
+                  opacity: (phone.length !== 10 || loadingLookup) ? 0.6 : 1,
+                  cursor: (phone.length !== 10 || loadingLookup) ? "not-allowed" : "pointer"
                 }}
               >
                 {loadingLookup ? <Loader2 size={18} className="animate-spin" /> : "Find Orders"}

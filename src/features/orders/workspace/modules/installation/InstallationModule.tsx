@@ -1,12 +1,19 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { ArrowLeft, Sparkles, Check, Loader2, CheckCircle, Save, UploadCloud, Calendar, Clock, Shield, FileText, Image as ImageIcon, Eye, Download, Trash, X, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft, Sparkles, Check, Loader2, CheckCircle, Save, Camera, Calendar, Clock, Shield, FileText, Image as ImageIcon, Eye, Download, Trash, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { InstallationScheduleModule } from "@/features/installations/components/InstallationScheduleModule";
 import { deleteStorageFilesAction } from "@/features/orders/actions/storageActions";
-import { uploadFileViaStaffApi } from "@/utils/supabase/uploadStorageFile";
+import { uploadFiles } from "@/utils/storage/uploadClient";
+import { parseStoredRef } from "@/utils/storage/storageRef";
+import { getSignedReadUrl } from "@/utils/storage/signedReadCache";
+import { OrderImage } from "@/components/storage/OrderImage";
 import { resolveSiteVisitInstallationAddress, buildGoogleMapsSearchUrl } from "@/features/orders/actions/siteVisitMapper";
 import { OverlayPortal } from "@/components/ui/OverlayPortal";
+import { DeliveryMethodChooser } from "@/features/installations/components/DeliveryMethodChooser";
+import { CustomerPickupModule } from "@/features/installations/components/CustomerPickupModule";
+import { loadClientConfig } from "@/config/loadClientConfig";
+import { getPaymentBalanceSummary } from "@/features/payments/actions/paymentActions";
 import type { StageModuleProps } from "../../shared/types";
 
 export interface InstallationModuleData {
@@ -54,13 +61,23 @@ export function InstallationModule({
     "Installation In Progress",
     "Installation Pending",
     "Installation",
+    "Customer Pickup",
   ].includes(order.stage);
+
+  const enableCustomerPickup = loadClientConfig().features.enableCustomerPickup === true;
+  const isReadyForInstallation = order.stage === "Ready For Installation";
+  const deliveryMethod = order.deliveryMethod || order.delivery_method || "installation";
+  const isCustomerPickup =
+    order.stage === "Customer Pickup" || deliveryMethod === "customer_pickup";
+  const [showScheduleForm, setShowScheduleForm] = useState(false);
   const baseFrozen = !isInstallationStage;
   const canEdit = (permission?.canEdit ?? true) && (!baseFrozen || adminOverrideUnlocked);
 
   const [saving, setSaving] = useState(false);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [alert, setAlert] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [outstandingAmount, setOutstandingAmount] = useState<number>(0);
+  const [loadingOutstanding, setLoadingOutstanding] = useState(false);
 
   const client = customers.find(c => c.id === order.customerId);
   const svDetails = order.siteVisitDetails || {};
@@ -96,9 +113,52 @@ export function InstallationModule({
   const [viewerPhotos, setViewerPhotos] = useState<string[]>([]);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
 
+  useEffect(() => {
+    let cancelled = false;
+    setLoadingOutstanding(true);
+    void getPaymentBalanceSummary(order.id)
+      .then((balance) => {
+        if (!cancelled) {
+          setOutstandingAmount(balance.outstanding || 0);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setOutstandingAmount(0);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingOutstanding(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [order.id]);
+
   const openPhotoViewer = (index: number) => {
     setViewerPhotos(afterPhotos);
     setViewerIndex(index);
+  };
+
+  const handleDownloadPhoto = async (url: string, filename?: string) => {
+    try {
+      let fetchUrl = url;
+      const parsed = parseStoredRef(url);
+      if (parsed) {
+        fetchUrl = await getSignedReadUrl(parsed.bucket, parsed.path);
+      }
+      const response = await fetch(fetchUrl);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = filename || `installation-photo-${Date.now()}.jpg`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error("Download failed:", error);
+      window.alert("Failed to download photo");
+    }
   };
 
   // Keep local worksheet fields in sync when realtime/parent installation props change.
@@ -122,22 +182,42 @@ export function InstallationModule({
     }
   };
 
-  const uploadInstallationPhoto = async (file: File) => {
-    const { url } = await uploadFileViaStaffApi(file, order.id, "installation_photo");
-    return url;
-  };
-
   const handlePhotoFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!canEdit) return;
     const files = e.target.files;
     if (!files || files.length === 0) return;
     setUploadingPhotos(true);
     try {
-      const uploadPromises = Array.from(files).map(file => uploadInstallationPhoto(file));
-      const urls = await Promise.all(uploadPromises);
-      const newUrls = [...afterPhotos, ...urls];
+      const { ok, failed } = await uploadFiles(Array.from(files), {
+        orderId: order.id,
+        purpose: "installation_photo",
+        channel: "staff",
+        concurrency: 3,
+      });
+      const refs = ok.map((o) => `${o.bucket}/${o.path}`);
+      if (failed.length) {
+        window.alert(`${failed.length} photo(s) failed to upload: ${failed[0].error}`);
+      }
+      const newUrls = [...afterPhotos, ...refs];
       setAfterPhotos(newUrls);
-      await updateInstallationDetails(order.id, { afterPhotos: newUrls, photos: newUrls });
+      if (refs.length) {
+        try {
+          await updateInstallationDetails(order.id, { afterPhotos: newUrls, photos: newUrls });
+        } catch (dbErr) {
+          // Roll back storage on DB failure to avoid orphans.
+          const byBucket = new Map<string, string[]>();
+          for (const o of ok) {
+            const list = byBucket.get(o.bucket) || [];
+            list.push(o.path);
+            byBucket.set(o.bucket, list);
+          }
+          for (const [bucket, paths] of byBucket) {
+            await deleteStorageFilesAction(bucket, paths).catch(() => {});
+          }
+          setAfterPhotos(afterPhotos);
+          throw dbErr;
+        }
+      }
     } catch (err: any) {
       window.alert("Upload failed: " + (err?.message || "Unknown error"));
     } finally {
@@ -148,15 +228,24 @@ export function InstallationModule({
 
   const removeInstallationPhoto = async (urlToRemove: string) => {
     if (!canEdit) return;
+    if (!window.confirm("Are you sure you want to remove this photo?")) return;
     try {
-      const path = urlToRemove.split("/installation-photos/").pop();
-      if (path) {
-        await deleteStorageFilesAction("installation-photos", [path]);
-      }
       const newUrls = afterPhotos.filter(u => u !== urlToRemove);
       setAfterPhotos(newUrls);
+      // DB first — if this fails, the photo is still in storage (no broken link).
       await updateInstallationDetails(order.id, { afterPhotos: newUrls, photos: newUrls });
+      // Then best-effort storage cleanup.
+      const parsed = parseStoredRef(urlToRemove);
+      if (parsed) {
+        try {
+          await deleteStorageFilesAction(parsed.bucket, [parsed.path]);
+        } catch (cleanupErr) {
+          console.error("Storage cleanup failed (DB record already removed):", cleanupErr);
+        }
+      }
     } catch (err: any) {
+      // Restore local state if DB write failed.
+      setAfterPhotos(afterPhotos);
       window.alert("Failed to delete photo: " + (err?.message || "Unknown error"));
     }
   };
@@ -225,7 +314,7 @@ export function InstallationModule({
             <ArrowLeft size={14} /> Back to Queue
           </button>
           <span className="text-slate-300">/</span>
-          <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">{order.orderCode}</span>
+          <span className="text-slate-400 text-xs font-medium">{order.orderCode}</span>
         </div>
       )}
 
@@ -234,7 +323,7 @@ export function InstallationModule({
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div className="flex flex-wrap gap-8">
             <div>
-              <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
+              <div className="text-[10px] text-slate-500 font-medium mb-1.5">
                 Date Started
               </div>
               <div className="text-sm font-bold text-slate-800">
@@ -248,7 +337,7 @@ export function InstallationModule({
               </div>
             </div>
             <div>
-              <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
+              <div className="text-[10px] text-slate-500 font-medium mb-1.5">
                 Scheduled Install
               </div>
               <div className="text-sm font-bold text-slate-800">
@@ -299,12 +388,58 @@ export function InstallationModule({
 
 
 
+      {isCustomerPickup ? (
+        <div className="space-y-4">
+          <div className="bg-rose-50 border border-rose-200 rounded-xl p-4">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-rose-700 mb-1">
+              Outstanding Amount
+            </div>
+            <div className="text-xl font-black text-rose-900">
+              {loadingOutstanding ? "Loading..." : `₹${outstandingAmount.toLocaleString("en-IN")}`}
+            </div>
+            <div className="text-xs text-rose-700 mt-1">
+              Amount pending before marking order as completed.
+            </div>
+          </div>
+          <CustomerPickupModule
+            orderId={order.id}
+            orderNo={order.orderId || order.order_id || order.id}
+            customerName={client?.name || client?.businessName || "Customer"}
+            businessName={order.businessName || client?.businessName || ""}
+            phone={client?.phone || ""}
+            email={client?.email || ""}
+            productType={order.productType || ""}
+            pickupConfirmedAt={order.pickupConfirmedAt || order.pickup_confirmed_at || null}
+          />
+        </div>
+      ) : (
       <div className={embedded ? "space-y-8" : "grid grid-cols-1 lg:grid-cols-3 gap-8 items-start"}>
 
         {/* Work column — full width when embedded */}
         <div className={embedded ? "space-y-8" : "lg:col-span-2 space-y-8"}>
+          <div className="bg-rose-50 border border-rose-200 rounded-xl p-4">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-rose-700 mb-1">
+              Outstanding Amount
+            </div>
+            <div className="text-xl font-black text-rose-900">
+              {loadingOutstanding ? "Loading..." : `₹${outstandingAmount.toLocaleString("en-IN")}`}
+            </div>
+            <div className="text-xs text-rose-700 mt-1">
+              Amount pending to be paid by customer.
+            </div>
+          </div>
 
-          {/* SCHEDULE INSTALLATION */}
+          {/* Delivery method chooser (when enabled and at Ready For Installation) */}
+          {enableCustomerPickup && isReadyForInstallation && !showScheduleForm ? (
+            <div className="bg-white border border-slate-200/70 rounded-xl p-4 sm:p-6">
+              <DeliveryMethodChooser
+                orderId={order.id}
+                onChooseInstallation={() => setShowScheduleForm(true)}
+                onPickupConfirmed={() => window.location.reload()}
+              />
+            </div>
+          ) : (
+          /* SCHEDULE INSTALLATION */
           <InstallationScheduleModule 
             orderId={order.id}
             initialScheduledDate={installationDetails.scheduledDate}
@@ -314,13 +449,14 @@ export function InstallationModule({
             locationText={siteAddress}
             onScheduled={onInstallationScheduled}
           />
+          )}
           
           {/* CHECKLIST */}
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-6 shadow-sm min-w-0 max-w-full overflow-hidden">
+          <div className="bg-white border border-slate-200/70 rounded-xl p-4 sm:p-6 min-w-0 max-w-full overflow-hidden">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-4 pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2 min-w-0">
                 <CheckCircle size={18} className="text-green-600 shrink-0" />
-                <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider">
+                <h2 className="text-sm font-bold text-slate-800">
                   Installation Checklist
                 </h2>
               </div>
@@ -391,8 +527,7 @@ export function InstallationModule({
                   <div className="flex flex-wrap gap-4">
                     {afterPhotos.map((photo, index) => (
                       <div key={photo} className="group relative w-24 h-24 sm:w-32 sm:h-32 bg-slate-100 rounded-xl overflow-hidden border border-slate-200 shadow-sm">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={photo} alt={`Installation photo ${index + 1}`} className="w-full h-full object-cover" />
+                        <OrderImage src={photo} width={320} alt={`Installation photo ${index + 1}`} className="w-full h-full object-cover" />
                         <div className="absolute inset-0 bg-slate-900/70 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                           <button
                             type="button"
@@ -405,7 +540,7 @@ export function InstallationModule({
                           </button>
                           <button
                             type="button"
-                            onClick={(e) => { e.stopPropagation(); window.open(`${photo}?download=`, "_blank"); }}
+                            onClick={(e) => { e.stopPropagation(); void handleDownloadPhoto(photo, `installation-photo-${index + 1}.jpg`); }}
                             className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/40 flex items-center justify-center text-white transition-colors"
                             title="Download"
                             aria-label="Download photo"
@@ -430,30 +565,57 @@ export function InstallationModule({
                 )}
                 
                 {!isCompleted && (
-                  <div className="pt-2">
+                  <div className="relative pt-2 flex flex-wrap items-center gap-3">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      id="installation-photos-camera"
+                      className="absolute w-px h-px p-0 -m-px overflow-hidden whitespace-nowrap border-0 [clip:rect(0,0,0,0)]"
+                      onChange={handlePhotoFiles}
+                      disabled={uploadingPhotos || !canEdit}
+                      tabIndex={-1}
+                    />
                     <input
                       type="file"
                       multiple
-                      accept="image/*"
-                      id="installation-photos-upload"
-                      className="hidden"
+                      accept="image/*,image/heic,image/heif"
+                      id="installation-photos-gallery"
+                      className="absolute w-px h-px p-0 -m-px overflow-hidden whitespace-nowrap border-0 [clip:rect(0,0,0,0)]"
                       onChange={handlePhotoFiles}
                       disabled={uploadingPhotos || !canEdit}
+                      tabIndex={-1}
                     />
-                    <label
-                      htmlFor="installation-photos-upload"
-                      className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all border ${
-                        uploadingPhotos || !canEdit
-                          ? "bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed" 
-                          : "bg-white hover:bg-slate-50 border-slate-200 text-slate-700 cursor-pointer shadow-sm"
-                      }`}
-                    >
-                      {uploadingPhotos ? (
-                        <><Loader2 size={14} className="animate-spin text-slate-400" /> Uploading...</>
-                      ) : (
-                        <><UploadCloud size={14} className="text-slate-500" /> Upload Photos</>
-                      )}
-                    </label>
+                    {uploadingPhotos ? (
+                      <span className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold border border-slate-200 bg-slate-50 text-slate-400">
+                        <Loader2 size={14} className="animate-spin" /> Uploading...
+                      </span>
+                    ) : (
+                      <>
+                        <label
+                          htmlFor="installation-photos-camera"
+                          className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                            !canEdit
+                              ? "bg-slate-50 text-slate-400 border border-slate-200 cursor-not-allowed pointer-events-none"
+                              : "bg-[var(--color-secondary)] text-white cursor-pointer hover:opacity-90"
+                          }`}
+                          aria-disabled={!canEdit}
+                        >
+                          <Camera size={14} /> Take Photo
+                        </label>
+                        <label
+                          htmlFor="installation-photos-gallery"
+                          className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all border ${
+                            !canEdit
+                              ? "bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed pointer-events-none"
+                              : "bg-white hover:bg-slate-50 border-slate-200 text-slate-700 cursor-pointer shadow-sm"
+                          }`}
+                          aria-disabled={!canEdit}
+                        >
+                          <ImageIcon size={14} className="text-slate-500" /> Gallery
+                        </label>
+                      </>
+                    )}
                   </div>
                 )}
               </div>
@@ -470,17 +632,18 @@ export function InstallationModule({
 
           {/* DESIGN REFERENCE */}
           {designImage && (
-            <div className="bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-6 shadow-sm min-w-0 max-w-full overflow-hidden">
+            <div className="bg-white border border-slate-200/70 rounded-xl p-4 sm:p-6 min-w-0 max-w-full overflow-hidden">
               <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
                 <Sparkles size={18} className="text-purple-600" />
-                <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider">
+                <h2 className="text-sm font-bold text-slate-800">
                   Design Reference
                 </h2>
               </div>
               <div className="rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
-                <img 
-                  src={designImage} 
-                  alt="Design Proof" 
+                <OrderImage
+                  src={designImage}
+                  format="origin"
+                  alt="Design Proof"
                   className="w-full h-auto max-h-[400px] object-contain"
                 />
               </div>
@@ -493,29 +656,29 @@ export function InstallationModule({
         {!embedded && (
           <div className="space-y-6 lg:sticky lg:top-24 transition-all duration-300">
             {client && (
-              <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm">
+              <div className="bg-white border border-slate-200/70 rounded-xl p-6">
                 <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
                   <Sparkles size={18} className="text-rose-600" />
-                  <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider">
+                  <h2 className="text-sm font-bold text-slate-800">
                     Client Contact
                   </h2>
                 </div>
                 <div className="space-y-4 text-xs">
                   <div>
-                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Client Name</div>
+                    <div className="text-[10px] text-slate-500 font-medium mb-1">Client Name</div>
                     <div className="font-bold text-slate-800 text-sm">{client.name}</div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     {client.phone && (
                       <div>
-                        <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Phone</div>
+                        <div className="text-[10px] text-slate-500 font-medium mb-1">Phone</div>
                         <div className="font-semibold text-slate-700">📞 {client.phone}</div>
                       </div>
                     )}
                     {client.whatsapp && (
                       <div>
-                        <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">WhatsApp</div>
+                        <div className="text-[10px] text-slate-500 font-medium mb-1">WhatsApp</div>
                         <div className="font-semibold text-emerald-600">💬 {client.whatsapp}</div>
                       </div>
                     )}
@@ -523,14 +686,14 @@ export function InstallationModule({
 
                   {client.email && (
                     <div>
-                      <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Email</div>
+                      <div className="text-[10px] text-slate-500 font-medium mb-1">Email</div>
                       <div className="font-semibold text-slate-700">✉️ {client.email}</div>
                     </div>
                   )}
 
                   {installationSiteAddress && (
                     <div className="pt-2 border-t border-slate-100 mt-2">
-                      <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Installation / Shipping Address</div>
+                      <div className="text-[10px] text-slate-500 font-medium mb-1">Installation / Shipping Address</div>
                       {siteMapsLink ? (
                         <a
                           href={siteMapsLink}
@@ -552,6 +715,7 @@ export function InstallationModule({
         )}
 
       </div>
+      )}
     </div>
 
     {viewerIndex !== null && viewerPhotos.length > 0 && (
@@ -571,11 +735,11 @@ export function InstallationModule({
           </button>
 
           <div className="relative max-w-4xl max-h-[85vh] w-full h-full flex items-center justify-center p-4">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            <OrderImage
               src={viewerPhotos[viewerIndex]}
-              className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+              format="origin"
               alt={`Installation photo ${viewerIndex + 1}`}
+              className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             />
           </div>
@@ -610,7 +774,7 @@ export function InstallationModule({
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                window.open(`${viewerPhotos[viewerIndex]}?download=`, "_blank");
+                void handleDownloadPhoto(viewerPhotos[viewerIndex], `installation-photo-${viewerIndex + 1}.jpg`);
               }}
               className="inline-flex items-center gap-1.5 bg-black/60 hover:bg-black/80 text-white text-sm font-semibold px-4 py-1.5 rounded-full backdrop-blur-md transition-colors"
             >

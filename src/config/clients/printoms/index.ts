@@ -41,7 +41,27 @@ export const defaultConfig: PrintOMSClientConfig = {
     enableAdminAssignment: false,
     needsAttentionAfterDays: 6,
     enquiryNeedsAttentionAfterDays: 5,
+    enableCustomerPickup: true,
   },
+  businessOperations: [
+    {
+      id: "signage",
+      label: "Signage",
+      stages: [
+        "enquiry",
+        "site_visit",
+        "quotation",
+        "design",
+        "production",
+        "installation",
+      ],
+    },
+    {
+      id: "flex_printing",
+      label: "Flex Printing",
+      stages: ["enquiry", "quotation", "design", "production", "installation"],
+    },
+  ],
   usesFloorPortals: true,
   stageGrantsByRole: {
     Designer: { ...view("site_visit"), ...edit("design", "quotation", "invoice") },

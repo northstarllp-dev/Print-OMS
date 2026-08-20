@@ -38,6 +38,7 @@ export type PipelineStage =
   | "Production"
   | "Ready For Installation"
   | "Installation Scheduled"
+  | "Customer Pickup"
   | "Completed"
   | "Closed";
 
@@ -182,8 +183,12 @@ export interface ProductionDetails {
   stage2?: boolean;
   stage3?: boolean;
   stage4?: boolean;
-  /** Dynamic workshop checklist progress keyed by settings item id. */
-  checklist?: Record<string, boolean>;
+  /** Dynamic workshop checklist progress keyed by settings item id.
+   *  May also include per-order custom checks and a `__custom_items__` label list. */
+  checklist?: Record<string, boolean | Array<{ id: string; label: string }>>;
+  /** Admin-set installation deadline (DB: productions.installation_deadline). */
+  installation_deadline?: string | null;
+  /** @deprecated Use installation_deadline */
   deadline?: string | null;
 }
 
@@ -222,9 +227,18 @@ export interface Order {
   orderCode?: string;
   health?: string;
   lost_reason?: string;
+  hold_note?: string | null;
+  reach_out_at?: string | null;
   orderId?: string;
-  /** Determines whether Quote or Design comes first after Site Visit */
+  /** Determines whether Quote or Design comes first after Site Visit (legacy). */
   workflow_type?: "quote_first" | "design_first";
+  /**
+   * Business operation id from client config (e.g. signage, flex_printing).
+   * Drives which pipeline stages apply and their order.
+   */
+  business_operation?: string;
+  delivery_method?: string;
+  pickup_confirmed_at?: string | null;
 }
 
 /** Payment tracking statuses (financial record only — no workflow). */
@@ -267,6 +281,8 @@ export interface Enquiry {
   enquireId?: string;
   customerId?: string;
   orderId?: string;
+  /** Business operation chosen at enquiry creation (copied to order on convert). */
+  businessOperation?: string;
 }
 
 

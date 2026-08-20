@@ -40,6 +40,7 @@ const getStageBadgeStyle = (stage: string) => {
   const styles: Record<string, { bg: string; text: string; border: string }> = {
     "Ready For Installation": { bg: "bg-indigo-50/70", text: "text-indigo-700", border: "border-indigo-200" },
     "Installation Scheduled": { bg: "bg-cyan-50/70", text: "text-cyan-700", border: "border-cyan-200" },
+    "Customer Pickup": { bg: "bg-amber-50/70", text: "text-amber-700", border: "border-amber-200" },
     "Completed": { bg: "bg-emerald-50/70", text: "text-emerald-700", border: "border-emerald-200" },
     "Closed": { bg: "bg-slate-50/70", text: "text-slate-600", border: "border-slate-200" },
   };

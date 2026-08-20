@@ -15,7 +15,12 @@ interface AdminControlModuleProps {
   onApproveWithWorkflowChoice?: () => void;
   updateSiteVisitDetails: (orderId: string, details: Partial<SiteVisitDetails>) => Promise<void>;
   updateOrderStage: (orderId: string, stage: string) => Promise<void>;
-  onUpdateHealth?: (health: string, lostReason?: string, callRemarks?: string) => Promise<void>;
+  onUpdateHealth?: (
+    health: string,
+    lostReason?: string,
+    callRemarks?: string,
+    hold?: { note?: string | null; reachOutAt?: string | null } | null
+  ) => Promise<void>;
   onReopen?: () => Promise<void>;
 }
 
@@ -54,6 +59,10 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
     ORDER_HEALTH_VALUES.includes(currentHealth) ? currentHealth : "Active"
   );
   const [lostReason, setLostReason] = useState(order.lost_reason || "");
+  const [holdNote, setHoldNote] = useState((order as any).hold_note || (order as any).holdNote || "");
+  const [reachOutAt, setReachOutAt] = useState(
+    (order as any).reach_out_at || (order as any).reachOutAt || ""
+  );
   const [callRemarks, setCallRemarks] = useState("");
   const [savingHealth, setSavingHealth] = useState(false);
 
@@ -65,7 +74,9 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
     const h = (order.health || "Active") as OrderHealth;
     setHealthDraft(ORDER_HEALTH_VALUES.includes(h) ? h : "Active");
     setLostReason(order.lost_reason || "");
-  }, [order.health, order.lost_reason]);
+    setHoldNote((order as any).hold_note || (order as any).holdNote || "");
+    setReachOutAt((order as any).reach_out_at || (order as any).reachOutAt || "");
+  }, [order.health, order.lost_reason, (order as any).hold_note, (order as any).reach_out_at]);
 
   useEffect(() => {
     fetchEmployeeStats().then(data => {
@@ -130,12 +141,19 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
       alert("A reason is required when marking an order as Lost.");
       return;
     }
+    if (healthDraft === "On Hold" && (!holdNote.trim() || !reachOutAt)) {
+      alert("A note and reach-out date are required when putting an order On Hold.");
+      return;
+    }
     setSavingHealth(true);
     try {
       await onUpdateHealth(
         healthDraft,
         healthDraft === "Lost" ? lostReason.trim() : undefined,
-        callRemarks.trim() || undefined
+        callRemarks.trim() || undefined,
+        healthDraft === "On Hold"
+          ? { note: holdNote.trim(), reachOutAt }
+          : null
       );
       setCallRemarks("");
     } catch (e: any) {
@@ -158,88 +176,6 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
   return (
     <>
     <div className="space-y-6 max-w-none">
-
-      {onUpdateHealth && (
-        <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
-            <div className="flex items-center gap-2">
-              <HeartPulse size={18} className="text-slate-500" />
-              <h3 className="text-sm font-extrabold text-slate-800 uppercase tracking-wider">Order Health</h3>
-            </div>
-          </div>
-          <div className="p-5 space-y-4">
-            <div className={`rounded-xl border p-3 text-xs font-medium ${healthBannerClass}`}>
-              Current: <span className="font-bold">{currentHealth}</span>
-              {order.lost_reason && currentHealth === "Lost" ? ` — ${order.lost_reason}` : ""}
-              <p className="mt-1 opacity-80">{HEALTH_HINT[ORDER_HEALTH_VALUES.includes(currentHealth) ? currentHealth : "Active"]}</p>
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                Set health
-              </label>
-              <select
-                value={healthDraft}
-                onChange={(e) => setHealthDraft(e.target.value as OrderHealth)}
-                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[13px] font-medium text-slate-700"
-              >
-                {ORDER_HEALTH_VALUES.map((h) => (
-                  <option key={h} value={h}>{h}</option>
-                ))}
-              </select>
-            </div>
-
-            {healthDraft === "Lost" && (
-              <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                  Lost reason <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={lostReason}
-                  onChange={(e) => setLostReason(e.target.value)}
-                  placeholder="e.g. Price too high, Unresponsive, Competitor"
-                  className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[13px] font-medium text-slate-700"
-                />
-              </div>
-            )}
-
-            <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                Call remarks (optional)
-              </label>
-              <textarea
-                value={callRemarks}
-                onChange={(e) => setCallRemarks(e.target.value)}
-                rows={2}
-                placeholder="Notes from calling the customer…"
-                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[13px] font-medium text-slate-700 resize-y"
-              />
-            </div>
-
-            <div className="flex flex-col sm:flex-row gap-2">
-              <button
-                type="button"
-                onClick={handleSaveHealth}
-                disabled={savingHealth}
-                className="px-4 py-2.5 bg-[#1E40AF] text-white rounded-lg text-xs font-bold hover:bg-blue-800 transition-colors disabled:opacity-50"
-              >
-                {savingHealth ? "Saving…" : "Update Health"}
-              </button>
-              {currentHealth === "Lost" && onReopen && (
-                <button
-                  type="button"
-                  onClick={() => onReopen()}
-                  disabled={savingHealth}
-                  className="px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-lg text-xs font-bold hover:bg-slate-50 transition-colors disabled:opacity-50"
-                >
-                  Reopen to Active
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
@@ -303,7 +239,15 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
                       className="px-4 py-2.5 bg-emerald-500 text-white rounded-lg text-xs font-bold hover:bg-emerald-600 transition-colors flex items-center justify-center gap-1.5 w-full sm:w-auto"
                     >
                       <CheckCircle2 size={16} />
-                      {isJobDonePending ? "Review Payments & Complete" : "Approve Stage"}
+                      {isJobDonePending
+                        ? "Review Payments & Complete"
+                        : (order.workflow_type || "quote_first") === "design_first"
+                          ? order.stage === "Quotation Approved"
+                            ? "Set deadline & start fabrication"
+                            : "Approve Stage"
+                          : order.stage === "Design Approved"
+                            ? "Set deadline & start fabrication"
+                            : "Approve Stage"}
                     </button>
                   )}
                 </div>
@@ -320,6 +264,155 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
           )}
         </div>
       </div>
+
+      {onUpdateHealth && (
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+            <div className="flex items-center gap-2">
+              <HeartPulse size={18} className="text-slate-500" />
+              <h3 className="text-sm font-extrabold text-slate-800 uppercase tracking-wider">Order Health</h3>
+            </div>
+          </div>
+          <div className="p-5 space-y-3">
+            <div className={`rounded-xl border p-3 text-xs font-medium ${healthBannerClass}`}>
+              Current: <span className="font-bold">{currentHealth}</span>
+              {order.lost_reason && currentHealth === "Lost" ? ` — ${order.lost_reason}` : ""}
+              {currentHealth === "On Hold" && ((order as any).reach_out_at || (order as any).reachOutAt) ? (
+                <span>
+                  {" "}
+                  — reach out {(order as any).reach_out_at || (order as any).reachOutAt}
+                  {(order as any).hold_note || (order as any).holdNote
+                    ? `: ${(order as any).hold_note || (order as any).holdNote}`
+                    : ""}
+                </span>
+              ) : null}
+              <p className="mt-1 opacity-80">{HEALTH_HINT[ORDER_HEALTH_VALUES.includes(currentHealth) ? currentHealth : "Active"]}</p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                  Set health
+                </label>
+                <select
+                  value={healthDraft}
+                  onChange={(e) => setHealthDraft(e.target.value as OrderHealth)}
+                  className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[13px] font-medium text-slate-700"
+                >
+                  {ORDER_HEALTH_VALUES.map((h) => (
+                    <option key={h} value={h}>{h}</option>
+                  ))}
+                </select>
+              </div>
+
+              {healthDraft === "Lost" ? (
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                    Lost reason <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={lostReason}
+                    onChange={(e) => setLostReason(e.target.value)}
+                    placeholder="e.g. Price too high, Unresponsive, Competitor"
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[13px] font-medium text-slate-700"
+                  />
+                </div>
+              ) : healthDraft === "On Hold" ? (
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                    Reach out again on <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={reachOutAt}
+                    onChange={(e) => setReachOutAt(e.target.value)}
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[13px] font-medium text-slate-700"
+                  />
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                    Call remarks (optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={callRemarks}
+                    onChange={(e) => setCallRemarks(e.target.value)}
+                    placeholder="Notes from calling the customer…"
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[13px] font-medium text-slate-700"
+                  />
+                </div>
+              )}
+            </div>
+
+            {healthDraft === "On Hold" && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="sm:col-span-1">
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                    Hold note <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    value={holdNote}
+                    onChange={(e) => setHoldNote(e.target.value)}
+                    rows={2}
+                    placeholder="Why is this on hold?"
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[13px] font-medium text-slate-700 resize-y min-h-[68px]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                    Call remarks (optional)
+                  </label>
+                  <textarea
+                    value={callRemarks}
+                    onChange={(e) => setCallRemarks(e.target.value)}
+                    rows={2}
+                    placeholder="Notes from calling the customer…"
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[13px] font-medium text-slate-700 resize-y min-h-[68px]"
+                  />
+                </div>
+              </div>
+            )}
+
+            {healthDraft === "Lost" && (
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                  Call remarks (optional)
+                </label>
+                <textarea
+                  value={callRemarks}
+                  onChange={(e) => setCallRemarks(e.target.value)}
+                  rows={2}
+                  placeholder="Notes from calling the customer…"
+                  className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[13px] font-medium text-slate-700 resize-y"
+                />
+              </div>
+            )}
+
+            <div className="flex flex-col sm:flex-row gap-2">
+              <button
+                type="button"
+                onClick={handleSaveHealth}
+                disabled={savingHealth}
+                className="px-4 py-2.5 bg-[#1E40AF] text-white rounded-lg text-xs font-bold hover:bg-blue-800 transition-colors disabled:opacity-50"
+              >
+                {savingHealth ? "Saving…" : "Update Health"}
+              </button>
+              {currentHealth === "Lost" && onReopen && (
+                <button
+                  type="button"
+                  onClick={() => onReopen()}
+                  disabled={savingHealth}
+                  className="px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-lg text-xs font-bold hover:bg-slate-50 transition-colors disabled:opacity-50"
+                >
+                  Reopen to Active
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">

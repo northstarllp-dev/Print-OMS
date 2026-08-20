@@ -8,6 +8,9 @@ import { resolveTicketPermission } from "@/features/service-tickets/ticketGrants
 
 const ALLOWED_BUCKETS = new Set([
   "site-visit-photos",
+  "order-resources",
+  "design-proofs",
+  "production-files",
   "installation-photos",
   "service-ticket-photos",
   "service-ticket-resolution-photos",
@@ -30,8 +33,10 @@ async function assertPathOwnedByCompany(
 ): Promise<void> {
   const first = path.split("/")[0] || "";
 
-  // Service-ticket uploads use support/… — require ticket manage (or admin via grant).
-  if (first === "support") {
+  // Legacy service-ticket uploads use support/…, resolution/… or public/… prefixes
+  // (pre-architecture). New uploads are order-scoped ({orderUuid}/…) and fall
+  // through to the order-ownership check below.
+  if (first === "support" || first === "resolution" || first === "public") {
     const profile = await getCurrentUser();
     const perm = resolveTicketPermission({
       role: profile?.role,

@@ -11,6 +11,7 @@ import {
 } from "@/features/orders/workspace/shared/staffQueueStages";
 import { QueueViewToggle } from "@/features/orders/components/QueueViewToggle";
 import type { QueueView, WorkflowType } from "@/features/orders/workspace/shared/staffQueueStages";
+import { getInstallationDeadlineCountdown } from "@/features/orders/workspace/modules/production/installationDeadlineUi";
 
 interface OrderItem {
   id: string;
@@ -211,16 +212,18 @@ export function ProductionDashboardClient({
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="text-[10px] font-bold text-slate-400 uppercase">Deadline</div>
-                      <div className="text-xs font-bold text-rose-500">
-                        {order.productionDeadline
-                          ? new Date(order.productionDeadline).toLocaleDateString("en-IN", {
-                              day: "numeric",
-                              month: "short",
-                              year: "numeric",
-                            })
-                          : "Not set"}
-                      </div>
+                      <div className="text-[10px] font-bold text-slate-400 uppercase">Installation Deadline</div>
+                      {(() => {
+                        const d = getInstallationDeadlineCountdown(order.productionDeadline);
+                        return (
+                          <div className={`text-xs font-bold ${d.valueClass}`}>
+                            <div>{d.countdownLabel}</div>
+                            {d.dateLabel ? (
+                              <div className="text-[10px] font-semibold opacity-80">{d.dateLabel}</div>
+                            ) : null}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
 
@@ -249,7 +252,7 @@ export function ProductionDashboardClient({
                 <th className="text-left py-4 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Business Name</th>
                 <th className="text-left py-4 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Current Stage</th>
                 <th className="text-left py-4 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Date Initiated</th>
-                <th className="text-left py-4 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Deadline Date</th>
+                <th className="text-left py-4 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Installation Deadline</th>
                 <th className="text-right py-4 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Action</th>
               </tr>
             </thead>
@@ -284,14 +287,18 @@ export function ProductionDashboardClient({
                           year: "numeric"
                         })}
                       </td>
-                      <td className="py-4 px-6 text-sm font-bold text-rose-500">
-                        {order.productionDeadline
-                          ? new Date(order.productionDeadline).toLocaleDateString("en-IN", {
-                              day: "numeric",
-                              month: "short",
-                              year: "numeric"
-                            })
-                          : "Not Set"}
+                      <td className="py-4 px-6 text-sm font-bold">
+                        {(() => {
+                          const d = getInstallationDeadlineCountdown(order.productionDeadline);
+                          return (
+                            <div className={d.valueClass}>
+                              <div>{d.countdownLabel}</div>
+                              {d.dateLabel ? (
+                                <div className="text-[11px] font-semibold opacity-80">{d.dateLabel}</div>
+                              ) : null}
+                            </div>
+                          );
+                        })()}
                       </td>
                       <td className="py-4 px-6 text-right">
                         <Link

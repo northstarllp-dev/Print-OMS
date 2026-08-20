@@ -5,6 +5,7 @@ import { checkRateLimit, clientIpFromHeaders } from "@/utils/rate-limiter";
 import { Info, Clock, CheckCircle, Check, Loader2, PlayCircle, MapPin, Search } from "lucide-react";
 import { mapSiteVisitFromDb, mapSiteVisitMeasurementFromDb } from "@/features/orders/actions/siteVisitMapper";
 import { mapDesignFromDb } from "@/features/designs/actions/designMapper";
+import { mapProductionDetails } from "@/features/orders/actions/productionMapper";
 import { toCustomerVisibleQuotation } from "@/features/quotations/utils/quotationSecurity";
 import { toCustomerVisibleDesign } from "@/features/designs/utils/customerVisibleDesign";
 import { OrderDetailClient } from "./OrderDetailClient";
@@ -158,6 +159,15 @@ export default async function OrderDetailPage({
     );
   }
 
+  if (orderData.stage === "Completed" || orderData.stage === "Closed") {
+    return (
+      <PortalError
+        title="Portal Link Inactive"
+        message="This order has been closed. The customer portal link is no longer active. Please contact us if you need help."
+      />
+    );
+  }
+
   // Fetch quotation for this order (service role; customer-visible statuses only)
   const { data: quotationRow } = await admin
     .from("quotations")
@@ -252,6 +262,7 @@ export default async function OrderDetailPage({
     versionHistory: orderData.version_history || [],
     chatHistory: orderData.chat_history || [],
     workflow_type: orderData.workflow_type,
+    business_operation: orderData.business_operation || "signage",
     siteVisitDetails: mapSiteVisitFromDb(
       Array.isArray(orderData.site_visits)
         ? (orderData.site_visits.length > 0 ? orderData.site_visits[0] : null)
@@ -266,7 +277,9 @@ export default async function OrderDetailPage({
           ? mapDesignFromDb(orderData.designs)
           : null
     ),
-    productionDetails: Array.isArray(orderData.productions) && orderData.productions.length > 0 ? orderData.productions[0] : (orderData.productions || null),
+    productionDetails: mapProductionDetails(
+      Array.isArray(orderData.productions) && orderData.productions.length > 0 ? orderData.productions[0] : (orderData.productions || null)
+    ),
     installationDetails: Array.isArray(orderData.installations) && orderData.installations.length > 0 ? orderData.installations[0] : (orderData.installations || null),
     stageStatus: orderData.stage_status || null,
     stageAdminNotes: orderData.stage_admin_notes || null,

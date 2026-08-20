@@ -12,6 +12,11 @@
 
 # testing
 /coverage
+/e2e/.auth/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
 
 # next.js
 /.next/
@@ -42,6 +47,8 @@ next-env.d.ts
 
 # supabase
 supabase/.temp/
+supabase/remote-dump/
+scripts/tmp-company-migrate/
 CLAUDE.md
 .CLAUDE
 .claudecodeignore

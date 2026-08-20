@@ -14,7 +14,7 @@ export const printecConfig: Partial<PrintOMSClientConfig> = {
     primary: "#13b5ea",
     onPrimary: "#ffffff",
     primaryContainer: "#e0f6ff",
-    onPrimaryContainer: "#005a80",
+    onPrimaryContainer: "#13b5ea",
     secondary: "#e41c8a",
     onSecondary: "#ffffff",
     secondaryContainer: "#fdecf5",
@@ -28,6 +28,7 @@ export const printecConfig: Partial<PrintOMSClientConfig> = {
     sidebarAccent: "#fcd900",
   },
   logoUrl: "/clients/printec/logo.png",
+  logoScale: 1,
   faviconUrl: "/clients/printec/favicon_io/favicon.ico",
   loadingText: "PRINTEC",
   features: {
@@ -43,4 +44,23 @@ export const printecConfig: Partial<PrintOMSClientConfig> = {
   },
   // Existing Meta templates were approved under the printec_ prefix
   whatsappTemplatePrefix: "printec_",
+  businessOperations: [
+    {
+      id: "signage",
+      label: "Signage",
+      stages: [
+        "enquiry",
+        "site_visit",
+        "quotation",
+        "design",
+        "production",
+        "installation",
+      ],
+    },
+    {
+      id: "flex_printing",
+      label: "Flex Printing",
+      stages: ["enquiry", "quotation", "design", "production", "installation"],
+    },
+  ],
 };

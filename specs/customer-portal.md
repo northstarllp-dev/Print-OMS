@@ -17,6 +17,7 @@
    * **Design Tab**: View proofs, add feedback comments on the canvas, upload inspiration, approve proofs.
    * **Payments Tab**: View payment milestones, submit UTR/reference, mark as paid (Pay Online placeholder for gateways). Always available; not a pipeline stage.
    * **Installation Tab**: View scheduled dates, and later see "After Photos" once completed.
+   * **Invoice Tab**: View and download final tax invoices generated for the order.
 6. **Token Expiration**: The magic link expires naturally over time or can be actively revoked by the Admin.
 
 ## Workflow States
@@ -96,7 +97,9 @@ Purpose: Visually maps the `stage` of the order into a clean 5-step UI (Enquiry,
 * `src/app/portal/PortalClient.tsx`
 * `src/app/portal/components/DesignTab.tsx`
 * `src/app/portal/components/QuotationTab.tsx`
-* `src/app/portal/components/InstallationLayoutClient.tsx`
+* `src/app/portal/components/PaymentsTab.tsx`
+* `src/app/portal/components/InvoiceTab.tsx`
+* `src/app/portal/components/SiteVisitLocationPicker.tsx`
 * `src/app/portal/hooks/useQuotationActions.ts`
 * `src/app/portal/hooks/usePortalOrderRealtime.ts`
 * `src/app/portal/order/[orderId]/page.tsx`

@@ -7,6 +7,7 @@ import { getAppSettings } from "@/features/settings/actions/settingsActions";
 import {
   buildProductionChecklistUpdate,
   DEFAULT_PRODUCTION_CHECKLIST_ITEMS,
+  readCustomProductionChecklistItems,
   resolveChecklistProgress,
   type ProductionChecklistItem,
 } from "@/features/settings/productionChecklist";
@@ -63,8 +64,13 @@ export const ProductionModule: React.FC<ProductionModuleProps> = ({
                     size={16}
                     className={`mr-3 ${checked ? "text-emerald-600" : "text-slate-300"}`}
                   />
-                  <span className="text-xs font-bold text-slate-800">
+                  <span className="text-xs font-bold text-slate-800 flex items-center gap-2 flex-wrap">
                     {index + 1}. {item.label}
+                    {item.required === false && (
+                      <span className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200">
+                        Optional
+                      </span>
+                    )}
                   </span>
                 </div>
                 <input
@@ -72,9 +78,20 @@ export const ProductionModule: React.FC<ProductionModuleProps> = ({
                   checked={checked}
                   onChange={() => {
                     const next = { ...progress, [item.id]: !checked };
+                    for (const custom of readCustomProductionChecklistItems(pd)) {
+                      next[custom.id] = custom.checked;
+                    }
+                    const customMeta = readCustomProductionChecklistItems(pd).map(
+                      ({ id, label }) => ({ id, label })
+                    );
                     updateProductionDetails(
                       order.id,
-                      buildProductionChecklistUpdate(next, items) as Partial<ProductionDetails>
+                      buildProductionChecklistUpdate(
+                        next,
+                        items,
+                        {},
+                        customMeta
+                      ) as Partial<ProductionDetails>
                     );
                   }}
                   disabled={isReadOnly || (isEmployee && order.stageStatus?.includes("Pending"))}

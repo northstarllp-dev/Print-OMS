@@ -12,6 +12,9 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  // Note: do NOT use rewrites with `basePath: false` + internal destinations.
+  // Next.js only allows that for external http(s) URLs and fails the build
+  // with "Invalid rewrites found". Root favicon proxies live in vercel.json.
 };
 
 export default nextConfig;

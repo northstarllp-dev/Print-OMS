@@ -6,6 +6,7 @@ import {
   filterOrders,
   healthMenuActions,
   isAllowedHealthTransition,
+  isActionableNeedsAttention,
   isOrderStalledCandidate,
   isValidLostReason,
   requiresLostReasonPrompt,
@@ -48,10 +49,25 @@ describe("order health", () => {
       expect(buildHealthUpdatePayload("Lost", "Price")).toEqual({
         health: "Lost",
         lost_reason: "Price",
+        hold_note: null,
+        reach_out_at: null,
       });
       expect(buildHealthUpdatePayload("On Hold", "Price")).toEqual({
         health: "On Hold",
         lost_reason: null,
+        hold_note: null,
+        reach_out_at: null,
+      });
+      expect(
+        buildHealthUpdatePayload("On Hold", null, {
+          note: "Call back",
+          reachOutAt: "2026-08-15",
+        })
+      ).toEqual({
+        health: "On Hold",
+        lost_reason: null,
+        hold_note: "Call back",
+        reach_out_at: "2026-08-15",
       });
     });
 
@@ -60,6 +76,14 @@ describe("order health", () => {
       expect(patch.health).toBe("Active");
       expect(patch.lost_reason).toBeNull();
       expect(stageProgressPatch("On Hold").health).toBeUndefined();
+    });
+
+    it("completing/closing clears health soft flags (inactive pipeline)", () => {
+      const completed = stageProgressPatch("On Hold", "Completed");
+      expect(completed.health).toBe("Active");
+      expect(completed.hold_note).toBeNull();
+      expect(completed.reach_out_at).toBeNull();
+      expect(stageProgressPatch("Needs Attention", "Closed").health).toBe("Active");
     });
   });
 
@@ -121,6 +145,18 @@ describe("order health", () => {
           cutoff
         )
       ).toBe(false);
+      expect(
+        isActionableNeedsAttention({
+          health: "Needs Attention",
+          stage: "Completed",
+        })
+      ).toBe(false);
+      expect(
+        isActionableNeedsAttention({
+          health: "Needs Attention",
+          stage: "Production",
+        })
+      ).toBe(true);
     });
   });
 

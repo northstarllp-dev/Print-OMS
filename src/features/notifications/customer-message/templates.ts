@@ -272,9 +272,9 @@ Your support request has been registered.
 
 Ticket: {{2}}
 
-Our team will review the issue and share updates in your portal.
+Our team will review the issue and share updates.
 
-Open your customer portal using the button below.`,
+Track your support request using the link below.`,
   },
   service_ticket_resolved: {
     title: "Service Ticket Resolved",
@@ -284,9 +284,7 @@ Open your customer portal using the button below.`,
 
 Your support ticket is marked resolved.
 
-If you need further help, contact our team or create a new support request.
-
-Open your customer portal using the button below.`,
+If you need further help, contact our team or create a new support request using the link below.`,
   },
   feedback_request: {
     title: "Feedback Request",

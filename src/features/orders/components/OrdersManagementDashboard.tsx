@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { 
@@ -25,6 +25,7 @@ import {
   Ban,
 } from "lucide-react";
 import { assignTeamToOrder, updateOrderHealthAction } from "@/features/orders/actions/orderActions";
+import { HoldFollowUpModal } from "@/features/calendar/components/HoldFollowUpModal";
 import { loadClientConfig } from "@/config/loadClientConfig";
 import { parseOrderStage } from "@/features/orders/workspace/shared/stageGrants";
 import {
@@ -39,19 +40,27 @@ import {
 } from "@/features/orders/workspace/shared/staffQueueStages";
 import { QueueViewToggle } from "./QueueViewToggle";
 import { MyOrdersStageTabs } from "./MyOrdersStageTabs";
+import { BusinessOperationCaption } from "./BusinessOperationCaption";
 import type { QueueView } from "@/features/orders/workspace/shared/staffQueueStages";
 import type { OrderStage } from "@/features/orders/workspace/shared/types";
 import { CreateServiceTicketModal } from "@/features/service-tickets/components/CreateServiceTicketModal";
 import type { OrderHealth } from "@/features/orders/lib/orderHealth";
 import {
   buildServiceTicketPreset,
+  canChangeOrderHealth,
+  canShowAddServiceTicketForOrder,
   computeOrderKpis,
   countActiveOrderFilters,
   filterOrders,
+  formatOnHoldHoverText,
   healthMenuActions as healthMenuActionLabels,
   needsAdminApproval,
+  paginateOrders,
   resolveOrderDetailHref,
 } from "@/features/orders/orderListLogic";
+import { resolveSiteVisitMapLink } from "@/features/orders/actions/siteVisitMapper";
+import { isSkippedSiteVisit } from "@/features/orders/workspace/modules/site-visit/siteVisitUiLogic";
+import { ListPagination, LIST_PAGE_SIZE } from "@/components/ui/ListPagination";
 
 const getStatusColor = (status: string) => {
   const colors: Record<string, { bg: string; text: string; label: string }> = {
@@ -67,6 +76,7 @@ const getStatusColor = (status: string) => {
     "Production":             { bg: "#dbeafe", text: "#0284c7", label: "Production" },
     "Ready For Installation": { bg: "#dbeafe", text: "#0284c7", label: "Ready For Installation" },
     "Installation Scheduled": { bg: "#dbeafe", text: "#0284c7", label: "Installation Scheduled" },
+    "Customer Pickup":        { bg: "#fef3c7", text: "#d97706", label: "Customer Pickup" },
     "Completed":              { bg: "#dcfce7", text: "#22c55e", label: "Completed" },
     "Closed":                 { bg: "#dcfce7", text: "#22c55e", label: "Closed" },
   };
@@ -82,6 +92,37 @@ const getHealthBadgeColor = (health: string) => {
   };
   return colors[health] || "bg-slate-100 text-slate-600 border-slate-200";
 };
+
+function OrderHealthBadge({
+  order,
+  className,
+}: {
+  order: {
+    health?: string | null;
+    hold_note?: string | null;
+    reach_out_at?: string | null;
+  };
+  className: string;
+}) {
+  const health = order.health || "Active";
+  const holdTip = formatOnHoldHoverText(order);
+  return (
+    <span
+      className={`group/health relative inline-block ${className} ${holdTip ? "cursor-help" : ""}`}
+      title={holdTip || undefined}
+    >
+      {health}
+      {holdTip ? (
+        <span
+          role="tooltip"
+          className="pointer-events-none absolute left-1/2 top-full z-40 mt-1.5 w-max max-w-[220px] -translate-x-1/2 rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-left text-[10px] font-semibold leading-snug text-white opacity-0 shadow-lg transition-opacity group-hover/health:opacity-100"
+        >
+          {holdTip}
+        </span>
+      ) : null}
+    </span>
+  );
+}
 
 /** Quick health transitions available from the row ⋯ menu (admin). */
 function healthMenuActions(health: string): Array<{
@@ -107,6 +148,108 @@ function healthMenuActions(health: string): Array<{
     icon: icons[a.health],
     className: colors[a.health],
   }));
+}
+
+const ORDER_MENU_HOST_ID = "printec-order-actions-menu-host";
+
+function getOrderMenuHost(): HTMLElement | null {
+  if (typeof document === "undefined") return null;
+  let host = document.getElementById(ORDER_MENU_HOST_ID);
+  if (!host) {
+    host = document.createElement("div");
+    host.id = ORDER_MENU_HOST_ID;
+    document.body.appendChild(host);
+  }
+  return host;
+}
+
+/** Fixed menu in a singleton body host — one menu only, never clipped by table overflow. */
+function PortaledDropdown({
+  open,
+  anchorEl,
+  onClose,
+  children,
+  minWidth = 170,
+}: {
+  open: boolean;
+  anchorEl: HTMLElement | null;
+  onClose: () => void;
+  children: React.ReactNode;
+  minWidth?: number;
+}) {
+  const [coords, setCoords] = useState<{
+    top?: number;
+    bottom?: number;
+    left: number;
+  } | null>(null);
+  const host = getOrderMenuHost();
+
+  useLayoutEffect(() => {
+    if (!open || !anchorEl) {
+      setCoords(null);
+      return;
+    }
+    // Drop stale menus left behind by HMR / older portal mounts.
+    document.querySelectorAll("[data-order-actions-menu='true']").forEach((n) => n.remove());
+    const place = () => {
+      const r = anchorEl.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - r.bottom;
+      const openUp = spaceBelow < 220;
+      const left = Math.max(
+        8,
+        Math.min(r.right - minWidth, window.innerWidth - minWidth - 8)
+      );
+      setCoords(
+        openUp
+          ? { bottom: window.innerHeight - r.top + 6, left }
+          : { top: r.bottom + 6, left }
+      );
+    };
+    place();
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [open, anchorEl, minWidth]);
+
+  if (!open || !coords || !host) return null;
+
+  return createPortal(
+    <>
+      <div
+        aria-hidden
+        onClick={onClose}
+        style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 99998,
+          background: "transparent",
+        }}
+      />
+      <div
+        role="menu"
+        style={{
+          position: "fixed",
+          top: coords.top,
+          bottom: coords.bottom,
+          left: coords.left,
+          minWidth,
+          zIndex: 99999,
+          background: "#fff",
+          border: "1px solid #e2e8f0",
+          borderRadius: 8,
+          boxShadow: "0 10px 28px rgba(15, 23, 42, 0.18)",
+          overflow: "hidden",
+          pointerEvents: "auto",
+        }}
+      >
+        {children}
+      </div>
+    </>,
+    host
+  );
 }
 
 export function OrdersManagementDashboard({ 
@@ -177,6 +320,22 @@ export function OrdersManagementDashboard({
     initialTab ?? pipelineInitial ?? (myOrdersStages[0] as MyOrdersTab | undefined);
   const [myOrdersTab, setMyOrdersTab] = useState<MyOrdersTab | undefined>(resolvedInitialTab);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [menuAnchorEl, setMenuAnchorEl] = useState<HTMLElement | null>(null);
+  const closeOrderMenu = useCallback(() => {
+    setOpenMenuId(null);
+    setMenuAnchorEl(null);
+  }, []);
+  const toggleOrderMenu = useCallback((orderId: string, el: HTMLElement) => {
+    setOpenMenuId((prev) => {
+      if (prev === orderId) {
+        setMenuAnchorEl(null);
+        return null;
+      }
+      setMenuAnchorEl(el);
+      return orderId;
+    });
+  }, []);
+  const [holdModalOrderId, setHoldModalOrderId] = useState<string | null>(null);
   const [ticketPreset, setTicketPreset] = useState<{
     phone?: string;
     customerId?: string;
@@ -188,6 +347,7 @@ export function OrdersManagementDashboard({
   const [dateFilterType, setDateFilterType] = useState<"all" | "range">("range");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [page, setPage] = useState(1);
 
   // Debounce search — 220 ms
   useEffect(() => {
@@ -252,7 +412,7 @@ export function OrdersManagementDashboard({
       businessName?: string;
     }) => {
       const customer = initialCustomers.find((c) => c.id === order.customerId);
-      setOpenMenuId(null);
+      closeOrderMenu();
       setTicketPreset(
         buildServiceTicketPreset({
           order,
@@ -260,12 +420,20 @@ export function OrdersManagementDashboard({
         })
       );
     },
-    [initialCustomers]
+    [initialCustomers, closeOrderMenu]
   );
 
   const applyOrderHealth = useCallback(
-    async (orderId: string, health: OrderHealth) => {
-      setOpenMenuId(null);
+    async (
+      orderId: string,
+      health: OrderHealth,
+      hold?: { note: string; reachOutAt: string } | null
+    ) => {
+      closeOrderMenu();
+      if (health === "On Hold" && !hold) {
+        setHoldModalOrderId(orderId);
+        return;
+      }
       let lostReason: string | undefined;
       if (health === "Lost") {
         const entered = window.prompt("Reason for marking this order as Lost:");
@@ -280,18 +448,36 @@ export function OrdersManagementDashboard({
       setOrders((list) =>
         list.map((o) =>
           o.id === orderId
-            ? { ...o, health, lost_reason: health === "Lost" ? lostReason : null }
+            ? {
+                ...o,
+                health,
+                lost_reason: health === "Lost" ? lostReason : null,
+                hold_note: health === "On Hold" ? hold?.note ?? null : null,
+                reach_out_at: health === "On Hold" ? hold?.reachOutAt ?? null : null,
+              }
             : o
         )
       );
       try {
-        await updateOrderHealthAction(orderId, health, lostReason);
+        await updateOrderHealthAction(
+          orderId,
+          health,
+          lostReason,
+          undefined,
+          health === "On Hold" ? hold : null
+        );
       } catch (err: any) {
         if (prev) {
           setOrders((list) =>
             list.map((o) =>
               o.id === orderId
-                ? { ...o, health: prev.health, lost_reason: prev.lost_reason }
+                ? {
+                    ...o,
+                    health: prev.health,
+                    lost_reason: prev.lost_reason,
+                    hold_note: prev.hold_note,
+                    reach_out_at: prev.reach_out_at,
+                  }
                 : o
             )
           );
@@ -299,7 +485,7 @@ export function OrdersManagementDashboard({
         alert(err?.message || "Failed to update order health.");
       }
     },
-    [orders]
+    [orders, closeOrderMenu]
   );
 
   const employeeName = currentEmployeeName;
@@ -382,16 +568,19 @@ export function OrdersManagementDashboard({
 
   // KPI counts reflect the same toolbar filters as the list (admin only)
   const kpis = computeOrderKpis(toolbarFilteredOrders);
+  const totalOrders = kpis.total;
   const activeOrders = kpis.active;
   const unassignedOrders = kpis.unassigned;
   const pendingApprovals = kpis.approvals;
   const completedOrders = kpis.completed;
+  const onHoldOrders = kpis.onHold;
+  const lostOrders = kpis.lost;
 
   const stats = currentUserRole === "Employee" ? [] : [
     {
-      label: "TOTAL ACTIVE",
-      value: activeOrders.toString(),
-      change: "Current orders in pipeline",
+      label: "TOTAL / ACTIVE",
+      value: `${totalOrders}/${activeOrders}`,
+      change: "All orders / working pipeline",
       filterKey: "active",
       icon: TrendingUp,
       color: "var(--color-primary)",
@@ -413,6 +602,22 @@ export function OrdersManagementDashboard({
       color: "#F97316",
     },
     {
+      label: "ON HOLD",
+      value: onHoldOrders.toString(),
+      change: "Paused — follow up later",
+      filterKey: "onHold",
+      icon: Pause,
+      color: "#64748b",
+    },
+    {
+      label: "LOST",
+      value: lostOrders.toString(),
+      change: "Cancelled / not proceeding",
+      filterKey: "lost",
+      icon: Ban,
+      color: "#e11d48",
+    },
+    {
       label: "COMPLETED",
       value: completedOrders.toString(),
       change: "All-time completed orders",
@@ -431,6 +636,27 @@ export function OrdersManagementDashboard({
     [toolbarFilteredOrders, selectedKpi]
   );
 
+  useEffect(() => {
+    setPage(1);
+  }, [
+    debouncedSearch,
+    stageFilter,
+    healthFilter,
+    adminAssignedFilter,
+    selectedKpi,
+    startDate,
+    endDate,
+    dateFilterType,
+    queueView,
+    myOrdersTab,
+  ]);
+
+  const pagedOrders = useMemo(
+    () => paginateOrders(filteredOrders, page, LIST_PAGE_SIZE),
+    [filteredOrders, page]
+  );
+  const pageOrders = pagedOrders.items;
+
   const resetFilters = () => {
     setDateFilterType("range");
     setStartDate("");
@@ -440,6 +666,7 @@ export function OrdersManagementDashboard({
     setAdminAssignedFilter("ALL");
     setSearchTerm("");
     setSelectedKpi(null);
+    setPage(1);
   };
 
   const activeFilterCount = countActiveOrderFilters({
@@ -544,7 +771,7 @@ export function OrdersManagementDashboard({
 
         {/* Desktop/tablet: Stats Cards (admin only) */}
         {currentUserRole !== "Employee" && (
-        <div className="hidden lg:grid grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className="hidden lg:grid grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6 gap-4">
           {stats.map((stat: any, idx) => {
             const Icon = stat.icon;
             const isActive = selectedKpi === stat.filterKey;
@@ -878,7 +1105,7 @@ export function OrdersManagementDashboard({
               No orders found matching your search.
             </div>
           ) : (
-            filteredOrders.map((order) => {
+            pageOrders.map((order) => {
               const isSiteVisitStage = order.stage === "Site Visit Scheduled" || order.stage === "Site Visit Completed";
               const hasNoDate = !order.siteVisitDetails || !order.siteVisitDetails.auditDate;
               const displayStage = (isSiteVisitStage && hasNoDate) ? "Site Visit Pending" : order.stage;
@@ -889,7 +1116,13 @@ export function OrdersManagementDashboard({
               const sv = order.siteVisitDetails;
               const visitDate = isInstallQueue ? inst?.scheduledDate : sv?.auditDate;
               const visitTime = isInstallQueue ? inst?.scheduledTime : sv?.auditTime;
-              const mapAddress = sv?.customerAddress || sv?.siteAddress || sv?.site_address || null;
+              const siteMap = resolveSiteVisitMapLink(sv);
+              const installMapLink = inst?.gmapLink || inst?.gmap_link || null;
+              const mapHref = isInstallQueue
+                ? installMapLink || siteMap?.href || null
+                : siteMap?.href || null;
+              const mapLabel = siteMap?.label || (mapHref ? "Open map location" : null);
+              const siteVisitSkipped = !isInstallQueue && isSkippedSiteVisit(sv);
               const title = order.businessName || order.clientName || "Order";
 
               return (
@@ -921,6 +1154,9 @@ export function OrdersManagementDashboard({
                               {statusColor.label}
                             </span>
                           </div>
+                          <BusinessOperationCaption
+                            opId={order.business_operation}
+                          />
                           <div className="text-[13px] font-semibold text-slate-800 truncate mt-1">
                             {title}
                           </div>
@@ -928,62 +1164,22 @@ export function OrdersManagementDashboard({
                             <div className="text-[11px] text-slate-500 truncate">{order.clientName}</div>
                           ) : null}
                         </button>
-                        <div className="relative shrink-0">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setOpenMenuId(openMenuId === order.id ? null : order.id);
-                            }}
-                            className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100"
-                            aria-label="Order actions"
-                          >
-                            <MoreHorizontal size={18} />
-                          </button>
-                          {openMenuId === order.id && (
-                            <>
-                              <div
-                                className="fixed inset-0 z-40"
-                                onClick={() => setOpenMenuId(null)}
-                              />
-                              <div className="absolute right-0 top-full mt-1 z-50 min-w-[160px] rounded-lg border border-slate-200 bg-white shadow-lg overflow-hidden">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setOpenMenuId(null);
-                                    router.push(resolveOrderHref(order));
-                                  }}
-                                  className="w-full px-3.5 py-2.5 flex items-center gap-2 text-left text-xs font-semibold text-slate-800 hover:bg-slate-50"
-                                >
-                                  <Eye size={13} /> View Order
-                                </button>
-                                {currentUserRole === "Admin" &&
-                                  healthMenuActions(order.health || "Active").map((action) => {
-                                    const Icon = action.icon;
-                                    return (
-                                      <button
-                                        key={action.health}
-                                        type="button"
-                                        onClick={() => applyOrderHealth(order.id, action.health)}
-                                        className={`w-full px-3.5 py-2.5 flex items-center gap-2 text-left text-xs font-semibold ${action.className}`}
-                                      >
-                                        <Icon size={13} /> {action.label}
-                                      </button>
-                                    );
-                                  })}
-                                {currentUserRole === "Admin" && (
-                                  <button
-                                    type="button"
-                                    onClick={() => openServiceTicketForOrder(order)}
-                                    className="w-full px-3.5 py-2.5 flex items-center gap-2 text-left text-xs font-semibold text-slate-800 hover:bg-slate-50 border-t border-slate-100"
-                                  >
-                                    <Wrench size={13} /> Add Service Ticket
-                                  </button>
-                                )}
-                              </div>
-                            </>
-                          )}
-                        </div>
+                        {currentUserRole === "Admin" && (
+                          <div className="relative shrink-0">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleOrderMenu(order.id, e.currentTarget);
+                              }}
+                              className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+                              aria-label="Order actions"
+                              aria-expanded={openMenuId === order.id}
+                            >
+                              <MoreHorizontal size={18} />
+                            </button>
+                          </div>
+                        )}
                       </div>
 
                       <button
@@ -994,21 +1190,32 @@ export function OrdersManagementDashboard({
                         <div className="flex items-center justify-between gap-2 min-w-0">
                           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500 min-w-0">
                             <span className="font-medium">{dateStr}</span>
-                            <span
-                              className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border ${getHealthBadgeColor(order.health || "Active")}`}
-                            >
-                              {order.health || "Active"}
-                            </span>
+                            <OrderHealthBadge
+                              order={order}
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${getHealthBadgeColor(order.health || "Active")}`}
+                            />
                           </div>
                         </div>
 
                         {(visitDate && visitTime) ? (
                           <div className="mt-2 rounded-lg bg-slate-50 border border-slate-100 px-2.5 py-1.5">
                             <div className="text-[11px] font-bold text-slate-800">{visitDate} • {visitTime}</div>
-                            {mapAddress ? (
-                              <div className="text-[10px] text-slate-500 mt-0.5 truncate" title={mapAddress}>
-                                {mapAddress}
+                            {siteVisitSkipped ? (
+                              <div className="text-[10px] font-semibold text-amber-700 mt-0.5">
+                                Site visit skipped
                               </div>
+                            ) : null}
+                            {mapHref && mapLabel ? (
+                              <a
+                                href={mapHref}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title={mapLabel}
+                                className="block text-[10px] text-slate-500 mt-0.5 truncate underline-offset-2 hover:underline"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {mapLabel}
+                              </a>
                             ) : null}
                           </div>
                         ) : null}
@@ -1053,7 +1260,7 @@ export function OrdersManagementDashboard({
               </tr>
             </thead>
             <tbody>
-              {filteredOrders.map((order, idx) => {
+              {pageOrders.map((order, idx) => {
                 const isSiteVisitStage = order.stage === "Site Visit Scheduled" || order.stage === "Site Visit Completed";
                 const hasNoDate = !order.siteVisitDetails || !order.siteVisitDetails.auditDate;
                 const displayStage = (isSiteVisitStage && hasNoDate) ? "Site Visit Pending" : order.stage;
@@ -1077,7 +1284,10 @@ export function OrdersManagementDashboard({
                     }}
                   >
                     <td style={{ padding: "16px 20px", fontSize: "13px", color: "#0f172a", fontWeight: "600" }}>
-                      {order.orderCode || order.id}
+                      <div>{order.orderCode || order.id}</div>
+                      <BusinessOperationCaption
+                        opId={order.business_operation}
+                      />
                     </td>
                     <td style={{ padding: "16px 20px", fontSize: "13px", color: "#64748b", fontWeight: "500" }}>
                       {dateStr}
@@ -1097,22 +1307,13 @@ export function OrdersManagementDashboard({
                         const sv = order.siteVisitDetails;
                         const visitDate = isInstallQueue ? inst?.scheduledDate : sv?.auditDate;
                         const visitTime = isInstallQueue ? inst?.scheduledTime : sv?.auditTime;
-                        const mapLink =
-                          (isInstallQueue && (inst?.gmapLink || inst?.gmap_link)) ||
-                          sv?.gmapLink ||
-                          sv?.gmap_link ||
-                          null;
-                        const mapAddress =
-                          sv?.customerAddress ||
-                          sv?.siteAddress ||
-                          sv?.site_address ||
-                          null;
-                        const mapHref = mapLink
-                          ? mapLink
-                          : mapAddress
-                            ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapAddress)}`
-                            : null;
-                        const mapLabel = mapAddress || (mapLink ? "Open map location" : null);
+                        const siteMap = resolveSiteVisitMapLink(sv);
+                        const installMapLink = inst?.gmapLink || inst?.gmap_link || null;
+                        const mapHref = isInstallQueue
+                          ? installMapLink || siteMap?.href || null
+                          : siteMap?.href || null;
+                        const mapLabel = siteMap?.label || (mapHref ? "Open map location" : null);
+                        const siteVisitSkipped = !isInstallQueue && isSkippedSiteVisit(sv);
 
                         if (visitDate && visitTime) {
                           return (
@@ -1120,6 +1321,18 @@ export function OrdersManagementDashboard({
                               <div style={{ fontSize: "12px", fontWeight: "600", color: "#0f172a" }}>
                                 {visitDate} • {visitTime}
                               </div>
+                              {siteVisitSkipped && (
+                                <div
+                                  style={{
+                                    fontSize: "10px",
+                                    fontWeight: 700,
+                                    color: "#b45309",
+                                    marginTop: "2px",
+                                  }}
+                                >
+                                  Site visit skipped
+                                </div>
+                              )}
                               {mapHref && mapLabel && (
                                 <div style={{ fontSize: "11px", marginTop: "2px", maxWidth: 220 }}>
                                   <a
@@ -1172,11 +1385,10 @@ export function OrdersManagementDashboard({
                       </span>
                     </td>
                     <td style={{ padding: "16px 20px", textAlign: "center" }}>
-                      <span
-                        className={`inline-block px-3 py-1 rounded-full text-xs font-bold border whitespace-nowrap ${getHealthBadgeColor(order.health || "Active")}`}
-                      >
-                        {order.health || "Active"}
-                      </span>
+                      <OrderHealthBadge
+                        order={order}
+                        className={`px-3 py-1 rounded-full text-xs font-bold border whitespace-nowrap ${getHealthBadgeColor(order.health || "Active")}`}
+                      />
                     </td>
                     <td style={{ padding: "16px 20px", textAlign: "center" }}>
                       <div className="relative inline-flex items-center gap-1.5">
@@ -1209,49 +1421,18 @@ export function OrdersManagementDashboard({
                           <Eye size={14} /> View Order
                         </button>
                         {currentUserRole === "Admin" && (
-                          <div className="relative">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setOpenMenuId(openMenuId === order.id ? null : order.id);
-                              }}
-                              className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100"
-                              aria-label="More actions"
-                            >
-                              <MoreHorizontal size={16} />
-                            </button>
-                            {openMenuId === order.id && (
-                              <>
-                                <div
-                                  className="fixed inset-0 z-40"
-                                  onClick={() => setOpenMenuId(null)}
-                                />
-                                <div className="absolute right-0 top-full mt-1 z-50 min-w-[170px] rounded-lg border border-slate-200 bg-white shadow-lg overflow-hidden">
-                                  {healthMenuActions(order.health || "Active").map((action) => {
-                                    const Icon = action.icon;
-                                    return (
-                                      <button
-                                        key={action.health}
-                                        type="button"
-                                        onClick={() => applyOrderHealth(order.id, action.health)}
-                                        className={`w-full px-3.5 py-2.5 flex items-center gap-2 text-left text-xs font-semibold ${action.className}`}
-                                      >
-                                        <Icon size={13} /> {action.label}
-                                      </button>
-                                    );
-                                  })}
-                                  <button
-                                    type="button"
-                                    onClick={() => openServiceTicketForOrder(order)}
-                                    className="w-full px-3.5 py-2.5 flex items-center gap-2 text-left text-xs font-semibold text-slate-800 hover:bg-slate-50 border-t border-slate-100"
-                                  >
-                                    <Wrench size={13} /> Add Service Ticket
-                                  </button>
-                                </div>
-                              </>
-                            )}
-                          </div>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleOrderMenu(order.id, e.currentTarget);
+                            }}
+                            className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+                            aria-label="More actions"
+                            aria-expanded={openMenuId === order.id}
+                          >
+                            <MoreHorizontal size={16} />
+                          </button>
                         )}
                       </div>
                     </td>
@@ -1268,6 +1449,14 @@ export function OrdersManagementDashboard({
             </tbody>
           </table>
         </div>
+        <ListPagination
+          page={pagedOrders.page}
+          totalPages={pagedOrders.totalPages}
+          total={pagedOrders.total}
+          pageSize={pagedOrders.pageSize}
+          onPageChange={setPage}
+          itemLabel="orders"
+        />
         </div>
         
         {/* Assignment Right Drawer */}
@@ -1368,6 +1557,76 @@ export function OrdersManagementDashboard({
           }}
         />
       )}
+
+      <HoldFollowUpModal
+        isOpen={!!holdModalOrderId}
+        entityLabel="order"
+        onClose={() => setHoldModalOrderId(null)}
+        onSubmit={(payload) => {
+          if (!holdModalOrderId) return;
+          const id = holdModalOrderId;
+          setHoldModalOrderId(null);
+          void applyOrderHealth(id, "On Hold", payload);
+        }}
+      />
+
+      {(() => {
+        const menuOrder = openMenuId
+          ? orders.find((o) => o.id === openMenuId) ?? null
+          : null;
+        if (!menuOrder || !menuAnchorEl) return null;
+
+        const healthActions =
+          currentUserRole === "Admin" && canChangeOrderHealth(menuOrder.stage)
+            ? healthMenuActions(menuOrder.health || "Active")
+            : [];
+        const showServiceTicket =
+          currentUserRole === "Admin" &&
+          canShowAddServiceTicketForOrder(menuOrder.stage);
+
+        // Desktop already has a View Order button; mobile card row is tappable.
+        // ⋯ menu is only for admin health / service-ticket actions.
+        if (healthActions.length === 0 && !showServiceTicket) {
+          return null;
+        }
+
+        return (
+          <PortaledDropdown
+            open
+            anchorEl={menuAnchorEl}
+            onClose={closeOrderMenu}
+          >
+            {healthActions.map((action) => {
+              const Icon = action.icon;
+              return (
+                <button
+                  key={action.health}
+                  type="button"
+                  onClick={() => {
+                    closeOrderMenu();
+                    applyOrderHealth(menuOrder.id, action.health);
+                  }}
+                  className={`w-full px-3.5 py-2.5 flex items-center gap-2 text-left text-xs font-semibold ${action.className}`}
+                >
+                  <Icon size={13} /> {action.label}
+                </button>
+              );
+            })}
+            {showServiceTicket && (
+              <button
+                type="button"
+                onClick={() => {
+                  closeOrderMenu();
+                  openServiceTicketForOrder(menuOrder);
+                }}
+                className="w-full px-3.5 py-2.5 flex items-center gap-2 text-left text-xs font-semibold text-slate-800 hover:bg-slate-50 border-t border-slate-100"
+              >
+                <Wrench size={13} /> Add Service Ticket
+              </button>
+            )}
+          </PortaledDropdown>
+        );
+      })()}
     </div>
   );
 }

@@ -2,7 +2,9 @@
 
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { createAdminClient } from "@/utils/supabase/admin";
 import { revokePortalToken } from "@/utils/portal-tokens";
+import { isClosedOrderStage } from "@/features/customers/customerLogic";
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -24,6 +26,22 @@ async function getSupabase() {
       },
     }
   );
+}
+
+async function revokeTokensByJtis(
+  supabase: any,
+  jtis: string[]
+): Promise<number> {
+  let revokedCount = 0;
+  for (const jti of jtis) {
+    try {
+      await revokePortalToken(supabase, jti);
+      revokedCount++;
+    } catch (e: any) {
+      console.error(`[revokePortalAccess] Failed to revoke token ${jti}:`, e.message);
+    }
+  }
+  return revokedCount;
 }
 
 /**
@@ -64,19 +82,95 @@ export async function revokePortalAccessAction(
     return { revoked: 0, message: "No active portal tokens found." };
   }
 
-  // Revoke each token
-  let revokedCount = 0;
-  for (const { jti } of tokens) {
-    try {
-      await revokePortalToken(supabase, jti);
-      revokedCount++;
-    } catch (e: any) {
-      console.error(`[revokePortalAccessAction] Failed to revoke token ${jti}:`, e.message);
-    }
-  }
+  const revokedCount = await revokeTokensByJtis(
+    supabase,
+    tokens.map((t) => t.jti)
+  );
 
   return {
     revoked: revokedCount,
     message: `Revoked ${revokedCount} active portal token${revokedCount !== 1 ? "s" : ""}. Customer link is now invalid.`,
   };
+}
+
+/**
+ * Invalidate customer portal magic links when an order is completed/closed.
+ * Revokes tokens for this order (UUID + friendly id) and, if the customer has
+ * no remaining open orders, all of their active portal tokens.
+ */
+export async function revokePortalAccessForClosedOrder(input: {
+  customerId?: string | null;
+  orderUuid: string;
+  friendlyOrderId?: string | null;
+}): Promise<void> {
+  const db = createAdminClient();
+  if (!db) return;
+
+  const orderKeys = Array.from(
+    new Set(
+      [input.orderUuid, input.friendlyOrderId].filter(
+        (v): v is string => typeof v === "string" && !!v.trim()
+      )
+    )
+  );
+  if (orderKeys.length === 0) return;
+
+  const { data: orderTokens, error: orderTokErr } = await db
+    .from("portal_access_tokens")
+    .select("jti")
+    .is("revoked_at", null)
+    .in("order_id", orderKeys);
+
+  if (orderTokErr) {
+    console.error(
+      "[revokePortalAccessForClosedOrder] order token lookup failed:",
+      orderTokErr.message
+    );
+  } else if (orderTokens?.length) {
+    await revokeTokensByJtis(
+      db,
+      orderTokens.map((t) => t.jti)
+    );
+  }
+
+  if (!input.customerId) return;
+
+  const { data: openOrders, error: openErr } = await db
+    .from("orders")
+    .select("id, stage")
+    .eq("customer_id", input.customerId);
+
+  if (openErr) {
+    console.error(
+      "[revokePortalAccessForClosedOrder] open orders lookup failed:",
+      openErr.message
+    );
+    return;
+  }
+
+  const hasOpenOrder = (openOrders || []).some(
+    (o) => !isClosedOrderStage(o.stage)
+  );
+  if (hasOpenOrder) return;
+
+  const { data: customerTokens, error: custTokErr } = await db
+    .from("portal_access_tokens")
+    .select("jti")
+    .eq("customer_id", input.customerId)
+    .is("revoked_at", null);
+
+  if (custTokErr) {
+    console.error(
+      "[revokePortalAccessForClosedOrder] customer token lookup failed:",
+      custTokErr.message
+    );
+    return;
+  }
+
+  if (customerTokens?.length) {
+    await revokeTokensByJtis(
+      db,
+      customerTokens.map((t) => t.jti)
+    );
+  }
 }

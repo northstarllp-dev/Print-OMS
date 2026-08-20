@@ -1,5 +1,6 @@
 import { ThemeColors } from "./theme";
 import { FeaturesConfig } from "./features";
+import type { BusinessOperation } from "./businessOperations";
 
 /** Stage permission shape used in client workflow config (mirrors stageGrants). */
 export type StagePermissionConfig = { canView: boolean; canEdit: boolean };
@@ -32,6 +33,12 @@ export interface PrintOMSClientConfig {
   faviconUrl?: string | null;
   loadingText?: string;
   features: FeaturesConfig;
+  /**
+   * Business operations available for this tenant (signage, flex printing, …).
+   * Each declares which pipeline stages are included and their order.
+   * Defaults to signage-only when omitted.
+   */
+  businessOperations?: BusinessOperation[];
   /** Dedicated /production and /installation floor portals */
   usesFloorPortals?: boolean;
   /** Per staff_role stage grant overrides (falls back to DEFAULT_STAGE_GRANTS_BY_ROLE) */

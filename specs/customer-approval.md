@@ -51,7 +51,8 @@ Permissions:
 ### Admin
 
 Permissions:
-* Override customer approval (force approval if customer confirmed via email/WhatsApp).
+* Override customer approval for Quotation (`adminMarkQuotationApprovedAction` — "Approve without Customer & Advance" when quote is `Sent`).
+* Override customer approval for Design (`adminMarkDesignApprovedAction` — "Approve without Customer & Advance" on the Design tab while `Design In Progress` and proofs are not yet customer-approved). Marks latest versions Approved, sets stage to `Design Approved`, then advances to the next pipeline stage. Admin portal only.
 * Record payments and mark them received.
 * Transition order stages after customer approval (payments do not block).
 
@@ -91,7 +92,7 @@ Method: Portal client / server updates on `quotations`
 Logic: Updates quotation row, logs activity, advances order stage when appropriate.
 
 ### Handle Design Response
-Method: Server Action (`updateDesignDetailsAction`, `approveAllDesignItemsAction`)
+Method: Server Action (`updateDesignDetailsAction`, `transitionDesignOrderStageAction`)
 Logic: Updates `designs.items` JSONB; when all items approved, advances stage.
 
 ### Payments

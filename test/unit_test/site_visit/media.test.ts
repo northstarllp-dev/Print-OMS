@@ -10,8 +10,11 @@ import { bucketForPurpose } from "@/utils/supabase/serverStorageUpload";
 
 describe("site visit media", () => {
   describe("storage paths + bucket isolation", () => {
-    it("routes site_visit_photo to site-visit-photos bucket", () => {
+    it("routes each of the five stage purposes to its dedicated bucket", () => {
       expect(bucketForPurpose("site_visit_photo")).toBe("site-visit-photos");
+      expect(bucketForPurpose("design_resource")).toBe("order-resources");
+      expect(bucketForPurpose("design_proof")).toBe("design-proofs");
+      expect(bucketForPurpose("production_asset")).toBe("production-files");
       expect(bucketForPurpose("installation_photo")).toBe("installation-photos");
     });
 

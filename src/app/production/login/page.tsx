@@ -123,7 +123,7 @@ export default function ProductionLogin() {
             type="submit"
             disabled={loading}
             className="prt-btn prt-btn-primary"
-            style={{ width: "100%", justifyContent: "center", padding: "10px 16px", fontSize: 14, marginTop: 4, background: "#0284c7" }}
+            style={{ width: "100%", justifyContent: "center", padding: "10px 16px", fontSize: 14, marginTop: 4 }}
           >
             {loading ? "Signing in..." : "Sign In to Production Portal"}
           </button>

@@ -12,7 +12,7 @@ import {
   upsertQuotation,
   sendQuotationToCustomer
 } from "@/features/quotations/actions/quotationActions";
-import { formatSiteMeasurementLabel } from "@/features/orders/actions/siteVisitMapper";
+import { formatSiteMeasurementLabel, siteMeasurementAreaSqFt } from "@/features/orders/actions/siteVisitMapper";
 import {
   calcLineAmount,
   getLineMeasurement,
@@ -31,6 +31,15 @@ import { QuotationDocument } from "@/features/quotations/components/QuotationDoc
 import { getAppSettings } from "@/features/settings/actions/settingsActions";
 import type { InvoiceProfile } from "@/features/quotations/types/invoiceProfile";
 import { EMPTY_INVOICE_PROFILE } from "@/features/quotations/types/invoiceProfile";
+import {
+  normalizeProductBusinessOperations,
+  productAppliesToBusinessOp,
+} from "@/features/products/productLogic";
+import {
+  getBusinessOperation,
+  getBusinessOperationsForTenant,
+} from "@/features/orders/businessOperations";
+import { loadClientConfig } from "@/config/loadClientConfig";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -46,6 +55,9 @@ interface Product {
   price_per_sqft?: number | null;
   price_per_unit?: number | null;
   unit_price_max_sqft?: number | null;
+  pricing_type_below?: string | null;
+  pricing_type_above?: string | null;
+  business_operations?: string[] | null;
   images?: string[];
 }
 
@@ -112,6 +124,7 @@ interface QuotationModuleProps {
     stage?: string;
     stageStatus?: string;
     workflow_type?: "quote_first" | "design_first";
+    business_operation?: string;
   };
   isEmployee: boolean;
   products: Product[];
@@ -176,6 +189,7 @@ function ProductSearch({
   onChange,
   disabled,
   measurement = 1,
+  businessOperationId,
 }: {
   value: string;
   products: Product[];
@@ -184,6 +198,7 @@ function ProductSearch({
   disabled?: boolean;
   /** Current line/site measurement — drives dual-price preview (≤10 unit, >10 sqft). */
   measurement?: number;
+  businessOperationId?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState(value);
@@ -192,6 +207,10 @@ function ProductSearch({
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const tenantOps = getBusinessOperationsForTenant(
+    loadClientConfig().businessOperations
+  );
+  const showOpTags = tenantOps.length > 1;
 
   useEffect(() => {
     setIsMounted(true);
@@ -234,6 +253,7 @@ function ProductSearch({
     ? products.filter(
       (p) =>
         p.is_active &&
+        productAppliesToBusinessOp(p, businessOperationId) &&
         (p.name.toLowerCase().includes(query.toLowerCase()) ||
           p.product_id.toLowerCase().includes(query.toLowerCase()) ||
           (p.category ?? "").toLowerCase().includes(query.toLowerCase()))
@@ -242,6 +262,14 @@ function ProductSearch({
 
   const visibleResults = filtered.slice(0, 6);
   const hasMore = filtered.length > visibleResults.length;
+
+  const formatOpTags = (ops?: string[] | null) => {
+    const ids = normalizeProductBusinessOperations(ops);
+    if (ids.length === 0) return "All";
+    return ids
+      .map((id) => getBusinessOperation(id, tenantOps).label)
+      .join(", ");
+  };
 
   const dropdown =
     isMounted && open && visibleResults.length > 0 && dropdownRect
@@ -274,6 +302,11 @@ function ProductSearch({
                   <span className="text-[11px] font-bold text-slate-900">{p.name}</span>
                   {p.category && (
                     <span className="ml-1.5 text-[9px] text-slate-400">{p.category}</span>
+                  )}
+                  {showOpTags && (
+                    <span className="mt-0.5 block text-[9px] font-semibold text-slate-500">
+                      {formatOpTags(p.business_operations)}
+                    </span>
                   )}
                 </div>
                 <div className="shrink-0 text-right">
@@ -432,7 +465,8 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
           };
         }
 
-        const defaultMeasurement = (item.width && item.height) ? item.width * item.height : 1;
+        const areaSqFt = siteMeasurementAreaSqFt(item);
+        const defaultMeasurement = areaSqFt > 0 ? areaSqFt : 1;
         // Default empty row inside a section
         return {
           siteVisitItemId: item.id,
@@ -675,10 +709,8 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
 
   function selectProduct(sectionId: string, lineId: string, p: Product) {
     const siteVisitItem = siteVisitItems.find((sv) => sv.id === sectionId);
-    const defaultMeasurement =
-      siteVisitItem?.width && siteVisitItem?.height
-        ? siteVisitItem.width * siteVisitItem.height
-        : 1;
+    const areaSqFt = siteMeasurementAreaSqFt(siteVisitItem);
+    const defaultMeasurement = areaSqFt > 0 ? areaSqFt : 1;
     const resolved = resolvePricingForMeasurement(p, defaultMeasurement);
 
     updateLine(sectionId, lineId, {
@@ -804,22 +836,11 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
       )}
 
       {/* Header Row */}
-      <div className="flex flex-col md:flex-row md:items-center gap-3 md:justify-between bg-slate-50 p-3 md:p-4 border border-slate-200 rounded-2xl">
-        <div className="flex flex-col gap-1.5 min-w-0">
-          <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
-            <ClipboardList size={16} className="text-blue-600 shrink-0" />
-            Quotation Builder
-          </h3>
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] text-slate-400 font-bold uppercase">Quote No:</span>
-            <input
-              type="text"
-              value={quotationId || "—"}
-              readOnly={true}
-              className="text-xs font-mono text-slate-700 bg-slate-100/50 border border-slate-200 cursor-not-allowed rounded px-2 py-1"
-              style={{ width: "90px" }}
-            />
-          </div>
+      <div className="flex flex-col md:flex-row md:items-center gap-3 md:justify-between bg-slate-50/70 px-4 py-3 border border-slate-200/70 rounded-xl">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <ClipboardList size={16} className="text-blue-600 shrink-0" />
+          <h3 className="text-sm font-bold text-slate-800">Quotation</h3>
+          <span className="text-xs font-mono text-slate-400 truncate">{quotationId || "—"}</span>
         </div>
         <div className="flex items-center gap-2 md:gap-3 flex-wrap">
           <button
@@ -852,11 +873,11 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
             </>
           )}
 
-          <span className={`text-xs px-3 py-1.5 rounded-md font-black uppercase shadow-sm ${
+          <span className={`text-xs px-2.5 py-1 rounded-md font-semibold ${
             status === "Approved" ? "bg-emerald-600 text-white" :
             status === "Sent" ? "bg-blue-600 text-white" :
             status === "Rejected" ? "bg-rose-600 text-white" :
-            "bg-slate-600 text-white"
+            "bg-slate-500 text-white"
           }`}>
             {status}
           </span>
@@ -878,16 +899,16 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
       )}
 
       {/* Customer Info Card */}
-      <div className="bg-white rounded-2xl px-5 py-4 border border-slate-200 flex justify-between items-start text-xs shadow-sm">
-        <div className="space-y-1.5 flex-1 max-w-[60%]">
-          <div className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Bill To</div>
-          <div className="font-black text-slate-800 py-0.5">
+      <div className="bg-white rounded-xl px-4 py-3 border border-slate-200/70 flex justify-between items-start text-xs">
+        <div className="flex-1 max-w-[60%]">
+          <div className="text-[10px] text-slate-400 mb-0.5">Bill To</div>
+          <div className="font-bold text-slate-800">
             {order.businessName} - {order.clientName}
           </div>
         </div>
         <div className="text-right">
-          <div className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-0.5">Date</div>
-          <div className="font-mono text-slate-700 font-bold" suppressHydrationWarning>
+          <div className="text-[10px] text-slate-400 mb-0.5">Date</div>
+          <div className="font-mono text-slate-700 font-semibold" suppressHydrationWarning>
             {new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
           </div>
         </div>
@@ -903,24 +924,24 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
           const svItem = siteVisitItems.find((sv) => sv.id === section.siteVisitItemId);
 
           return (
-            <div key={section.siteVisitItemId} className="border border-slate-200 rounded-2xl bg-white shadow-sm overflow-visible">
+            <div key={section.siteVisitItemId} className="border border-slate-200/70 rounded-xl bg-white overflow-visible">
               {/* Section Header */}
-              <div className="bg-[#f8fafc] px-4 md:px-5 py-3.5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center gap-2 sm:justify-between rounded-t-2xl">
+              <div className="bg-slate-50/60 px-4 py-3 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center gap-2 sm:justify-between rounded-t-xl">
                 <div className="flex flex-col gap-0.5 min-w-0">
-                  <span className="text-xs font-black text-[#0f172a] uppercase tracking-wider">{section.itemLabel}</span>
+                  <span className="text-xs font-bold text-slate-800">{section.itemLabel}</span>
                   {(() => {
                     const measurementLabel = formatSiteMeasurementLabel(svItem);
                     return measurementLabel ? (
-                      <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                      <span className="text-[10px] text-slate-500 font-medium">
                         {measurementLabel}
                       </span>
                     ) : null;
                   })()}
                 </div>
-                <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+                <div className="flex items-center gap-3 shrink-0">
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-[10px] text-slate-400 font-black uppercase shrink-0">Total (incl. GST):</span>
-                    <span className="text-sm font-black text-[#1e40af] font-mono truncate">
+                    <span className="text-[10px] text-slate-400 shrink-0">Total (incl. GST)</span>
+                    <span className="text-sm font-bold text-blue-700 font-mono truncate">
                       ₹{itemTotal.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                   </div>
@@ -944,7 +965,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
               >
               <div className="min-w-[980px] md:min-w-[1040px]">
               <div
-                className="grid gap-3 px-4 py-2.5 text-[10px] font-black text-[#64748b] uppercase tracking-wider bg-slate-50 border-b border-slate-100"
+                className="grid gap-3 px-4 py-2 text-[10px] font-semibold text-slate-500 bg-slate-50/40 border-b border-slate-100"
                 style={{
                   gridTemplateColumns: "minmax(300px, 2.5fr) 80px 120px 120px 100px 56px 100px 36px",
                 }}
@@ -987,15 +1008,15 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                             value={line.description}
                             products={products}
                             disabled={isLocked}
+                            businessOperationId={order.business_operation}
                             measurement={
                               getLineMeasurement(line) ||
                               (() => {
                                 const sv = siteVisitItems.find(
                                   (item) => item.id === section.siteVisitItemId
                                 );
-                                return sv?.width && sv?.height
-                                  ? sv.width * sv.height
-                                  : 1;
+                                const area = siteMeasurementAreaSqFt(sv);
+                                return area > 0 ? area : 1;
                               })()
                             }
                             onSelect={(p) => selectProduct(section.siteVisitItemId, line.id, p)}
@@ -1068,7 +1089,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                         <input
                           type="number"
                           min="0.01"
-                          step="0.01"
+                          step="1"
                           value={measurement === 0 ? "" : measurement}
                           disabled={isLocked}
                           onFocus={(e) => e.target.select()}
@@ -1187,7 +1208,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                   <button
                     type="button"
                     onClick={() => addLine(section.siteVisitItemId)}
-                    className="w-full flex items-center justify-center gap-1.5 py-2 border border-dashed border-slate-200 rounded-xl text-xs font-bold text-slate-500 hover:border-blue-400 hover:text-blue-600 transition-all bg-white shadow-sm"
+                    className="w-full flex items-center justify-center gap-1.5 py-2 border border-dashed border-slate-200 rounded-xl text-xs font-semibold text-slate-500 hover:border-blue-400 hover:text-blue-600 transition-all bg-white"
                   >
                     <Plus size={13} /> Add Line Item
                   </button>
@@ -1202,13 +1223,13 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
 
 
 
-      {/* Recreated 2nd SS bottom section layout */}
+      {/* Bottom section: notes/terms + summary */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-        {/* Left Column: Notes, Included Services, Terms */}
+        {/* Left Column: Notes, Terms */}
         <div className="space-y-4">
           {/* Notes */}
           <div>
-            <label className="block text-[10px] font-black text-[#0f172a] uppercase tracking-wider mb-1">Notes</label>
+            <label className="block text-[11px] font-semibold text-slate-600 mb-1">Notes</label>
             <textarea
               value={notes}
               disabled={isLocked}
@@ -1219,11 +1240,9 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
             />
           </div>
 
-
-
           {/* Terms & Conditions */}
           <div>
-            <label className="block text-[10px] font-black text-[#0f172a] uppercase tracking-wider mb-1">Terms & Conditions</label>
+            <label className="block text-[11px] font-semibold text-slate-600 mb-1">Terms & Conditions</label>
             <textarea
               value={terms}
               disabled={isLocked}
@@ -1235,43 +1254,45 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
           </div>
         </div>
 
-        {/* Right Column: Invoice summary details */}
-        <div className="bg-[#f8fafc] border border-slate-200/80 rounded-3xl p-6 space-y-4 shadow-sm h-fit">
+        {/* Right Column: Summary */}
+        <div className="bg-slate-50/70 border border-slate-200/70 rounded-2xl p-5 space-y-3.5 h-fit">
           {/* Subtotal */}
-          <div className="flex justify-between items-center text-xs font-bold text-slate-500 uppercase tracking-wider pb-3 border-b border-slate-200/50">
+          <div className="flex justify-between items-center text-xs text-slate-500 pb-3 border-b border-slate-200/50">
             <span>Subtotal</span>
-            <span className="font-mono text-slate-800 text-sm">
+            <span className="font-mono text-slate-800 font-semibold text-sm">
               ₹{subtotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
             </span>
           </div>
 
-          {/* Tax Amount Display */}
-          <div className="flex justify-between items-center text-xs font-bold text-slate-500 uppercase tracking-wider pb-3 border-b border-slate-200/50">
-            <span>Tax Amount (GST)</span>
-            <span className="font-mono text-slate-800">
+          {/* Tax Amount */}
+          <div className="flex justify-between items-center text-xs text-slate-500 pb-3 border-b border-slate-200/50">
+            <span>Tax (GST)</span>
+            <span className="font-mono text-slate-800 font-semibold">
               ₹{tax.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
             </span>
           </div>
 
           {/* Discount & Shipping Buttons / Inputs */}
           <div className="space-y-3.5 py-1.5">
-            <div className="flex gap-4">
+            <div className="flex flex-wrap gap-2">
               {!showDiscountInput && (
                 <button
                   type="button"
                   onClick={() => setShowDiscountInput(true)}
-                  className="text-xs font-black text-[#1e40af] hover:text-[#173087] flex items-center gap-1 transition-colors"
+                  className="inline-flex items-center justify-center gap-1.5 h-9 sm:h-8 px-3 rounded-lg text-[12px] font-semibold bg-white text-slate-600 border border-slate-200 shadow-sm hover:bg-slate-50 hover:border-slate-300 hover:text-slate-900 transition-colors flex-1 sm:flex-none min-w-[8.5rem]"
                 >
-                  + Discount
+                  <Plus size={13} strokeWidth={2.5} />
+                  Discount
                 </button>
               )}
               {!showShippingInput && (
                 <button
                   type="button"
                   onClick={() => setShowShippingInput(true)}
-                  className="text-xs font-black text-[#1e40af] hover:text-[#173087] flex items-center gap-1 transition-colors"
+                  className="inline-flex items-center justify-center gap-1.5 h-9 sm:h-8 px-3 rounded-lg text-[12px] font-semibold bg-white text-slate-600 border border-slate-200 shadow-sm hover:bg-slate-50 hover:border-slate-300 hover:text-slate-900 transition-colors flex-1 sm:flex-none min-w-[8.5rem]"
                 >
-                  + Shipping
+                  <Plus size={13} strokeWidth={2.5} />
+                  Shipping
                 </button>
               )}
             </div>
@@ -1279,7 +1300,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
             {showDiscountInput && (
               <div className="space-y-1">
                 <div className="flex justify-between items-center">
-                  <label className="text-[10px] font-black text-[#0f172a] uppercase tracking-wider">Discount</label>
+                  <label className="text-[11px] font-semibold text-slate-600">Discount</label>
                   <button
                     type="button"
                     onClick={() => {
@@ -1311,7 +1332,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                     <option value="percentage">%</option>
                   </select>
                   <div className="relative flex-1">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-black">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-semibold">
                       {discountType === "amount" ? "₹" : "%"}
                     </span>
                     <input
@@ -1348,7 +1369,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
             {showShippingInput && (
               <div className="space-y-1">
                 <div className="flex justify-between items-center">
-                  <label className="text-[10px] font-black text-[#0f172a] uppercase tracking-wider">Shipping (₹)</label>
+                  <label className="text-[11px] font-semibold text-slate-600">Shipping (₹)</label>
                   <button
                     type="button"
                     onClick={() => {
@@ -1361,7 +1382,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                   </button>
                 </div>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-black">₹</span>
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-semibold">₹</span>
                   <input
                     type="number"
                     min="0"
@@ -1382,8 +1403,8 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
 
           {/* Grand Total */}
           <div className="flex justify-between items-center py-4 border-t border-slate-200">
-            <span className="font-black text-slate-900 text-sm uppercase tracking-wider">Total</span>
-            <span className="font-black text-[#0f172a] text-xl font-mono">
+            <span className="font-bold text-slate-900 text-sm">Total</span>
+            <span className="font-bold text-slate-900 text-xl font-mono">
               ₹{grandTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
             </span>
           </div>
@@ -1437,7 +1458,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                   type="button"
                   onClick={handleSave}
                   disabled={isPending}
-                  className="py-2.5 px-4 bg-slate-100 border border-slate-200 text-slate-700 hover:bg-slate-200 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm flex-1 sm:flex-none min-w-0"
+                  className="py-2.5 px-4 bg-slate-100 border border-slate-200 text-slate-700 hover:bg-slate-200 rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-1.5 shadow-sm flex-1 sm:flex-none min-w-0"
                 >
                   {isPending ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
                   Save Draft
@@ -1448,7 +1469,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                     type="button"
                     onClick={() => setShowSendConfirm(true)}
                     disabled={isPending || sendingToCustomer || sections.length === 0}
-                    className="py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex-1 sm:flex-none min-w-0"
+                    className="py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex-1 sm:flex-none min-w-0"
                   >
                     {sendingToCustomer ? (
                       <Loader2 size={14} className="animate-spin" />
@@ -1464,7 +1485,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                     type="button"
                     onClick={() => setAdvanceConfirmType("override")}
                     disabled={isPending}
-                    className="py-2.5 px-4 md:px-5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 flex-1 sm:flex-none min-w-0"
+                    className="py-2.5 px-4 md:px-5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 flex-1 sm:flex-none min-w-0"
                   >
                     <Sparkles size={13} className="shrink-0" />
                     <span className="text-center leading-tight">
@@ -1478,7 +1499,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                   <button
                     type="button"
                     onClick={() => setAdvanceConfirmType("advance")}
-                    className="py-2.5 px-4 md:px-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm flex-1 sm:flex-none min-w-0"
+                    className="py-2.5 px-4 md:px-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-1.5 shadow-sm flex-1 sm:flex-none min-w-0"
                   >
                     <Sparkles size={13} className="shrink-0" />
                     {advanceButtonLabel}
@@ -1487,7 +1508,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
               </div>
             ) : (
               <div className="flex flex-row flex-wrap items-stretch sm:items-center gap-2 w-full">
-                <div className="py-2.5 px-4 bg-slate-100 border border-slate-200 text-slate-500 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 shadow-sm flex-1 sm:flex-none min-w-0">
+                <div className="py-2.5 px-4 bg-slate-100 border border-slate-200 text-slate-500 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 shadow-sm flex-1 sm:flex-none min-w-0">
                   <Check size={14} /> Submitted & Locked
                 </div>
                 {canAdminApproveWithoutCustomer && (
@@ -1495,7 +1516,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                     type="button"
                     onClick={() => setAdvanceConfirmType("override")}
                     disabled={isPending}
-                    className="py-2.5 px-4 md:px-5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 flex-1 sm:flex-none min-w-0"
+                    className="py-2.5 px-4 md:px-5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 flex-1 sm:flex-none min-w-0"
                   >
                     <Sparkles size={13} className="shrink-0" />
                     <span className="text-center leading-tight">
@@ -1508,7 +1529,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                   <button
                     type="button"
                     onClick={() => setAdvanceConfirmType("advance")}
-                    className="py-2.5 px-4 md:px-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm flex-1 sm:flex-none min-w-0"
+                    className="py-2.5 px-4 md:px-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-1.5 shadow-sm flex-1 sm:flex-none min-w-0"
                   >
                     <Sparkles size={13} className="shrink-0" />
                     {advanceButtonLabel}

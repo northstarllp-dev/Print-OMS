@@ -28,6 +28,9 @@ export interface EnquiryListRow {
   addedBy?: string | null;
   health?: string | null;
   lostReason?: string | null;
+  holdNote?: string | null;
+  reachOutAt?: string | null;
+  businessOperation?: string | null;
 }
 
 export interface EnquiryFilterOptions {
@@ -62,6 +65,9 @@ export function mapDbEnquiryToViewRow(e: Record<string, any>): EnquiryListRow {
     addedBy: e.added_by,
     health: e.health,
     lostReason: e.lost_reason,
+    holdNote: e.hold_note,
+    reachOutAt: e.reach_out_at,
+    businessOperation: e.business_operation || "signage",
   };
 }
 
@@ -103,15 +109,32 @@ export function isAllowedHealthTransition(
   return healthMenuActions(from).some((a) => a.health === to);
 }
 
-/** Server update payload for health (clears lost_reason unless Lost). */
+/** Server update payload for health (clears lost_reason unless Lost; hold fields when On Hold). */
 export function buildHealthUpdatePayload(
   health: string,
-  lostReason?: string | null
-): { health: string; lost_reason: string | null } {
+  lostReason?: string | null,
+  hold?: { note?: string | null; reachOutAt?: string | null } | null
+): {
+  health: string;
+  lost_reason: string | null;
+  hold_note: string | null;
+  reach_out_at: string | null;
+} {
+  const isHold = health === "On Hold";
   return {
     health,
     lost_reason: health === "Lost" ? lostReason ?? null : null,
+    hold_note: isHold ? hold?.note?.trim() || null : null,
+    reach_out_at: isHold ? hold?.reachOutAt || null : null,
   };
+}
+
+export function requiresHoldFollowUpPrompt(health: string): boolean {
+  return health === "On Hold";
+}
+
+export function isValidHoldFollowUp(note?: string | null, reachOutAt?: string | null): boolean {
+  return Boolean(note?.trim() && reachOutAt);
 }
 
 export function requiresLostReasonPrompt(
@@ -151,7 +174,9 @@ export function filterEnquiries<T extends EnquiryListRow>(
       !search ||
       (e.businessName || "").toLowerCase().includes(search) ||
       (e.leadName || "").toLowerCase().includes(search) ||
-      (e.phone || "").includes(opts.search || "");
+      (e.phone || "").includes(opts.search || "") ||
+      (e.email || "").toLowerCase().includes(search) ||
+      (e.enquireId || "").toLowerCase().includes(search);
 
     const matchesSource = sourceFilter === "All" || e.source === sourceFilter;
     const matchesAddedBy =
@@ -238,4 +263,24 @@ export function canListEnquiries(actor: {
 }): boolean {
   if (actor.role === "admin") return true;
   return actor.canView || actor.canEdit;
+}
+
+/** Client-side page slice after filters (10/page UI). */
+export function paginateEnquiries<T>(
+  rows: T[],
+  page: number,
+  pageSize: number
+): { items: T[]; total: number; page: number; pageSize: number; totalPages: number } {
+  const size = Math.max(1, Math.floor(pageSize));
+  const total = rows.length;
+  const totalPages = Math.max(1, Math.ceil(total / size));
+  const safePage = Math.min(Math.max(1, Math.floor(page)), totalPages);
+  const start = (safePage - 1) * size;
+  return {
+    items: rows.slice(start, start + size),
+    total,
+    page: safePage,
+    pageSize: size,
+    totalPages,
+  };
 }

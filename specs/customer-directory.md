@@ -15,9 +15,12 @@
 
 ## Workflow States
 
-* Customers do not have complex states, but may have a simple `status` such as:
+* Customers have the following `status` options:
   * **Active**: Currently doing business or in good standing.
-  * **Inactive / Blocked**: Flagged by admin for non-payment or other issues (Future enhancement).
+  * **Inactive**: No recent activity.
+  * **Pending**: Needs review or missing info.
+  * **Blocked**: Flagged by admin for non-payment or other issues.
+  * **Archived**: Hidden from default views.
 
 ## Business Rules
 
@@ -49,18 +52,23 @@ Permissions:
 | id | uuid (PK) | Unique customer ID |
 | company_id | uuid (FK) | Reference to the tenant company |
 | customer_id | varchar | Auto-generated friendly ID (e.g., CUST-001) |
-| business_name | text | Company/Entity name of the client |
+| name | text | Company/Entity name or client's name |
 | contact_person | text | Primary point of contact |
 | phone | text | Primary phone number |
+| whatsapp | text | WhatsApp contact number |
 | email | text | Email address |
-| address | text | Billing/Primary address |
+| city | text | City of operation |
+| billing_address | text | Billing address |
+| shipping_address | text | Shipping/delivery address |
 | gst_number | text | Tax ID for invoicing (optional) |
+| customer_type | text | Retail, Corporate, or Dealer |
+| status | text | Active, Inactive, Blocked, etc. |
 
 ## API Endpoints
 
 ### Customer Lookup / Search
 Method: Server Action or standard query.
-Behavior: Performs an `ilike` search on `business_name`, `contact_person`, or `phone`.
+Behavior: Performs search on `name`, `phone`, or `email`.
 
 ### Manage Customers
 Method: Server Actions (`createCustomer`, `updateCustomer`)
@@ -76,8 +84,9 @@ Purpose: A deep-dive page showing the customer's contact card on the left, and a
 
 ## File Structure
 
-* `src/features/customers/components/CustomersView.tsx`
+* `src/features/customers/components/CustomersViewNew.tsx`
 * `src/features/customers/actions/customerActions.ts`
+* `src/features/customers/customerLogic.ts`
 
 ## Data Flow
 

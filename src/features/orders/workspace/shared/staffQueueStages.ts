@@ -1,4 +1,6 @@
 import type { OrderStage } from "./types";
+import { isStageInOp } from "@/features/orders/businessOperations";
+import type { BusinessStageKey } from "@/config/schema/businessOperations";
 
 export type WorkflowType = "quote_first" | "design_first";
 
@@ -16,6 +18,7 @@ export const PIPELINE_STAGE_ORDER = [
   "Production",
   "Ready For Installation",
   "Installation Scheduled",
+  "Customer Pickup",
   "Completed",
   "Closed",
 ] as const;
@@ -34,6 +37,7 @@ export const PIPELINE_STAGE_ORDER_DESIGN_FIRST = [
   "Production",
   "Ready For Installation",
   "Installation Scheduled",
+  "Customer Pickup",
   "Completed",
   "Closed",
 ] as const;
@@ -55,7 +59,7 @@ const CURRENT_STAGES_BY_QUEUE: Record<OrderStage, readonly string[]> = {
   invoice: [], // Not an order queue — dedicated /staff/invoices list
   design: ["Design In Progress", "Design Approved"],
   production: ["Production"],
-  installation: ["Ready For Installation", "Installation Scheduled"],
+  installation: ["Ready For Installation", "Installation Scheduled", "Customer Pickup"],
   service_tickets: [], // Service tickets don't use order status pipeline
 };
 
@@ -117,7 +121,24 @@ export type StaffQueueOrder = {
   stage?: string | null;
   assigned_employees?: string[] | null;
   workflow_type?: WorkflowType | null;
+  business_operation?: string | null;
 };
+
+function queueStageInBusinessOp(
+  entryStage: OrderStage,
+  businessOperation?: string | null
+): boolean {
+  // Mixed queue lists keep all stages unless the order declares an op that excludes this module.
+  if (!businessOperation) return true;
+  if (
+    entryStage === "enquiry" ||
+    entryStage === "invoice" ||
+    entryStage === "service_tickets"
+  ) {
+    return true;
+  }
+  return isStageInOp(businessOperation, entryStage as BusinessStageKey);
+}
 
 export type QueueView = "incoming" | "current" | "completed";
 
@@ -134,24 +155,29 @@ export function filterStaffQueueOrders<T extends StaffQueueOrder>(
       return false;
     }
     if (!requireAssignment && !o.stage) return false;
+    if (!queueStageInBusinessOp(entryStage, o.business_operation)) return false;
     return isStaffQueueRelevant(o.stage ?? "", entryStage, o.workflow_type as WorkflowType);
   });
 }
 
 /** Floor/kiosk portals: all orders relevant to queue (no assignment filter). */
-export function filterFloorQueueOrders<T extends { stage?: string | null, workflow_type?: WorkflowType | null }>(
+export function filterFloorQueueOrders<T extends { stage?: string | null, workflow_type?: WorkflowType | null, business_operation?: string | null }>(
   orders: T[] | null | undefined,
   entryStage: OrderStage
 ): T[] {
-  return (orders ?? []).filter((o) => isStaffQueueRelevant(o.stage ?? "", entryStage, o.workflow_type as WorkflowType));
+  return (orders ?? []).filter((o) => {
+    if (!queueStageInBusinessOp(entryStage, o.business_operation)) return false;
+    return isStaffQueueRelevant(o.stage ?? "", entryStage, o.workflow_type as WorkflowType);
+  });
 }
 
-export function partitionQueueOrdersByView<T extends { stage?: string | null, workflow_type?: WorkflowType | null }>(
+export function partitionQueueOrdersByView<T extends { stage?: string | null, workflow_type?: WorkflowType | null, business_operation?: string | null }>(
   orders: T[],
   entryStage: OrderStage,
   view: QueueView
 ): T[] {
   return orders.filter((o) => {
+    if (!queueStageInBusinessOp(entryStage, o.business_operation)) return false;
     const stage = o.stage ?? "";
     const wt = o.workflow_type as WorkflowType;
     if (view === "incoming") return isStaffQueueIncoming(stage, entryStage, wt);

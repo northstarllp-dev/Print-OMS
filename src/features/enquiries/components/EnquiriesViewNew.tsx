@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { createPortal } from "react-dom";
-import { Search, Filter, Plus, AlertCircle, CheckCircle, Clock, Phone, X, Check, Calendar, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
+import { Search, Filter, Plus, AlertCircle, CheckCircle, Clock, Phone, X, Check, Calendar, ChevronLeft, ChevronRight, RefreshCw, Pencil, Trash2 } from "lucide-react";
 import { AddEnquiryModal, EnquiryFormData } from "./AddEnquiryModal";
 import { ConvertEnquiryModal } from "./ConvertEnquiryModal";
 import { AssignTeamModal } from "./AssignTeamModal";
@@ -13,13 +13,19 @@ import {
   countActiveEnquiryFilters,
   filterEnquiries,
   healthMenuActions,
+  paginateEnquiries,
   requiresLostReasonPrompt,
+  requiresHoldFollowUpPrompt,
 } from "@/features/enquiries/enquiryListLogic";
+import { ListPagination, LIST_PAGE_SIZE } from "@/components/ui/ListPagination";
+import { HoldFollowUpModal } from "@/features/calendar/components/HoldFollowUpModal";
 import {
   canConvertEnquiry,
 } from "@/features/enquiries/enquiryConvertLogic";
 import { shouldOpenAssignTeamAfterConvert } from "@/features/enquiries/enquiryAssignLogic";
-import { createEnquiry, convertEnquiryToOrderAction, updateEnquiryHealthAction } from "@/features/enquiries/actions/enquiryActions";
+import { getBusinessOperation } from "@/features/orders/businessOperations";
+import { BusinessOperationCaption } from "@/features/orders/components/BusinessOperationCaption";
+import { createEnquiry, updateEnquiry, deleteEnquiryAction, convertEnquiryToOrderAction, updateEnquiryHealthAction } from "@/features/enquiries/actions/enquiryActions";
 import { CustomerMessageModal, CustomerMessageInfo } from "@/features/notifications/customer-message/CustomerMessageModal";
 import type { CustomerMessageKey } from "@/features/notifications/customer-message/templates";
 
@@ -152,6 +158,7 @@ export function EnquiriesViewNew({
   const [addedByFilter, setAddedByFilter] = useState("All");
   const [healthFilter, setHealthFilter] = useState("ALL");
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [page, setPage] = useState(1);
 
   const availableAddedBy = useMemo(() => {
     const creatorsSet = new Set<string>();
@@ -172,7 +179,13 @@ export function EnquiriesViewNew({
   const [convertModalOpen, setConvertModalOpen] = useState(false);
   const [assignTeamModalOpen, setAssignTeamModalOpen] = useState(false);
   const [assignedOrderId, setAssignedOrderId] = useState("");
-  const [selectedEnquiry, setSelectedEnquiry] = useState<{id: string, businessName: string, leadName: string, notes?: string} | null>(null);
+  const [selectedEnquiry, setSelectedEnquiry] = useState<{
+    id: string;
+    businessName: string;
+    leadName: string;
+    notes?: string;
+    businessOperation?: string;
+  } | null>(null);
 
   // Customer message popup (templated copy / WhatsApp / email)
   const [customerMsg, setCustomerMsg] = useState<{
@@ -193,6 +206,82 @@ export function EnquiriesViewNew({
   
   // Lost reason modal state
   const [lostReasonModalData, setLostReasonModalData] = useState<{enquiryId: string} | null>(null);
+  const [holdModalEnquiryId, setHoldModalEnquiryId] = useState<string | null>(null);
+  const [editingEnquiry, setEditingEnquiry] = useState<{ id: string; formData: EnquiryFormData } | null>(null);
+  const [deletingEnquiryId, setDeletingEnquiryId] = useState<string | null>(null);
+
+  const canEditEnquiry = (enq: any) => canEdit && !enq.orderId && enq.status !== "Converted";
+  const canDeleteEnquiry = (enq: any) => canEdit && !enq.orderId && enq.status !== "Converted";
+
+  const openEditModal = (enq: any) => {
+    setEditingEnquiry({
+      id: enq.id,
+      formData: {
+        businessName: enq.businessName || "",
+        leadName: enq.leadName || "",
+        phone: enq.phone || "",
+        whatsappNumber: enq.whatsapp || "",
+        email: enq.email || "",
+        primaryMode: (enq.primaryCommunicationMode === "MAIL" ? "email" : "whatsapp") as any,
+        source: enq.source || "Meta Ads",
+        notes: enq.notes || "",
+        location: enq.location || "",
+        businessOperation: enq.businessOperation || "signage",
+      },
+    });
+  };
+
+  const handleEditEnquiry = async (data: EnquiryFormData) => {
+    if (!editingEnquiry) return;
+    try {
+      const payload: Record<string, unknown> = {
+        lead_name: data.leadName,
+        business_name: data.businessName,
+        phone: data.phone.replace(/\s/g, ""),
+        whatsapp: data.whatsappNumber.replace(/\s/g, ""),
+        email: data.email,
+        source: data.source,
+        notes: data.notes,
+        primary_communication_mode: data.primaryMode === "whatsapp" ? "WHATSAPP" : "MAIL",
+        location: data.location,
+        business_operation: data.businessOperation || "signage",
+      };
+      await updateEnquiry(editingEnquiry.id, payload);
+      setEnquiries((prev) =>
+        prev.map((e) =>
+          e.id === editingEnquiry.id
+            ? {
+                ...e,
+                leadName: data.leadName,
+                businessName: data.businessName,
+                phone: data.phone,
+                whatsapp: data.whatsappNumber,
+                email: data.email,
+                source: data.source,
+                notes: data.notes,
+                primaryCommunicationMode: data.primaryMode === "whatsapp" ? "WHATSAPP" : "MAIL",
+                location: data.location,
+                businessOperation: data.businessOperation,
+              }
+            : e
+        )
+      );
+      setEditingEnquiry(null);
+    } catch (err: any) {
+      alert(err.message || "Failed to update enquiry");
+    }
+  };
+
+  const handleDeleteEnquiry = async (id: string) => {
+    try {
+      await deleteEnquiryAction(id);
+      setEnquiries((prev) => prev.filter((e) => e.id !== id));
+      setDeletingEnquiryId(null);
+    } catch (err: any) {
+      alert(err.message || "Failed to delete enquiry");
+      setDeletingEnquiryId(null);
+    }
+  };
 
   const handleAddEnquiry = async (data: EnquiryFormData) => {
     try {
@@ -267,8 +356,17 @@ export function EnquiriesViewNew({
     return colors[health] || "bg-slate-100 text-slate-600 border-slate-200";
   };
 
-  const applyEnquiryHealth = async (enquiryId: string, health: string, promptReason?: string) => {
+  const applyEnquiryHealth = async (
+    enquiryId: string,
+    health: string,
+    promptReason?: string,
+    hold?: { note: string; reachOutAt: string } | null
+  ) => {
     try {
+      if (requiresHoldFollowUpPrompt(health) && !hold) {
+        setHoldModalEnquiryId(enquiryId);
+        return;
+      }
       let lostReason = promptReason || null;
       if (requiresLostReasonPrompt(health, promptReason)) {
         setLostReasonModalData({ enquiryId });
@@ -279,12 +377,23 @@ export function EnquiriesViewNew({
       setEnquiries((prev) =>
         prev.map((e) =>
           e.id === enquiryId
-            ? { ...e, health, lostReason: health === "Lost" ? lostReason : null }
+            ? {
+                ...e,
+                health,
+                lostReason: health === "Lost" ? lostReason : null,
+                holdNote: health === "On Hold" ? hold?.note ?? null : null,
+                reachOutAt: health === "On Hold" ? hold?.reachOutAt ?? null : null,
+              }
             : e
         )
       );
       
-      await updateEnquiryHealthAction(enquiryId, health, lostReason);
+      await updateEnquiryHealthAction(
+        enquiryId,
+        health,
+        lostReason,
+        health === "On Hold" ? hold : null
+      );
     } catch (err: any) {
       alert(err.message || "Failed to update enquiry health");
     }
@@ -341,6 +450,25 @@ export function EnquiriesViewNew({
     });
   }, [enquiries, debouncedSearchTerm, sourceFilter, addedByFilter, healthFilter, selectedKpi, dateFilterType, startDate, endDate]);
 
+  useEffect(() => {
+    setPage(1);
+  }, [
+    debouncedSearchTerm,
+    sourceFilter,
+    addedByFilter,
+    healthFilter,
+    selectedKpi,
+    dateFilterType,
+    startDate,
+    endDate,
+  ]);
+
+  const pagedEnquiries = useMemo(
+    () => paginateEnquiries(filteredEnquiries, page, LIST_PAGE_SIZE),
+    [filteredEnquiries, page]
+  );
+  const pageEnquiries = pagedEnquiries.items;
+
   const resetFilters = () => {
     setDateFilterType("range");
     setStartDate("");
@@ -350,6 +478,7 @@ export function EnquiriesViewNew({
     setHealthFilter("ALL");
     setSearchTerm("");
     setSelectedKpi(null);
+    setPage(1);
   };
 
   const activeFilterCount = countActiveEnquiryFilters({
@@ -367,6 +496,7 @@ export function EnquiriesViewNew({
       businessName: enq.businessName || enq.leadName,
       leadName: enq.leadName,
       notes: enq.notes,
+      businessOperation: enq.businessOperation || "signage",
     });
     setConvertModalOpen(true);
   };
@@ -750,7 +880,7 @@ export function EnquiriesViewNew({
               No enquiries found matching your search.
             </div>
           ) : (
-            filteredEnquiries.map((enq) => {
+            pageEnquiries.map((enq) => {
               const statusColor = getStatusColor(enq.status);
               const dateStr = enq.dateReceived
                 ? new Date(enq.dateReceived).toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" })
@@ -784,6 +914,7 @@ export function EnquiriesViewNew({
                               </span>
                             )}
                           </div>
+                          <BusinessOperationCaption opId={enq.businessOperation} />
                           <div className="text-[13px] font-semibold text-slate-800 truncate mt-1">
                             {enq.businessName || enq.leadName}
                           </div>
@@ -798,6 +929,24 @@ export function EnquiriesViewNew({
                         {enq.source ? <span>· {enq.source}</span> : null}
                       </div>
                       <div className="mt-2.5 flex flex-wrap gap-2">
+                        {canEditEnquiry(enq) && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => openEditModal(enq)}
+                              className="px-2.5 py-1.5 rounded-md text-[12px] font-semibold text-slate-600 bg-slate-100 border border-slate-200 whitespace-nowrap inline-flex items-center gap-1"
+                            >
+                              <Pencil size={12} /> Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDeletingEnquiryId(enq.id)}
+                              className="px-2.5 py-1.5 rounded-md text-[12px] font-semibold text-red-600 bg-red-50 border border-red-200 whitespace-nowrap inline-flex items-center gap-1"
+                            >
+                              <Trash2 size={12} /> Delete
+                            </button>
+                          </>
+                        )}
                         {canConvertEnquiry(enq.status) ? (
                           canEdit ? (
                             <div className="flex gap-2">
@@ -885,10 +1034,13 @@ export function EnquiriesViewNew({
               </tr>
             </thead>
             <tbody>
-              {filteredEnquiries.map((enq) => {
+              {pageEnquiries.map((enq) => {
                 return (
                   <tr key={enq.id} style={{ borderBottom: "1px solid #e2e8f0", transition: "background 0.2s" }} onMouseEnter={(e) => { e.currentTarget.style.background = "#f8fafc"; }} onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
-                    <td style={{ padding: "16px 20px", fontSize: "13px", color: "#0f172a", fontWeight: "700" }}>{enq.enquireId || enq.id.substring(0, 8)}</td>
+                    <td style={{ padding: "16px 20px", fontSize: "13px", color: "#0f172a", fontWeight: "700" }}>
+                      <div>{enq.enquireId || enq.id.substring(0, 8)}</div>
+                      <BusinessOperationCaption opId={enq.businessOperation} />
+                    </td>
                     <td style={{ padding: "16px 20px", fontSize: "13px", color: "#64748b", fontWeight: "500" }}>{new Date(enq.dateReceived).toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" })}</td>
                     <td style={{ padding: "16px 20px", fontSize: "13px", color: "#0f172a" }}>
                       <div style={{ fontWeight: "700" }}>{enq.businessName}</div>
@@ -944,6 +1096,26 @@ export function EnquiriesViewNew({
                     </td>
                     <td style={{ padding: "16px 20px", textAlign: "right" }}>
                       <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", alignItems: "center" }}>
+                        {canEditEnquiry(enq) && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => openEditModal(enq)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11px] font-semibold text-slate-600 bg-slate-100 border border-slate-200 hover:bg-slate-200 transition-colors"
+                              title="Edit enquiry"
+                            >
+                              <Pencil size={12} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDeletingEnquiryId(enq.id)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11px] font-semibold text-red-600 bg-red-50 border border-red-200 hover:bg-red-100 transition-colors"
+                              title="Delete enquiry"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </>
+                        )}
                         {canConvertEnquiry(enq.status) ? (
                           canEdit ? (
                           <button 
@@ -1027,6 +1199,14 @@ export function EnquiriesViewNew({
             </tbody>
           </table>
         </div>
+        <ListPagination
+          page={pagedEnquiries.page}
+          totalPages={pagedEnquiries.totalPages}
+          total={pagedEnquiries.total}
+          pageSize={pagedEnquiries.pageSize}
+          onPageChange={setPage}
+          itemLabel="enquiries"
+        />
       </div>
       
       {canEdit ? (
@@ -1047,6 +1227,10 @@ export function EnquiriesViewNew({
           defaultClientName={selectedEnquiry.leadName || ""}
           defaultBusinessName={selectedEnquiry.businessName || ""}
           defaultRequirements={selectedEnquiry.notes || ""}
+          businessOperationLabel={
+            getBusinessOperation(selectedEnquiry.businessOperation || "signage").label
+          }
+          businessOperationId={selectedEnquiry.businessOperation || "signage"}
           onSubmit={async (clientName, businessName, productType, requirements, assignedAdmins) => {
             const enq = enquiries.find(e => e.id === selectedEnquiry.id);
             const res = await convertEnquiryToOrderLocal(selectedEnquiry.id, clientName, businessName, productType, requirements, assignedAdmins);
@@ -1136,6 +1320,64 @@ export function EnquiriesViewNew({
           }
         }}
       />
+
+      <HoldFollowUpModal
+        isOpen={!!holdModalEnquiryId}
+        entityLabel="enquiry"
+        onClose={() => setHoldModalEnquiryId(null)}
+        onSubmit={(payload) => {
+          if (!holdModalEnquiryId) return;
+          const id = holdModalEnquiryId;
+          setHoldModalEnquiryId(null);
+          void applyEnquiryHealth(id, "On Hold", undefined, payload);
+        }}
+      />
+
+      {editingEnquiry && (
+        <AddEnquiryModal
+          isOpen
+          onClose={() => setEditingEnquiry(null)}
+          onSubmit={handleEditEnquiry}
+          initialData={editingEnquiry.formData}
+        />
+      )}
+
+      {deletingEnquiryId &&
+        createPortal(
+          <div className="fixed inset-0 z-[200] flex items-center justify-center">
+            <div
+              className="absolute inset-0 bg-slate-900/40 backdrop-blur-[4px]"
+              onClick={() => setDeletingEnquiryId(null)}
+              aria-hidden
+            />
+            <div className="relative z-[201] w-full max-w-[380px] mx-4 bg-white rounded-2xl shadow-2xl p-6 text-center">
+              <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-red-50 flex items-center justify-center">
+                <Trash2 size={28} className="text-red-500" />
+              </div>
+              <h3 className="text-lg font-extrabold text-slate-900 mb-2">Delete Enquiry?</h3>
+              <p className="text-sm text-slate-500 mb-5">
+                This action cannot be undone. The enquiry will be permanently removed.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setDeletingEnquiryId(null)}
+                  className="flex-1 py-2.5 rounded-lg bg-slate-100 border border-slate-200 text-sm font-semibold text-slate-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDeleteEnquiry(deletingEnquiryId)}
+                  className="flex-1 py-2.5 rounded-lg bg-red-600 text-sm font-semibold text-white hover:bg-red-700 transition-colors"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

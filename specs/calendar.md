@@ -2,19 +2,49 @@
 
 ## Overview
 
-The company calendar is a **derived** view — it reads scheduled dates from orders, site visits, installations, production deadlines, and internal tasks. There is no standalone `calendar_events` table.
+The company calendar combines **derived** schedule events (orders, site visits, installations, production deadlines, tasks, On Hold reach-out dates) with **user-created reminders** stored in `calendar_reminders`.
 
 ## Event sources
 
-| Type | Source table | Date field | Notes |
-| ---- | ----------- | ---------- | ----- |
+| Type | Source | Date field | Notes |
+| ---- | ------ | ---------- | ----- |
 | Site Visit | `site_visits` | `audit_date` / `preferred_date` | Address + gmapLink from visit row preferred over customer |
 | Installation | `installations` | `scheduled_date` | Address from install row or customer shipping |
 | Production Deadline | `productions` | `deadline` | Read-only; links to production tab |
 | Task (Assigned) | `tasks` | `assigned_at` | Internal task assignment marker |
 | Task (Due) | `tasks` | `due_date` | Internal deadline marker |
+| Hold follow-up | `orders` / `enquiries` | `reach_out_at` | When health is On Hold; shows `hold_note` |
+| Reminder | `calendar_reminders` | `reminder_date` | User-created; visibility via `viewer_ids` + creator |
 
-Events are built client-side by `buildCalendarEvents` from order nested data.
+## On Hold reach-out
+
+Putting an order or enquiry **On Hold** requires:
+
+1. A note (`hold_note`)
+2. A reach-out date (`reach_out_at`)
+
+These appear on the calendar as `hold_followup` events.
+
+**Visibility**
+
+| Actor | Sees hold follow-ups? |
+| ----- | --------------------- |
+| Admin | Yes (orders + enquiries) |
+| Staff with enquiry `canView` or `canEdit` | Yes |
+| Other staff | No |
+
+Leaving On Hold (or setting Lost/Active) clears `hold_note` and `reach_out_at`.
+
+## Reminders
+
+Anyone on admin or staff calendar can **Add reminder**:
+
+- Title (required), date (required), optional note
+- **Visible to**: multi-select employees (creator always sees it)
+- Stored in `calendar_reminders` (company-scoped RLS)
+- Creator or admin can delete
+
+Staff list filters to reminders where they are creator or listed in `viewer_ids`.
 
 ## Views
 
@@ -47,19 +77,19 @@ Production deadlines are **not** reschedulable from the calendar (edit via order
 ## Data flow
 
 ```
-Admin Calendar page
-  → fetch orders (with nested site_visits, installations, productions)
-  → fetch payment summaries (outstanding per order)
-  → fetch tasks
-  → buildCalendarEvents(orders, paymentMap, tasks)
-  → CompanyCalendarView (month / week / today)
+Admin / Staff Calendar page
+  → fetch orders (nested schedules + health/hold fields)
+  → fetch enquiries (if enquiry access)
+  → fetch payment summaries, tasks, reminders
+  → buildCalendarEvents(..., { enquiries, reminders, includeHoldFollowups })
+  → CompanyCalendarView
 ```
 
-Staff calendar locks the employee filter to the current user.
+Staff calendar locks the employee filter to the current user (hold follow-ups bypass assignee filter when included).
 
 ## Filters
 
-- Event type: Site Visit / Installation / Deadline / Tasks
+- Event type: Site Visit / Installation / Deadline / Tasks / Hold follow-ups / Reminders
 - Employee / assignee (admin only; staff locked)
 - Upcoming only (hide past events)
 - Show/hide deadlines
@@ -69,7 +99,10 @@ Staff calendar locks the employee filter to the current user.
 ```
 src/features/calendar/types.ts
 src/features/calendar/buildCalendarEvents.ts
+src/features/calendar/actions/reminderActions.ts
 src/features/calendar/components/CompanyCalendarView.tsx
+src/features/calendar/components/HoldFollowUpModal.tsx
+src/features/calendar/components/AddReminderModal.tsx
 src/app/admin/(dashboard)/calendar/page.tsx
 src/app/staff/(dashboard)/calendar/page.tsx
 specs/calendar.md
@@ -81,3 +114,4 @@ specs/calendar.md
 | ------- | ---- | ------- |
 | 1.0 | 2026-07-29 | Initial spec: derived calendar with month/week/today views, reschedule, ops badges |
 | 1.1 | 2026-07-30 | Added task events (assigned + due) and separate Tasks type filter |
+| 1.2 | 2026-08-04 | On Hold note + reach_out_at on calendar; calendar_reminders with viewer list |

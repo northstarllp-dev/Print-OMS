@@ -2,8 +2,11 @@
 
 import React from "react";
 import { Upload, X, Eye, Download, Trash2, Camera } from "lucide-react";
-import { createClient } from "@/utils/supabase/client";
 import { deleteStorageFilesAction } from "@/features/orders/actions/storageActions";
+import { parseStoredRef } from "@/utils/storage/storageRef";
+import { uploadFiles } from "@/utils/storage/uploadClient";
+import { OrderImage } from "@/components/storage/OrderImage";
+import { getSignedReadUrl } from "@/utils/storage/signedReadCache";
 import {
   completeTicketAction,
   updateTicketResolutionAction,
@@ -11,6 +14,28 @@ import {
   type TicketPhoto,
 } from "@/features/service-tickets/actions/serviceTicketActions";
 import { CustomerMessageModal } from "@/features/notifications/customer-message/CustomerMessageModal";
+
+async function downloadTicketPhoto(url: string, filename?: string) {
+  try {
+    let fetchUrl = url;
+    const parsed = parseStoredRef(url);
+    if (parsed) {
+      fetchUrl = await getSignedReadUrl(parsed.bucket, parsed.path);
+    }
+    const response = await fetch(fetchUrl);
+    const blob = await response.blob();
+    const blobUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = blobUrl;
+    link.download = filename || `service-ticket-photo-${Date.now()}.jpg`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(blobUrl);
+  } catch (error) {
+    console.error("Download failed:", error);
+  }
+}
 
 interface ServiceTicketDetailModalProps {
   ticket: ServiceTicketRecord | null;
@@ -32,6 +57,7 @@ export function ServiceTicketDetailModal({
     ticket?.resolution_photos ?? []
   );
   const [showCompleteConfirm, setShowCompleteConfirm] = React.useState(false);
+  const [showSaveConfirm, setShowSaveConfirm] = React.useState(false);
   // Ticket resolved — show the customer message popup before closing
   const [showResolvedMsg, setShowResolvedMsg] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
@@ -40,32 +66,32 @@ export function ServiceTicketDetailModal({
 
   if (!ticket) return null;
 
+  const ticketId = ticket.id;
+  const ticketOrderId = ticket.order_id;
+
   async function uploadResolutionFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
     setUploadingResolution(true);
     try {
-      const supabase = createClient();
-      const uploaded: TicketPhoto[] = [];
-      for (const file of Array.from(files)) {
-        const ext = file.name.split(".").pop() || "jpg";
-        const path = `resolution/${Date.now()}-${Math.random()
-          .toString(36)
-          .slice(2)}.${ext}`;
-        const { error } = await supabase.storage
-          .from("service-ticket-resolution-photos")
-          .upload(path, file, { contentType: file.type, upsert: false });
-        if (error) throw new Error(error.message);
-        const { data } = supabase.storage
-          .from("service-ticket-resolution-photos")
-          .getPublicUrl(path);
-        uploaded.push({
-          url: data.publicUrl,
-          name: file.name,
-          uploadedBy: "Service Manager",
-          createdAt: new Date().toISOString(),
-        });
-      }
+      const { ok, failed } = await uploadFiles(Array.from(files), {
+        orderId: ticketOrderId,
+        purpose: "service_ticket_resolution_photo",
+        channel: "staff",
+        concurrency: 3,
+      });
+      const uploaded: TicketPhoto[] = ok.map((o) => ({
+        url: `${o.bucket}/${o.path}`,
+        name: o.fileName,
+        uploadedBy: "Service Manager",
+        createdAt: new Date().toISOString(),
+      }));
       setResolutionPhotos((prev) => [...prev, ...uploaded]);
+      if (failed.length) {
+        // Surface partial failure without throwing (already-uploaded photos remain).
+        console.warn(`${failed.length} resolution photo(s) failed: ${failed[0].error}`);
+      }
+    } catch (err) {
+      console.error("Resolution photo upload failed:", err);
     } finally {
       setUploadingResolution(false);
     }
@@ -73,26 +99,41 @@ export function ServiceTicketDetailModal({
 
   async function removeResolutionPhoto(index: number) {
     const photo = resolutionPhotos[index];
+    const prevPhotos = resolutionPhotos;
+    const newPhotos = prevPhotos.filter((_, i) => i !== index);
+    setResolutionPhotos(newPhotos);
     try {
-      const path = photo.url.split("/service-ticket-resolution-photos/").pop();
-      if (path) {
-        await deleteStorageFilesAction("service-ticket-resolution-photos", [path]);
+      // DB first — if this fails, the photo is still in storage (no broken link).
+      await updateTicketResolutionAction(ticketId, {
+        resolutionPhotos: newPhotos,
+      });
+      // Then best-effort storage cleanup.
+      const parsed = parseStoredRef(photo.url);
+      if (parsed) {
+        try {
+          await deleteStorageFilesAction(parsed.bucket, [parsed.path]);
+        } catch (cleanupErr) {
+          console.error("Storage cleanup failed (DB record already updated):", cleanupErr);
+        }
       }
-    } catch {
-      // best-effort cleanup
+    } catch (err: any) {
+      // Restore local state if DB write failed.
+      setResolutionPhotos(prevPhotos);
+      console.error("Failed to remove resolution photo:", err);
     }
-    setResolutionPhotos((prev) => prev.filter((_, i) => i !== index));
   }
 
   async function handleSaveResolution() {
     if (!ticket) return;
     setSaving(true);
     try {
-      await updateTicketResolutionAction(ticket.id, {
+      await updateTicketResolutionAction(ticketId, {
         resolutionNotes,
         resolutionPhotos,
       });
       onUpdated();
+      setShowSaveConfirm(false);
+      onClose();
     } finally {
       setSaving(false);
     }
@@ -102,11 +143,11 @@ export function ServiceTicketDetailModal({
     if (!ticket) return;
     setSaving(true);
     try {
-      await updateTicketResolutionAction(ticket.id, {
+      await updateTicketResolutionAction(ticketId, {
         resolutionNotes,
         resolutionPhotos,
       });
-      await completeTicketAction(ticket.id);
+      await completeTicketAction(ticketId);
       onUpdated();
       // Show the customer message popup first; onClose fires when it closes.
       setShowResolvedMsg(true);
@@ -204,8 +245,9 @@ export function ServiceTicketDetailModal({
                     boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
                   }}
                 >
-                  <img
+                  <OrderImage
                     src={photo.url}
+                    width={200}
                     alt={photo.name || `Resolution photo ${idx + 1}`}
                     style={{ width: "100%", height: "100%", objectFit: "cover" }}
                   />
@@ -222,28 +264,30 @@ export function ServiceTicketDetailModal({
                       transition: "opacity 0.2s",
                     }}
                   >
-                    <a
-                      href={photo.url}
-                      target="_blank"
-                      rel="noreferrer"
+                    <button
+                      type="button"
                       style={overlayBtnStyle}
-                      onMouseOver={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.4)"; }}
-                      onMouseOut={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.2)"; }}
+                      onClick={() => {
+                        void (async () => {
+                          const parsed = parseStoredRef(photo.url);
+                          const href = parsed
+                            ? await getSignedReadUrl(parsed.bucket, parsed.path)
+                            : photo.url;
+                          window.open(href, "_blank", "noopener,noreferrer");
+                        })();
+                      }}
                       title="View"
                     >
                       <Eye size={14} />
-                    </a>
-                    <a
-                      href={`${photo.url}?download=`}
-                      target="_blank"
-                      rel="noreferrer"
+                    </button>
+                    <button
+                      type="button"
                       style={overlayBtnStyle}
-                      onMouseOver={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.4)"; }}
-                      onMouseOut={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.2)"; }}
+                      onClick={() => void downloadTicketPhoto(photo.url, photo.name || `resolution-photo-${idx + 1}.jpg`)}
                       title="Download"
                     >
                       <Download size={14} />
-                    </a>
+                    </button>
                     {canManage && (
                       <button
                         type="button"
@@ -343,7 +387,7 @@ export function ServiceTicketDetailModal({
           {canManage && (
             <button
               className="prt-btn prt-btn-secondary"
-              onClick={handleSaveResolution}
+              onClick={() => setShowSaveConfirm(true)}
               disabled={saving}
             >
               Save Resolution
@@ -360,6 +404,54 @@ export function ServiceTicketDetailModal({
           )}
         </div>
       </div>
+
+      {/* ─── Save Confirmation ─── */}
+      {showSaveConfirm && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(12, 15, 26, 0.65)",
+            zIndex: 110,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "16px",
+          }}
+        >
+          <div
+            className="prt-card prt-animate-in"
+            style={{
+              width: "100%",
+              maxWidth: "420px",
+              padding: "24px",
+            }}
+          >
+            <h4 className="text-title-sm" style={{ margin: "0 0 8px", color: "var(--color-on-surface)" }}>
+              Save Resolution?
+            </h4>
+            <p className="text-body-md" style={{ margin: "0 0 24px", color: "var(--color-on-surface-variant)" }}>
+              This will save the resolution notes and photos for this ticket.
+            </p>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px" }}>
+              <button
+                className="prt-btn prt-btn-secondary"
+                onClick={() => setShowSaveConfirm(false)}
+                disabled={saving}
+              >
+                Cancel
+              </button>
+              <button
+                className="prt-btn prt-btn-primary"
+                onClick={() => void handleSaveResolution()}
+                disabled={saving}
+              >
+                {saving ? "Saving..." : "Confirm"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ─── Complete Confirmation ─── */}
       {showCompleteConfirm && (
@@ -455,8 +547,9 @@ function PhotoGallery({ photos, emptyText }: { photos: TicketPhoto[]; emptyText:
             boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
           }}
         >
-          <img
+          <OrderImage
             src={photo.url}
+            width={200}
             alt={photo.name || `Photo ${idx + 1}`}
             style={{ width: "100%", height: "100%", objectFit: "cover" }}
           />
@@ -473,28 +566,30 @@ function PhotoGallery({ photos, emptyText }: { photos: TicketPhoto[]; emptyText:
               transition: "opacity 0.2s",
             }}
           >
-            <a
-              href={photo.url}
-              target="_blank"
-              rel="noreferrer"
+            <button
+              type="button"
               style={overlayBtnStyle}
-              onMouseOver={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.4)"; }}
-              onMouseOut={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.2)"; }}
+              onClick={() => {
+                void (async () => {
+                  const parsed = parseStoredRef(photo.url);
+                  const href = parsed
+                    ? await getSignedReadUrl(parsed.bucket, parsed.path)
+                    : photo.url;
+                  window.open(href, "_blank", "noopener,noreferrer");
+                })();
+              }}
               title="View"
             >
               <Eye size={14} />
-            </a>
-            <a
-              href={`${photo.url}?download=`}
-              target="_blank"
-              rel="noreferrer"
+            </button>
+            <button
+              type="button"
               style={overlayBtnStyle}
-              onMouseOver={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.4)"; }}
-              onMouseOut={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.2)"; }}
+              onClick={() => void downloadTicketPhoto(photo.url, photo.name || `ticket-photo-${idx + 1}.jpg`)}
               title="Download"
             >
               <Download size={14} />
-            </a>
+            </button>
           </div>
         </div>
       ))}

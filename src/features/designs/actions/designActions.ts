@@ -6,13 +6,16 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { DesignRecord } from "@/types";
 import { mapDesignFromDb } from "./designMapper";
+import { mergePortalDesignItemsPreservingStaffDrafts } from "@/features/designs/utils/customerVisibleDesign";
 import { dispatchWhatsAppNotification } from "@/features/notifications/actions/dispatchNotification";
 import { getRequestBaseUrl } from "@/features/notifications/whatsapp/requestBaseUrl";
 import { getCurrentUser } from "@/features/auth/actions/authActions";
 import { createAdminClient } from "@/utils/supabase/admin";
 import {
+  assertAdminOnly,
   assertStageEditPermission,
 } from "@/features/orders/workspace/shared/serverPermissions";
+import { getDesignItemsWithVersions } from "@/features/designs/utils/designApproval";
 import { resolveStagePermission } from "@/features/orders/workspace/shared/permissions";
 import {
   revalidateOrderDetailPaths,
@@ -150,7 +153,7 @@ async function updateOrderStage(supabase: SupabaseClient, orderUuid: string, sta
     const { stageProgressPatch } = await import("@/features/orders/lib/orderHealth");
     const { error: updateError } = await supabase
       .from("orders")
-      .update({ stage, ...stageProgressPatch(o.health) })
+      .update({ stage, ...stageProgressPatch(o.health, stage) })
       .eq("id", orderUuid);
     if (updateError) throw new Error(updateError.message);
 
@@ -193,13 +196,40 @@ export async function updateDesignDetailsAction(
     .maybeSingle();
   if (fetchError) throw new Error(fetchError.message);
 
-  const payload: Record<string, unknown> = {
-    order_id: orderUuid,
-    resources: current?.resources || [],
-    items: current?.items || [],
-    ...details,
+  const buildPayload = (base: Record<string, unknown> | null) => {
+    const payload: Record<string, unknown> = {
+      order_id: orderUuid,
+      resources: base?.resources || [],
+      items: base?.items || [],
+      ...details,
+    };
+    payload.order_id = orderUuid;
+
+    // Portal clients only see customer-visible items (staff drafts + production files
+    // stripped). Re-attach staff-only data from the DB so customer feedback/approval
+    // never wipes a designer's in-progress work.
+    if (fromPortal && Array.isArray(details.items)) {
+      payload.items = mergePortalDesignItemsPreservingStaffDrafts(
+        (base?.items as any[]) || [],
+        details.items
+      );
+    }
+    return payload;
   };
-  payload.order_id = orderUuid;
+
+  const runUpdate = async (
+    base: Record<string, unknown>,
+    expectedAt?: string
+  ) => {
+    let query = supabase
+      .from("designs")
+      .update(buildPayload(base))
+      .eq("order_id", orderUuid);
+    if (expectedAt) {
+      query = query.eq("updated_at", expectedAt);
+    }
+    return query.select().maybeSingle();
+  };
 
   let data: Record<string, unknown> | null = null;
   let error: Error | null = null;
@@ -207,33 +237,50 @@ export async function updateDesignDetailsAction(
   if (!current) {
     const { data: inserted, error: insertError } = await supabase
       .from("designs")
-      .upsert(payload, { onConflict: "order_id" })
+      .upsert(buildPayload(null), { onConflict: "order_id" })
       .select()
       .single();
     data = inserted;
     error = insertError;
   } else {
-    let query = supabase
-      .from("designs")
-      .update(payload)
-      .eq("order_id", orderUuid);
-    if (expectedUpdatedAt) {
-      query = query.eq("updated_at", expectedUpdatedAt);
-    }
-    const { data: updated, error: updateError } = await query
-      .select()
-      .maybeSingle();
+    let { data: updated, error: updateError } = await runUpdate(
+      current,
+      expectedUpdatedAt
+    );
     data = updated;
     error = updateError;
+
+    // Stale client timestamp is common after prior saves / revalidates. Retry once
+    // with the latest updated_at so proof uploads aren't blocked in production.
     if (!updateError && expectedUpdatedAt && !updated) {
-      throw new Error("Design was updated by another user. Please refresh and try again.");
+      const { data: fresh, error: freshError } = await supabase
+        .from("designs")
+        .select("*")
+        .eq("order_id", orderUuid)
+        .maybeSingle();
+      if (freshError) throw new Error(freshError.message);
+      if (!fresh) {
+        throw new Error("Design was updated by another user. Please refresh and try again.");
+      }
+
+      const retry = await runUpdate(fresh, fresh.updated_at as string);
+      data = retry.data;
+      error = retry.error;
+      if (!retry.error && !retry.data) {
+        throw new Error("Design was updated by another user. Please refresh and try again.");
+      }
     }
   }
 
   if (error) throw new Error(error.message);
   if (!data) throw new Error("Failed to update design.");
 
-  await revalidateDesignPaths(orderId, fromPortal);
+  try {
+    await revalidateDesignPaths(orderId, fromPortal);
+  } catch (revalidateErr) {
+    // DB write already succeeded — never fail the upload because a page revalidate blew up.
+    console.error("Design revalidate failed:", revalidateErr);
+  }
   return mapDesignFromDb(data);
 }
 
@@ -281,4 +328,81 @@ export async function transitionDesignOrderStageAction(
   const { supabase, orderUuid, fromPortal } = await getDesignMutationContext(orderId, portalToken);
   await updateOrderStage(supabase, orderUuid, stage);
   await revalidateDesignPaths(orderId, fromPortal);
+}
+
+/**
+ * Admin-only: mark every design item's latest version Approved and move the order
+ * to Design Approved (mirrors adminMarkQuotationApprovedAction). Does not require
+ * portal customer approval or production files.
+ */
+export async function adminMarkDesignApprovedAction(orderId: string): Promise<DesignRecord> {
+  await assertAdminOnly();
+  const supabase = await getSupabase();
+  const orderUuid = await resolveOrderUuid(supabase, orderId);
+
+  const { data: order, error: orderError } = await supabase
+    .from("orders")
+    .select("order_id, company_id, stage, health")
+    .eq("id", orderUuid)
+    .single();
+  if (orderError) throw new Error(orderError.message);
+  if (!order.company_id) throw new Error("company_id is required to log design activity");
+  if (order.stage !== "Design In Progress" && order.stage !== "Design Approved") {
+    throw new Error("Design can only be force-approved while the order is in a Design stage.");
+  }
+
+  const { data: designRow, error: designFetchError } = await supabase
+    .from("designs")
+    .select("*")
+    .eq("order_id", orderUuid)
+    .maybeSingle();
+  if (designFetchError) throw new Error(designFetchError.message);
+  if (!designRow) throw new Error("Design not found");
+
+  const design = mapDesignFromDb(designRow);
+  if (getDesignItemsWithVersions(design.items).length === 0) {
+    throw new Error("Upload at least one design proof before approving without customer.");
+  }
+
+  const items = design.items.map((item) => {
+    if (!Array.isArray(item.versions) || item.versions.length === 0) return item;
+    const versions = item.versions.map((v, idx) =>
+      idx === item.versions.length - 1 ? { ...v, status: "Approved" as const } : v
+    );
+    return { ...item, versions };
+  });
+
+  const { data: updated, error: designUpdateError } = await supabase
+    .from("designs")
+    .update({ items })
+    .eq("order_id", orderUuid)
+    .select()
+    .single();
+  if (designUpdateError) throw new Error(designUpdateError.message);
+  if (!updated) throw new Error("Failed to update design.");
+
+  if (order.stage === "Design In Progress") {
+    const { stageProgressPatch } = await import("@/features/orders/lib/orderHealth");
+    const { error: stageError } = await supabase
+      .from("orders")
+      .update({
+        stage: "Design Approved",
+        stage_status: "Normal",
+        ...stageProgressPatch(order.health, "Design Approved"),
+      })
+      .eq("id", orderUuid);
+    if (stageError) throw new Error(stageError.message);
+  }
+
+  await insertOrderActivity(supabase, {
+    order_id: order.order_id || orderUuid,
+    company_id: order.company_id,
+    actor_name: "System",
+    actor_role: "System",
+    content: "Admin marked the design as approved without customer portal approval.",
+    metadata: { action: "design_approved_by_admin" },
+  });
+
+  await revalidateDesignPaths(orderId);
+  return mapDesignFromDb(updated);
 }

@@ -8,6 +8,7 @@ import {
 import {
   buildGoogleMapsSearchUrl,
   resolveSiteVisitInstallationAddress,
+  resolveSiteVisitMapLink,
 } from "@/features/orders/actions/siteVisitMapper";
 import {
   gpsCheckInPayload,
@@ -16,8 +17,10 @@ import {
   isNearScheduledLocation,
 } from "@/features/orders/workspace/modules/site-visit/siteVisitChecklistLogic";
 import {
+  isSkippedSiteVisit,
   isSkippedSiteVisitAddress,
   parseGpsMapCenter,
+  SKIPPED_SITE_VISIT_LANDMARK,
 } from "@/features/orders/workspace/modules/site-visit/siteVisitUiLogic";
 
 describe("site visit GPS & maps", () => {
@@ -38,6 +41,21 @@ describe("site visit GPS & maps", () => {
       expect(isSkippedSiteVisitAddress("Skipped — customer unavailable")).toBe(true);
       expect(isSkippedSiteVisitAddress("skipped elsewhere")).toBe(false);
       expect(isSkippedSiteVisitAddress(null)).toBe(false);
+    });
+
+    it("detects skip via landmark while keeping real installation address", () => {
+      expect(
+        isSkippedSiteVisit({
+          landmark: SKIPPED_SITE_VISIT_LANDMARK,
+          customerAddress: "12 MG Road, Bengaluru",
+        })
+      ).toBe(true);
+      expect(
+        resolveSiteVisitInstallationAddress({
+          landmark: SKIPPED_SITE_VISIT_LANDMARK,
+          customerAddress: "12 MG Road, Bengaluru",
+        })
+      ).toBe("12 MG Road, Bengaluru");
     });
   });
 
@@ -66,6 +84,44 @@ describe("site visit GPS & maps", () => {
       expect(buildGoogleMapsSearchUrl("MG Road")).toBe(
         "https://www.google.com/maps/search/?api=1&query=MG%20Road"
       );
+    });
+
+    it("resolveSiteVisitMapLink prefers real address, then GPS, never Skipped text", () => {
+      expect(
+        resolveSiteVisitMapLink({
+          siteAddress: SKIPPED_SITE_VISIT_LANDMARK,
+          customerAddress: "12 MG Road, Bengaluru",
+        })
+      ).toEqual({
+        href: "https://www.google.com/maps/search/?api=1&query=12%20MG%20Road%2C%20Bengaluru",
+        label: "12 MG Road, Bengaluru",
+      });
+
+      expect(
+        resolveSiteVisitMapLink({
+          customerAddress: "Skipped - Direct Measurement (Manual Entry)",
+          gpsLocation: "12.97, 77.59",
+        })
+      ).toEqual({
+        href: "https://www.google.com/maps/search/?api=1&query=12.97%2C%2077.59",
+        label: "12.97, 77.59",
+      });
+
+      expect(
+        resolveSiteVisitMapLink({
+          customerAddress: "Skipped - Direct Measurement (Manual Entry)",
+        })
+      ).toBeNull();
+
+      expect(
+        resolveSiteVisitMapLink({
+          customerAddress: "Skipped visit",
+          gmapLink: "https://maps.google.com/?q=12.97,77.59",
+        })
+      ).toEqual({
+        href: "https://maps.google.com/?q=12.97,77.59",
+        label: "Open map location",
+      });
     });
   });
 

@@ -61,13 +61,19 @@ export function shouldOfferWorkflowChoice(input: {
   const stage = input.stage || "";
   if (!stage.startsWith("Site Visit")) return false;
   if (!input.stageStatus || input.stageStatus === "Normal") return false;
-  // Already chosen — don't offer again
-  if (isValidWorkflowType(input.workflowType)) {
-    // After site visit, a real choice always advances off Site Visit stages.
-    // If still on Site Visit with a workflow set, allow re-open only if stage not advanced —
-    // current product: once workflow is set, stage leaves Site Visit, so this is false.
-  }
   return true;
+}
+
+/** Quote vs Design fork exists only when the business op includes both modules. */
+export function businessOpNeedsWorkflowChoice(stageKeys: readonly string[]): boolean {
+  return stageKeys.includes("quotation") && stageKeys.includes("design");
+}
+
+export function impliedWorkflowTypeForOp(stageKeys: readonly string[]): WorkflowType {
+  if (stageKeys.includes("design") && !stageKeys.includes("quotation")) {
+    return "design_first";
+  }
+  return "quote_first";
 }
 
 /** Block opening if workflow already applied (order left Site Visit). */
@@ -170,6 +176,22 @@ export function buildWorkflowChoiceActivity(workflowType: WorkflowType): {
       stage,
     },
   };
+}
+
+/**
+ * Default workflow_type to apply when auto-approval advances an order past
+ * Site Visit and the business op supports both quotation AND design (which
+ * normally requires an admin to choose via the workflow modal).
+ *
+ * Per product decision: default to `quote_first`.
+ *
+ * For ops where only one of quote/design exists, callers should use
+ * `inferWorkflowTypeForBusinessOp` from `businessOperations.ts` instead.
+ */
+export function defaultWorkflowTypeForAutoApproval(
+  canChooseQuoteOrDesign: boolean
+): WorkflowType {
+  return canChooseQuoteOrDesign ? "quote_first" : "quote_first";
 }
 
 /** Who should be notified after selection (role hints for queues). */

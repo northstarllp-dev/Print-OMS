@@ -1,5 +1,6 @@
 import { calcLineAmount, getLineMeasurement } from "@/features/quotations/utils/lineAmount";
 import type { InvoiceTaxSplit } from "@/features/quotations/types/invoiceProfile";
+import { siteMeasurementAreaSqFt } from "@/features/orders/actions/siteVisitMapper";
 
 export interface QuotationDocLine {
   id?: string;
@@ -55,9 +56,11 @@ function formatSizeDetail(sv: {
   if (sv.width == null && sv.height == null) return null;
   const w = Number(sv.width) || 0;
   const h = Number(sv.height) || 0;
-  const area = w > 0 && h > 0 ? w * h : null;
-  if (area != null && area > 0) {
-    return `Size : ${w}X${h}=${area} Sqft`;
+  const area = siteMeasurementAreaSqFt(sv);
+  if (area > 0) {
+    const wUnit = (sv.widthUnit || "ft").toUpperCase();
+    const hUnit = (sv.heightUnit || "ft").toUpperCase();
+    return `Size : ${w}${wUnit} × ${h}${hUnit} = ${area} Sqft`;
   }
   const wLabel = sv.width != null ? `${sv.width}${sv.widthUnit || "ft"}` : "—";
   const hLabel = sv.height != null ? `${sv.height}${sv.heightUnit || "ft"}` : "—";

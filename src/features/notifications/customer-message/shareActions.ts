@@ -29,10 +29,6 @@ async function getSupabase() {
   );
 }
 
-function isAdminRole(role: unknown): boolean {
-  return String(role ?? "").toLowerCase() === "admin";
-}
-
 /** Upsert a share row for this order + template (latest channel/time wins). */
 export async function recordCustomerMessageShare(input: {
   orderId: string;
@@ -44,7 +40,8 @@ export async function recordCustomerMessageShare(input: {
 
   const profile = await getCurrentUser();
   if (!profile) return { error: "Unauthorized" };
-  if (!isAdminRole(profile.role)) return { error: "Admin only" };
+  const role = String(profile.role ?? "").toLowerCase();
+  if (role !== "admin" && role !== "staff") return { error: "Unauthorized" };
   const companyId = profile.company_id as string | undefined;
   if (!companyId) return { error: "Company context missing" };
 

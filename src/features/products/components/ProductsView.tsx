@@ -6,17 +6,29 @@ import {
   Upload, Image as ImageIcon, Loader2, IndianRupee, ChevronDown, Tag, Ruler, Hash, RefreshCw, Filter
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
+import { compressImageFile } from "@/utils/storage/compressImage";
+import { runQueue } from "@/utils/storage/uploadQueue";
 import {
   createProduct, updateProduct, deleteProduct, deleteImagesFromStorage, 
   createProductCategory, deleteProductCategory, type Product, type CreateProductPayload, type ProductCategory,
 } from "../actions/productActions";
 import {
+  buildProductImageStoragePath,
   generateFinalProductId,
   generateProductId,
   filterProductsCatalog,
   isPricingFieldDisabled,
   MAX_PRODUCT_IMAGES,
+  PRODUCT_IMAGE_BUCKET,
+  takeProductImageSlots,
+  validateProductImageFile,
+  normalizeProductBusinessOperations,
 } from "../productLogic";
+import { loadClientConfig } from "@/config/loadClientConfig";
+import {
+  getBusinessOperation,
+  getBusinessOperationsForTenant,
+} from "@/features/orders/businessOperations";
 
 const PRICING_TYPES = ["Per Sq.Ft", "Per Unit", "Multiple"];
 
@@ -47,28 +59,81 @@ function ProductImageUpload({
   const [uploading, setUploading] = useState(false);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    if (!files.length) return;
+    const selected = Array.from(e.target.files || []);
+    if (!selected.length) return;
+
+    const { accepted, rejectedCount } = takeProductImageSlots(selected, images.length);
+    if (accepted.length === 0) {
+      alert(`Maximum ${MAX_PRODUCT_IMAGES} images allowed.`);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+    if (rejectedCount > 0) {
+      alert(
+        `Only ${accepted.length} of ${selected.length} files will be uploaded (max ${MAX_PRODUCT_IMAGES} images).`
+      );
+    }
+
     setUploading(true);
     const newUrls: string[] = [];
-    for (const file of files) {
-      const ext = file.name.split(".").pop();
-      const path = `products/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-      const { error: upErr } = await supabase.storage
-        .from("product-images")
-        .upload(path, file, { cacheControl: "3600", upsert: false });
-      if (upErr) {
-        console.error("Storage upload error:", upErr);
-        alert(`Upload failed: ${upErr.message}`);
-      } else {
-        const { data: urlData } = supabase.storage.from("product-images").getPublicUrl(path);
-        newUrls.push(urlData.publicUrl);
+    try {
+      const results = await runQueue(
+        accepted,
+        async (file) => {
+          const validation = validateProductImageFile({
+            fileName: file.name,
+            size: file.size,
+            mime: file.type || undefined,
+          });
+          if (!validation.ok) {
+            throw new Error(`${file.name}: ${validation.message}`);
+          }
+
+          // Compress large images before upload (image pipeline).
+          const compressed = await compressImageFile(file);
+          const toUpload = compressed.file;
+
+          const path = buildProductImageStoragePath(toUpload.name);
+          const { error: upErr } = await supabase.storage
+            .from(PRODUCT_IMAGE_BUCKET)
+            .upload(path, toUpload, {
+              cacheControl: "3600",
+              upsert: false,
+              contentType: toUpload.type || "image/jpeg",
+            });
+          if (upErr) throw new Error(upErr.message);
+
+          // Public catalog bucket: store public URL (reads need no signed token).
+          const { data: urlData } = supabase.storage
+            .from(PRODUCT_IMAGE_BUCKET)
+            .getPublicUrl(path);
+          return urlData.publicUrl;
+        },
+        { concurrency: 3 }
+      );
+
+      const failed: string[] = [];
+      for (const r of results) {
+        if (r?.ok && r.value) newUrls.push(r.value);
+        else {
+          failed.push(
+            r?.error instanceof Error ? r.error.message : "Upload failed"
+          );
+        }
       }
+      if (newUrls.length) {
+        onChange([...images, ...newUrls]);
+        if (onUpload) onUpload(newUrls);
+      }
+      if (failed.length) {
+        alert(`${failed.length} image(s) failed to upload: ${failed[0]}`);
+      }
+    } catch (err: any) {
+      alert(`Upload failed: ${err?.message || "Unknown error"}`);
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
-    onChange([...images, ...newUrls]);
-    if (onUpload) onUpload(newUrls);
-    setUploading(false);
-    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const removeImage = (idx: number) => {
@@ -127,9 +192,86 @@ function ProductImageUpload({
         capture={undefined}
       />
       <p style={{ fontSize: 10, color: "#94a3b8", margin: 0 }}>
-        Upload from gallery or camera · Max {MAX_PRODUCT_IMAGES} images · JPEG / PNG / WebP
+        Upload from gallery or camera · Max {MAX_PRODUCT_IMAGES} images · JPEG / PNG / WebP / GIF · up to 50 MB
       </p>
     </div>
+  );
+}
+
+const BAND_TYPE_OPTIONS = [
+  { value: "per_sqft", label: "Per Sq.Ft" },
+  { value: "per_unit", label: "Per Unit" },
+] as const;
+
+function PriceAmountInput({
+  label,
+  value,
+  disabled,
+  placeholder,
+  onChange,
+}: {
+  label: string;
+  value: number | null | undefined;
+  disabled?: boolean;
+  placeholder: string;
+  onChange: (v: number | null) => void;
+}) {
+  return (
+    <div>
+      <label style={{ ...labelStyle, fontSize: 10, textTransform: "none" }}>{label}</label>
+      <div style={{ position: "relative" }}>
+        <IndianRupee
+          size={11}
+          style={{
+            position: "absolute",
+            left: 9,
+            top: "50%",
+            transform: "translateY(-50%)",
+            color: disabled ? "#cbd5e1" : "#94a3b8",
+            pointerEvents: "none",
+          }}
+        />
+        <input
+          type="number"
+          min={0}
+          step="0.01"
+          placeholder={placeholder}
+          disabled={disabled}
+          value={value ?? ""}
+          onChange={(e) => onChange(e.target.value === "" ? null : parseFloat(e.target.value))}
+          style={{
+            ...inputStyle,
+            paddingLeft: 26,
+            background: disabled ? "#f8fafc" : "white",
+            color: disabled ? "#cbd5e1" : "#374151",
+            cursor: disabled ? "not-allowed" : "text",
+            borderColor: disabled ? "#f1f5f9" : "#cbd5e1",
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function BandTypeSelect({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      style={{ ...inputStyle, cursor: "pointer" }}
+    >
+      {BAND_TYPE_OPTIONS.map((opt) => (
+        <option key={opt.value} value={opt.value}>
+          {opt.label}
+        </option>
+      ))}
+    </select>
   );
 }
 
@@ -140,49 +282,16 @@ function PricingSection({
   form: Partial<CreateProductPayload>;
   setForm: React.Dispatch<React.SetStateAction<Partial<CreateProductPayload>>>;
 }) {
-  const pricingFields = [
-    { key: "price_per_sqft", label: "Price / Sq.Ft", placeholder: "e.g. 120" },
-    { key: "price_per_unit", label: "Price / Unit", placeholder: "e.g. 500" },
-  ] as const;
-  const showThreshold = form.pricing_type === "Multiple";
+  const isMultiple = form.pricing_type === "Multiple";
+  const threshold = form.unit_price_max_sqft ?? 10;
 
-  return (
-    <div>
-      <label style={labelStyle}>Pricing (fill whichever apply)</label>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
-        {pricingFields.map(({ key, label, placeholder }) => {
-          const disabled = isPricingFieldDisabled(key, form.pricing_type);
-          return (
-            <div key={key}>
-              <label style={{ ...labelStyle, fontSize: 10, textTransform: "none" }}>{label}</label>
-              <div style={{ position: "relative" }}>
-                <IndianRupee size={11} style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", color: disabled ? "#cbd5e1" : "#94a3b8", pointerEvents: "none" }} />
-                <input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  placeholder={placeholder}
-                  disabled={disabled}
-                  value={(form as any)[key] ?? ""}
-                  onChange={e => setForm(f => ({ ...f, [key]: e.target.value === "" ? null : parseFloat(e.target.value) }))}
-                  style={{
-                    ...inputStyle,
-                    paddingLeft: 26,
-                    background: disabled ? "#f8fafc" : "white",
-                    color: disabled ? "#cbd5e1" : "#374151",
-                    cursor: disabled ? "not-allowed" : "text",
-                    borderColor: disabled ? "#f1f5f9" : "#cbd5e1"
-                  }}
-                />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      {showThreshold && (
-        <div className="mb-1">
+  if (isMultiple) {
+    return (
+      <div>
+        <label style={labelStyle}>Pricing (threshold bands)</label>
+        <div className="mb-3">
           <label style={{ ...labelStyle, fontSize: 10, textTransform: "none" }}>
-            Unit price up to (sq.ft) *
+            Switch at (sq.ft) *
           </label>
           <input
             type="number"
@@ -200,11 +309,77 @@ function PricingSection({
             }
             style={inputStyle}
           />
-          <p style={{ margin: "6px 0 0", fontSize: 10, color: "#64748b", fontWeight: 600, lineHeight: 1.4 }}>
-            ≤ this area uses unit price; above uses sq.ft price.
-          </p>
         </div>
-      )}
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-1">
+          <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-2.5 space-y-2">
+            <div style={{ fontSize: 10, fontWeight: 700, color: "#475569" }}>
+              Up to {Number.isFinite(Number(threshold)) ? threshold : "—"} sq.ft
+            </div>
+            <PriceAmountInput
+              label="Price *"
+              value={form.price_per_unit}
+              placeholder="e.g. 500"
+              onChange={(v) => setForm((f) => ({ ...f, price_per_unit: v }))}
+            />
+            <div>
+              <label style={{ ...labelStyle, fontSize: 10, textTransform: "none" }}>Type</label>
+              <BandTypeSelect
+                value={form.pricing_type_below || "per_unit"}
+                onChange={(v) => setForm((f) => ({ ...f, pricing_type_below: v }))}
+              />
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-2.5 space-y-2">
+            <div style={{ fontSize: 10, fontWeight: 700, color: "#475569" }}>
+              Above {Number.isFinite(Number(threshold)) ? threshold : "—"} sq.ft
+            </div>
+            <PriceAmountInput
+              label="Price *"
+              value={form.price_per_sqft}
+              placeholder="e.g. 120"
+              onChange={(v) => setForm((f) => ({ ...f, price_per_sqft: v }))}
+            />
+            <div>
+              <label style={{ ...labelStyle, fontSize: 10, textTransform: "none" }}>Type</label>
+              <BandTypeSelect
+                value={form.pricing_type_above || "per_sqft"}
+                onChange={(v) => setForm((f) => ({ ...f, pricing_type_above: v }))}
+              />
+            </div>
+          </div>
+        </div>
+        <p style={{ margin: "6px 0 0", fontSize: 10, color: "#64748b", fontWeight: 600, lineHeight: 1.4 }}>
+          Each band can be Per Unit or Per Sq.Ft — any combination.
+        </p>
+      </div>
+    );
+  }
+
+  const pricingFields = [
+    { key: "price_per_sqft" as const, label: "Price / Sq.Ft", placeholder: "e.g. 120" },
+    { key: "price_per_unit" as const, label: "Price / Unit", placeholder: "e.g. 500" },
+  ];
+
+  return (
+    <div>
+      <label style={labelStyle}>Pricing (fill whichever apply)</label>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+        {pricingFields.map(({ key, label, placeholder }) => {
+          const disabled = isPricingFieldDisabled(key, form.pricing_type);
+          return (
+            <PriceAmountInput
+              key={key}
+              label={label}
+              value={form[key]}
+              disabled={disabled}
+              placeholder={placeholder}
+              onChange={(v) => setForm((f) => ({ ...f, [key]: v }))}
+            />
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -227,6 +402,10 @@ function ProductFormModal({
   const [imagesToDeleteOnSave, setImagesToDeleteOnSave] = useState<string[]>([]);
 
   const tenantCompanyId = product?.company_id ?? allProducts.find((p) => p.company_id)?.company_id;
+  const businessOps = getBusinessOperationsForTenant(
+    loadClientConfig().businessOperations
+  );
+  const showBusinessOpPicker = businessOps.length > 1;
 
   const [form, setForm] = useState<Partial<CreateProductPayload>>(() => {
     const final_prdt = product?.final_prdt ?? false;
@@ -247,6 +426,8 @@ function ProductFormModal({
       price_per_sqft: product?.price_per_sqft ?? null,
       price_per_unit: product?.price_per_unit ?? null,
       unit_price_max_sqft: product?.unit_price_max_sqft ?? (product?.pricing_type === "Multiple" ? 10 : null),
+      pricing_type_below: product?.pricing_type_below ?? (product?.pricing_type === "Multiple" ? "per_unit" : null),
+      pricing_type_above: product?.pricing_type_above ?? (product?.pricing_type === "Multiple" ? "per_sqft" : null),
       images: product?.images ?? [],
       is_active: product?.is_active ?? true,
       final_prdt,
@@ -260,6 +441,7 @@ function ProductFormModal({
       gst_rate: product?.gst_rate ?? null,
       barcode: product?.barcode ?? "",
       track_inventory: product?.track_inventory ?? true,
+      business_operations: product?.business_operations ?? [],
     };
   });
 
@@ -274,13 +456,28 @@ function ProductFormModal({
         else if (payloadToSave.pricing_type === "Per Sq.Ft") payloadToSave.pricing_type = "per_sqft";
         if (payloadToSave.pricing_type !== "Multiple") {
           payloadToSave.unit_price_max_sqft = null;
+          payloadToSave.pricing_type_below = null;
+          payloadToSave.pricing_type_above = null;
         } else if (
           payloadToSave.unit_price_max_sqft == null ||
           Number.isNaN(Number(payloadToSave.unit_price_max_sqft))
         ) {
-          setError("Set the sq.ft threshold for unit vs sq.ft pricing.");
+          setError("Set the sq.ft threshold where pricing switches.");
           return;
+        } else if (
+          !(Number(payloadToSave.price_per_unit) > 0) ||
+          !(Number(payloadToSave.price_per_sqft) > 0)
+        ) {
+          setError("Enter a price for both the up-to and above threshold bands.");
+          return;
+        } else {
+          payloadToSave.pricing_type_below = payloadToSave.pricing_type_below || "per_unit";
+          payloadToSave.pricing_type_above = payloadToSave.pricing_type_above || "per_sqft";
         }
+
+        payloadToSave.business_operations = normalizeProductBusinessOperations(
+          payloadToSave.business_operations
+        );
 
         if (isEdit) {
           const res = await updateProduct(product!.id, payloadToSave);
@@ -385,15 +582,23 @@ function ProductFormModal({
                       if (nextPricingType === "Per Sq.Ft") {
                         next.price_per_unit = null;
                         next.unit_price_max_sqft = null;
+                        next.pricing_type_below = null;
+                        next.pricing_type_above = null;
                       } else if (nextPricingType === "Per Unit") {
                         next.price_per_sqft = null;
                         next.unit_price_max_sqft = null;
+                        next.pricing_type_below = null;
+                        next.pricing_type_above = null;
                       } else if (nextPricingType === "Multiple") {
                         if (next.unit_price_max_sqft == null) next.unit_price_max_sqft = 10;
+                        if (!next.pricing_type_below) next.pricing_type_below = "per_unit";
+                        if (!next.pricing_type_above) next.pricing_type_above = "per_sqft";
                       } else if (!nextPricingType) {
                         next.price_per_sqft = null;
                         next.price_per_unit = null;
                         next.unit_price_max_sqft = null;
+                        next.pricing_type_below = null;
+                        next.pricing_type_above = null;
                       }
                       return next;
                     });
@@ -474,6 +679,54 @@ function ProductFormModal({
             </div>
           </div>
 
+          {showBusinessOpPicker && (
+            <div>
+              <label style={labelStyle}>Business operations</label>
+              <p style={{ fontSize: 11, color: "#64748b", margin: "0 0 8px" }}>
+                Select where this product can be used. Leave none selected to allow all.
+              </p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {businessOps.map((op) => {
+                  const selected = (form.business_operations || []).includes(op.id);
+                  return (
+                    <label
+                      key={op.id}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                        padding: "6px 10px",
+                        borderRadius: 8,
+                        border: `1px solid ${selected ? "var(--color-primary)" : "#e2e8f0"}`,
+                        background: selected ? "var(--color-primary-container, #eff6ff)" : "white",
+                        cursor: "pointer",
+                        fontSize: 12,
+                        fontWeight: 700,
+                        color: "#0f172a",
+                        userSelect: "none",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        onChange={() => {
+                          setForm((f) => {
+                            const current = f.business_operations || [];
+                            const next = selected
+                              ? current.filter((id) => id !== op.id)
+                              : [...current, op.id];
+                            return { ...f, business_operations: next };
+                          });
+                        }}
+                      />
+                      {op.label}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Image Upload */}
           <ProductImageUpload
             images={form.images ?? []}
@@ -546,6 +799,16 @@ function ProductCard({
   }, [images.length]);
 
   const hasPricing = product.price_per_sqft || product.price_per_unit;
+  const businessOps = getBusinessOperationsForTenant(
+    loadClientConfig().businessOperations
+  );
+  const productOpIds = normalizeProductBusinessOperations(product.business_operations);
+  const productOpLabels =
+    businessOps.length > 1 && productOpIds.length > 0
+      ? productOpIds.map((id) => getBusinessOperation(id, businessOps).label)
+      : businessOps.length > 1 && productOpIds.length === 0
+        ? ["All"]
+        : [];
 
   return (
     <div style={{
@@ -622,6 +885,26 @@ function ProductCard({
           <div>
             <div style={{ fontSize: 13, fontWeight: 800, color: "#0f172a", lineHeight: 1.3 }}>{product.name}</div>
             {product.category && <div style={{ fontSize: 10, color: "#64748b", fontWeight: 600, marginTop: 2 }}>{product.category}</div>}
+            {productOpLabels.length > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
+                {productOpLabels.map((label) => (
+                  <span
+                    key={label}
+                    style={{
+                      fontSize: 9,
+                      fontWeight: 700,
+                      color: "#475569",
+                      background: "#f1f5f9",
+                      border: "1px solid #e2e8f0",
+                      borderRadius: 999,
+                      padding: "2px 7px",
+                    }}
+                  >
+                    {label}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
           <span style={{ fontSize: 9, fontWeight: 700, color: "#94a3b8", fontFamily: "monospace", flexShrink: 0 }}>{product.product_id}</span>
         </div>
@@ -639,12 +922,46 @@ function ProductCard({
         {/* Pricing display */}
         {hasPricing && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 8px", marginTop: 2 }}>
-            {product.price_per_sqft && <span style={{ fontSize: 11, fontWeight: 700, color: "#0f172a" }}>₹{Number(product.price_per_sqft).toLocaleString("en-IN")}<span style={{ fontWeight: 500, color: "#64748b", fontSize: 9 }}>/sqft</span></span>}
-            {product.price_per_unit && <span style={{ fontSize: 11, fontWeight: 700, color: "#0f172a" }}>₹{Number(product.price_per_unit).toLocaleString("en-IN")}<span style={{ fontWeight: 500, color: "#64748b", fontSize: 9 }}>/unit</span></span>}
-            {product.pricing_type === "Multiple" && product.unit_price_max_sqft != null && (
-              <span style={{ fontSize: 10, fontWeight: 600, color: "#64748b" }}>
-                unit ≤{Number(product.unit_price_max_sqft)} sqft
-              </span>
+            {product.pricing_type === "Multiple" ? (
+              <>
+                {product.price_per_unit != null && Number(product.price_per_unit) > 0 && (
+                  <span style={{ fontSize: 11, fontWeight: 700, color: "#0f172a" }}>
+                    ₹{Number(product.price_per_unit).toLocaleString("en-IN")}
+                    <span style={{ fontWeight: 500, color: "#64748b", fontSize: 9 }}>
+                      /{product.pricing_type_below === "per_sqft" ? "sqft" : "unit"}
+                      {product.unit_price_max_sqft != null
+                        ? ` ≤${Number(product.unit_price_max_sqft)}`
+                        : ""}
+                    </span>
+                  </span>
+                )}
+                {product.price_per_sqft != null && Number(product.price_per_sqft) > 0 && (
+                  <span style={{ fontSize: 11, fontWeight: 700, color: "#0f172a" }}>
+                    ₹{Number(product.price_per_sqft).toLocaleString("en-IN")}
+                    <span style={{ fontWeight: 500, color: "#64748b", fontSize: 9 }}>
+                      /{product.pricing_type_above === "per_unit" ? "unit" : "sqft"}
+                      {product.unit_price_max_sqft != null
+                        ? ` >${Number(product.unit_price_max_sqft)}`
+                        : ""}
+                    </span>
+                  </span>
+                )}
+              </>
+            ) : (
+              <>
+                {product.price_per_sqft && (
+                  <span style={{ fontSize: 11, fontWeight: 700, color: "#0f172a" }}>
+                    ₹{Number(product.price_per_sqft).toLocaleString("en-IN")}
+                    <span style={{ fontWeight: 500, color: "#64748b", fontSize: 9 }}>/sqft</span>
+                  </span>
+                )}
+                {product.price_per_unit && (
+                  <span style={{ fontSize: 11, fontWeight: 700, color: "#0f172a" }}>
+                    ₹{Number(product.price_per_unit).toLocaleString("en-IN")}
+                    <span style={{ fontWeight: 500, color: "#64748b", fontSize: 9 }}>/unit</span>
+                  </span>
+                )}
+              </>
             )}
           </div>
         )}
