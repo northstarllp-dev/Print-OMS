@@ -104,6 +104,74 @@ export async function markInstallationCompleted(orderId: string, checklist: any[
 
   if (error) throw error;
 
+  // Auto-approval: when the installation toggle is ON, advance the order
+  // to Completed automatically (payment-balance gate still applies) instead
+  // of parking it in "Pending Admin Approval: Job Done".
+  const { getWorkflowAutoApprovalForCompany } = await import(
+    "@/features/settings/actions/settingsActions"
+  );
+  const { stageKeyForOrderStage, isAutoApprovalEnabledForStage } = await import(
+    "@/features/orders/workflowAutoApproval"
+  );
+  const { autoAdvanceStageAction } = await import(
+    "@/features/orders/actions/orderActions"
+  );
+
+  let autoAdvanced = false;
+  if (order.company_id) {
+    const settings = await getWorkflowAutoApprovalForCompany(order.company_id);
+    const stageKey = stageKeyForOrderStage(order.stage);
+    if (stageKey && isAutoApprovalEnabledForStage(settings, stageKey)) {
+      try {
+        const { data: fullOrder } = await supabase
+          .from("orders")
+          .select(
+            "stage, order_id, workflow_type, business_operation, stage_status, company_id, customer_id"
+          )
+          .eq("id", orderId)
+          .single();
+        if (fullOrder) {
+          await autoAdvanceStageAction(
+            supabase,
+            orderId,
+            {
+              stage: fullOrder.stage,
+              order_id: fullOrder.order_id,
+              workflow_type: fullOrder.workflow_type,
+              business_operation: fullOrder.business_operation,
+              stage_status: fullOrder.stage_status,
+              company_id: fullOrder.company_id,
+              customer_id: fullOrder.customer_id,
+            },
+            "quote_first"
+          );
+          autoAdvanced = true;
+        }
+      } catch (autoErr: any) {
+        // Payment-balance gate (or another readiness gate) blocked the
+        // auto-advance. Fall back to pending admin approval so an admin
+        // can resolve payments and click Approve.
+        console.error(
+          "markInstallationCompleted: auto-advance blocked, falling back to pending:",
+          autoErr?.message
+        );
+      }
+    }
+  }
+
+  if (autoAdvanced) {
+    await insertOrderActivity(supabase, {
+      order_id: order.order_id || orderId,
+      company_id: order.company_id,
+      actor_name: "Installation Team",
+      actor_role: "Installation",
+      content: `Installation marked complete from "${order.stage}" and auto-approved to Completed.`,
+      metadata: { action: "installation_complete_auto_approved" },
+    });
+    await revalidateStaffQueuePaths();
+    return { success: true };
+  }
+
   const { error: orderError } = await supabase
     .from("orders")
     .update({ stage_status: "Pending Admin Approval: Job Done" })

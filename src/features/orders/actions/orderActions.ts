@@ -413,7 +413,11 @@ export async function updateSiteVisitDetailsAction(orderId: string, details: any
   const orderUuid = await resolveOrderUuid(supabase, orderId);
 
   // 1. Get company ID and order_id
-  const { data: order } = await supabase.from("orders").select("company_id, order_id").eq("id", orderUuid).single();
+  const { data: order } = await supabase
+    .from("orders")
+    .select("company_id, order_id, stage")
+    .eq("id", orderUuid)
+    .single();
   if (!order?.company_id) {
     throw new Error("Order is missing company_id — cannot save site visit.");
   }
@@ -504,6 +508,29 @@ export async function updateSiteVisitDetailsAction(orderId: string, details: any
     }
   }
 
+  // Skip visit: staff cannot call updateOrderStageAction (admin-only). Promote
+  // Pending → Scheduled here so skip works for every site-visit editor.
+  const { isSkippedSiteVisit } = await import(
+    "@/features/orders/workspace/modules/site-visit/siteVisitUiLogic"
+  );
+  if (isSkippedSiteVisit(details) && order.stage === "Site Visit Pending") {
+    const { error: stageErr } = await supabase
+      .from("orders")
+      .update({ stage: "Site Visit Scheduled" })
+      .eq("id", orderUuid);
+    if (stageErr) throw new Error(stageErr.message);
+    await insertOrderActivity(supabase, {
+      order_id: order.order_id || orderId,
+      company_id: companyId,
+      actor_name: "System",
+      actor_role: "System",
+      content:
+        "Site visit skipped. Measurements can be entered without a physical visit.",
+      metadata: { action: "site_visit_skipped" },
+    });
+    await revalidateStaffQueuePaths();
+  }
+
   // Revalidate this order only — queues refresh when stage/status changes.
   const orderCode = order?.order_id;
   revalidateOrderDetailPaths(orderId);
@@ -590,7 +617,9 @@ export async function requestStageAdvancementAction(orderId: string) {
   const orderUuid = await resolveOrderUuid(supabase, orderId);
   const { data: current, error: fetchError } = await supabase
     .from("orders")
-    .select("stage, workflow_type, business_operation")
+    .select(
+      "stage, workflow_type, business_operation, stage_status, order_id, company_id, customer_id"
+    )
     .eq("id", orderUuid)
     .single();
   if (fetchError) throw new Error(fetchError.message);
@@ -625,7 +654,6 @@ export async function requestStageAdvancementAction(orderId: string) {
   }
   await assertStageEditPermission(requiredStage);
 
-  let nextStatus = "Normal";
   const stage = current.stage;
 
   if (
@@ -649,7 +677,7 @@ export async function requestStageAdvancementAction(orderId: string) {
     await assertProductionChecklistReady(supabase, orderUuid);
   }
 
-  nextStatus = pendingApprovalLabelAfter(
+  const nextStatus = pendingApprovalLabelAfter(
     businessOp,
     stage,
     undefined,
@@ -658,7 +686,50 @@ export async function requestStageAdvancementAction(orderId: string) {
   if (nextStatus === "Normal") {
     throw new Error(`No advancement path configured from "${stage}"`);
   }
-  
+
+  // Auto-approval: when the per-stage toggle is ON for the source stage,
+  // advance the order directly instead of parking it in Pending Admin Approval.
+  // Stages are wired one-by-one; this set grows as each stage is implemented.
+  const { stageKeyForOrderStage, isAutoApprovalEnabledForStage } = await import(
+    "@/features/orders/workflowAutoApproval"
+  );
+  const { getWorkflowAutoApprovalForCompany } = await import(
+    "@/features/settings/actions/settingsActions"
+  );
+  const SUPPORTED_AUTO_APPROVAL_STAGES = new Set([
+    "site_visit",
+    "quotation",
+    "design",
+    "production",
+    "installation",
+  ]);
+  const stageKey = stageKeyForOrderStage(current.stage);
+  if (
+    stageKey &&
+    SUPPORTED_AUTO_APPROVAL_STAGES.has(stageKey) &&
+    current.company_id
+  ) {
+    const settings = await getWorkflowAutoApprovalForCompany(current.company_id);
+    if (isAutoApprovalEnabledForStage(settings, stageKey)) {
+      // Site Visit with Quote/Design fork defaults to quote_first on auto-approval.
+      // For other stages the override is ignored by computeStageAdvancement.
+      return autoAdvanceStageAction(
+        supabase,
+        orderUuid,
+        {
+          stage: current.stage,
+          order_id: current.order_id,
+          workflow_type: current.workflow_type,
+          business_operation: current.business_operation,
+          stage_status: current.stage_status,
+          company_id: current.company_id,
+          customer_id: current.customer_id,
+        },
+        "quote_first"
+      );
+    }
+  }
+
   const result = await updateOrder(orderId, { stage_status: nextStatus, stage_admin_notes: "" });
 
   // Notify all admins that stage advancement has been requested
@@ -691,17 +762,38 @@ export async function requestStageAdvancementAction(orderId: string) {
   return result;
 }
 
-export async function adminApproveStageAction(orderId: string) {
-  await assertAdminOnly();
-  const supabase = await getSupabase();
-  const orderUuid = await resolveOrderUuid(supabase, orderId);
-  const { data: o, error: fetchError } = await supabase
-    .from("orders")
-    .select("stage, order_id, workflow_type, business_operation, stage_status, company_id, customer_id")
-    .eq("id", orderUuid)
-    .single();
-  if (fetchError) throw new Error(fetchError.message);
-
+/**
+ * Shared advancement planner for `adminApproveStageAction` and
+ * `autoAdvanceStageAction`. Runs all readiness gates and returns the
+ * computed next stage (and workflow_type for site-visit transitions) plus
+ * the timeline message. Does NOT perform the order update — callers own
+ * that step so they can use the appropriate client (user vs service-role).
+ *
+ * `siteVisitWorkflowOverride`:
+ *   - `null`  → throw when the op requires the Quote/Design choice modal
+ *              (admin path; admin must use the workflow modal).
+ *   - `"quote_first" | "design_first"` → apply that workflow_type and jump
+ *              to the first post-site-visit stage without the modal
+ *              (auto-approval path).
+ */
+async function computeStageAdvancement(
+  supabase: Awaited<ReturnType<typeof getSupabase>>,
+  orderUuid: string,
+  o: {
+    stage: string;
+    order_id: string | null;
+    workflow_type: string | null;
+    business_operation: string | null;
+    stage_status: string | null;
+  },
+  options: {
+    siteVisitWorkflowOverride: "quote_first" | "design_first" | null;
+  }
+): Promise<{
+  nextStage: string;
+  workflowType: "quote_first" | "design_first" | null;
+  logMsg: string;
+}> {
   const midQuotationStages = new Set([
     "Quotation In Progress",
     "Quotation Sent",
@@ -713,63 +805,53 @@ export async function adminApproveStageAction(orderId: string) {
     );
   }
 
-  const { nextStageAfter, resolveStageOrder, firstStageAfterSiteVisitModule, inferWorkflowTypeForBusinessOp } = await import(
-    "@/features/orders/businessOperations"
-  );
+  const {
+    nextStageAfter,
+    resolveStageOrder,
+    firstStageAfterSiteVisitModule,
+    inferWorkflowTypeForBusinessOp,
+  } = await import("@/features/orders/businessOperations");
   const businessOp = (o.business_operation as string) || "signage";
 
-  // Site Visit → next module from business operation (when path is unambiguous).
-  // Ops with both Quote + Design after site visit use the workflow choice modal instead.
   if ((o.stage || "").startsWith("Site Visit")) {
     const { canChooseQuoteOrDesignAfterSiteVisit } = await import(
       "@/features/orders/businessOperations"
     );
-    if (canChooseQuoteOrDesignAfterSiteVisit(businessOp)) {
+    const { firstStageAfterWorkflowChoice } = await import(
+      "@/features/orders/workflowSelectionLogic"
+    );
+    const needsChoice = canChooseQuoteOrDesignAfterSiteVisit(businessOp);
+    if (needsChoice && !options.siteVisitWorkflowOverride) {
       throw new Error(
         "Choose Quote First or Design First to leave Site Visit."
       );
     }
     await assertSiteVisitReadyToAdvance(supabase, orderUuid);
-    const nextStage = firstStageAfterSiteVisitModule(businessOp);
-    const workflowType = inferWorkflowTypeForBusinessOp(businessOp);
-    const result = await updateOrder(orderUuid, {
-      stage: nextStage,
-      workflow_type: workflowType,
-      stage_status: "Normal",
-      stage_admin_notes: "",
-    });
-    await insertOrderActivity(supabase, {
-      order_id: o.order_id || orderId,
-      company_id: o.company_id,
-      actor_name: "System",
-      actor_role: "System",
-      content: `Admin approved site visit. Order advanced to ${nextStage} (${businessOp}).`,
-      metadata: {
-        action: "stage_approved",
-        old: o.stage,
-        new: nextStage,
-        business_operation: businessOp,
-        workflow_type: workflowType,
-      },
-    });
-    if (nextStage !== o.stage) {
-      void dispatchWhatsAppForPipelineStage(supabase, orderUuid, nextStage).catch((err) =>
-        console.error("WhatsApp pipeline notify failed:", err)
-      );
-      void notifyOrderStageChange(supabase, orderUuid, nextStage, o.stage).catch((err) =>
-        console.error("Stage change notify failed:", err)
-      );
+
+    let nextStage: string;
+    let workflowType: "quote_first" | "design_first";
+    if (needsChoice && options.siteVisitWorkflowOverride) {
+      workflowType = options.siteVisitWorkflowOverride;
+      nextStage = firstStageAfterWorkflowChoice(workflowType);
+    } else {
+      nextStage = firstStageAfterSiteVisitModule(businessOp);
+      workflowType = inferWorkflowTypeForBusinessOp(businessOp);
     }
-    return result;
+    return {
+      nextStage,
+      workflowType,
+      logMsg: `Approved site visit. Order advanced to ${nextStage} (${businessOp}).`,
+    };
   }
 
   const isJobDonePending = o.stage_status === "Pending Admin Approval: Job Done";
+  const isJobDoneStage =
+    o.stage === "Installation Scheduled" || o.stage === "Customer Pickup";
 
-  // Prefer business-op order; fall back to legacy workflow_type map.
   const orderStages = resolveStageOrder(businessOp, o.workflow_type);
   const idx = orderStages.indexOf(o.stage);
   let nextStage =
-    isJobDonePending
+    isJobDonePending || isJobDoneStage
       ? "Completed"
       : idx >= 0 && idx < orderStages.length - 1
         ? orderStages[idx + 1]
@@ -790,7 +872,6 @@ export async function adminApproveStageAction(orderId: string) {
     await assertProductionFilesUploaded(supabase, orderUuid);
   }
 
-  // Hard gate: never close/complete while quote balance is still outstanding.
   if (nextStage === "Completed") {
     const { getPaymentBalanceSummary } = await import(
       "@/features/payments/actions/paymentActions"
@@ -804,10 +885,159 @@ export async function adminApproveStageAction(orderId: string) {
   }
 
   const logMsg = isJobDonePending
-    ? `Admin reviewed payments and marked the order Completed (from "${o.stage}").`
-    : `Admin approved stage progression from "${o.stage}" to "${nextStage}".`;
+    ? `Reviewed payments and marked the order Completed (from "${o.stage}").`
+    : `Approved stage progression from "${o.stage}" to "${nextStage}".`;
+
+  return { nextStage, workflowType: null, logMsg };
+}
+
+/**
+ * Auto-approval path invoked by `requestStageAdvancementAction` when the
+ * per-stage `workflow_auto_approval` setting is ON for the source stage.
+ *
+ * Uses the service-role client (the caller is staff, who cannot write
+ * `orders.stage` via RLS) and attributes the timeline entry to
+ * "System (auto-approval)".
+ *
+ * For Site Visit with a Quote/Design fork, defaults to `quote_first`
+ * (per `defaultWorkflowTypeForAutoApproval`) instead of requiring the
+ * admin workflow-choice modal.
+ */
+export async function autoAdvanceStageAction(
+  supabase: Awaited<ReturnType<typeof getSupabase>>,
+  orderUuid: string,
+  o: {
+    stage: string;
+    order_id: string | null;
+    workflow_type: string | null;
+    business_operation: string | null;
+    stage_status: string | null;
+    company_id: string;
+    customer_id: string | null;
+  },
+  siteVisitWorkflowOverride: "quote_first" | "design_first"
+): Promise<unknown> {
+  const { nextStage, workflowType, logMsg } = await computeStageAdvancement(
+    supabase,
+    orderUuid,
+    o,
+    { siteVisitWorkflowOverride }
+  );
+
+  const admin = requireAdminClient();
+  const { stageProgressPatch } = await import("@/features/orders/lib/orderHealth");
+  const patch: Record<string, unknown> = {
+    ...(workflowType ? { workflow_type: workflowType } : {}),
+    stage: nextStage,
+    stage_status: "Normal",
+    stage_admin_notes: "",
+  };
+  if (nextStage !== o.stage) {
+    Object.assign(patch, stageProgressPatch(undefined, nextStage));
+  }
+  const { data: updated, error: updateError } = await admin
+    .from("orders")
+    .update(patch)
+    .eq("id", orderUuid)
+    .select();
+  if (updateError) throw new Error(updateError.message);
+
+  // Entering Production normally flows through ProductionAdvanceModal which
+  // sets an installation deadline. Auto-approval skips the modal, so default
+  // the deadline to +7 days on the productions row.
+  if (nextStage === "Production") {
+    const defaultDeadline = new Date(
+      Date.now() + 7 * 24 * 60 * 60 * 1000
+    ).toISOString();
+    const { error: prodError } = await admin
+      .from("productions")
+      .upsert(
+        {
+          order_id: orderUuid,
+          installation_deadline: defaultDeadline,
+        },
+        { onConflict: "order_id" }
+      );
+    if (prodError) {
+      console.error(
+        "autoAdvanceStageAction: failed to set default installation_deadline:",
+        prodError.message
+      );
+    }
+  }
+
+  await insertOrderActivity(supabase, {
+    order_id: o.order_id || orderUuid,
+    company_id: o.company_id,
+    actor_name: "System (auto-approval)",
+    actor_role: "System",
+    content: `Auto-approved: ${logMsg}`,
+    metadata: {
+      action: "stage_auto_approved",
+      old: o.stage,
+      new: nextStage,
+      ...(workflowType ? { workflow_type: workflowType } : {}),
+    },
+  });
+
+  if (nextStage !== o.stage) {
+    void dispatchWhatsAppForPipelineStage(supabase, orderUuid, nextStage).catch((err) =>
+      console.error("WhatsApp pipeline notify failed:", err)
+    );
+    void notifyOrderStageChange(supabase, orderUuid, nextStage, o.stage).catch((err) =>
+      console.error("Stage change notify failed:", err)
+    );
+  }
+
+  if (
+    nextStage !== o.stage &&
+    (nextStage === "Completed" || nextStage === "Closed")
+  ) {
+    void import("@/features/portal/actions/portalAdminActions")
+      .then(({ revokePortalAccessForClosedOrder }) =>
+        revokePortalAccessForClosedOrder({
+          customerId: o.customer_id,
+          orderUuid,
+          friendlyOrderId: o.order_id,
+        })
+      )
+      .catch((err) =>
+        console.error("Portal revoke on order close failed:", err)
+      );
+  }
+
+  const friendlyOrderId =
+    (updated?.[0]?.order_id as string) || o.order_id || orderUuid;
+  await revalidateStaffQueuePaths().catch((err) =>
+    console.error("revalidateStaffQueuePaths failed:", err)
+  );
+  revalidateOrderDetailPaths(friendlyOrderId);
+  revalidateOrderDetailPaths(orderUuid);
+  revalidatePath("/printoms/portal");
+
+  return updated;
+}
+
+export async function adminApproveStageAction(orderId: string) {
+  await assertAdminOnly();
+  const supabase = await getSupabase();
+  const orderUuid = await resolveOrderUuid(supabase, orderId);
+  const { data: o, error: fetchError } = await supabase
+    .from("orders")
+    .select("stage, order_id, workflow_type, business_operation, stage_status, company_id, customer_id")
+    .eq("id", orderUuid)
+    .single();
+  if (fetchError) throw new Error(fetchError.message);
+
+  const { nextStage, workflowType, logMsg } = await computeStageAdvancement(
+    supabase,
+    orderUuid,
+    o,
+    { siteVisitWorkflowOverride: null }
+  );
 
   const result = await updateOrder(orderUuid, {
+    ...(workflowType ? { workflow_type: workflowType } : {}),
     stage: nextStage,
     stage_status: "Normal",
     stage_admin_notes: "",
@@ -819,15 +1049,18 @@ export async function adminApproveStageAction(orderId: string) {
     actor_name: "System",
     actor_role: "System",
     content: logMsg,
-    metadata: { action: "stage_approved", old: o.stage, new: nextStage }
+    metadata: {
+      action: "stage_approved",
+      old: o.stage,
+      new: nextStage,
+      ...(workflowType ? { workflow_type: workflowType } : {}),
+    },
   });
 
-  // Don't block the admin UI on WhatsApp delivery.
   if (nextStage !== o.stage) {
     void dispatchWhatsAppForPipelineStage(supabase, orderUuid, nextStage).catch((err) =>
       console.error("WhatsApp pipeline notify failed:", err)
     );
-    // Notify relevant staff that stage was approved and advanced
     void notifyOrderStageChange(supabase, orderUuid, nextStage, o.stage).catch((err) =>
       console.error("Stage change notify failed:", err)
     );
@@ -1682,13 +1915,21 @@ export async function markOrderAsCustomerPickup(orderId: string) {
   }
 
   const { stageProgressPatch } = await import("@/features/orders/lib/orderHealth");
-
-  const result = await updateOrder(orderUuid, {
+  const patch = {
     delivery_method: "customer_pickup",
     stage: "Customer Pickup",
     stage_status: "Normal",
     ...stageProgressPatch(o.health, "Customer Pickup"),
-  });
+  };
+  const { data: result, error: updErr } = await supabase
+    .from("orders")
+    .update(patch)
+    .eq("id", orderUuid)
+    .select();
+  if (updErr) throw new Error(updErr.message);
+  if (!result?.length) {
+    throw new Error("Could not mark order as customer pickup.");
+  }
 
   await insertOrderActivity(supabase, {
     order_id: o.order_id || orderId,
@@ -1730,13 +1971,21 @@ export async function confirmCustomerPickup(orderId: string) {
   }
 
   const { stageProgressPatch } = await import("@/features/orders/lib/orderHealth");
-
-  const result = await updateOrder(orderUuid, {
+  const patch = {
     stage: "Completed",
     stage_status: "Normal",
     pickup_confirmed_at: new Date().toISOString(),
     ...stageProgressPatch(o.health, "Completed"),
-  });
+  };
+  const { data: result, error: updErr } = await supabase
+    .from("orders")
+    .update(patch)
+    .eq("id", orderUuid)
+    .select();
+  if (updErr) throw new Error(updErr.message);
+  if (!result?.length) {
+    throw new Error("Could not confirm customer pickup.");
+  }
 
   await insertOrderActivity(supabase, {
     order_id: o.order_id || orderId,

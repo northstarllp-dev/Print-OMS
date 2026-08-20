@@ -92,7 +92,7 @@ Method: Portal client / server updates on `quotations`
 Logic: Updates quotation row, logs activity, advances order stage when appropriate.
 
 ### Handle Design Response
-Method: Server Action (`updateDesignDetailsAction`, `approveAllDesignItemsAction`)
+Method: Server Action (`updateDesignDetailsAction`, `transitionDesignOrderStageAction`)
 Logic: Updates `designs.items` JSONB; when all items approved, advances stage.
 
 ### Payments

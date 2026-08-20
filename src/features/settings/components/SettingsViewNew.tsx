@@ -11,6 +11,13 @@ import {
   updateCompanyDetails,
 } from "@/features/settings/actions/settingsActions";
 import type { AppSettings, CompanyDetails } from "@/features/settings/settingsTypes";
+import {
+  WORKFLOW_AUTO_APPROVAL_STAGE_KEYS,
+  WORKFLOW_AUTO_APPROVAL_STAGE_LABELS,
+  WORKFLOW_AUTO_APPROVAL_STAGE_DESCRIPTIONS,
+  type WorkflowAutoApprovalMap,
+  type WorkflowAutoApprovalStageKey,
+} from "@/features/settings/settingsTypes";
 import { updateUserPassword } from "@/features/auth/actions/authActions";
 import { loadClientConfig } from "@/config/loadClientConfig";
 import { getBusinessOperationsForTenant } from "@/features/orders/businessOperations";
@@ -113,6 +120,18 @@ export function SettingsViewNew({ initialAppSettings, companyDetails }: Settings
   const [activeChecklistOpId, setActiveChecklistOpId] = useState(
     () => opIds[0] || "signage"
   );
+
+  const [workflowAutoApproval, setWorkflowAutoApproval] =
+    useState<WorkflowAutoApprovalMap>(
+      () =>
+        initialAppSettings?.workflowAutoApproval ?? {
+          site_visit: false,
+          quotation: false,
+          design: false,
+          production: false,
+          installation: false,
+        }
+    );
 
   const checklistItems =
     checklistsByOp[activeChecklistOpId] ||
@@ -270,6 +289,11 @@ export function SettingsViewNew({ initialAppSettings, companyDetails }: Settings
     });
   };
 
+  const toggleWorkflowAutoApproval = (key: WorkflowAutoApprovalStageKey) => {
+    markDirty();
+    setWorkflowAutoApproval((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
   const addChecklistItem = () => {
     markDirty();
     const current = checklistsByOp[activeChecklistOpId] || checklistItems;
@@ -322,6 +346,7 @@ export function SettingsViewNew({ initialAppSettings, companyDetails }: Settings
           installationSchedulingEnabled: settings.installationSchedulingEnabled,
           googleReviewLink: settings.googleReviewLink,
           productionChecklistsByOp: checklistsByOp,
+          workflowAutoApproval,
         }),
       ]);
       setInitialSettings(settings);
@@ -509,6 +534,96 @@ export function SettingsViewNew({ initialAppSettings, companyDetails }: Settings
 
           </div>
         ))}
+
+        {/* Workflow Approvals (per-stage auto-approval) */}
+        <div
+          style={{
+            background: "white",
+            border: "1px solid #e2e8f0",
+            borderRadius: "12px",
+            padding: "24px",
+            marginBottom: "20px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "20px", paddingBottom: "16px", borderBottom: "1px solid #e2e8f0" }}>
+            <div style={{ width: "40px", height: "40px", background: "#fff7ed", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", color: "#ea580c" }}>
+              <CheckSquare size={20} />
+            </div>
+            <div>
+              <div style={{ fontSize: "16px", fontWeight: "700", color: "#0f172a" }}>
+                Workflow Approvals
+              </div>
+              <div style={{ fontSize: "12px", color: "#64748b", marginTop: "2px" }}>
+                Toggle auto-approval per pipeline stage. When ON, staff stage-advancement requests for that stage skip the admin approval queue and advance automatically.
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gap: "14px" }}>
+            {WORKFLOW_AUTO_APPROVAL_STAGE_KEYS.map((key) => {
+              const enabled = workflowAutoApproval[key];
+              return (
+                <div
+                  key={key}
+                  style={{
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "10px",
+                    padding: "14px 16px",
+                    background: "#f8fafc",
+                    display: "flex",
+                    alignItems: "flex-start",
+                    justifyContent: "space-between",
+                    gap: "16px",
+                  }}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a", marginBottom: "4px" }}>
+                      {WORKFLOW_AUTO_APPROVAL_STAGE_LABELS[key]}
+                    </div>
+                    <div style={{ fontSize: "12px", color: "#64748b", lineHeight: 1.5 }}>
+                      {WORKFLOW_AUTO_APPROVAL_STAGE_DESCRIPTIONS[key]}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => toggleWorkflowAutoApproval(key)}
+                    aria-pressed={enabled}
+                    aria-label={`Toggle auto-approval for ${WORKFLOW_AUTO_APPROVAL_STAGE_LABELS[key]}`}
+                    title={enabled ? "Auto-approval ON — click to require admin approval" : "Admin approval required — click to enable auto-approval"}
+                    style={{
+                      position: "relative",
+                      flexShrink: 0,
+                      width: "48px",
+                      height: "26px",
+                      background: enabled ? "var(--color-primary)" : "#cbd5e1",
+                      border: "none",
+                      borderRadius: "9999px",
+                      cursor: "pointer",
+                      transition: "background 0.3s ease",
+                      padding: 0,
+                      outline: "none",
+                      display: "flex",
+                      alignItems: "center",
+                    }}
+                  >
+                    <div
+                      style={{
+                        position: "absolute",
+                        left: enabled ? "24px" : "2px",
+                        width: "22px",
+                        height: "22px",
+                        background: "white",
+                        borderRadius: "50%",
+                        transition: "left 0.3s cubic-bezier(0.4, 0.0, 0.2, 1)",
+                        boxShadow: "0 1px 3px rgba(0,0,0,0.15), 0 1px 2px rgba(0,0,0,0.1)",
+                      }}
+                    />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
 
         {/* Business operations (from client config) */}
         <div

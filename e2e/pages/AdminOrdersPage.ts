@@ -69,13 +69,15 @@ export class AdminOrdersPage {
       await allDates.first().click();
     }
 
-    // Prefer search box when present
-    const search = this.page.getByPlaceholder(/Search|search/i);
+    const search = this.page
+      .getByPlaceholder(/Search enquiries/i)
+      .locator("visible=true")
+      .first();
     const needle =
       opts.enquireId || opts.phone || opts.leadName || opts.businessName || "";
-    if (needle && (await search.count()) && (await search.first().isVisible())) {
-      await search.first().fill(needle);
-      await this.page.waitForTimeout(400);
+    if (needle && (await search.isVisible({ timeout: 5_000 }).catch(() => false))) {
+      await search.fill(needle);
+      await this.page.waitForTimeout(500);
     }
 
     const row = this.page
@@ -90,6 +92,9 @@ export class AdminOrdersPage {
       .locator("visible=true")
       .first();
     await convertBtn.click();
+    await this.page.getByRole("heading", { name: "Convert to Order" }).waitFor({
+      timeout: 15_000,
+    });
 
     const businessInput = this.page.locator(
       'input[name="businessName"], input[placeholder*="Business"]'
@@ -104,11 +109,74 @@ export class AdminOrdersPage {
 
     await this.page.getByRole("button", { name: /Create Order/i }).click();
 
-    const assign = this.page.getByRole("button", {
-      name: /Save Assignments|Skip|Close|Done/i,
+    // Convert is a server action — wait for the success popup before navigating
+    // away, otherwise the request is aborted and the enquiry stays Pending.
+    const customerMsg = this.page.getByRole("heading", {
+      name: /Customer Message/i,
     });
-    if (await assign.first().isVisible({ timeout: 5_000 }).catch(() => false)) {
-      await assign.first().click();
+    await customerMsg.waitFor({ state: "visible", timeout: 30_000 });
+    await this.page
+      .getByRole("button", { name: /Assign Employees|^Close$/i })
+      .locator("visible=true")
+      .first()
+      .click();
+    await customerMsg.waitFor({ state: "hidden", timeout: 15_000 });
+
+    const assignHeading = this.page.getByRole("heading", {
+      name: "Assign Employees",
+      exact: true,
+    });
+    if (await assignHeading.isVisible({ timeout: 8_000 }).catch(() => false)) {
+      await assignHeading.locator("xpath=../..").getByRole("button").click();
     }
+
+    const okay = this.page.getByRole("button", { name: /^Okay$/i });
+    if (await okay.first().isVisible({ timeout: 5_000 }).catch(() => false)) {
+      await okay.first().click();
+    }
+  }
+
+  async searchEnquiries(term: string) {
+    await this.gotoEnquire();
+    const reset = this.page.getByRole("button", { name: /Reset/i }).locator("visible=true");
+    if (await reset.first().isVisible({ timeout: 2_000 }).catch(() => false)) {
+      await reset.first().click();
+    }
+    const search = this.page
+      .getByPlaceholder(/Search enquiries/i)
+      .locator("visible=true")
+      .first();
+    await search.waitFor({ state: "visible", timeout: 15_000 });
+    await search.fill(term);
+    await this.page.waitForTimeout(500);
+  }
+
+  async editVisibleEnquiry(leadName: string) {
+    await this.page
+      .getByRole("button", { name: /Edit/i })
+      .locator("visible=true")
+      .first()
+      .click();
+    await this.page.getByRole("heading", { name: /Edit Enquiry/i }).waitFor();
+    await this.page.locator('input[name="leadName"]').fill(leadName);
+    await this.page.getByRole("button", { name: /Save Changes/i }).click();
+    await this.page.getByRole("heading", { name: /Edit Enquiry/i }).waitFor({
+      state: "hidden",
+      timeout: 15_000,
+    });
+  }
+
+  async deleteVisibleEnquiry() {
+    await this.page
+      .getByRole("button", { name: /Delete/i })
+      .locator("visible=true")
+      .first()
+      .click();
+    await this.page.getByRole("heading", { name: /Delete Enquiry/i }).waitFor();
+    await this.page.getByRole("button", { name: /^Delete$/i }).last().click();
+    await this.page.getByRole("heading", { name: /Delete Enquiry/i }).waitFor({
+      state: "hidden",
+      timeout: 15_000,
+    });
   }
 }

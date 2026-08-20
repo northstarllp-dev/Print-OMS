@@ -15,22 +15,21 @@ import {
 } from "../helpers/assertions";
 
 /**
- * Core business story: enquiry → order → quote_first pipeline → Completed.
+ * Core business story: enquiry UI → convert → quote_first pipeline → Completed.
  *
- * UI drives admin enquiry creation + conversion (the entry funnel).
- * Stage progression uses DB helpers that mirror server-action outcomes so we
- * assert business state (orders.stage, timeline, outbox, portal) without
- * depending on every worksheet modal selector on day one.
+ * This is the full-UI happy path for the funnel. Later stages are advanced
+ * with DB helpers so we don't re-click every worksheet on this journey.
  */
 test.describe("enquiry → installation happy path", () => {
   test("quote_first pipeline reaches Completed with portal visibility", async ({
     browser,
+    baseURL,
   }) => {
     const customer = makeCustomer("corporate");
 
     try {
       // ── Story 1: Admin enquiry (UI) + convert (UI) ─────────────────────
-      const created = await createOrderViaEnquiry(browser, customer);
+      const created = await createOrderViaEnquiry(browser, baseURL, customer);
 
       await expectOrderStage(created.orderUuid, "Site Visit Pending");
       await expectCustomerExists({ email: customer.email });
@@ -59,13 +58,8 @@ test.describe("enquiry → installation happy path", () => {
 
       try {
         const portalPage = new CustomerPortalPage(portal.page);
-        await portalPage.expectVisibleText(
-          new RegExp(customer.name.split(" ").slice(-1)[0], "i")
-        );
-        await portalPage.expectVisibleText(
-          new RegExp(created.friendlyOrderId.replace("-", "[-‐‑]?"))
-        );
-        await portalPage.expectVisibleText(/Job completed|Completed|Installation/i);
+        // Completed orders deactivate the magic link (portal page.tsx).
+        await portalPage.expectVisibleText(/Portal Link Inactive|no longer active/i);
         await expectPortalTokenValid({
           customerId,
           orderId: created.orderUuid,
@@ -99,9 +93,9 @@ test.describe("enquiry → installation happy path", () => {
       });
 
       try {
-        await expect(portal.page.getByText(/Completed|Installation|Order/i).first()).toBeVisible({
-          timeout: 20_000,
-        });
+        await expect(
+          portal.page.getByRole("heading", { name: /Portal Link Inactive/i })
+        ).toBeVisible({ timeout: 20_000 });
       } finally {
         await portal.context.close();
       }

@@ -60,7 +60,9 @@ export default async function OrderDetailPage({
     reach_out_at: order.reach_out_at || null,
     workflow_type: (order.workflow_type as "quote_first" | "design_first") || "quote_first",
     business_operation: (order as { business_operation?: string }).business_operation || "signage",
-
+    delivery_method: (order as { delivery_method?: string }).delivery_method || "installation",
+    pickup_confirmed_at: (order as { pickup_confirmed_at?: string | null }).pickup_confirmed_at ?? null,
+    pickupConfirmedAt: (order as { pickup_confirmed_at?: string | null }).pickup_confirmed_at ?? null,
   };
 
   const mappedCustomers = customersData?.map((c) => ({

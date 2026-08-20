@@ -38,6 +38,7 @@ export type PipelineStage =
   | "Production"
   | "Ready For Installation"
   | "Installation Scheduled"
+  | "Customer Pickup"
   | "Completed"
   | "Closed";
 

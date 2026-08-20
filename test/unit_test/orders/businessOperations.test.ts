@@ -104,6 +104,15 @@ describe("businessOperations", () => {
     );
   });
 
+  it("treats customer pickup as a branch, not the step after installation", () => {
+    const order = getPipelineStageOrderForOp("signage", OPS);
+    expect(order).not.toContain("Customer Pickup");
+    expect(nextStageAfter("signage", "Installation Scheduled", OPS)).toBe(
+      "Completed"
+    );
+    expect(moduleKeyForPipelineStage("Customer Pickup")).toBe("installation");
+  });
+
   it("production-last flex has no installation stages", () => {
     const order = getPipelineStageOrderForOp("flex_printing_last", OPS);
     expect(order).toContain("Design In Progress");

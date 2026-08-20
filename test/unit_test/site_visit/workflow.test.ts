@@ -15,12 +15,35 @@ import {
   canAdvanceSiteVisitAudit,
   isSiteVisitModuleBaseFrozen,
   isSiteVisitUiFrozen,
+  mergeIncomingSiteVisitDetails,
   resolveDisplaySiteVisitStage,
   siteVisitReviewCopy,
 } from "@/features/orders/workspace/modules/site-visit/siteVisitUiLogic";
 
 describe("site visit workflow", () => {
   describe("UI — advance, freeze, display, portal tabs", () => {
+    it("keeps unsaved locations when a server snapshot has none yet", () => {
+      const local = {
+        landmark: "SKIPPED_SITE_VISIT",
+        customerAddress: "Indiranagar",
+        locations: [{ id: "item-1" }],
+      };
+      const incoming = {
+        landmark: "SKIPPED_SITE_VISIT",
+        customerAddress: "Indiranagar",
+        locations: [],
+      };
+      expect(mergeIncomingSiteVisitDetails(local, incoming)?.locations).toEqual([
+        { id: "item-1" },
+      ]);
+      expect(
+        mergeIncomingSiteVisitDetails(
+          { locations: [{ id: "a" }] },
+          { locations: [{ id: "a" }, { id: "b" }] }
+        )?.locations
+      ).toHaveLength(2);
+    });
+
     it("blocks advance until schedule or skip + at least one location", () => {
       expect(
         canAdvanceSiteVisitAudit({

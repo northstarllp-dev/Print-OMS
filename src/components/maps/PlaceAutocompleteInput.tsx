@@ -62,16 +62,22 @@ export function PlaceAutocompleteInput({
     null
   );
   const sessionTokenRef = useRef<google.maps.places.AutocompleteSessionToken | null>(null);
+  const sessionTokenCreatedAtRef = useRef<number>(0);
   const requestIdRef = useRef(0);
   const skipFetchRef = useRef(false);
   const lastEmittedMapsUrlRef = useRef<string | null>(null);
   const regionKey = regionCodes.join(",");
 
   const refreshSessionToken = useCallback(async () => {
-    const { AutocompleteSessionToken } = (await google.maps.importLibrary(
-      "places"
-    )) as google.maps.PlacesLibrary;
-    sessionTokenRef.current = new AutocompleteSessionToken();
+    try {
+      const { AutocompleteSessionToken } = (await google.maps.importLibrary(
+        "places"
+      )) as google.maps.PlacesLibrary;
+      sessionTokenRef.current = new AutocompleteSessionToken();
+      sessionTokenCreatedAtRef.current = Date.now();
+    } catch (e) {
+      console.warn("[PlaceAutocomplete] failed to initialize session token:", e);
+    }
   }, []);
 
   const updateMenuPosition = useCallback(() => {
@@ -113,6 +119,9 @@ export function PlaceAutocompleteInput({
     const q = value.trim();
     if (q.length < 2 || isGoogleMapsUrl(q)) {
       clearSuggestions();
+      if (q.length === 0) {
+        void refreshSessionToken();
+      }
       return;
     }
 
@@ -124,8 +133,10 @@ export function PlaceAutocompleteInput({
       try {
         const { AutocompleteSuggestion, AutocompleteSessionToken } =
           (await google.maps.importLibrary("places")) as google.maps.PlacesLibrary;
-        if (!sessionTokenRef.current) {
+        const isSessionExpired = Date.now() - sessionTokenCreatedAtRef.current > 3 * 60 * 1000;
+        if (!sessionTokenRef.current || isSessionExpired) {
           sessionTokenRef.current = new AutocompleteSessionToken();
+          sessionTokenCreatedAtRef.current = Date.now();
         }
         const { suggestions: rows } =
           await AutocompleteSuggestion.fetchAutocompleteSuggestions({

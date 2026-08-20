@@ -68,13 +68,28 @@ function SiteVisitLocationPickerInner({
     }
   }, [isLoaded]);
 
-  const reverseGeocode = useCallback((lat: number, lng: number) => {
-    if (!geocoder.current) return;
-    geocoder.current.geocode({ location: { lat, lng } }, (results, status) => {
-      if (status === "OK" && results?.[0]) {
-        onAddressChange(results[0].formatted_address);
+  const reverseGeocodeTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (reverseGeocodeTimerRef.current) {
+        window.clearTimeout(reverseGeocodeTimerRef.current);
       }
-    });
+    };
+  }, []);
+
+  const reverseGeocode = useCallback((lat: number, lng: number) => {
+    if (reverseGeocodeTimerRef.current) {
+      window.clearTimeout(reverseGeocodeTimerRef.current);
+    }
+    reverseGeocodeTimerRef.current = window.setTimeout(() => {
+      if (!geocoder.current) return;
+      geocoder.current.geocode({ location: { lat, lng } }, (results, status) => {
+        if (status === "OK" && results?.[0]) {
+          onAddressChange(results[0].formatted_address);
+        }
+      });
+    }, 350);
   }, [onAddressChange]);
 
   const onMapClick = useCallback(

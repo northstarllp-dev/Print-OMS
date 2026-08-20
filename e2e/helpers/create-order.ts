@@ -10,6 +10,7 @@ import {
   getEnquiryByEmail,
   getOrderByCustomerEmail,
 } from "./assertions";
+import { createOrderDirect } from "./stages";
 
 export type CreatedOrder = {
   orderUuid: string;
@@ -19,16 +20,53 @@ export type CreatedOrder = {
   enquireId: string | null;
 };
 
+/** Map a DB-seeded order row onto the shape the worksheet specs use. */
+export function fromSeed(row: {
+  id: string;
+  order_id: string;
+  customerUuid: string;
+}): CreatedOrder {
+  return {
+    orderUuid: row.id,
+    friendlyOrderId: row.order_id,
+    customerUuid: row.customerUuid,
+    enquiryId: null,
+    enquireId: null,
+  };
+}
+
 /**
- * Admin creates enquiry → converts to order.
- * Uses a fresh admin UI login (more reliable than storageState for SSR cookies).
+ * Fast path: insert customer + order at Site Visit Pending (no enquiry UI).
+ * Use this for stage worksheet tests. Keep createOrderViaEnquiry for the
+ * enquiry → convert happy path only.
+ */
+export async function createOrderAtSiteVisit(
+  customer: CustomerFixture
+): Promise<CreatedOrder> {
+  return fromSeed(await createOrderDirect(customer));
+}
+
+/**
+ * Admin creates enquiry → converts to order (slow: real login + two modals).
+ * Reserve for e2e/flows and e2e/enquiries.
  */
 export async function createOrderViaEnquiry(
   browser: Browser,
-  customer: CustomerFixture
+  baseURLOrCustomer: string | CustomerFixture,
+  maybeCustomer?: CustomerFixture
 ): Promise<CreatedOrder> {
-  const adminCtx = await browser.newContext();
+  const customer =
+    typeof baseURLOrCustomer === "string" ? maybeCustomer : baseURLOrCustomer;
+  if (!customer) {
+    throw new Error("createOrderViaEnquiry: customer fixture is required");
+  }
+  const baseURL =
+    typeof baseURLOrCustomer === "string"
+      ? baseURLOrCustomer
+      : process.env.PLAYWRIGHT_ORIGIN || "http://localhost:3001";
+  const adminCtx = await browser.newContext({ baseURL, storageState: undefined });
   const adminPage = await adminCtx.newPage();
+
   try {
     const login = new LoginPage(adminPage, "admin");
     await login.goto();

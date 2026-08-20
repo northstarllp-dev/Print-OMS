@@ -312,7 +312,11 @@ export async function advanceQuoteFirstPipeline(orderUuid: string) {
 }
 
 /**
- * Create customer + order directly (for tests that skip the public enquiry UI).
+ * Create customer + order directly (skips the enquiry UI).
+ *
+ * Stage tests should seed to the stage under test, then drive only that
+ * worksheet in the browser. Keep createOrderViaEnquiry for the enquiry
+ * happy path in e2e/flows and e2e/enquiries.
  */
 export async function createOrderDirect(
   customer: CustomerFixture
@@ -374,5 +378,286 @@ export async function createOrderDirect(
     stage_status: order!.stage_status,
     customerUuid: cust!.id,
     customerFriendlyId: cust!.customer_id,
+  };
+}
+
+/**
+ * Seed to "Quotation In Progress" with a completed site visit + one
+ * measurement line so the Quote worksheet has a row to fill.
+ */
+export async function seedOrderAtQuotationInProgress(
+  customer: CustomerFixture
+): Promise<OrderRef & { customerUuid: string; customerFriendlyId: string }> {
+  const base = await createOrderDirect(customer);
+  const db = getServiceClient();
+  const orderUuid = base.id;
+
+  await setOrderStage(orderUuid, "Site Visit Scheduled");
+  const { data: sv, error: svErr } = await db
+    .from("site_visits")
+    .upsert(
+      {
+        order_id: orderUuid,
+        company_id: PRINTOMS_COMPANY_ID,
+        completed: true,
+        review_status: "approved",
+        customer_address: customer.location,
+      },
+      { onConflict: "order_id" }
+    )
+    .select("id")
+    .single();
+  if (svErr) throw new Error(`site_visits upsert: ${svErr.message}`);
+
+  await db.from("site_visit_measurements").insert({
+    site_visit_id: sv!.id,
+    name: "Item-1",
+    width: 12,
+    height: 4,
+    width_unit: "ft",
+    height_unit: "ft",
+  });
+
+  await setOrderStage(orderUuid, "Site Visit Completed");
+  await setWorkflowType(orderUuid, "quote_first");
+
+  return {
+    ...base,
+    stage: "Quotation In Progress",
+    stage_status: "Normal",
+  };
+}
+
+/**
+ * Seed a quote_first order directly to "Quotation Approved" with an approved
+ * quotation row. Used by quotation-stage auto-approval tests.
+ */
+export async function seedOrderAtQuotationApproved(
+  customer: CustomerFixture
+): Promise<OrderRef & { customerUuid: string; customerFriendlyId: string }> {
+  const base = await seedOrderAtQuotationInProgress(customer);
+  const db = getServiceClient();
+  const orderUuid = base.id;
+  const friendly = base.order_id;
+  const customerId = base.customer_id;
+
+  // Quotation sent + approved
+  const { data: quote, error: qErr } = await db
+    .from("quotations")
+    .insert({
+      quotation_id: "",
+      order_id: orderUuid,
+      company_id: PRINTOMS_COMPANY_ID,
+      customer_id: customerId,
+      status: "Sent",
+      subtotal: 50000,
+      tax: 9000,
+      grand_total: 59000,
+      signage_options: [
+        { name: "3D LED Channel Letters", qty: 1, rate: 50000, amount: 50000 },
+      ],
+      notes: "E2E seeded quotation",
+      terms: "50% advance",
+    })
+    .select("*")
+    .single();
+  if (qErr) throw new Error(`quotation insert: ${qErr.message}`);
+
+  await setOrderStage(orderUuid, "Quotation Sent");
+  await db
+    .from("quotations")
+    .update({ status: "Approved", customer_response: "Approved" })
+    .eq("id", quote!.id);
+  await setOrderStage(orderUuid, "Quotation Approved");
+
+  return {
+    ...base,
+    stage: "Quotation Approved",
+    stage_status: "Normal",
+  };
+}
+
+/**
+ * Seed to "Design In Progress" with an approved quote and empty design items
+ * so the Design worksheet can upload the first proof.
+ */
+export async function seedOrderAtDesignInProgress(
+  customer: CustomerFixture
+): Promise<OrderRef & { customerUuid: string; customerFriendlyId: string }> {
+  const base = await seedOrderAtQuotationApproved(customer);
+  await setOrderStage(base.id, "Design In Progress");
+  return {
+    ...base,
+    stage: "Design In Progress",
+    stage_status: "Normal",
+  };
+}
+
+/**
+ * Seed a quote_first order directly to "Design Approved" with an approved
+ * design row (all items approved + production files). Used by design-stage
+ * auto-approval tests.
+ */
+export async function seedOrderAtDesignApproved(
+  customer: CustomerFixture
+): Promise<OrderRef & { customerUuid: string; customerFriendlyId: string }> {
+  const base = await seedOrderAtQuotationApproved(customer);
+  const db = getServiceClient();
+  const orderUuid = base.id;
+
+  // Advance quotation → design
+  await setOrderStage(orderUuid, "Design In Progress");
+
+  await db.from("designs").upsert(
+    {
+      order_id: orderUuid,
+      resources: [],
+      items: [
+        {
+          id: "item-1",
+          name: "Storefront fascia",
+          currentVersion: 1,
+          versions: [
+            {
+              id: "v1",
+              version: 1,
+              proofUrl: "https://example.com/proof.png",
+              fileName: "proof.png",
+              status: "Approved",
+              comments: [],
+              createdAt: new Date().toISOString(),
+            },
+          ],
+          productionFiles: [
+            { id: "pf1", name: "final.pdf", url: "https://example.com/final.pdf", createdAt: new Date().toISOString() },
+          ],
+        },
+      ],
+    },
+    { onConflict: "order_id" }
+  );
+
+  await setOrderStage(orderUuid, "Design Approved");
+
+  return {
+    ...base,
+    stage: "Design Approved",
+    stage_status: "Normal",
+  };
+}
+
+/**
+ * Seed a quote_first order directly to "Production" with a complete workshop
+ * checklist. Used by production-stage auto-approval tests.
+ */
+export async function seedOrderAtProduction(
+  customer: CustomerFixture,
+  opts?: { checklistComplete?: boolean }
+): Promise<OrderRef & { customerUuid: string; customerFriendlyId: string }> {
+  const base = await seedOrderAtDesignApproved(customer);
+  const db = getServiceClient();
+  const orderUuid = base.id;
+  const done = opts?.checklistComplete !== false;
+
+  await setOrderStage(orderUuid, "Production");
+
+  await db.from("productions").upsert(
+    {
+      order_id: orderUuid,
+      stage1: done,
+      stage2: done,
+      stage3: done,
+      stage4: done,
+      checklist: {
+        stage1: done,
+        stage2: done,
+        stage3: done,
+        stage4: done,
+      },
+    },
+    { onConflict: "order_id" }
+  );
+
+  return {
+    ...base,
+    stage: "Production",
+    stage_status: "Normal",
+  };
+}
+
+/**
+ * Seed a quote_first order to "Ready For Installation" with the quotation
+ * balance already received. Used by delivery-method chooser / pickup tests.
+ */
+export async function seedOrderAtReadyForInstallation(
+  customer: CustomerFixture
+): Promise<OrderRef & { customerUuid: string; customerFriendlyId: string }> {
+  const base = await seedOrderAtProduction(customer);
+  const db = getServiceClient();
+  const orderUuid = base.id;
+
+  await setOrderStage(orderUuid, "Ready For Installation");
+
+  await db.from("payments").insert({
+    order_id: orderUuid,
+    payment_name: "Full payment",
+    trigger_stage: "Order Created",
+    amount_type: "fixed",
+    amount: 59000,
+    calculated_amount: 59000,
+    status: "received",
+    paid_at: new Date().toISOString(),
+  });
+
+  return {
+    ...base,
+    stage: "Ready For Installation",
+    stage_status: "Normal",
+  };
+}
+
+/**
+ * Seed a quote_first order directly to "Installation Scheduled" with an
+ * installations row and a received payment that zeroes the balance (so the
+ * payment-balance gate on Completion passes). Used by installation-stage
+ * auto-approval tests.
+ */
+export async function seedOrderAtInstallationScheduled(
+  customer: CustomerFixture
+): Promise<OrderRef & { customerUuid: string; customerFriendlyId: string }> {
+  const base = await seedOrderAtProduction(customer);
+  const db = getServiceClient();
+  const orderUuid = base.id;
+
+  await setOrderStage(orderUuid, "Ready For Installation");
+  await setOrderStage(orderUuid, "Installation Scheduled");
+
+  await db.from("installations").upsert(
+    {
+      order_id: orderUuid,
+      status: "Scheduled",
+      checklist: {},
+      photos: [],
+      afterPhotos: [],
+    },
+    { onConflict: "order_id" }
+  );
+
+  // Zero the payment balance so the Completion gate passes.
+  await db.from("payments").insert({
+    order_id: orderUuid,
+    payment_name: "Full payment",
+    trigger_stage: "Order Created",
+    amount_type: "fixed",
+    amount: 59000,
+    calculated_amount: 59000,
+    status: "received",
+    paid_at: new Date().toISOString(),
+  });
+
+  return {
+    ...base,
+    stage: "Installation Scheduled",
+    stage_status: "Normal",
   };
 }

@@ -453,8 +453,9 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
   }
 
   return (
-    <div className="min-h-screen bg-[#f4f6fb] font-sans">
+    <div className="h-[100dvh] max-h-[100dvh] flex flex-col overflow-hidden bg-[#f4f6fb] font-sans">
       <style>{`
+        html, body { overflow: hidden !important; height: 100% !important; height: 100dvh !important; margin: 0; padding: 0; }
         .portal-stepper-line { transition: width 0.6s cubic-bezier(0.4,0,0.2,1); }
         .scope-item { transition: all 0.2s ease; }
         .portal-scroll::-webkit-scrollbar { width: 4px; }
@@ -468,7 +469,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
       `}</style>
 
       {/* --- TOP HEADER --- */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-20">
+      <header className="bg-white border-b border-slate-200 z-20 shrink-0">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2.5 sm:py-3 flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
           
           {/* Row 1 on mobile: Logo + Order Switcher */}
@@ -539,6 +540,9 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
         </div>
       </header>
 
+      {/* --- SCROLL REGION: stepper + stage content --- */}
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+
       {/* --- PROGRESS STEPPER --- */}
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3 sm:py-5">
@@ -592,7 +596,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
       </div>
 
       {/* --- MAIN CONTENT --- */}
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6 pb-24">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6 w-full">
         <div className="grid grid-cols-1 gap-6">
 
           {/* --- LEFT: Stage Content --- */}
@@ -1143,25 +1147,16 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
           </div>
 
         </div>
-
-        <div style={{
-          position: "fixed",
-          bottom: 0,
-          left: 0,
-          textAlign: "center",
-          padding: "8px 0 calc(8px + env(safe-area-inset-bottom, 0px))",
-          borderTop: "1px solid #E2E8F0",
-          color: "#94A3B8",
-          fontSize: "13px",
-          fontWeight: "600",
-          width: "100%",
-          background: "#f4f6fb",
-          zIndex: 40,
-          pointerEvents: "none",
-        }}>
-          <PlatformMadeWithLove variant="portal" />
-        </div>
       </div>
+      </div>
+
+      {/* --- FOOTER (in-flow, pinned at the bottom of the app shell) --- */}
+      <footer
+        className="shrink-0 w-full text-center text-slate-400 text-[13px] font-semibold bg-[#f4f6fb] border-t border-slate-200"
+        style={{ padding: "8px 0 calc(8px + env(safe-area-inset-bottom, 0px))" }}
+      >
+        <PlatformMadeWithLove variant="portal" />
+      </footer>
 
 
 

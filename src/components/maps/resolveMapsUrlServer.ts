@@ -36,24 +36,57 @@ async function followMapsRedirect(url: string): Promise<string> {
   return res.url || normalized;
 }
 
-/** Reverse-geocode exact coordinates (never unbound place-name search). */
+type CachedGeocode = {
+  address: string;
+  expiresAt: number;
+};
+
+const GEOCODE_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const geocodeMemoryCache = new Map<string, CachedGeocode>();
+
+function getGeocodeCacheKey(lat: number, lng: number): string {
+  // 4 decimal places = ~11m precision (building/address level)
+  return `${lat.toFixed(4)},${lng.toFixed(4)}`;
+}
+
+/** Reverse-geocode exact coordinates (never unbound place-name search). Cached for 24h. */
 async function reverseGeocode(
   lat: number,
   lng: number
 ): Promise<string | null> {
+  const cacheKey = getGeocodeCacheKey(lat, lng);
+  const cached = geocodeMemoryCache.get(cacheKey);
+  const now = Date.now();
+  if (cached && cached.expiresAt > now) {
+    return cached.address;
+  }
+
   const key = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
   if (!key) return null;
   const endpoint = new URL("https://maps.googleapis.com/maps/api/geocode/json");
   endpoint.searchParams.set("latlng", `${lat},${lng}`);
   endpoint.searchParams.set("key", key);
-  const res = await fetch(endpoint.toString());
+  const res = await fetch(endpoint.toString(), {
+    next: { revalidate: 86400 },
+  });
   if (!res.ok) return null;
   const data = (await res.json()) as {
     status: string;
     results?: Array<{ formatted_address?: string }>;
   };
   if (data.status !== "OK" || !data.results?.[0]?.formatted_address) return null;
-  return data.results[0].formatted_address;
+  const address = data.results[0].formatted_address;
+
+  if (geocodeMemoryCache.size > 1000) {
+    const oldestKey = geocodeMemoryCache.keys().next().value;
+    if (oldestKey) geocodeMemoryCache.delete(oldestKey);
+  }
+  geocodeMemoryCache.set(cacheKey, {
+    address,
+    expiresAt: now + GEOCODE_CACHE_TTL_MS,
+  });
+
+  return address;
 }
 
 /**

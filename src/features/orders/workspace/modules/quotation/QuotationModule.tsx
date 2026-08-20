@@ -1274,23 +1274,25 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
 
           {/* Discount & Shipping Buttons / Inputs */}
           <div className="space-y-3.5 py-1.5">
-            <div className="flex gap-4">
+            <div className="flex flex-wrap gap-2">
               {!showDiscountInput && (
                 <button
                   type="button"
                   onClick={() => setShowDiscountInput(true)}
-                  className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1 transition-colors"
+                  className="inline-flex items-center justify-center gap-1.5 h-9 sm:h-8 px-3 rounded-lg text-[12px] font-semibold bg-white text-slate-600 border border-slate-200 shadow-sm hover:bg-slate-50 hover:border-slate-300 hover:text-slate-900 transition-colors flex-1 sm:flex-none min-w-[8.5rem]"
                 >
-                  + Discount
+                  <Plus size={13} strokeWidth={2.5} />
+                  Discount
                 </button>
               )}
               {!showShippingInput && (
                 <button
                   type="button"
                   onClick={() => setShowShippingInput(true)}
-                  className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1 transition-colors"
+                  className="inline-flex items-center justify-center gap-1.5 h-9 sm:h-8 px-3 rounded-lg text-[12px] font-semibold bg-white text-slate-600 border border-slate-200 shadow-sm hover:bg-slate-50 hover:border-slate-300 hover:text-slate-900 transition-colors flex-1 sm:flex-none min-w-[8.5rem]"
                 >
-                  + Shipping
+                  <Plus size={13} strokeWidth={2.5} />
+                  Shipping
                 </button>
               )}
             </div>

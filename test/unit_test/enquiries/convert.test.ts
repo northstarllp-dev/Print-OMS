@@ -75,6 +75,7 @@ describe("convert", () => {
         business_name: "Gourmet",
         customer_id: "cust-uuid",
         stage: "Site Visit Pending",
+        business_operation: "signage",
         health: "Active",
         product_type: "ACP Board",
         requirements: "Need fascia",

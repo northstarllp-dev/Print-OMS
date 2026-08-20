@@ -18,7 +18,14 @@ import {
 } from "@/types";
 import { SiteVisitModule } from "@/features/orders/workspace/modules/site-visit/SiteVisitModule";
 import { SiteVisitReviewModal } from "@/features/orders/workspace/modules/site-visit/SiteVisitReviewModal";
-import { canAdvanceSiteVisitAudit } from "@/features/orders/workspace/modules/site-visit/siteVisitUiLogic";
+import {
+  canAdvanceSiteVisitAudit,
+  mergeIncomingSiteVisitDetails,
+} from "@/features/orders/workspace/modules/site-visit/siteVisitUiLogic";
+import {
+  businessOpNeedsWorkflowChoice,
+  impliedWorkflowTypeForOp,
+} from "@/features/orders/workflowSelectionLogic";
 import { productionChecklistAdvanceGate, getChecklistForBusinessOp, type ProductionChecklistsByOp } from "@/features/settings/productionChecklist";
 import { getAppSettings } from "@/features/settings/actions/settingsActions";
 import { RequirementsNotesBanner } from "@/features/orders/workspace/shared/RequirementsNotesBanner";
@@ -302,6 +309,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   /** Sync ref so Save Draft always sends the latest locations, not a stale render snapshot. */
   const siteVisitDetailsRef = useRef(initialOrder.siteVisitDetails);
   const [quotationRealtimeRow, setQuotationRealtimeRow] = useState<Record<string, unknown> | null>(null);
+  const userNavigatedRef = useRef(false);
 
   const triggerLocalAlert = useCallback((
     message: string,
@@ -331,8 +339,12 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
 
       if (freshOrder) {
         const mapped = mapDbOrderToWorksheetOrder(freshOrder as Record<string, unknown>);
-        setOrder(mapped);
-        siteVisitDetailsRef.current = mapped.siteVisitDetails;
+        const mergedSv = mergeIncomingSiteVisitDetails(
+          siteVisitDetailsRef.current,
+          mapped.siteVisitDetails
+        );
+        setOrder({ ...mapped, siteVisitDetails: mergedSv });
+        siteVisitDetailsRef.current = mergedSv;
       }
 
       if (freshQuotation) {
@@ -358,12 +370,17 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   const lockInitialTabRef = useRef(initialStepTab != null);
 
   useEffect(() => {
-    setOrder(initialOrder);
-    siteVisitDetailsRef.current = initialOrder.siteVisitDetails;
+    const mergedSv = mergeIncomingSiteVisitDetails(
+      siteVisitDetailsRef.current,
+      initialOrder.siteVisitDetails
+    );
+    setOrder({ ...initialOrder, siteVisitDetails: mergedSv });
+    siteVisitDetailsRef.current = mergedSv;
   }, [initialOrder]);
   useEffect(() => {
     if (entryStageRef.current != null) return;
     if (lockInitialTabRef.current) return;
+    if (userNavigatedRef.current) return;
     setActiveStepTab(
       stageToTabIndex(order.stage, order.business_operation, order.workflow_type)
     );
@@ -400,7 +417,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
 
   // Load which customer message templates were already shared for this order.
   useEffect(() => {
-    if (!isOpen || currentUserRole !== "Admin") return;
+    if (!isOpen) return;
     let cancelled = false;
     void listCustomerMessageShares(order.id, order.orderId).then((res) => {
       if (cancelled || "error" in res) return;
@@ -409,7 +426,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [isOpen, order.id, order.orderId, currentUserRole, templatePickerOpen]);
+  }, [isOpen, order.id, order.orderId, templatePickerOpen]);
 
   useOrderDetailSync({
     orderId: order.id,
@@ -494,12 +511,11 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   const client = customers.find((c) => c.id === order.customerId);
   const isEmployee = currentUserRole === "Employee";
 
-  /* Customer message popup — admin portal only */
+  /* Customer message popup — staff and admin (Meta WhatsApp is off; this is the share path). */
   const openCustomerMessage = (
     key: CustomerMessageKey,
     extra?: { date?: string; time?: string }
   ) => {
-    if (currentUserRole !== "Admin") return;
     setCustomerMsg({
       key,
       ...extra,
@@ -527,14 +543,13 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   const designTab = tabIndexForModule(worksheetModules, "design");
   const productionTab = tabIndexForModule(worksheetModules, "production");
   const installationTab = tabIndexForModule(worksheetModules, "installation");
-  // Auto-skip Quote/Design modal only when the op has a single path after site visit.
+  // Quote vs Design picker only when the op has both modules after site visit.
   const opStages = getStagesForOp(businessOp);
   const stagesAfterSiteVisit = opStages.includes("site_visit")
     ? opStages.slice(opStages.indexOf("site_visit") + 1)
     : [];
-  const hasFixedBusinessOpOrder = !(
-    stagesAfterSiteVisit.includes("quotation") &&
-    stagesAfterSiteVisit.includes("design")
+  const needsSiteVisitWorkflowChoice = businessOpNeedsWorkflowChoice(
+    stagesAfterSiteVisit
   );
   const actor = {
     role: currentUserRole === "Admin" ? "admin" : "staff",
@@ -552,12 +567,12 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   };
   /**
    * Workflow progression gate (Phase 6): separate from resolveStagePermission (RBAC).
-   * A staff member's granted stage only becomes accessible once the order has actually
-   * reached (or passed) it. Admin bypasses, consistent with their existing ability to
-   * freely preview any stage.
+   * A stage only becomes accessible once the order has actually reached (or passed)
+   * it — for staff AND admins. Later stages are fully locked (no tab click, lock
+   * screen, no footer actions) until the order advances into them. Past stages stay
+   * open and retain their God Mode (adminOverrideUnlocked) override behavior.
    */
   const hasStageBeenReached = (stage: OrderStage): boolean => {
-    if (actor.role === "admin") return true;
     return (
       orderStageToTabIndex(stage, order.business_operation, workflowType) <=
       currentStageIndex
@@ -735,12 +750,24 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           setIsProcessing(false);
           return;
         }
-        if (hasFixedBusinessOpOrder) {
-          await executeAdminApprove();
+        if (needsSiteVisitWorkflowChoice) {
+          setIsWorkflowChoiceOpen(true);
           setIsProcessing(false);
           return;
         }
-        setIsWorkflowChoiceOpen(true);
+        const workflowType = impliedWorkflowTypeForOp(
+          getStagesForOp(order.business_operation)
+        );
+        await setWorkflowTypeAction(order.id, workflowType);
+        setOrder((prev) => ({
+          ...prev,
+          workflow_type: workflowType,
+          stage:
+            workflowType === "design_first"
+              ? "Design In Progress"
+              : "Quotation In Progress",
+          stageStatus: "Normal",
+        }));
         setIsProcessing(false);
         return;
       }
@@ -1138,7 +1165,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   };
 
   /* ── Module fallbacks ── */
-  const sv = order.siteVisitDetails || { width: 0, height: 0, depth: 0, auditDate: "", auditTime: "", sitePersonnel: "", photos: [], completed: false, notes: "", locations: [] };
+  const sv = siteVisitDetailsRef.current || order.siteVisitDetails || { width: 0, height: 0, depth: 0, auditDate: "", auditTime: "", sitePersonnel: "", photos: [], completed: false, notes: "", locations: [] };
   const dd = (order.design as DesignRecord) || { resources: [], items: [], payment_verified: false };
   const pd = order.productionDetails || { stage1: false, stage2: false, stage3: false, stage4: false, checklist: {} };
   const inst = order.installationDetails || { photoUrl: "", customerSignature: "", paymentCode: "" };
@@ -1233,6 +1260,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     (order.stageStatus === "Normal" || isJobDonePending);
   // Stage-page Approve when Normal; installation tab also supports admin completion (with or without staff push).
   // Site Visit: hide until scheduled/skipped. Production: hide until checklist complete.
+  const effectiveStageStatus = order.stageStatus || "Normal";
   const showAdminApproveButton =
     !isEmployee &&
     currentStageIndex === activeStepTab &&
@@ -1240,7 +1268,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     !(productionTab >= 0 && activeStepTab === productionTab && !productionAdvanceGate.ok) &&
     (
       (
-        order.stageStatus === "Normal" &&
+        effectiveStageStatus === "Normal" &&
         !(order.stage === "Design In Progress" && !isDesignAdvanceReady) &&
         (!isInstallationStageTab || order.stage === "Ready For Installation")
       ) ||
@@ -1316,18 +1344,26 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
         <SiteVisitModule
           order={order} customers={customers} employees={employees}
           currentUserRole={currentUserRole} currentEmployee={currentEmployee}
-          onClose={onClose} onUpdate={(d) => updateSiteVisitDetails(order.id, d)}
+          onClose={onClose}
+          onUpdate={async (d) => {
+            siteVisitDetailsRef.current = d as SiteVisitDetails;
+            setOrder((prev) => ({
+              ...prev,
+              siteVisitDetails: d as SiteVisitDetails,
+            }));
+          }}
           onSubmitForApproval={handleRequestAdvancement}
           onAdminApprove={async (): Promise<void> => { await handleAdminApprove(); }}
-          onCustomerMessage={currentUserRole === "Admin" ? openCustomerMessage : undefined}
+          onCustomerMessage={openCustomerMessage}
           onSkipSiteVisit={async (location) => {
             if (!getStagePermissionInContext("site_visit", actor, entryStage).canEdit) return;
             const { SKIPPED_SITE_VISIT_LANDMARK } = await import(
               "@/features/orders/workspace/modules/site-visit/siteVisitUiLogic"
             );
             // Clear schedule fields — auditTime must not store "skipped at HH:MM" (looks like an appointment).
+            const previous = siteVisitDetailsRef.current || order.siteVisitDetails || {};
             const newDetails = {
-              ...(order.siteVisitDetails || {}),
+              ...previous,
               auditDate: null,
               auditTime: null,
               preferredDate: null,
@@ -1336,9 +1372,21 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
               gpsLocation: location.gpsLocation,
               landmark: SKIPPED_SITE_VISIT_LANDMARK,
             };
-            await updateSiteVisitDetailsAction(order.id, newDetails);
-            setOrder((prev) => ({ ...prev, siteVisitDetails: newDetails as any }));
-            await handleUpdateOrderStage(order.id, "Site Visit Scheduled");
+            const result = await updateSiteVisitDetailsAction(order.id, newDetails);
+            const saved = (result?.siteVisitDetails || newDetails) as SiteVisitDetails;
+            const merged = mergeIncomingSiteVisitDetails(
+              siteVisitDetailsRef.current,
+              saved
+            ) as SiteVisitDetails;
+            siteVisitDetailsRef.current = merged;
+            setOrder((prev) => ({
+              ...prev,
+              siteVisitDetails: merged,
+              stage:
+                prev.stage === "Site Visit Pending"
+                  ? ("Site Visit Scheduled" as PipelineStage)
+                  : prev.stage,
+            }));
           }}
           adminOverrideUnlocked={effectiveAdminOverrideUnlocked}
           setAdminOverrideUnlocked={godModeSetterForTab(siteVisitTab)}
@@ -1369,7 +1417,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           initialQuotation={initialQuotation}
           siteVisitItems={siteVisitItems}
           onRequestAdvance={handleQuotationAdvance}
-          onCustomerMessage={currentUserRole === "Admin" ? openCustomerMessage : undefined}
+          onCustomerMessage={openCustomerMessage}
           externalRealtime
           realtimeQuotation={quotationRealtimeRow}
           adminOverrideUnlocked={effectiveAdminOverrideUnlocked}
@@ -1496,11 +1544,11 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
               }
               setIsProcessing(false);
             }
-            if (hasFixedBusinessOpOrder) {
-              await handleAdminApprove();
+            if (needsSiteVisitWorkflowChoice) {
+              setIsWorkflowChoiceOpen(true);
               return;
             }
-            setIsWorkflowChoiceOpen(true);
+            await handleAdminApprove();
           }}
           updateSiteVisitDetails={updateSiteVisitDetails}
           updateOrderStage={handleUpdateOrderStage}
@@ -1728,21 +1776,102 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           {/* Customer Strip & Horizontal Timeline Header */}
           <div className="px-3 sm:px-4 md:px-6" style={{ background: "white", flexShrink: 0 }}>
 
-            <div className="py-2 border-b border-slate-100 space-y-1.5">
-              {/* Row 1: Back + icon actions */}
-              <div className="flex items-center justify-between gap-2">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  title="Back"
-                  aria-label="Back to orders"
-                  className="inline-flex items-center justify-center gap-1.5 h-9 px-2.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-colors shrink-0"
-                >
-                  <ArrowLeft size={15} className="shrink-0" />
-                  <span className="text-[12px] font-bold">Back</span>
-                </button>
+            <div className="py-3 border-b border-slate-100">
+              <div className="flex items-center justify-between gap-2 sm:gap-3 min-w-0">
+                <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    title="Back"
+                    aria-label="Back to orders"
+                    className="inline-flex items-center justify-center gap-1.5 h-9 w-9 sm:w-auto sm:px-2.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-colors shrink-0"
+                  >
+                    <ArrowLeft size={15} className="shrink-0" />
+                    <span className="hidden sm:inline text-[12px] font-bold">Back</span>
+                  </button>
 
-                <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[15px] sm:text-lg font-extrabold text-slate-900 leading-tight truncate">
+                      {order.businessName || "—"}
+                    </div>
+                    <div className="mt-0.5 flex items-center gap-1.5 min-w-0 text-[11px] text-slate-500">
+                      <span className="font-semibold tracking-wide text-slate-400 uppercase shrink-0">
+                        {order.orderCode}
+                      </span>
+                      <BusinessOperationCaption
+                        opId={order.business_operation}
+                        className="min-w-0 truncate text-[11px] font-medium text-slate-500 leading-none normal-case tracking-normal before:content-['·'] before:mr-1.5 before:text-slate-300"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+                  {!isEmployee && (
+                    <div className="hidden sm:flex items-center gap-1.5">
+                      {([
+                        {
+                          key: "portal",
+                          label: copiedLink ? "Copied!" : "Portal",
+                          shortLabel: copiedLink ? "Copied!" : "Portal",
+                          icon: Share2,
+                          onClick: handleCopyMagicLink,
+                          active: false,
+                          badge: null as React.ReactNode,
+                        },
+                        {
+                          key: "admin",
+                          label: "Admin Controls",
+                          shortLabel: "Admin",
+                          icon: Lock,
+                          onClick: () => {
+                            userNavigatedRef.current = true;
+                            setActiveStepTab(ADMIN_TAB);
+                          },
+                          active: activeStepTab === ADMIN_TAB,
+                          badge:
+                            order.stageStatus && order.stageStatus !== "Normal" ? (
+                              <span className="flex items-center justify-center w-3.5 h-3.5 shrink-0 text-[9px] font-bold text-white bg-red-500 rounded-full animate-pulse shadow-sm">
+                                1
+                              </span>
+                            ) : null,
+                        },
+                        {
+                          key: "payments",
+                          label: "Payments",
+                          shortLabel: "Pay",
+                          icon: CreditCard,
+                          onClick: () => {
+                            userNavigatedRef.current = true;
+                            setActiveStepTab(PAYMENTS_TAB);
+                          },
+                          active: activeStepTab === PAYMENTS_TAB,
+                          badge: null as React.ReactNode,
+                        },
+                      ] as const).map((btn) => {
+                        const Icon = btn.icon;
+                        return (
+                          <button
+                            key={btn.key}
+                            type="button"
+                            onClick={btn.onClick}
+                            title={btn.label}
+                            className={`h-9 inline-flex items-center justify-center gap-1.5 px-2 lg:px-2.5 rounded-lg text-[11px] font-semibold border transition-colors ${
+                              btn.active
+                                ? "bg-slate-900 text-white border-slate-900 shadow-sm"
+                                : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300 hover:text-slate-900"
+                            }`}
+                          >
+                            <Icon size={13} className="shrink-0" />
+                            <span className="hidden lg:inline whitespace-nowrap">{btn.label}</span>
+                            <span className="lg:hidden whitespace-nowrap">{btn.shortLabel}</span>
+                            {btn.badge}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
                   <button
                     type="button"
                     onClick={() => void handleRefreshOrder()}
@@ -1752,7 +1881,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                     className={`inline-flex items-center justify-center w-9 h-9 rounded-lg border transition-all ${
                       isRefreshing
                         ? "border-[var(--color-secondary)]/25 bg-[var(--color-secondary)]/5 text-[var(--color-secondary)]"
-                        : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                        : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300"
                     }`}
                   >
                     <RefreshCw
@@ -1769,7 +1898,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                     className={`relative inline-flex items-center justify-center w-9 h-9 rounded-lg border transition-colors ${
                       activeRightPanel === "timeline"
                         ? "border-transparent bg-[var(--color-secondary)] text-white"
-                        : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                        : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300"
                     }`}
                   >
                     <History size={15} />
@@ -1788,96 +1917,73 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                     onClick={() => setShowCustomerPanel(true)}
                     title="Customer details"
                     aria-label="Customer details"
-                    className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-colors"
+                    className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-colors"
                   >
                     <User size={15} />
                   </button>
                 </div>
               </div>
 
-              {/* Row 2: Order identity + Portal/Admin/Payments */}
-              <div className="flex flex-col gap-1.5 sm:flex-row sm:items-end sm:justify-between sm:gap-3 min-w-0">
-                <div className="min-w-0 flex-1">
-                  <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider leading-tight">
-                    {order.orderCode}
-                  </div>
-                  <BusinessOperationCaption
-                    opId={order.business_operation}
-                    className="text-[10px] font-semibold text-slate-500 leading-tight normal-case tracking-normal"
-                  />
-                  <div className="text-base sm:text-lg font-extrabold text-slate-900 leading-snug truncate">
-                    {order.businessName || "—"}
-                  </div>
+              {!isEmployee && (
+                <div className="sm:hidden mt-2.5 grid grid-cols-3 gap-1.5">
+                  {([
+                    {
+                      key: "portal",
+                      label: copiedLink ? "Copied!" : "Portal",
+                      icon: Share2,
+                      onClick: handleCopyMagicLink,
+                      active: false,
+                      badge: null as React.ReactNode,
+                    },
+                    {
+                      key: "admin",
+                      label: "Admin",
+                      icon: Lock,
+                      onClick: () => {
+                        userNavigatedRef.current = true;
+                        setActiveStepTab(ADMIN_TAB);
+                      },
+                      active: activeStepTab === ADMIN_TAB,
+                      badge:
+                        order.stageStatus && order.stageStatus !== "Normal" ? (
+                          <span className="flex items-center justify-center w-3.5 h-3.5 shrink-0 text-[9px] font-bold text-white bg-red-500 rounded-full animate-pulse shadow-sm">
+                            1
+                          </span>
+                        ) : null,
+                    },
+                    {
+                      key: "payments",
+                      label: "Payments",
+                      icon: CreditCard,
+                      onClick: () => {
+                        userNavigatedRef.current = true;
+                        setActiveStepTab(PAYMENTS_TAB);
+                      },
+                      active: activeStepTab === PAYMENTS_TAB,
+                      badge: null as React.ReactNode,
+                    },
+                  ] as const).map((btn) => {
+                    const Icon = btn.icon;
+                    return (
+                      <button
+                        key={btn.key}
+                        type="button"
+                        onClick={btn.onClick}
+                        title={btn.label === "Admin" ? "Admin Controls" : btn.label}
+                        className={`h-9 inline-flex items-center justify-center gap-1 px-1.5 rounded-lg text-[11px] font-semibold border transition-colors overflow-hidden ${
+                          btn.active
+                            ? "bg-slate-900 text-white border-slate-900 shadow-sm"
+                            : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300 hover:text-slate-900"
+                        }`}
+                      >
+                        <Icon size={13} className="shrink-0" />
+                        <span className="truncate">{btn.label}</span>
+                        {btn.badge}
+                      </button>
+                    );
+                  })}
                 </div>
-
-                {!isEmployee && (
-                  <div className="grid grid-cols-3 gap-1.5 w-full sm:w-auto sm:shrink-0 sm:min-w-[260px] md:min-w-[320px]">
-                    {([
-                      {
-                        key: "portal",
-                        label: copiedLink ? "Copied!" : "Portal",
-                        shortLabel: copiedLink ? "Copied!" : "Portal",
-                        icon: Share2,
-                        onClick: handleCopyMagicLink,
-                        active: false,
-                        show: true,
-                        badge: null as React.ReactNode,
-                      },
-                      {
-                        key: "admin",
-                        label: "Admin Controls",
-                        shortLabel: "Admin",
-                        icon: Lock,
-                        onClick: () => setActiveStepTab(ADMIN_TAB),
-                        active: activeStepTab === ADMIN_TAB,
-                        show: true,
-                        badge:
-                          order.stageStatus && order.stageStatus !== "Normal" ? (
-                            <span className="flex items-center justify-center w-3.5 h-3.5 shrink-0 text-[9px] font-bold text-white bg-red-500 rounded-full animate-pulse shadow-sm">
-                              1
-                            </span>
-                          ) : null,
-                      },
-                      {
-                        key: "payments",
-                        label: "Payments",
-                        shortLabel: "Payments",
-                        icon: CreditCard,
-                        onClick: () => setActiveStepTab(PAYMENTS_TAB),
-                        active: activeStepTab === PAYMENTS_TAB,
-                        show: true,
-                        badge: null as React.ReactNode,
-                      },
-                    ] as const)
-                      .filter((btn) => btn.show)
-                      .map((btn) => {
-                        const Icon = btn.icon;
-                        return (
-                          <button
-                            key={btn.key}
-                            type="button"
-                            onClick={btn.onClick}
-                            title={btn.label}
-                            className="min-w-0 h-9 inline-flex items-center justify-center gap-1 px-1.5 sm:px-2 rounded-lg text-[11px] font-semibold transition-all overflow-hidden"
-                            style={{
-                              background: btn.active ? "#0F172A" : "transparent",
-                              border: btn.active ? "none" : "1px solid #E2E8F0",
-                              color: btn.active ? "white" : "#475569",
-                              boxShadow: btn.active ? "0 1px 2px rgba(0,0,0,0.05)" : "none",
-                            }}
-                          >
-                            <Icon size={13} className="shrink-0" />
-                            <span className="truncate min-w-0">
-                              <span className="sm:hidden">{btn.shortLabel}</span>
-                              <span className="hidden sm:inline">{btn.label}</span>
-                            </span>
-                            {btn.badge}
-                          </button>
-                        );
-                      })}
-                  </div>
-                )}
-              </div>
+              )}
             </div>
 
             {/* Horizontal Timeline */}
@@ -1914,10 +2020,13 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                           type="button"
                           title={step.label}
                           onClick={() => {
-                            if (canSelect) setActiveStepTab(step.tabIndex);
+                            if (canSelect) {
+                              userNavigatedRef.current = true;
+                              setActiveStepTab(step.tabIndex);
+                            }
                           }}
                           disabled={!canSelect}
-                          className={`shrink-0 min-w-[5.5rem] md:flex-1 md:min-w-0 flex items-center justify-center gap-1 rounded-lg px-2.5 py-2 text-[12px] font-semibold transition-all focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed ${
+                          className={`shrink-0 min-w-[4.75rem] sm:min-w-[5.5rem] md:flex-1 md:min-w-0 flex items-center justify-center gap-1 rounded-lg px-2 sm:px-2.5 py-2 text-[11px] sm:text-[12px] font-semibold transition-all focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed ${
                             isActive
                               ? "bg-white text-[var(--color-secondary)] shadow-[0_1px_3px_rgba(0,0,0,0.1)] ring-1 ring-slate-900/5"
                               : isDone
@@ -2369,11 +2478,11 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
               openCustomerMessage("site_visit_completed");
               setIsReviewModalOpen(false);
               router.refresh();
-              if (hasFixedBusinessOpOrder) {
-                await handleAdminApprove();
+              if (needsSiteVisitWorkflowChoice) {
+                setIsWorkflowChoiceOpen(true);
                 return;
               }
-              setIsWorkflowChoiceOpen(true);
+              await handleAdminApprove();
             } catch (err: any) {
               console.error(err);
               triggerLocalAlert(
@@ -2512,8 +2621,8 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
         />
       )}
 
-      {/* Catch-up WhatsApp FAB — admin only, when auto popup was skipped */}
-      {currentUserRole === "Admin" && !customerMsg && !templatePickerOpen && (
+      {/* Catch-up WhatsApp FAB — when auto popup was skipped */}
+      {isStaffOrAdmin && !customerMsg && !templatePickerOpen && (
         <button
           type="button"
           onClick={() => setTemplatePickerOpen(true)}
@@ -2541,7 +2650,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
         </button>
       )}
 
-      {currentUserRole === "Admin" && (
+      {isStaffOrAdmin && (
         <CustomerMessageTemplatePicker
           isOpen={templatePickerOpen}
           onClose={() => setTemplatePickerOpen(false)}

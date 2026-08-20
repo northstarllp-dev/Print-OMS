@@ -39,6 +39,7 @@ export async function cleanupByEmail(email: string) {
     await db.from("site_visits").delete().in("order_id", orderUuids);
     await db.from("productions").delete().in("order_id", orderUuids);
     await db.from("installations").delete().in("order_id", orderUuids);
+    await db.from("payments").delete().in("order_id", orderUuids);
     await db.from("portal_access_tokens").delete().in("order_id", orderUuids);
     await db.from("orders").delete().in("id", orderUuids);
   }

@@ -35,6 +35,8 @@ const sampleRows = [
     health: "Active",
     addedBy: "Priya",
     dateReceived: "2026-08-02T00:00:00.000Z",
+    email: "ramesh@gourmet.test",
+    enquireId: "ENQ-1001",
   }),
   row({
     id: "2",
@@ -79,6 +81,8 @@ describe("table", () => {
 
     it("filters by search, source, addedBy, health, KPI, and date", () => {
       expect(filterEnquiries(sampleRows, { search: "gourmet" }).map((e) => e.id)).toEqual(["1"]);
+      expect(filterEnquiries(sampleRows, { search: "ramesh@gourmet.test" }).map((e) => e.id)).toEqual(["1"]);
+      expect(filterEnquiries(sampleRows, { search: "ENQ-1001" }).map((e) => e.id)).toEqual(["1"]);
       expect(filterEnquiries(sampleRows, { search: "98333" }).map((e) => e.id)).toEqual(["3"]);
       expect(filterEnquiries(sampleRows, { sourceFilter: "Meta Ads" })).toHaveLength(1);
       expect(filterEnquiries(sampleRows, { addedByFilter: "Priya" })).toHaveLength(2);

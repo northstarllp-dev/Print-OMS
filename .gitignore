@@ -48,6 +48,7 @@ next-env.d.ts
 # supabase
 supabase/.temp/
 supabase/remote-dump/
+scripts/tmp-company-migrate/
 CLAUDE.md
 .CLAUDE
 .claudecodeignore

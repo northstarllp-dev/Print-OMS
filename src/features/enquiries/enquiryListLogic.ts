@@ -174,7 +174,9 @@ export function filterEnquiries<T extends EnquiryListRow>(
       !search ||
       (e.businessName || "").toLowerCase().includes(search) ||
       (e.leadName || "").toLowerCase().includes(search) ||
-      (e.phone || "").includes(opts.search || "");
+      (e.phone || "").includes(opts.search || "") ||
+      (e.email || "").toLowerCase().includes(search) ||
+      (e.enquireId || "").toLowerCase().includes(search);
 
     const matchesSource = sourceFilter === "All" || e.source === sourceFilter;
     const matchesAddedBy =

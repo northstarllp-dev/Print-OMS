@@ -24,7 +24,9 @@ import {
   Trash,
   ChevronLeft,
   ChevronRight,
-  Shield
+  Shield,
+  Navigation,
+  ExternalLink
 } from "lucide-react";
 import { 
   Order, 
@@ -47,14 +49,7 @@ import { uploadFiles } from "@/utils/storage/uploadClient";
 import { parseStoredRef } from "@/utils/storage/storageRef";
 import { getSignedReadUrl } from "@/utils/storage/signedReadCache";
 import { OrderImage } from "@/components/storage/OrderImage";
-import { GoogleMap, useJsApiLoader } from "@react-google-maps/api";
-import { AdvancedMapMarker } from "@/components/maps/AdvancedMapMarker";
 import { OverlayPortal } from "@/components/ui/OverlayPortal";
-import {
-  GOOGLE_MAPS_DEFAULT_OPTIONS,
-  GOOGLE_MAPS_LIBRARIES,
-  GOOGLE_MAPS_SCRIPT_ID,
-} from "@/components/maps/googleMapsConfig";
 import { loadClientConfig } from "@/config/loadClientConfig";
 
 export interface ExtendedSignLocation {
@@ -199,25 +194,6 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
       }))
     };
   });
-
-  const [map, setMap] = useState<google.maps.Map | null>(null);
-
-  const { isLoaded } = useJsApiLoader({
-    id: GOOGLE_MAPS_SCRIPT_ID,
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
-    libraries: GOOGLE_MAPS_LIBRARIES,
-  });
-
-  const mapCenter = React.useMemo(() => {
-    if (!siteVisit?.gpsLocation) return null;
-    const parts = siteVisit.gpsLocation.replace(/°|N|E|S|W/gi, "").split(",");
-    if (parts.length >= 2) {
-      const lat = parseFloat(parts[0].trim());
-      const lng = parseFloat(parts[1].trim());
-      if (!isNaN(lat) && !isNaN(lng)) return { lat, lng };
-    }
-    return null;
-  }, [siteVisit?.gpsLocation]);
   
   // Freeze flag — read-only if not in Site Visit stage, or if completed and pending admin approval.
   // It unfreezes if the admin requests changes (stageStatus becomes "Normal" while still in Site Visit stage).
@@ -297,21 +273,21 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
 
   useEffect(() => {
     const baseDetails = (order.siteVisitDetails || {}) as Partial<SiteVisitDetails>;
-    setSiteVisit({
-      completed: false,
+    setSiteVisit((prev) => ({
+      ...prev,
       ...baseDetails,
-      locations: (baseDetails.locations || []).map(loc => ({
+      locations: baseDetails.locations?.length ? baseDetails.locations.map(loc => ({
         ...loc,
         photos: loc.photos || []
-      }))
-    } as any);
+      })) : (prev.locations || [])
+    } as any));
 
     const locs = baseDetails.locations || [];
     setSelectedLocationId((prev) => {
       if (prev && locs.some((loc) => loc.id === prev)) return prev;
-      return locs[0]?.id || null;
+      return locs[0]?.id || prev || null;
     });
-  }, [order.siteVisitDetails]);
+  }, [order.siteVisitDetails, order.id]);
   
   // State for selected sign location tab
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(() => {
@@ -509,11 +485,11 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
                 Scheduled Site Visit
               </h3>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-stretch sm:items-center gap-2 w-full sm:w-auto">
               {onSkipSiteVisit && !isFrozen && (
                 <button
                   onClick={() => setIsSkipLocationModalOpen(true)}
-                  className="px-3 py-1.5 bg-amber-50 border border-amber-200 text-amber-700 text-xs font-bold rounded-lg hover:bg-amber-100 transition-colors shadow-sm whitespace-nowrap"
+                  className="px-3 py-2 sm:py-1.5 bg-amber-50 border border-amber-200 text-amber-700 text-xs font-bold rounded-lg hover:bg-amber-100 transition-colors shadow-sm flex-1 sm:flex-none text-center"
                 >
                   Skip Visit & Add Values
                 </button>
@@ -521,7 +497,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
               {!isFrozen && (
                 <button
                   onClick={() => setIsScheduleModalOpen(true)}
-                  className="px-3 py-1.5 bg-white border border-indigo-200 text-indigo-700 text-xs font-bold rounded-lg hover:bg-indigo-50 transition-colors shadow-sm"
+                  className="px-3 py-2 sm:py-1.5 bg-white border border-indigo-200 text-indigo-700 text-xs font-bold rounded-lg hover:bg-indigo-50 transition-colors shadow-sm flex-1 sm:flex-none"
                 >
                   Edit Schedule
                 </button>
@@ -561,59 +537,48 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
               </div>
             )}
 
-            {/* Address */}
+            {/* Location & Navigation — spans remaining columns after Visit Schedule */}
             {scheduledAddress && (
-              <div className="bg-white rounded-xl p-3 border border-indigo-100 shadow-sm flex flex-col justify-center">
-                <div className="flex items-center gap-2 mb-1">
-                  <MapPin size={14} className="text-indigo-500" />
-                  <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">
-                    Site Address
-                  </span>
+              <div className={`${scheduledDate || scheduledTime ? "md:col-span-2" : "md:col-span-3"} bg-gradient-to-br from-indigo-50/80 to-blue-50/60 rounded-xl p-3 border border-indigo-100 shadow-sm flex flex-col justify-between gap-2`}>
+                <div>
+                  <div className="flex items-center justify-between gap-1 mb-1.5">
+                    <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider flex items-center gap-1">
+                      <Navigation size={12} className="text-indigo-600" />
+                      Location Details
+                    </span>
+                    {siteVisit.gpsLocation && siteVisit.gpsLocation !== "N/A" && (
+                      <span className="text-[9px] font-mono font-semibold text-indigo-700 bg-indigo-100/90 px-1.5 py-0.5 rounded">
+                        GPS Pinned
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-700 leading-relaxed break-words">
+                    {scheduledAddress}
+                  </p>
+                  {siteVisit.landmark && (
+                    <p className="text-[10px] text-slate-500 mt-1 break-words">
+                      Landmark: {siteVisit.landmark}
+                    </p>
+                  )}
+                  {siteVisit.gpsLocation && siteVisit.gpsLocation !== "N/A" && (
+                    <p className="text-[10px] text-slate-400 mt-0.5 font-mono break-all">
+                      GPS: {siteVisit.gpsLocation}
+                    </p>
+                  )}
                 </div>
-                <a
-                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(scheduledAddress)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 hover:underline line-clamp-2"
-                >
-                  {scheduledAddress}
-                </a>
-                {siteVisit.landmark && (
-                  <p className="text-[10px] text-slate-500 mt-0.5 truncate">
-                    Near: {siteVisit.landmark}
-                  </p>
+                {installationMapsUrl && (
+                  <div className="pt-1">
+                    <a
+                      href={installationMapsUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 sm:py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs w-full sm:w-auto sm:min-w-[12rem]"
+                    >
+                      <ExternalLink size={12} />
+                      Open in Google Maps
+                    </a>
+                  </div>
                 )}
-                {siteVisit.gpsLocation && (
-                  <p className="text-[10px] text-slate-400 mt-0.5 font-mono truncate">
-                    GPS: {siteVisit.gpsLocation}
-                  </p>
-                )}
-                
-                <a
-                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(siteVisit.gpsLocation || scheduledAddress)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 mt-2 text-indigo-600 hover:text-indigo-800 text-[10px] font-bold transition-colors w-max"
-                >
-                  <MapPin size={10} />
-                  Open in Google Maps
-                </a>
-              </div>
-            )}
-
-            {/* Map */}
-            {scheduledAddress && mapCenter && isLoaded && (
-              <div className="h-24 md:h-full w-full rounded-xl overflow-hidden border border-slate-200 relative bg-slate-100">
-                <GoogleMap
-                  mapContainerStyle={{ width: "100%", height: "100%" }}
-                  center={mapCenter}
-                  zoom={15}
-                  onLoad={setMap}
-                  onUnmount={() => setMap(null)}
-                  options={{ ...GOOGLE_MAPS_DEFAULT_OPTIONS, disableDefaultUI: true }}
-                >
-                  <AdvancedMapMarker map={map} position={mapCenter} />
-                </GoogleMap>
               </div>
             )}
           </div>
@@ -629,11 +594,11 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
               <p className="text-xs text-slate-500 mt-0.5">The client has not yet scheduled their site visit date, time, and location from the customer portal.</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
             {onSkipSiteVisit && !isFrozen && (
               <button
                 onClick={() => setIsSkipLocationModalOpen(true)}
-                className="px-4 py-2 bg-amber-100 text-amber-700 font-semibold text-xs rounded-lg whitespace-nowrap hover:bg-amber-200 transition-colors shadow-sm"
+                className="px-4 py-2.5 sm:py-2 bg-amber-100 text-amber-700 font-semibold text-xs rounded-lg hover:bg-amber-200 transition-colors shadow-sm text-center"
               >
                 Skip Visit & Add Values
               </button>
@@ -641,7 +606,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
             <button 
               onClick={() => setIsScheduleModalOpen(true)}
               disabled={isFrozen}
-              className="px-4 py-2 bg-emerald-600 text-white font-semibold text-xs rounded-lg whitespace-nowrap hover:bg-emerald-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2.5 sm:py-2 bg-emerald-600 text-white font-semibold text-xs rounded-lg hover:bg-emerald-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed text-center"
             >
               Schedule by yourself
             </button>
@@ -694,6 +659,17 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
         }
         onSchedule={async (_date, _time, location, coords) => {
           if (!canEdit || !onSkipSiteVisit) return;
+          const { SKIPPED_SITE_VISIT_LANDMARK } = await import("./siteVisitUiLogic");
+          setSiteVisit((prev) => ({
+            ...prev,
+            auditDate: undefined,
+            auditTime: undefined,
+            preferredDate: undefined,
+            preferredTime: undefined,
+            customerAddress: location,
+            gpsLocation: coords,
+            landmark: SKIPPED_SITE_VISIT_LANDMARK,
+          }));
           await onSkipSiteVisit({ customerAddress: location, gpsLocation: coords });
         }}
       />
@@ -736,10 +712,20 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
             {/* New Item Button — hidden when frozen */}
             {!isFrozen && (
               <button
+                type="button"
                 onClick={addSignLocation}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-semibold text-slate-500 hover:text-slate-700 hover:bg-slate-200/50 rounded-lg transition-all flex-shrink-0 focus:outline-none ml-1"
+                className={`group flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 text-[13px] font-semibold rounded-lg flex-shrink-0 focus:outline-none transition-all duration-200 min-h-10 ${
+                  (siteVisit.locations || []).length === 0
+                    ? "flex-1 min-w-0 text-[var(--color-secondary)] bg-white/80 ring-1 ring-slate-200/80 hover:bg-white hover:shadow-md hover:ring-[var(--color-secondary)]/35 active:scale-[0.99] sm:hover:-translate-y-px sm:active:translate-y-0"
+                    : "ml-1 text-slate-500 hover:text-[var(--color-secondary)] hover:bg-white hover:shadow-sm hover:ring-1 hover:ring-slate-200/80 active:scale-[0.98]"
+                }`}
               >
-                <Plus size={14} strokeWidth={2.5} /> New Item
+                <Plus
+                  size={14}
+                  strokeWidth={2.5}
+                  className="transition-transform duration-200 group-hover:scale-110 group-hover:rotate-90"
+                />
+                New Item
               </button>
             )}
           </div>

@@ -21,6 +21,11 @@ import {
   type ProductionChecklistsByOp,
 } from "@/features/settings/productionChecklist";
 import type { AppSettings, CompanyDetails } from "@/features/settings/settingsTypes";
+import {
+  DEFAULT_WORKFLOW_AUTO_APPROVAL,
+  type WorkflowAutoApprovalMap,
+  type WorkflowAutoApprovalStageKey,
+} from "@/features/settings/settingsTypes";
 
 const DEFAULT_SETTINGS: AppSettings = {
   siteVisitSchedulingEnabled: true,
@@ -33,7 +38,21 @@ const DEFAULT_SETTINGS: AppSettings = {
     DEFAULT_PRODUCTION_CHECKLISTS_BY_OP,
     "signage"
   ),
+  workflowAutoApproval: { ...DEFAULT_WORKFLOW_AUTO_APPROVAL },
 };
+
+/** Normalize arbitrary DB JSON into a complete WorkflowAutoApprovalMap. */
+function normalizeWorkflowAutoApproval(raw: unknown): WorkflowAutoApprovalMap {
+  const out: WorkflowAutoApprovalMap = { ...DEFAULT_WORKFLOW_AUTO_APPROVAL };
+  if (raw && typeof raw === "object") {
+    const obj = raw as Record<string, unknown>;
+    for (const key of Object.keys(out) as WorkflowAutoApprovalStageKey[]) {
+      const v = obj[key];
+      if (typeof v === "boolean") out[key] = v;
+    }
+  }
+  return out;
+}
 
 function mapRow(data: {
   site_visit_scheduling_enabled?: boolean;
@@ -42,6 +61,7 @@ function mapRow(data: {
   invoice_profile?: unknown;
   invoice_numbering?: unknown;
   production_checklist_items?: unknown;
+  workflow_auto_approval?: unknown;
 }): AppSettings {
   const productionChecklistsByOp = normalizeProductionChecklistsByOp(
     data.production_checklist_items
@@ -56,6 +76,9 @@ function mapRow(data: {
     productionChecklistItems: getChecklistForBusinessOp(
       productionChecklistsByOp,
       "signage"
+    ),
+    workflowAutoApproval: normalizeWorkflowAutoApproval(
+      data.workflow_auto_approval
     ),
   };
 }
@@ -90,7 +113,7 @@ export async function getAppSettingsForCompany(
   const { data, error } = await supabase
     .from("app_settings")
     .select(
-      "site_visit_scheduling_enabled, installation_scheduling_enabled, google_review_link, invoice_profile, invoice_numbering, production_checklist_items"
+      "site_visit_scheduling_enabled, installation_scheduling_enabled, google_review_link, invoice_profile, invoice_numbering, production_checklist_items, workflow_auto_approval"
     )
     .eq("company_id", companyId)
     .maybeSingle();
@@ -111,9 +134,10 @@ export async function getAppSettingsForCompany(
       invoice_profile: EMPTY_INVOICE_PROFILE,
       invoice_numbering: EMPTY_INVOICE_NUMBERING,
       production_checklist_items: DEFAULT_PRODUCTION_CHECKLISTS_BY_OP,
+      workflow_auto_approval: DEFAULT_SETTINGS.workflowAutoApproval,
     })
     .select(
-      "site_visit_scheduling_enabled, installation_scheduling_enabled, google_review_link, invoice_profile, invoice_numbering, production_checklist_items"
+      "site_visit_scheduling_enabled, installation_scheduling_enabled, google_review_link, invoice_profile, invoice_numbering, production_checklist_items, workflow_auto_approval"
     )
     .single();
 
@@ -174,6 +198,14 @@ export async function updateAppSettings(
             signage: settings.productionChecklistItems,
           })
         : current.productionChecklistsByOp;
+  const newWorkflowAutoApproval: WorkflowAutoApprovalMap =
+    settings.workflowAutoApproval !== undefined
+      ? {
+          ...DEFAULT_WORKFLOW_AUTO_APPROVAL,
+          ...current.workflowAutoApproval,
+          ...settings.workflowAutoApproval,
+        }
+      : current.workflowAutoApproval;
 
   const { error: upsertError } = await supabase.from("app_settings").upsert(
     {
@@ -184,6 +216,7 @@ export async function updateAppSettings(
       invoice_profile: newInvoiceProfile,
       invoice_numbering: newInvoiceNumbering,
       production_checklist_items: newProductionChecklistsByOp,
+      workflow_auto_approval: newWorkflowAutoApproval,
     },
     { onConflict: "company_id" }
   );
@@ -212,6 +245,25 @@ export async function updateInvoiceNumbering(
   await updateAppSettings({
     invoiceNumbering: normalizeInvoiceNumbering(numbering),
   });
+}
+
+/**
+ * Service-role read of the workflow-auto-approval map for a company.
+ * Used by `requestStageAdvancementAction` to decide whether to auto-advance.
+ * No auth context required — caller must already be authenticated.
+ */
+export async function getWorkflowAutoApprovalForCompany(
+  companyId: string
+): Promise<WorkflowAutoApprovalMap> {
+  const adminClient = createAdminClient();
+  if (!adminClient) return { ...DEFAULT_WORKFLOW_AUTO_APPROVAL };
+  const { data, error } = await adminClient
+    .from("app_settings")
+    .select("workflow_auto_approval")
+    .eq("company_id", companyId)
+    .maybeSingle();
+  if (error || !data) return { ...DEFAULT_WORKFLOW_AUTO_APPROVAL };
+  return normalizeWorkflowAutoApproval(data.workflow_auto_approval);
 }
 
 export async function getCompanyDetails(): Promise<CompanyDetails | null> {

@@ -300,6 +300,7 @@ export async function updateEnquiry(id: string, updates: Record<string, unknown>
 export async function deleteEnquiryAction(id: string) {
   await assertAdminOnly();
   const admin = await createAdminClient();
+  if (!admin) throw new Error("Server not configured");
 
   const { data: existing, error: fetchErr } = await admin
     .from("enquiries")
@@ -319,7 +320,7 @@ export async function deleteEnquiryAction(id: string) {
     const { count } = await admin
       .from("orders")
       .select("id", { count: "exact", head: true })
-      .eq("customerId", customerId);
+      .eq("customer_id", customerId);
     if (count === 0) {
       await admin.from("customers").delete().eq("id", customerId);
     }

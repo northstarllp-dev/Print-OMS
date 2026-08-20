@@ -115,14 +115,29 @@ export const ScheduleVisitModal: React.FC<ScheduleVisitModalProps> = ({
     setSiteAddress(defaultAddress || "");
   }, [isOpen, defaultAddress]);
 
-  const reverseGeocode = (lat: number, lng: number) => {
-    if (!geocoder.current) return;
-    geocoder.current.geocode({ location: { lat, lng } }, (results: any, status: any) => {
-      if (status === "OK" && results[0]) {
-        setSiteAddress(results[0].formatted_address);
+  const reverseGeocodeTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (reverseGeocodeTimerRef.current) {
+        window.clearTimeout(reverseGeocodeTimerRef.current);
       }
-    });
-  };
+    };
+  }, []);
+
+  const reverseGeocode = useCallback((lat: number, lng: number) => {
+    if (reverseGeocodeTimerRef.current) {
+      window.clearTimeout(reverseGeocodeTimerRef.current);
+    }
+    reverseGeocodeTimerRef.current = window.setTimeout(() => {
+      if (!geocoder.current) return;
+      geocoder.current.geocode({ location: { lat, lng } }, (results: any, status: any) => {
+        if (status === "OK" && results?.[0]) {
+          setSiteAddress(results[0].formatted_address);
+        }
+      });
+    }, 350);
+  }, []);
 
   const onMapClick = useCallback((e: google.maps.MapMouseEvent) => {
     if (!e.latLng) return;
@@ -130,7 +145,7 @@ export const ScheduleVisitModal: React.FC<ScheduleVisitModalProps> = ({
     const lng = e.latLng.lng();
     applyLocation(lat, lng);
     reverseGeocode(lat, lng);
-  }, [applyLocation]);
+  }, [applyLocation, reverseGeocode]);
 
   const handleCurrentLocation = () => {
     setMapsSearching(true);

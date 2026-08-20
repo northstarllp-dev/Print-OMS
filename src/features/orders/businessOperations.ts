@@ -77,6 +77,12 @@ export const PIPELINE_STAGES_BY_MODULE: Record<BusinessStageKey, readonly string
 
 const TERMINAL_STAGES = ["Completed", "Closed"] as const;
 
+/**
+ * Alternate delivery path (Ready For Installation → Customer Pickup → Completed).
+ * Not a linear step after Installation Scheduled.
+ */
+const NON_LINEAR_STAGES = new Set(["Customer Pickup"]);
+
 export function getBusinessOperationsForTenant(
   ops?: BusinessOperation[] | null
 ): BusinessOperation[] {
@@ -163,6 +169,7 @@ export function getPipelineStageOrderForOp(
   for (const mod of modules) {
     for (const s of PIPELINE_STAGES_BY_MODULE[mod] || []) {
       if (TERMINAL_STAGES.includes(s as (typeof TERMINAL_STAGES)[number])) continue;
+      if (NON_LINEAR_STAGES.has(s)) continue;
       if (seen.has(s)) continue;
       seen.add(s);
       order.push(s);

@@ -66,7 +66,9 @@ export function InstallationModule({
 
   const enableCustomerPickup = loadClientConfig().features.enableCustomerPickup === true;
   const isReadyForInstallation = order.stage === "Ready For Installation";
-  const isCustomerPickup = order.stage === "Customer Pickup";
+  const deliveryMethod = order.deliveryMethod || order.delivery_method || "installation";
+  const isCustomerPickup =
+    order.stage === "Customer Pickup" || deliveryMethod === "customer_pickup";
   const [showScheduleForm, setShowScheduleForm] = useState(false);
   const baseFrozen = !isInstallationStage;
   const canEdit = (permission?.canEdit ?? true) && (!baseFrozen || adminOverrideUnlocked);

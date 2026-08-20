@@ -173,8 +173,11 @@ stateDiagram-v2
 * `users` - Stores Admin and Staff profiles.
 * `customers` - Stores client contact and address details.
 * `enquiries` - Pre-order lead tracking.
-* `orders` - The central spine. Holds `stage`, `workflow_type`, `design_details` (JSONB), `production_details` (JSONB), `installation_details` (JSONB).
+* `orders` - The central spine. Holds `stage`, `health`, and `workflow_type`. Sub-data has been fully extracted to relational tables.
 * `site_visits` / `site_visit_measurements` - Relational tables tracking audit metrics and locations.
+* `designs` - Stores design versions, proof URLs, and pin comments.
+* `productions` - Tracks physical manufacturing checklists and deadlines.
+* `installations` - Tracks scheduled dates, GPS links, and completion photos.
 * `quotations` / `quote_items` - Relational tables for financial pricing.
 * `order_assignments` - Join table mapping `orders` to `users` (Staff).
 * `order_activity` - Immutable append-only log capturing all stage changes, approvals, and internal chats.
@@ -221,10 +224,11 @@ Customer Portal
 | `updateOrderStageAction` | Manual manual stage jump | Admin Override | `orders.stage`, `order_activity` | Admin |
 | `adminApproveStageAction` | Validates and pushes stage fwd | `AdminControlModule` | `orders.stage`, `order_activity` | Admin |
 | `setWorkflowTypeAction` | Sets design-first vs quote-first | `WorkflowChoiceModal` | `orders.workflow_type` | Admin |
-| `updateDesignDetailsAction` | Mutates the JSONB design payload | `DesignModule`, `DesignTab` | `orders.design_details` | Admin, Designer |
+| `updateDesignDetailsAction` | Saves relational design data | `DesignModule`, `DesignTab` | `designs` | Admin, Designer |
+| `updateProductionDetailsAction` | Saves production checkboxes | `ProductionModule` | `productions` | Admin, Production |
 | `assignTeamToOrder` | Links staff to an order | `AdminControlModule` | `order_assignments` | Admin |
 | `updateQuotationAction` | Saves relational quote data | `QuotationModule` | `quotations`, `quote_items` | Admin, Marketer |
-| `provideInstallationLocationAction` | Customer submits maps link | `PortalClient` | `orders.installation_details` | Customer |
+| `updateInstallationDetails` | Customer/Staff saves install data | `PortalClient`, `InstallationModule` | `installations` | Admin, Installer, Customer |
 
 ---
 
@@ -241,19 +245,17 @@ Customer Portal
 ## 10. Technical Debt & Future Improvements
 
 ### 10.1 Known Technical Debt
-* **JSONB vs Relational Split:** `site_visits` and `quotations` were recently migrated to strict relational SQL tables, but `design_details`, `production_details`, and `installation_details` are still stored as massive JSONB blobs on the `orders` table. This makes querying "All active designs" at a database level extremely difficult.
 * **Duplicated Stage Logic:** The `stageToTabIndex` calculation logic is duplicated across `OrderWorksheetModal.tsx` and `PortalClient.tsx`, which can cause desyncs if the workflow is altered.
 * **Prop Drilling:** `OrderWorksheetModal.tsx` is exceedingly large (>1200 lines) and passes dozens of props down into `SiteVisitModule`, `DesignModule`, etc.
 
 ### 10.2 Recommended Future Improvements
-1. **Migrate Designs to SQL:** Break `design_details` out of the JSONB column into `designs`, `design_items`, `design_versions`, and `design_comments` tables to match Quotations.
-2. **Context API / Zustand:** Implement a global state manager for the active Order to eliminate the massive prop-drilling inside `OrderWorksheetModal`.
-3. **Automated Notifications:** Connect Supabase Edge Functions or Postgres Triggers to automatically send Emails/WhatsApp messages when `order_activity` registers a "Quotation Sent" or "Design Sent" event.
+1. **Context API / Zustand:** Implement a global state manager for the active Order to eliminate the massive prop-drilling inside `OrderWorksheetModal`.
+2. **Automated Notifications:** Connect Supabase Edge Functions or Postgres Triggers to automatically send Emails/WhatsApp messages when `order_activity` registers a "Quotation Sent" or "Design Sent" event.
 
 ---
 
 ## 11. Final Summary
 
-**Overall Architecture:** A monolithic Next.js (App Router) application backed by Supabase (PostgreSQL). State is primarily tracked via an `orders` table, surrounded by related entity tables, communicating via Server Actions.
-**Current Strengths:** Robust file handling, real-time customer feedback loops via the portal, strict permission checks, and flexible branch routing (`workflow_type`).
-**Known Limitations:** Over-reliance on JSONB for core order sub-data, which will inhibit future analytical querying capabilities.
+**Overall Architecture:** A monolithic Next.js (App Router) application backed by Supabase (PostgreSQL). State is primarily tracked via an `orders` table, surrounded by fully relational entity tables (`designs`, `productions`, `installations`, etc.), communicating via Server Actions.
+**Current Strengths:** Robust file handling, real-time customer feedback loops via the portal, strict permission checks, flexible branch routing (`workflow_type`), and strict SQL relational data isolation.
+**Known Limitations:** High prop-drilling within the order worksheet modules limits immediate maintainability.

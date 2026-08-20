@@ -7,6 +7,8 @@ import {
   canOpenWorkflowChoiceModal,
   isWorkflowChoiceSubmitLocked,
   shouldOfferWorkflowChoice,
+  businessOpNeedsWorkflowChoice,
+  impliedWorkflowTypeForOp,
   workflowDisplayName,
   workflowPathSteps,
   workflowSubtitle,
@@ -38,6 +40,27 @@ describe("workflow selection UI", () => {
           stageStatus: "Pending Admin Approval",
         })
       ).toBe(false);
+    });
+
+    it("offers Quote vs Design only when the business op includes both modules", () => {
+      expect(
+        businessOpNeedsWorkflowChoice([
+          "enquiry",
+          "site_visit",
+          "quotation",
+          "design",
+          "production",
+        ])
+      ).toBe(true);
+      expect(businessOpNeedsWorkflowChoice(["enquiry", "site_visit", "production"])).toBe(
+        false
+      );
+      expect(impliedWorkflowTypeForOp(["site_visit", "design", "production"])).toBe(
+        "design_first"
+      );
+      expect(impliedWorkflowTypeForOp(["site_visit", "quotation", "production"])).toBe(
+        "quote_first"
+      );
     });
 
     it("cannot open twice / already open", () => {

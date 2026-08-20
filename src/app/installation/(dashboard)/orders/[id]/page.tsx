@@ -84,6 +84,9 @@ export default async function InstallationOrderDetailPage({
     health: order.health || "Active",
     lost_reason: order.lost_reason,
     workflow_type: (order.workflow_type as "quote_first" | "design_first") || "quote_first",
+    delivery_method: (order as { delivery_method?: string }).delivery_method || "installation",
+    pickup_confirmed_at: (order as { pickup_confirmed_at?: string | null }).pickup_confirmed_at ?? null,
+    pickupConfirmedAt: (order as { pickup_confirmed_at?: string | null }).pickup_confirmed_at ?? null,
   };
 
   const mappedCustomers = (customersData || []).map((c: any) => ({

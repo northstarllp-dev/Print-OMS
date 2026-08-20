@@ -71,6 +71,29 @@ export function isSiteVisitUiFrozen(input: {
   return (baseFrozen && !input.adminOverrideUnlocked) || !input.canEdit;
 }
 
+/**
+ * When a server snapshot arrives (router.refresh / getOrderById), keep
+ * in-progress location items that have not been saved yet.
+ */
+export function mergeIncomingSiteVisitDetails<
+  T extends { locations?: unknown[] | null },
+>(
+  local: T | null | undefined,
+  incoming: T | null | undefined
+): T | undefined {
+  if (!incoming && !local) return undefined;
+  if (!incoming) return local as T;
+  if (!local) return incoming;
+  const localCount = Array.isArray(local.locations) ? local.locations.length : 0;
+  const incomingCount = Array.isArray(incoming.locations)
+    ? incoming.locations.length
+    : 0;
+  if (localCount > incomingCount) {
+    return { ...incoming, locations: local.locations };
+  }
+  return incoming;
+}
+
 /** Staff/admin advance gate on the site visit tab. */
 export function canAdvanceSiteVisitAudit(details: {
   auditDate?: string | null;
