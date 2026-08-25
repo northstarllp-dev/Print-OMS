@@ -178,6 +178,7 @@ describe("computeQuotationTotals", () => {
     expect(totals.discount).toBe(0);
     expect(totals.tax).toBe(45);
     expect(totals.shipping).toBe(0);
+    expect(totals.installation_charges).toBe(0);
     expect(totals.grand_total).toBe(295);
   });
 
@@ -187,7 +188,15 @@ describe("computeQuotationTotals", () => {
     expect(totals.discount).toBe(50);
     expect(totals.tax).toBe(36);
     expect(totals.shipping).toBe(10);
+    expect(totals.installation_charges).toBe(0);
     expect(totals.grand_total).toBe(246); // 250 - 50 + 36 + 10
+  });
+
+  it("adds installation charges before shipping in grand total", () => {
+    const totals = computeQuotationTotals(sections, 0, 10, 100);
+    expect(totals.installation_charges).toBe(100);
+    expect(totals.shipping).toBe(10);
+    expect(totals.grand_total).toBe(405); // 250 + 45 + 100 + 10
   });
 
   it("clamps oversized discount and negative shipping", () => {
@@ -195,6 +204,7 @@ describe("computeQuotationTotals", () => {
     expect(totals.discount).toBe(250);
     expect(totals.tax).toBe(0);
     expect(totals.shipping).toBe(0);
+    expect(totals.installation_charges).toBe(0);
     expect(totals.grand_total).toBe(0);
   });
 
@@ -204,6 +214,7 @@ describe("computeQuotationTotals", () => {
       discount: 0,
       tax: 0,
       shipping: 5,
+      installation_charges: 0,
       grand_total: 5,
     });
   });

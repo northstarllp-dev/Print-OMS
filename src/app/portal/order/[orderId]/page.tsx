@@ -183,6 +183,9 @@ export default async function OrderDetailPage({
     signageOptions: quotationData.signage_options || [],
     discount: Number(quotationData.discount || 0),
     shipping: Number(quotationData.shipping || 0),
+    installationCharges: Number(
+      (quotationData as { installation_charges?: number }).installation_charges || 0
+    ),
     subtotal: Number(quotationData.subtotal || 0),
     tax: Number(quotationData.tax || 0),
     grandTotal: Number(quotationData.grand_total || 0),

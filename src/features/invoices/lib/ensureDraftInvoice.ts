@@ -43,7 +43,7 @@ export async function ensureDraftInvoiceFromQuotation(
   const { data: qt, error: qErr } = await db
     .from("quotations")
     .select(
-      "id, company_id, customer_id, signage_options, discount, shipping, subtotal, tax, grand_total, notes, terms, status"
+      "id, company_id, customer_id, signage_options, discount, shipping, installation_charges, subtotal, tax, grand_total, notes, terms, status"
     )
     .eq("order_id", orderUuid)
     .maybeSingle();
@@ -57,7 +57,8 @@ export async function ensureDraftInvoiceFromQuotation(
   const totals = computeQuotationTotals(
     signageOptions,
     Number(qt.discount || 0),
-    Number(qt.shipping || 0)
+    Number(qt.shipping || 0),
+    Number((qt as { installation_charges?: number }).installation_charges || 0)
   );
 
   const { invoiceId } = await allocateInvoiceNumber(db, qt.company_id);

@@ -22,6 +22,7 @@ export interface PortalQuotationOrder {
     subtotal?: number;
     discount?: number;
     shipping?: number;
+    installationCharges?: number;
     tax?: number;
     grandTotal?: number;
     notes?: string;
@@ -118,6 +119,7 @@ export function QuotationTab({
             subtotal={qd.subtotal}
             discount={qd.discount}
             shipping={qd.shipping}
+            installationCharges={qd.installationCharges}
             tax={qd.tax}
             grandTotal={qd.grandTotal}
             notes={qd.notes}

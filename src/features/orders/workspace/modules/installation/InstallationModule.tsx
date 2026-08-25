@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { ArrowLeft, Sparkles, Check, Loader2, CheckCircle, Save, Camera, Calendar, Clock, Shield, FileText, Image as ImageIcon, Eye, Download, Trash, X, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft, Sparkles, Check, Loader2, CheckCircle, Save, Camera, Calendar, Clock, Shield, FileText, Image as ImageIcon, Eye, Download, Trash, X, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
 import { InstallationScheduleModule } from "@/features/installations/components/InstallationScheduleModule";
 import { deleteStorageFilesAction } from "@/features/orders/actions/storageActions";
 import { uploadFiles } from "@/utils/storage/uploadClient";
@@ -12,6 +12,7 @@ import { resolveSiteVisitInstallationAddress, buildGoogleMapsSearchUrl } from "@
 import { OverlayPortal } from "@/components/ui/OverlayPortal";
 import { DeliveryMethodChooser } from "@/features/installations/components/DeliveryMethodChooser";
 import { CustomerPickupModule } from "@/features/installations/components/CustomerPickupModule";
+import { changeOrderDeliveryMethod } from "@/features/orders/actions/orderActions";
 import { loadClientConfig } from "@/config/loadClientConfig";
 import { getPaymentBalanceSummary } from "@/features/payments/actions/paymentActions";
 import type { StageModuleProps } from "../../shared/types";
@@ -66,10 +67,12 @@ export function InstallationModule({
 
   const enableCustomerPickup = loadClientConfig().features.enableCustomerPickup === true;
   const isReadyForInstallation = order.stage === "Ready For Installation";
+  const isInstallationScheduled = order.stage === "Installation Scheduled";
   const deliveryMethod = order.deliveryMethod || order.delivery_method || "installation";
   const isCustomerPickup =
     order.stage === "Customer Pickup" || deliveryMethod === "customer_pickup";
   const [showScheduleForm, setShowScheduleForm] = useState(false);
+  const [changingMethod, setChangingMethod] = useState(false);
   const baseFrozen = !isInstallationStage;
   const canEdit = (permission?.canEdit ?? true) && (!baseFrozen || adminOverrideUnlocked);
 
@@ -78,6 +81,31 @@ export function InstallationModule({
   const [alert, setAlert] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [outstandingAmount, setOutstandingAmount] = useState<number>(0);
   const [loadingOutstanding, setLoadingOutstanding] = useState(false);
+
+  const handleChangeToCustomerPickup = async () => {
+    if (changingMethod) return;
+    // Local-only choice: just reopen the chooser, no DB write yet.
+    if (isReadyForInstallation && showScheduleForm) {
+      setShowScheduleForm(false);
+      return;
+    }
+    if (
+      !window.confirm(
+        "Switch this order to Customer Pickup? Installation scheduling will be cleared from the workflow."
+      )
+    ) {
+      return;
+    }
+    setChangingMethod(true);
+    try {
+      await changeOrderDeliveryMethod(order.id, "customer_pickup");
+      window.location.reload();
+    } catch (err: unknown) {
+      window.alert(err instanceof Error ? err.message : "Failed to change delivery method");
+    } finally {
+      setChangingMethod(false);
+    }
+  };
 
   const client = customers.find(c => c.id === order.customerId);
   const svDetails = order.siteVisitDetails || {};
@@ -272,6 +300,14 @@ export function InstallationModule({
   // RBAC (canEdit) + workflow (isCompleted): authority vs actionable
   const canAct = canEdit && !isCompleted;
 
+  const canChangeDeliveryMethod =
+    enableCustomerPickup &&
+    canEdit &&
+    !isCompleted &&
+    (isCustomerPickup ||
+      isInstallationScheduled ||
+      (isReadyForInstallation && showScheduleForm));
+
   return (
     <>
     <div className={`min-w-0 max-w-full overflow-x-hidden ${embedded ? "space-y-6" : "p-4 sm:p-8 bg-slate-50/50 min-h-screen"}`}>
@@ -410,6 +446,8 @@ export function InstallationModule({
             email={client?.email || ""}
             productType={order.productType || ""}
             pickupConfirmedAt={order.pickupConfirmedAt || order.pickup_confirmed_at || null}
+            canChangeMethod={canChangeDeliveryMethod}
+            onMethodChanged={() => window.location.reload()}
           />
         </div>
       ) : (
@@ -440,15 +478,32 @@ export function InstallationModule({
             </div>
           ) : (
           /* SCHEDULE INSTALLATION */
-          <InstallationScheduleModule 
-            orderId={order.id}
-            initialScheduledDate={installationDetails.scheduledDate}
-            initialScheduledTime={installationDetails.scheduledTime}
-            isCompleted={!canAct}
-            locationLink={siteMapsLink || undefined}
-            locationText={siteAddress}
-            onScheduled={onInstallationScheduled}
-          />
+          <div className="space-y-3">
+            {canChangeDeliveryMethod && (
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleChangeToCustomerPickup}
+                  disabled={changingMethod}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  {changingMethod ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                  {isReadyForInstallation && showScheduleForm
+                    ? "Change delivery method"
+                    : "Change to Customer Pickup"}
+                </button>
+              </div>
+            )}
+            <InstallationScheduleModule 
+              orderId={order.id}
+              initialScheduledDate={installationDetails.scheduledDate}
+              initialScheduledTime={installationDetails.scheduledTime}
+              isCompleted={!canAct}
+              locationLink={siteMapsLink || undefined}
+              locationText={siteAddress}
+              onScheduled={onInstallationScheduled}
+            />
+          </div>
           )}
           
           {/* CHECKLIST */}

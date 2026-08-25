@@ -1,8 +1,11 @@
 "use client";
 
 import React, { useState } from "react";
-import { Package, CheckCircle, Loader2, Phone, Mail, AlertTriangle } from "lucide-react";
-import { confirmCustomerPickup } from "@/features/orders/actions/orderActions";
+import { Package, CheckCircle, Loader2, Phone, Mail, AlertTriangle, RefreshCw } from "lucide-react";
+import {
+  confirmCustomerPickup,
+  changeOrderDeliveryMethod,
+} from "@/features/orders/actions/orderActions";
 
 interface CustomerPickupModuleProps {
   orderId: string;
@@ -13,6 +16,8 @@ interface CustomerPickupModuleProps {
   email: string;
   productType: string;
   pickupConfirmedAt: string | null;
+  canChangeMethod?: boolean;
+  onMethodChanged?: () => void;
 }
 
 export function CustomerPickupModule({
@@ -24,8 +29,11 @@ export function CustomerPickupModule({
   email,
   productType,
   pickupConfirmedAt: initialPickupAt,
+  canChangeMethod = false,
+  onMethodChanged,
 }: CustomerPickupModuleProps) {
   const [confirming, setConfirming] = useState(false);
+  const [changing, setChanging] = useState(false);
   const [pickupConfirmedAt, setPickupConfirmedAt] = useState(initialPickupAt);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,6 +62,27 @@ export function CustomerPickupModule({
     }
   };
 
+  const handleChangeToInstallation = async () => {
+    if (changing || isConfirmed) return;
+    if (
+      !window.confirm(
+        "Switch this order to Schedule Installation? Customer pickup will be cleared."
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    setChanging(true);
+    try {
+      await changeOrderDeliveryMethod(orderId, "installation");
+      onMethodChanged?.();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to change delivery method");
+    } finally {
+      setChanging(false);
+    }
+  };
+
   const formattedPickupDate = pickupConfirmedAt
     ? new Date(pickupConfirmedAt).toLocaleString("en-IN", {
         day: "2-digit",
@@ -68,14 +97,27 @@ export function CustomerPickupModule({
     <div className="space-y-6 max-w-2xl">
       {/* Header */}
       <div className="bg-white border border-slate-200/70 rounded-xl p-5 sm:p-6">
-        <div className="flex items-center gap-3 mb-4 pb-3 border-b border-slate-100">
-          <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center shrink-0">
-            <Package size={20} className="text-amber-600" />
+        <div className="flex items-start justify-between gap-3 mb-4 pb-3 border-b border-slate-100">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center shrink-0">
+              <Package size={20} className="text-amber-600" />
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-[15px] font-extrabold text-slate-900">Customer Pickup / Self Receive</h2>
+              <p className="text-xs text-slate-500 mt-0.5">Customer will collect this order from our location</p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-[15px] font-extrabold text-slate-900">Customer Pickup / Self Receive</h2>
-            <p className="text-xs text-slate-500 mt-0.5">Customer will collect this order from our location</p>
-          </div>
+          {canChangeMethod && !isConfirmed && (
+            <button
+              type="button"
+              onClick={handleChangeToInstallation}
+              disabled={changing || confirming}
+              className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            >
+              {changing ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+              Change to Installation
+            </button>
+          )}
         </div>
 
         {/* Order summary */}
@@ -168,7 +210,7 @@ export function CustomerPickupModule({
             <button
               type="button"
               onClick={handleConfirm}
-              disabled={confirming}
+              disabled={confirming || changing}
               className="w-full sm:w-auto px-6 py-3 rounded-xl bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors inline-flex items-center justify-center gap-2"
             >
               {confirming ? (

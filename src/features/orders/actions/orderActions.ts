@@ -1999,3 +1999,74 @@ export async function confirmCustomerPickup(orderId: string) {
   await revalidateStaffQueuePaths();
   return result;
 }
+
+/** Switch between installation and customer pickup after the initial choice. */
+export async function changeOrderDeliveryMethod(
+  orderId: string,
+  method: "installation" | "customer_pickup"
+) {
+  await assertStageEditPermission("installation");
+  const supabase = await getSupabase();
+  const orderUuid = await resolveOrderUuid(supabase, orderId);
+
+  const { data: o, error: fetchErr } = await supabase
+    .from("orders")
+    .select("stage, order_id, company_id, health, delivery_method, pickup_confirmed_at")
+    .eq("id", orderUuid)
+    .single();
+  if (fetchErr) throw new Error(fetchErr.message);
+
+  const changeableStages = new Set([
+    "Ready For Installation",
+    "Installation Scheduled",
+    "Customer Pickup",
+  ]);
+  if (!changeableStages.has(o.stage)) {
+    throw new Error(
+      `Cannot change delivery method while order is at "${o.stage}".`
+    );
+  }
+  if (o.pickup_confirmed_at) {
+    throw new Error("Cannot change delivery method after pickup is confirmed.");
+  }
+
+  const { stageProgressPatch } = await import("@/features/orders/lib/orderHealth");
+  const nextStage =
+    method === "customer_pickup" ? "Customer Pickup" : "Ready For Installation";
+  const patch = {
+    delivery_method: method,
+    stage: nextStage,
+    stage_status: "Normal",
+    pickup_confirmed_at: null,
+    ...stageProgressPatch(o.health, nextStage),
+  };
+
+  const { data: result, error: updErr } = await supabase
+    .from("orders")
+    .update(patch)
+    .eq("id", orderUuid)
+    .select();
+  if (updErr) throw new Error(updErr.message);
+  if (!result?.length) {
+    throw new Error("Could not change delivery method.");
+  }
+
+  const label =
+    method === "customer_pickup" ? "Customer Pickup" : "Schedule Installation";
+  await insertOrderActivity(supabase, {
+    order_id: o.order_id || orderId,
+    company_id: o.company_id,
+    actor_name: "System",
+    actor_role: "System",
+    content: `Delivery method changed to ${label}.`,
+    metadata: {
+      action: "delivery_method_changed",
+      old_stage: o.stage,
+      old_method: o.delivery_method,
+      new_method: method,
+    },
+  });
+
+  await revalidateStaffQueuePaths();
+  return result;
+}
