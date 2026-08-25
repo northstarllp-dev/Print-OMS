@@ -4,6 +4,7 @@ import { SupabaseClient } from "@supabase/supabase-js";
 import { getCurrentUser } from "@/features/auth/actions/authActions";
 import { resolveStagePermission } from "./permissions";
 import type { OrderStage } from "./types";
+import { isDesignPendingAdminLocked } from "./adminGodMode";
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -19,11 +20,6 @@ async function resolveOrderUuidForLock(
     .maybeSingle();
   if (error || !data) throw new Error(`Could not resolve order ID: ${orderId}`);
   return data.id;
-}
-
-function isDesignStageLocked(stage: string, stageStatus: string | null): boolean {
-  if (!stageStatus || stageStatus === "Normal") return false;
-  return stage === "Design In Progress" || stage === "Design Approved";
 }
 
 /**
@@ -57,7 +53,7 @@ export async function assertDesignStageUnlocked(orderId: string): Promise<void> 
   if (error) throw new Error(error.message);
   if (!order) throw new Error("Order not found");
 
-  if (isDesignStageLocked(order.stage, order.stage_status)) {
+  if (isDesignPendingAdminLocked(order.stage, order.stage_status)) {
     throw new Error(
       "Design is locked pending admin approval. Please wait for admin review or requested changes."
     );

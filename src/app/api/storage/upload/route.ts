@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { checkRateLimit } from "@/utils/rate-limiter";
-import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import {
   uploadBase64ToStorageBucket,
@@ -11,6 +9,7 @@ import {
   assertUploadPayload,
   parseUploadRequest,
 } from "@/utils/supabase/parseUploadRequest";
+import { resolveStaffUploadUser } from "@/utils/storage/resolveStaffUploadUser";
 
 export const runtime = "nodejs";
 
@@ -21,13 +20,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   }
 
-  const cookieStore = await cookies();
-  const supabase = createClient(cookieStore);
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await resolveStaffUploadUser(req);
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { error: "Session expired. Please log in again and retry the upload." },
+      { status: 401 }
+    );
   }
 
   const admin = createAdminClient();

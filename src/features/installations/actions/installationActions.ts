@@ -4,7 +4,7 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { dispatchWhatsAppNotification } from "@/features/notifications/actions/dispatchNotification";
 import { getRequestBaseUrl } from "@/features/notifications/whatsapp/requestBaseUrl";
-import { assertStageEditPermission } from "@/features/orders/workspace/shared/serverPermissions";
+import { assertStageEditPermission, assertAdminOnly } from "@/features/orders/workspace/shared/serverPermissions";
 import { revalidateStaffQueuePaths } from "@/features/orders/actions/orderActions";
 import { insertOrderActivity } from "@/features/orders/activity/logOrderActivity";
 
@@ -55,8 +55,12 @@ export async function getInstallationByOrderId(orderId: string) {
   return data;
 }
 
-export async function updateInstallationDetails(orderId: string, details: any) {
-  await assertStageEditPermission("installation");
+export async function updateInstallationDetails(orderId: string, details: any, adminOverride = false) {
+  if (adminOverride) {
+    await assertAdminOnly();
+  } else {
+    await assertStageEditPermission("installation");
+  }
   const supabase = await getSupabase();
   
   // First ensure record exists

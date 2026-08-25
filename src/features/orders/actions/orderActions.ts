@@ -407,8 +407,12 @@ export async function deleteOrder(id: string) {
   }
 }
 
-export async function updateSiteVisitDetailsAction(orderId: string, details: any) {
-  await assertStageEditPermission("site_visit");
+export async function updateSiteVisitDetailsAction(orderId: string, details: any, adminOverride = false) {
+  if (adminOverride) {
+    await assertAdminOnly();
+  } else {
+    await assertStageEditPermission("site_visit");
+  }
   const supabase = await getSupabase();
   const orderUuid = await resolveOrderUuid(supabase, orderId);
 
@@ -551,8 +555,12 @@ export async function updateSiteVisitDetailsAction(orderId: string, details: any
 
 
 
-export async function updateProductionDetailsAction(orderId: string, details: any) {
-  await assertStageEditPermission("production");
+export async function updateProductionDetailsAction(orderId: string, details: any, adminOverride = false) {
+  if (adminOverride) {
+    await assertAdminOnly();
+  } else {
+    await assertStageEditPermission("production");
+  }
   const supabase = await getSupabase();
   const orderUuid = await resolveOrderUuid(supabase, orderId);
 
@@ -590,8 +598,12 @@ export async function updateProductionDetailsAction(orderId: string, details: an
   return { success: true };
 }
 
-export async function updateInstallationDetailsAction(orderId: string, details: any) {
-  await assertStageEditPermission("installation");
+export async function updateInstallationDetailsAction(orderId: string, details: any, adminOverride = false) {
+  if (adminOverride) {
+    await assertAdminOnly();
+  } else {
+    await assertStageEditPermission("installation");
+  }
   const supabase = await getSupabase();
   const orderUuid = await resolveOrderUuid(supabase, orderId);
 
