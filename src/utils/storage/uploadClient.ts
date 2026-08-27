@@ -50,21 +50,60 @@ interface SignUploadResponse {
   tus?: { endpoint: string; uploadUrl: string; useSessionToken: boolean };
 }
 
+async function getStaffAccessToken(): Promise<string | null> {
+  try {
+    const { createClient } = await import("@/utils/supabase/client");
+    const supabase = createClient();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    let accessToken = session?.access_token ?? null;
+
+    // Refresh when missing or near expiry so sign-upload cookies/Bearer stay valid.
+    const expiresAtMs = session?.expires_at ? session.expires_at * 1000 : 0;
+    const needsRefresh = !accessToken || (expiresAtMs > 0 && expiresAtMs <= Date.now() + 60_000);
+    if (needsRefresh) {
+      const { data: refreshed, error } = await supabase.auth.refreshSession();
+      if (!error && refreshed.session?.access_token) {
+        accessToken = refreshed.session.access_token;
+      }
+    }
+    return accessToken;
+  } catch {
+    return null;
+  }
+}
+
 async function requestSignedUpload(
   channel: "staff" | "portal",
   body: Record<string, unknown>
 ): Promise<SignUploadResponse> {
   const endpoint =
     channel === "portal" ? "/api/portal/sign-upload" : "/api/storage/sign-upload";
+
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  if (channel === "staff") {
+    const token = await getStaffAccessToken();
+    if (token) headers.authorization = `Bearer ${token}`;
+  }
+
   const res = await fetch(withBasePath(endpoint), {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers,
     credentials: "include",
     body: JSON.stringify(body),
   });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error((json as any).error || "Could not start upload");
+    const msg = (json as { error?: string }).error || "Could not start upload";
+    if (res.status === 401) {
+      throw new Error(
+        msg.includes("log in")
+          ? msg
+          : "Session expired. Please log in again and retry the upload."
+      );
+    }
+    throw new Error(msg);
   }
   return json as SignUploadResponse;
 }
@@ -106,18 +145,10 @@ async function tryTusUpload(
     const tus = await import("tus-js-client").catch(() => null as any);
     if (!tus?.Upload) return false;
 
-    // Attach the caller's session access token for the resumable endpoint.
-    let authorization = "";
-    try {
-      const { createClient } = await import("@/utils/supabase/client");
-      const supabase = createClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (session?.access_token) authorization = `Bearer ${session.access_token}`;
-    } catch {
-      /* fall through — anon uploads still work when bucket policy allows */
-    }
+    // TUS needs a live user JWT for private buckets. Prefer signed-URL fallback
+    // when the session is gone instead of failing with a vague Unauthorized.
+    const accessToken = await getStaffAccessToken();
+    if (!accessToken) return false;
 
     await new Promise<void>((resolve, reject) => {
       const upload = new tus.Upload(file, {
@@ -125,7 +156,7 @@ async function tryTusUpload(
         chunkSize: TUS_CHUNK_SIZE,
         retryDelays: [0, 3000, 5000, 10000, 20000],
         headers: {
-          ...(authorization ? { authorization } : {}),
+          authorization: `Bearer ${accessToken}`,
           "x-upsert": "false",
         },
         metadata: {

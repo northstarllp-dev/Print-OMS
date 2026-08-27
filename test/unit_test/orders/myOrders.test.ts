@@ -94,6 +94,7 @@ describe("My Orders stage partition + Incoming/Completed", () => {
     expect(myOrdersHasPipelineGaps(["site_visit", "production", "installation"])).toBe(true);
     expect(myOrdersHasIncomingTab(["site_visit", "production", "installation"])).toBe(true);
     expect(buildMyOrdersTabList(["site_visit", "production", "installation"])).toEqual([
+      "all",
       "site_visit",
       "incoming",
       "production",
@@ -101,6 +102,7 @@ describe("My Orders stage partition + Incoming/Completed", () => {
       "completed",
     ]);
     expect(buildMyOrdersTabList(["production", "installation"])).toEqual([
+      "all",
       "incoming",
       "production",
       "installation",
@@ -121,6 +123,18 @@ describe("My Orders stage partition + Incoming/Completed", () => {
     ]);
     expect(partitionMyOrdersByTab(filtered, "completed", allowed).map((o) => o.id)).toEqual([
       "5",
+    ]);
+  });
+
+  it("All tab returns every assigned order without stage partitioning", () => {
+    const allowed = ["site_visit", "quotation", "design"] as const;
+    const filtered = filterMyOrdersAssigned(orders, userId, [...allowed]);
+    expect(partitionMyOrdersByTab(filtered, "all", allowed).map((o) => o.id).sort()).toEqual([
+      "1",
+      "2",
+      "3",
+      "5",
+      "6",
     ]);
   });
 
@@ -165,17 +179,16 @@ describe("My Orders stage partition + Incoming/Completed", () => {
     ]);
   });
 
-  it("countMyOrdersTabs and defaultMyOrdersTab prefer first non-empty current band", () => {
+  it("countMyOrdersTabs includes all assigned and defaultMyOrdersTab is All", () => {
     const assigned = filterMyOrdersAssigned(orders, userId, [...PIPELINE_QUEUE_STAGES]);
     const counts = countMyOrdersTabs(assigned, ["design", "site_visit", "quotation"]);
+    expect(counts.all).toBe(assigned.length);
     expect(counts.site_visit).toBe(2);
     expect(counts.quotation).toBe(1);
     expect(counts.design).toBe(1);
     expect(counts.completed).toBe(1);
     expect(counts.incoming).toBe(0);
-    expect(defaultMyOrdersTab(["design", "site_visit"], counts)).toBe("site_visit");
-    expect(defaultMyOrdersTab(["production", "installation"], counts)).toBe(
-      "completed"
-    );
+    expect(defaultMyOrdersTab(["design", "site_visit"], counts)).toBe("all");
+    expect(defaultMyOrdersTab(["production", "installation"], counts)).toBe("all");
   });
 });

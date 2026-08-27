@@ -59,7 +59,7 @@ export default async function StaffMyOrdersPage({
   const allottedOrders = filterMyOrdersAssigned(orders, user.id, allowedStages);
   const counts = countMyOrdersTabs(allottedOrders, allowedStages);
   const initialTab =
-    tabFromQuery ?? defaultMyOrdersTab(allowedStages, counts) ?? allowedStages[0];
+    tabFromQuery ?? defaultMyOrdersTab(allowedStages, counts) ?? "all";
 
   const mappedOrders = allottedOrders.map((o) => ({
     id: o.id,

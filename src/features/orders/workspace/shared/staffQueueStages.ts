@@ -242,7 +242,7 @@ export function myOrdersHasPipelineGaps(allowedStages: readonly OrderStage[]): b
   return false;
 }
 
-export type MyOrdersTab = "incoming" | PipelineQueueStage | "completed";
+export type MyOrdersTab = "all" | "incoming" | PipelineQueueStage | "completed";
 
 /**
  * Incoming tab when:
@@ -256,8 +256,8 @@ export function myOrdersHasIncomingTab(allowedStages: readonly OrderStage[]): bo
 }
 
 /**
- * Tab strip order: classic Incoming first; otherwise Incoming inserted after the
- * stage that precedes the first pipeline gap (e.g. Site Visit | Incoming | Production).
+ * Tab strip order: All first; then classic Incoming; otherwise Incoming inserted after the
+ * stage that precedes the first pipeline gap (e.g. All | Site Visit | Incoming | Production).
  */
 export function buildMyOrdersTabList(
   allowedStages: readonly OrderStage[]
@@ -265,7 +265,7 @@ export function buildMyOrdersTabList(
   const ordered = orderedMyOrdersStages(allowedStages);
   if (ordered.length === 0) return [];
 
-  const tabs: MyOrdersTab[] = [];
+  const tabs: MyOrdersTab[] = ["all"];
   const classicIncoming = queueHasIncomingTab(ordered[0]);
   if (classicIncoming) tabs.push("incoming");
 
@@ -290,6 +290,7 @@ export function parseMyOrdersTab(
   allowedStages: readonly OrderStage[]
 ): MyOrdersTab | undefined {
   if (!value) return undefined;
+  if (value === "all") return "all";
   if (value === "incoming") {
     return myOrdersHasIncomingTab(allowedStages) ? "incoming" : undefined;
   }
@@ -378,6 +379,7 @@ export function partitionMyOrdersByStage<T extends { stage?: string | null }>(
 export function partitionMyOrdersByTab<
   T extends { stage?: string | null; workflow_type?: WorkflowType | null },
 >(orders: T[], tab: MyOrdersTab, allowedStages: readonly OrderStage[]): T[] {
+  if (tab === "all") return orders;
   if (tab === "incoming") {
     return orders.filter((o) =>
       isMyOrdersIncoming(o.stage ?? "", allowedStages, o.workflow_type as WorkflowType)
@@ -392,6 +394,7 @@ export function partitionMyOrdersByTab<
 }
 
 export type MyOrdersTabCounts = {
+  all: number;
   incoming: number;
   completed: number;
 } & Partial<Record<OrderStage, number>>;
@@ -401,6 +404,7 @@ export function countMyOrdersTabs<
 >(orders: T[], allowedStages: readonly OrderStage[]): MyOrdersTabCounts {
   const stages = orderedMyOrdersStages(allowedStages);
   const counts: MyOrdersTabCounts = {
+    all: orders.length,
     incoming: partitionMyOrdersByTab(orders, "incoming", stages).length,
     completed: partitionMyOrdersByTab(orders, "completed", stages).length,
   };
@@ -422,18 +426,14 @@ export function countMyOrdersByStage<T extends { stage?: string | null }>(
   return counts;
 }
 
-/** Default tab: first current-band with orders, else Incoming if any, else Completed, else first stage. */
+/** Default tab: All assigned orders (stage tabs remain available as filters). */
 export function defaultMyOrdersTab(
   allowedStages: readonly OrderStage[],
-  counts: MyOrdersTabCounts
+  _counts?: MyOrdersTabCounts
 ): MyOrdersTab | undefined {
   const stages = orderedMyOrdersStages(allowedStages);
   if (stages.length === 0) return undefined;
-  const withOrders = stages.find((s) => (counts[s] ?? 0) > 0);
-  if (withOrders) return withOrders;
-  if (myOrdersHasIncomingTab(stages) && counts.incoming > 0) return "incoming";
-  if (counts.completed > 0) return "completed";
-  return stages[0];
+  return "all";
 }
 
 /** @deprecated Prefer defaultMyOrdersTab */

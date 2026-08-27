@@ -39,6 +39,7 @@ export interface QuotationDocumentProps {
   subtotal?: number;
   discount?: number;
   shipping?: number;
+  installationCharges?: number;
   tax?: number;
   grandTotal?: number;
   notes?: string | null;
@@ -70,6 +71,7 @@ export function QuotationDocument({
   subtotal = 0,
   discount = 0,
   shipping = 0,
+  installationCharges = 0,
   tax = 0,
   grandTotal = 0,
   notes,
@@ -103,6 +105,7 @@ export function QuotationDocument({
       (displaySubtotal -
         Math.max(0, discount) +
         (taxRows.length > 0 ? taxTotalFromRows : tax) +
+        Math.max(0, installationCharges) +
         Math.max(0, shipping)) *
       100
     ) / 100;
@@ -322,15 +325,15 @@ export function QuotationDocument({
               <article className="quotation-sheet bg-white text-[#1a1a1a] border border-slate-200 shadow-sm overflow-hidden min-w-0">
                 {/* Header */}
                 <header className="quotation-sheet-header flex flex-col sm:flex-row gap-4 sm:gap-6 justify-between p-4 sm:p-6 lg:p-8 border-b border-slate-200">
-                  <div className="min-w-0 flex-1 overflow-hidden">
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-start gap-3 min-w-0">
                       <div className="flex flex-col min-w-0">
-                        <div className="mb-2 max-w-full overflow-hidden">
+                        <div className="mb-2 overflow-visible">
                           <div className="quotation-logo-mobile sm:hidden">
-                            <Logo width={150} height={32} align="left" />
+                            <Logo width={200} height={48} align="left" applyScale={false} />
                           </div>
                           <div className="quotation-logo-desktop hidden sm:block">
-                            <Logo width={220} height={40} align="left" />
+                            <Logo width={320} height={72} align="left" applyScale={false} />
                           </div>
                         </div>
                         {legalName && legalName !== brand && (
@@ -503,6 +506,12 @@ export function QuotationDocument({
                         <span className="font-semibold tabular-nums">{formatInr(row.amount)}</span>
                       </div>
                     ))}
+                    {installationCharges > 0 && (
+                      <div className="flex justify-between gap-3">
+                        <span className="text-slate-600">Installation</span>
+                        <span className="font-semibold tabular-nums">{formatInr(installationCharges)}</span>
+                      </div>
+                    )}
                     {shipping > 0 && (
                       <div className="flex justify-between gap-3">
                         <span className="text-slate-600">Shipping</span>
@@ -684,6 +693,16 @@ export function QuotationDocument({
                                 </span>
                               </div>
                             ))}
+                            {installationCharges > 0 && (
+                              <div className="flex items-baseline justify-between gap-3 px-2.5 py-[3px]">
+                                <span className="text-slate-600 whitespace-nowrap text-right flex-1">
+                                  Installation
+                                </span>
+                                <span className="font-semibold tabular-nums text-right text-slate-900 w-[5.75rem] shrink-0">
+                                  {formatInr(installationCharges)}
+                                </span>
+                              </div>
+                            )}
                             {shipping > 0 && (
                               <div className="flex items-baseline justify-between gap-3 px-2.5 py-[3px]">
                                 <span className="text-slate-600 whitespace-nowrap text-right flex-1">

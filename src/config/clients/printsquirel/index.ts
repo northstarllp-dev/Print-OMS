@@ -79,8 +79,8 @@ export const printsquirelConfig: Partial<PrintOMSClientConfig> = {
   usesFloorPortals: false,
   stageGrantsByRole: {
     Designer: { ...view("site_visit"), ...edit("design", "quotation", "invoice") },
-    Marketer: edit("enquiry", "site_visit", "design", "quotation", "invoice"),
-    Sales: { ...edit("site_visit", "quotation"), ...view("design", "production", "installation") },
+    "Prod Designer": { ...view("site_visit"), ...edit("design", "production") },
+    Marketer: { ...edit("enquiry", "site_visit", "design", "quotation", "invoice"), ...view("design","production", "installation") },
     "Production & Installation": { ...view("site_visit"), ...edit("production", "installation", "service_tickets") },
   },
   whatsappTemplatePrefix: "printsquirel_",

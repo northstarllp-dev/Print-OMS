@@ -179,9 +179,26 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
   orderRef.current = order;
   const prevStageRef = useRef(order.stage);
 
+  // Only apply a new server snapshot when pipeline fields change. Blindly
+  // syncing on every initialOrder identity (revalidate after pin save) was
+  // wiping freshly saved design comments and forcing customers to try twice.
+  const initialOrderSyncKey = `${initialOrder.id}:${initialOrder.stage}:${initialOrder.stageStatus}`;
   useEffect(() => {
-    setOrder(initialOrder);
-  }, [initialOrder]);
+    setOrder((prev) => {
+      if (prev.id !== initialOrder.id) return initialOrder;
+      const localUpdated = prev.design?.updated_at
+        ? Date.parse(prev.design.updated_at)
+        : 0;
+      const serverUpdated = initialOrder.design?.updated_at
+        ? Date.parse(initialOrder.design.updated_at)
+        : 0;
+      if (localUpdated > serverUpdated) {
+        return { ...initialOrder, design: prev.design };
+      }
+      return initialOrder;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialOrderSyncKey]);
 
   // Establish HttpOnly portal_session cookie (required for design/quote server actions).
   useEffect(() => {

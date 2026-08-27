@@ -104,7 +104,7 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
     if (updateDesignDetails) {
       await updateDesignDetails(order.id, details);
     } else {
-      await updateDesignDetailsAction(order.id, details, dd.updated_at);
+      await updateDesignDetailsAction(order.id, details, dd.updated_at, undefined, adminOverrideUnlocked);
     }
   };
 
@@ -314,7 +314,7 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
         if (updateDesignDetails) {
           await updateDesignDetails(order.id, details);
         } else {
-          await updateDesignDetailsAction(order.id, details, dd.updated_at);
+          await updateDesignDetailsAction(order.id, details, dd.updated_at, undefined, adminOverrideUnlocked);
         }
       } catch (dbErr) {
         // Rollback: delete uploaded storage objects.
@@ -346,7 +346,7 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
       if (updateDesignDetails) {
         await updateDesignDetails(order.id, details);
       } else {
-        await updateDesignDetailsAction(order.id, details, dd.updated_at);
+        await updateDesignDetailsAction(order.id, details, dd.updated_at, undefined, adminOverrideUnlocked);
       }
 
       // Best-effort storage cleanup — DB record is already removed.

@@ -48,6 +48,10 @@ describe("quotation validators", () => {
     it("locks Approved quotations", () => {
       expect(() => assertQuotationEditable("Approved")).toThrow(/locked/);
     });
+
+    it("allows Approved when adminOverride is true", () => {
+      expect(() => assertQuotationEditable("Approved", true)).not.toThrow();
+    });
   });
 
   describe("assertCanSendQuotationToCustomer", () => {
@@ -77,6 +81,17 @@ describe("quotation validators", () => {
 
     it("blocks edits when existing is Approved", () => {
       expect(() => assertUpsertStatusTransition("Approved", "Draft")).toThrow(/locked/);
+    });
+
+    it("allows editing Approved when adminOverride is true", () => {
+      expect(() => assertUpsertStatusTransition("Approved", "Draft", true)).not.toThrow();
+      expect(() => assertUpsertStatusTransition("Approved", "Sent", true)).not.toThrow();
+    });
+
+    it("still blocks setting Approved via save even with adminOverride", () => {
+      expect(() => assertUpsertStatusTransition("Draft", "Approved", true)).toThrow(
+        /workflow action/
+      );
     });
   });
 

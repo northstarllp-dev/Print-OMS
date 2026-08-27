@@ -26,8 +26,11 @@ export function assertValidQuotationStatus(status: string | undefined): string {
   return value;
 }
 
-export function assertQuotationEditable(existingStatus: string | undefined): void {
-  if (existingStatus && UPSERT_LOCKED_STATUSES.has(existingStatus)) {
+export function assertQuotationEditable(
+  existingStatus: string | undefined,
+  adminOverride = false
+): void {
+  if (existingStatus && UPSERT_LOCKED_STATUSES.has(existingStatus) && !adminOverride) {
     throw new Error("Quotation is locked and cannot be edited");
   }
 }
@@ -42,7 +45,8 @@ export function assertCanSendQuotationToCustomer(status: string): void {
 
 export function assertUpsertStatusTransition(
   existingStatus: string | undefined,
-  nextStatus: string
+  nextStatus: string,
+  adminOverride = false
 ): void {
   if (nextStatus === "Approved") {
     throw new Error(`Status "${nextStatus}" cannot be set via save — use the workflow action`);
@@ -50,7 +54,7 @@ export function assertUpsertStatusTransition(
   if (nextStatus === "Rejected" && existingStatus !== "Rejected") {
     throw new Error(`Status "${nextStatus}" cannot be set via save — use the workflow action`);
   }
-  if (existingStatus && UPSERT_LOCKED_STATUSES.has(existingStatus)) {
+  if (existingStatus && UPSERT_LOCKED_STATUSES.has(existingStatus) && !adminOverride) {
     throw new Error("Quotation is locked and cannot be edited");
   }
 }

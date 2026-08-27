@@ -25,6 +25,9 @@ export function MyOrdersStageTabs({
 }: MyOrdersStageTabsProps) {
   const tabs = useMemo(() => {
     return buildMyOrdersTabList(stages).map((id) => {
+      if (id === "all") {
+        return { id, label: "All", count: counts.all ?? 0 };
+      }
       if (id === "incoming") {
         return { id, label: "Incoming", count: counts.incoming ?? 0 };
       }

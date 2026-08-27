@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { checkCustomRateLimit, checkRateLimit } from "@/utils/rate-limiter";
-import { createClient } from "@/utils/supabase/server";
 import { issueSignedUpload } from "@/utils/supabase/storageIssue";
 import { VALID_PURPOSES } from "@/utils/supabase/parseUploadRequest";
 import type { StorageUploadPurpose } from "@/utils/supabase/serverStorageUpload";
+import { resolveStaffUploadUser } from "@/utils/storage/resolveStaffUploadUser";
 
 export const runtime = "nodejs";
 
@@ -19,13 +18,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   }
 
-  const cookieStore = await cookies();
-  const supabase = createClient(cookieStore);
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await resolveStaffUploadUser(req);
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { error: "Session expired. Please log in again and retry the upload." },
+      { status: 401 }
+    );
   }
 
   let body: {

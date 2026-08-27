@@ -127,6 +127,7 @@ export function DesignTab({ order, customer, siteVisitItems = [], portalToken, o
   const [uploading, setUploading] = useState(false);
   const [commentingOn, setCommentingOn] = useState<{x: number, y: number} | null>(null);
   const [commentText, setCommentText] = useState("");
+  const [savingComment, setSavingComment] = useState(false);
   const [showGeneralFeedback, setShowGeneralFeedback] = useState(false);
   const [generalFeedbackText, setGeneralFeedbackText] = useState("");
   const [showApproveModal, setShowApproveModal] = useState(false);
@@ -156,7 +157,8 @@ export function DesignTab({ order, customer, siteVisitItems = [], portalToken, o
     const updated = await updateDesignDetailsAction(order.id, { items: updatedItems }, dd.updated_at, portalToken);
     onDesignUpdated?.(toCustomerVisibleDesign(updated) || updated);
 
-    if (updateStage) {
+    // Skip no-op stage writes — they revalidate the portal and can wipe local design state.
+    if (updateStage && order.stage !== updateStage) {
       await transitionDesignOrderStageAction(order.id, updateStage, portalToken);
     }
   };
@@ -234,10 +236,12 @@ export function DesignTab({ order, customer, siteVisitItems = [], portalToken, o
   };
 
   const handleImageClick = (e: React.MouseEvent<HTMLImageElement>) => {
-    if (isLocked || !activeVersion || activeVersion.status === "Approved") return;
+    if (isLocked || savingComment || !activeVersion || activeVersion.status === "Approved") return;
+    if (!isLatestVersion) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
+    setCommentText("");
     setCommentingOn({ x, y });
   };
 
@@ -265,17 +269,18 @@ export function DesignTab({ order, customer, siteVisitItems = [], portalToken, o
   };
 
   const handleAddComment = async () => {
-    if (!commentingOn || !commentText.trim() || !activeVersion) return;
-    
+    if (!commentingOn || !commentText.trim() || !activeVersion || savingComment) return;
+
     // Auto-number based on existing pinpoint comments
     const number = allComments.filter((c: any) => !c.isGeneral).length + 1;
-    
+    const text = commentText.trim();
+
     const pinpointComment = {
       id: (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36),
       x: commentingOn.x,
       y: commentingOn.y,
       number,
-      content: commentText,
+      content: text,
       author: customer.name,
       createdAt: new Date().toISOString(),
       isGeneral: false,
@@ -283,23 +288,32 @@ export function DesignTab({ order, customer, siteVisitItems = [], portalToken, o
 
     const generalComment = {
       id: (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36),
-      content: `Pin #${number}: ${commentText}`,
+      content: `Pin #${number}: ${text}`,
       author: customer.name,
       createdAt: new Date().toISOString(),
       isGeneral: true,
     };
-    
-    const updatedVersions = localVersions.map((v: any) => 
-      v.id === activeVersion.id ? { 
-        ...v, 
-        comments: [...(v.comments || []), pinpointComment, generalComment], 
-        status: "Changes Requested" 
+
+    const updatedVersions = localVersions.map((v: any) =>
+      v.id === activeVersion.id ? {
+        ...v,
+        comments: [...(v.comments || []), pinpointComment, generalComment],
+        status: "Changes Requested"
       } : v
     );
 
-    setCommentingOn(null);
-    setCommentText("");
-    await handleUpdateItemVersions(updatedVersions, "Design In Progress");
+    setSavingComment(true);
+    try {
+      await handleUpdateItemVersions(updatedVersions, "Design In Progress");
+      // Clear only after a successful save — early clear made first attempts look broken.
+      setCommentingOn(null);
+      setCommentText("");
+    } catch (err: unknown) {
+      console.error("Pin comment save failed:", err);
+      alert("Could not save pin comment: " + friendlyPortalError(err));
+    } finally {
+      setSavingComment(false);
+    }
   };
 
   const handleGeneralFeedbackSubmit = async () => {
@@ -557,7 +571,7 @@ export function DesignTab({ order, customer, siteVisitItems = [], portalToken, o
                   style={{ cursor: isLocked || activeVersion.status === "Approved" ? "default" : "crosshair", display: 'block' }}
                 />
                 
-                {/* Render Existing Comments */}
+                {/* Existing pin markers only — composer lives outside scale() so clicks aren't eaten */}
                 {allComments.map((comment: any) => (
                   !comment.isGeneral && (
                     <div key={comment.id} className="absolute z-10 hover:z-50 w-0 h-0 group/pin" style={{ left: `${comment.x}%`, top: `${comment.y}%` }}>
@@ -576,31 +590,53 @@ export function DesignTab({ order, customer, siteVisitItems = [], portalToken, o
                     </div>
                   )
                 ))}
-                
-                {/* New Comment Input Box */}
+
                 {commentingOn && (
-                  <div className="absolute z-30 w-0 h-0" style={{ left: `${commentingOn.x}%`, top: `${commentingOn.y}%` }}>
-                    <div className="absolute w-6 h-6 bg-blue-500 rounded-full border-2 border-white shadow-lg flex items-center justify-center text-white text-xs font-bold animate-bounce -translate-x-1/2 -translate-y-1/2">+</div>
-                    <div className={`absolute bg-white p-3 rounded-lg shadow-2xl border border-gray-200 w-56 z-40
-                      ${commentingOn.x < 20 ? 'left-0 ml-3' : commentingOn.x > 80 ? 'right-0 mr-3' : '-translate-x-1/2'}
-                      ${commentingOn.y > 50 ? 'bottom-full mb-4' : 'top-full mt-4'}
-                    `}>
-                      <textarea
-                        autoFocus
-                        value={commentText}
-                        onChange={(e) => setCommentText(e.target.value)}
-                        placeholder="Type feedback here..."
-                        className="w-full text-xs p-2 border border-gray-200 rounded focus:outline-none mb-2"
-                        rows={2}
-                      />
-                      <div className="flex justify-end gap-2">
-                        <button onClick={() => setCommentingOn(null)} className="px-2 py-1 text-[10px] font-bold text-gray-500 hover:bg-gray-100 rounded">Cancel</button>
-                        <button onClick={handleAddComment} className="px-2 py-1 text-[10px] font-bold text-white bg-blue-600 rounded">Add Comment</button>
-                      </div>
-                    </div>
+                  <div className="absolute z-30 w-0 h-0 pointer-events-none" style={{ left: `${commentingOn.x}%`, top: `${commentingOn.y}%` }}>
+                    <div className="absolute w-6 h-6 bg-blue-500 rounded-full border-2 border-white shadow-lg flex items-center justify-center text-white text-xs font-bold -translate-x-1/2 -translate-y-1/2">+</div>
                   </div>
                 )}
               </div>
+
+              {commentingOn && !isLocked && activeVersion.status !== "Approved" && (
+                <div
+                  className="absolute left-1/2 bottom-14 z-[60] w-[min(100%-1.5rem,18rem)] -translate-x-1/2 bg-white p-3 rounded-xl shadow-2xl border border-slate-200"
+                  onClick={(e) => e.stopPropagation()}
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-2">Pin comment</p>
+                  <textarea
+                    autoFocus
+                    value={commentText}
+                    onChange={(e) => setCommentText(e.target.value)}
+                    placeholder="Type feedback here..."
+                    className="w-full text-xs p-2 border border-gray-200 rounded focus:outline-none mb-2"
+                    rows={2}
+                    disabled={savingComment}
+                  />
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (savingComment) return;
+                        setCommentingOn(null);
+                        setCommentText("");
+                      }}
+                      className="px-2 py-1 text-[10px] font-bold text-gray-500 hover:bg-gray-100 rounded"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleAddComment()}
+                      disabled={savingComment || !commentText.trim()}
+                      className="px-2 py-1 text-[10px] font-bold text-white bg-blue-600 rounded disabled:opacity-50"
+                    >
+                      {savingComment ? "Saving…" : "Add Comment"}
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <div className="absolute bottom-2 sm:bottom-4 right-2 sm:right-4 bg-white/90 backdrop-blur border border-slate-200 rounded-lg p-1.5 flex items-center gap-2 shadow-sm sm:opacity-0 sm:group-hover:opacity-100 opacity-100 transition-opacity">
                 <button onClick={() => setZoomLevel(v => Math.max(v - 20, 50))} className="p-1 text-slate-500 hover:text-slate-800 bg-gray-100 rounded"><ZoomOut size={14} /></button>

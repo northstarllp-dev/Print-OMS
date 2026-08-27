@@ -106,6 +106,7 @@ interface Quotation {
   tax: number;
   grand_total: number;
   shipping?: number;
+  installation_charges?: number;
   notes: string;
   terms: string;
   created_at?: string;
@@ -375,6 +376,7 @@ function applyQuotationRealtimeRow(
     setNotes: (v: string) => void;
     setTerms: (v: string) => void;
     setShipping: (v: number) => void;
+    setInstallationCharges: (v: number) => void;
     setDiscount: (v: number) => void;
     setRejectionReason: (v: string) => void;
     setSections: React.Dispatch<React.SetStateAction<SignageSection[]>>;
@@ -395,6 +397,9 @@ function applyQuotationRealtimeRow(
   if (newQuote.notes !== undefined) setters.setNotes((newQuote.notes as string) ?? "");
   if (newQuote.terms !== undefined) setters.setTerms((newQuote.terms as string) ?? "");
   if (newQuote.shipping !== undefined) setters.setShipping(Number(newQuote.shipping) || 0);
+  if (newQuote.installation_charges !== undefined) {
+    setters.setInstallationCharges(Number(newQuote.installation_charges) || 0);
+  }
   if (newQuote.discount !== undefined) setters.setDiscount(Number(newQuote.discount) || 0);
   if (newQuote.rejection_reason !== undefined) {
     setters.setRejectionReason((newQuote.rejection_reason as string) ?? "");
@@ -520,6 +525,11 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
   const [shipping, setShipping] = useState<number>(
     initialQuotation?.shipping ? Number(initialQuotation.shipping) : 0
   );
+  const [installationCharges, setInstallationCharges] = useState<number>(
+    initialQuotation?.installation_charges
+      ? Number(initialQuotation.installation_charges)
+      : 0
+  );
 
 
   const [taxPercent, setTaxPercent] = useState<number>(() => {
@@ -534,6 +544,9 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
   });
 
   const [showDiscountInput, setShowDiscountInput] = useState(discount > 0);
+  const [showInstallationInput, setShowInstallationInput] = useState(
+    installationCharges > 0
+  );
   const [showShippingInput, setShowShippingInput] = useState(shipping > 0);
 
   const [notes, setNotes] = useState(initialQuotation?.notes ?? "");
@@ -575,6 +588,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
       setNotes,
       setTerms,
       setShipping,
+      setInstallationCharges,
       setDiscount,
       setRejectionReason,
       setSections,
@@ -644,7 +658,9 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
 
   const effectiveDiscount = Math.min(Math.max(0, discount), subtotal);
   const tax = subtotal > 0 ? Math.round(totalGst * (1 - effectiveDiscount / subtotal) * 100) / 100 : 0;
-  const grandTotal = Math.round((subtotal - effectiveDiscount + tax + shipping) * 100) / 100;
+  const grandTotal = Math.round(
+    (subtotal - effectiveDiscount + tax + installationCharges + shipping) * 100
+  ) / 100;
 
   useEffect(() => {
     if (discountType === "percentage") {
@@ -761,6 +777,8 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
           notes,
           terms,
           shipping,
+          installation_charges: installationCharges,
+          adminOverride: adminOverrideUnlocked === true,
         });
         if (saved.quotation_id) setQuotationId(saved.quotation_id);
         setStatus("Draft");
@@ -785,6 +803,8 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
         notes,
         terms,
         shipping,
+        installation_charges: installationCharges,
+        adminOverride: adminOverrideUnlocked === true,
       });
       if (saved.quotation_id) setQuotationId(saved.quotation_id);
       const { isRevisionResend } = await sendQuotationToCustomer(saved.id, actorName);
@@ -1272,7 +1292,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
             </span>
           </div>
 
-          {/* Discount & Shipping Buttons / Inputs */}
+          {/* Discount / Installation / Shipping Buttons / Inputs */}
           <div className="space-y-3.5 py-1.5">
             <div className="flex flex-wrap gap-2">
               {!showDiscountInput && (
@@ -1283,6 +1303,16 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                 >
                   <Plus size={13} strokeWidth={2.5} />
                   Discount
+                </button>
+              )}
+              {!showInstallationInput && (
+                <button
+                  type="button"
+                  onClick={() => setShowInstallationInput(true)}
+                  className="inline-flex items-center justify-center gap-1.5 h-9 sm:h-8 px-3 rounded-lg text-[12px] font-semibold bg-white text-slate-600 border border-slate-200 shadow-sm hover:bg-slate-50 hover:border-slate-300 hover:text-slate-900 transition-colors flex-1 sm:flex-none min-w-[8.5rem]"
+                >
+                  <Plus size={13} strokeWidth={2.5} />
+                  Installation
                 </button>
               )}
               {!showShippingInput && (
@@ -1363,6 +1393,42 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                     Amount to deduct: ₹{discount.toFixed(2)}
                   </div>
                 )}
+              </div>
+            )}
+
+            {showInstallationInput && (
+              <div className="space-y-1">
+                <div className="flex justify-between items-center">
+                  <label className="text-[11px] font-semibold text-slate-600">
+                    Installation charges (₹)
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setInstallationCharges(0);
+                      setShowInstallationInput(false);
+                    }}
+                    className="text-[10px] text-rose-500 hover:underline font-bold"
+                  >
+                    Remove
+                  </button>
+                </div>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-semibold">₹</span>
+                  <input
+                    type="number"
+                    min="0"
+                    value={installationCharges === 0 ? "" : installationCharges}
+                    disabled={isLocked}
+                    onFocus={(e) => e.target.select()}
+                    onChange={(e) => {
+                      markDirty();
+                      setInstallationCharges(parseFloat(e.target.value) || 0);
+                    }}
+                    className={`${inputCls} w-full pl-7 pr-3 py-2 font-mono font-bold bg-white`}
+                    placeholder="0.00"
+                  />
+                </div>
               </div>
             )}
 
@@ -1602,6 +1668,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                 subtotal={subtotal}
                 discount={effectiveDiscount}
                 shipping={shipping}
+                installationCharges={installationCharges}
                 tax={tax}
                 grandTotal={grandTotal}
                 notes={notes}
@@ -1624,6 +1691,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
           discount={effectiveDiscount}
           tax={tax}
           shipping={shipping}
+          installationCharges={installationCharges}
           grandTotal={grandTotal}
           totalItems={sections.reduce((acc, sec) => acc + sec.lines.length, 0)}
           sectionSummaries={sections.map((sec) => ({
@@ -1812,6 +1880,7 @@ function QuotationConfirmModal({
   discount,
   tax,
   shipping,
+  installationCharges = 0,
   grandTotal,
   totalItems,
   sectionSummaries,
@@ -1824,6 +1893,7 @@ function QuotationConfirmModal({
   discount: number;
   tax: number;
   shipping: number;
+  installationCharges?: number;
   grandTotal: number;
   totalItems: number;
   sectionSummaries: {
@@ -1935,6 +2005,12 @@ function QuotationConfirmModal({
             <span style={{ fontSize: "12px", color: "#64748b", fontWeight: 600 }}>Tax (GST)</span>
             <span style={{ fontSize: "12px", color: "#0f172a", fontWeight: 800 }}>+₹{tax.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
           </div>
+          {installationCharges > 0 && (
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: "12px", color: "#64748b", fontWeight: 600 }}>Installation</span>
+              <span style={{ fontSize: "12px", color: "#0f172a", fontWeight: 800 }}>+₹{installationCharges.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+            </div>
+          )}
           {shipping > 0 && (
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <span style={{ fontSize: "12px", color: "#64748b", fontWeight: 600 }}>Shipping</span>

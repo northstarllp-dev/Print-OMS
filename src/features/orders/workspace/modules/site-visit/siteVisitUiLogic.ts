@@ -1,5 +1,7 @@
 /** Pure UI / workflow rules for the site visit module (unit-tested). */
 
+import { isStageModuleEditable } from "@/features/orders/workspace/shared/adminGodMode";
+
 export type GpsLatLng = { lat: number; lng: number };
 
 /** Parse stored GPS text ("12.97, 77.59" or with °NSEW) into a map center. */
@@ -68,7 +70,11 @@ export function isSiteVisitUiFrozen(input: {
     input.stageStatus,
     input.completed
   );
-  return (baseFrozen && !input.adminOverrideUnlocked) || !input.canEdit;
+  return !isStageModuleEditable({
+    baseFrozen,
+    adminOverrideUnlocked: input.adminOverrideUnlocked,
+    canEdit: input.canEdit,
+  });
 }
 
 /**

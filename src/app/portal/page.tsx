@@ -270,6 +270,7 @@ export default async function PortalPage({
     signageOptions: q.signage_options || [],
     discount: Number(q.discount || 0),
     shipping: Number(q.shipping || 0),
+    installationCharges: Number(q.installation_charges || 0),
     subtotal: Number(q.subtotal || 0),
     tax: Number(q.tax || 0),
     grandTotal: Number(q.grand_total || 0),
@@ -319,6 +320,7 @@ export default async function PortalPage({
           signageOptions: q.signage_options || [],
           discount: Number(q.discount || 0),
           shipping: Number(q.shipping || 0),
+          installationCharges: Number(q.installation_charges || 0),
           subtotal: Number(q.subtotal || 0),
           tax: Number(q.tax || 0),
           grandTotal: Number(q.grand_total || 0),
@@ -409,8 +411,8 @@ function PortalError({ title, message }: { title: string; message: string }) {
           boxShadow: "0 8px 24px rgba(0, 0, 0, 0.08)",
         }}
       >
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: "24px" }}>
-          <Logo height={48} />
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: "16px", maxWidth: 140, marginLeft: "auto", marginRight: "auto" }}>
+          <Logo height={28} width={120} applyScale={false} />
         </div>
         <div
           style={{

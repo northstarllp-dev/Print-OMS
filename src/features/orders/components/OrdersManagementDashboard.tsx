@@ -317,7 +317,7 @@ export function OrdersManagementDashboard({
       ? (initialStage as MyOrdersTab)
       : undefined;
   const resolvedInitialTab: MyOrdersTab | undefined =
-    initialTab ?? pipelineInitial ?? (myOrdersStages[0] as MyOrdersTab | undefined);
+    initialTab ?? pipelineInitial ?? (myOrdersStages.length > 0 ? "all" : undefined);
   const [myOrdersTab, setMyOrdersTab] = useState<MyOrdersTab | undefined>(resolvedInitialTab);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [menuAnchorEl, setMenuAnchorEl] = useState<HTMLElement | null>(null);
@@ -501,7 +501,7 @@ export function OrdersManagementDashboard({
   }, [orders, parsedEntryStage]);
 
   const myOrdersTabCounts: MyOrdersTabCounts = useMemo(() => {
-    if (!isMyOrders) return { incoming: 0, completed: 0 };
+    if (!isMyOrders) return { all: 0, incoming: 0, completed: 0 };
     return countMyOrdersTabs(orders, myOrdersStages);
   }, [isMyOrders, orders, myOrdersStages]);
 

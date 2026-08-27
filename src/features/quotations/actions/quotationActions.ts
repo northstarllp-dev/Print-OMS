@@ -12,6 +12,7 @@ import {
 } from "@/features/orders/actions/revalidateOrderPaths";
 import {
   assertStageEditPermission,
+  assertAdminOnly,
 } from "@/features/orders/workspace/shared/serverPermissions";
 import { computeQuotationTotals } from "@/features/quotations/utils/lineAmount";
 import {
@@ -181,10 +182,13 @@ export interface QuotationPayload {
   signage_options?: unknown[];
   discount?: number;
   shipping?: number;
+  installation_charges?: number;
   status?: string;
   notes?: string;
   terms?: string;
   customer_id?: string;
+  /** Admin God Mode: bypass Approved-quote lock (server still asserts admin). */
+  adminOverride?: boolean;
 }
 
 async function revalidateQuotationPaths(orderId: string, scope: "staff" | "detail" = "detail") {
@@ -207,7 +211,8 @@ export async function upsertQuotation(orderId: string, payload: QuotationPayload
   const totals = computeQuotationTotals(
     signageOptions,
     payload.discount ?? 0,
-    payload.shipping ?? 0
+    payload.shipping ?? 0,
+    payload.installation_charges ?? 0
   );
 
   const { data: existing } = await supabase
@@ -216,7 +221,12 @@ export async function upsertQuotation(orderId: string, payload: QuotationPayload
     .eq("order_id", resolved.uuid)
     .maybeSingle();
 
-  assertUpsertStatusTransition(existing?.status, nextStatus);
+  // Admin God Mode: allow editing an Approved quote, but verify admin server-side.
+  const adminOverride = payload.adminOverride === true;
+  if (adminOverride) {
+    await assertAdminOnly();
+  }
+  assertUpsertStatusTransition(existing?.status, nextStatus, adminOverride);
 
   const customerId = payload.customer_id ?? resolved.customerId ?? null;
 
@@ -231,6 +241,7 @@ export async function upsertQuotation(orderId: string, payload: QuotationPayload
     terms: payload.terms ?? null,
     customer_id: customerId,
     shipping: totals.shipping,
+    installation_charges: totals.installation_charges,
   };
 
   let result;

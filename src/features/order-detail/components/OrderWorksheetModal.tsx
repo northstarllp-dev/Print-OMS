@@ -22,6 +22,7 @@ import {
   canAdvanceSiteVisitAudit,
   mergeIncomingSiteVisitDetails,
 } from "@/features/orders/workspace/modules/site-visit/siteVisitUiLogic";
+import { resolveEffectiveAdminOverride } from "@/features/orders/workspace/shared/adminGodMode";
 import {
   businessOpNeedsWorkflowChoice,
   impliedWorkflowTypeForOp,
@@ -601,7 +602,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   // Quote details are now managed entirely by QuotationModule via quotationActions.
   const updateDesignDetails = async (orderId: string, details: Partial<DesignRecord>) => {
     const save = async (expectedUpdatedAt?: string) =>
-      updateDesignDetailsAction(orderId, details, expectedUpdatedAt);
+      updateDesignDetailsAction(orderId, details, expectedUpdatedAt, undefined, effectiveAdminOverrideUnlocked);
 
     const isStaleOrDigested = (err: unknown) => {
       const message = err instanceof Error ? err.message : String(err);
@@ -627,7 +628,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   };
   const updateProductionDetails = async (orderId: string, details: Partial<ProductionDetails>) => {
     setOrder((prev) => ({ ...prev, productionDetails: { ...(prev.productionDetails || {}), ...details } as ProductionDetails }));
-    await updateProductionDetailsAction(orderId, details);
+    await updateProductionDetailsAction(orderId, details, effectiveAdminOverrideUnlocked);
   };
   const updateInstallationDetails = async (orderId: string, details: Partial<InstallationDetails> & { afterPhotos?: string[]; photos?: string[] }) => {
     const photoList = details.afterPhotos ?? details.photos;
@@ -651,7 +652,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
       };
     });
     // Same path as installation portal: ensure row exists, then update
-    await updateInstallationDetailsServer(orderId, payload);
+    await updateInstallationDetailsServer(orderId, payload, effectiveAdminOverrideUnlocked);
   };
   const handleMarkInstallationCompleted = async (
     orderId: string,
@@ -1110,7 +1111,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
             siteVisitDetailsRef.current ||
             orderRef.current.siteVisitDetails;
           if (details) {
-            const result = await updateSiteVisitDetailsAction(order.id, details);
+            const result = await updateSiteVisitDetailsAction(order.id, details, effectiveAdminOverrideUnlocked);
             if (result?.siteVisitDetails) {
               siteVisitDetailsRef.current = result.siteVisitDetails as SiteVisitDetails;
               setOrder((prev) => ({
@@ -1131,7 +1132,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
               (item: any) =>
                 (item.versions || []).some((v: any) => v.status === "Changes Requested")
             );
-            const updated = await sendDesignToCustomerAction(order.id);
+            const updated = await sendDesignToCustomerAction(order.id, effectiveAdminOverrideUnlocked);
             setOrder(prev => ({ ...prev, design: updated }));
             if (!opts?.suppressCustomerPopup) {
               openCustomerMessage(
@@ -1142,12 +1143,12 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           break;
         case productionTab: // Production
           if (productionTab >= 0 && order.productionDetails) {
-            await updateProductionDetailsAction(order.id, order.productionDetails);
+            await updateProductionDetailsAction(order.id, order.productionDetails, effectiveAdminOverrideUnlocked);
           }
           break;
         case installationTab: // Installation
           if (installationTab >= 0 && order.installationDetails) {
-            await updateInstallationDetailsAction(order.id, order.installationDetails);
+            await updateInstallationDetailsAction(order.id, order.installationDetails, effectiveAdminOverrideUnlocked);
           }
           break;
       }
@@ -1175,7 +1176,10 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     (order.stage === "Design In Progress" || order.stage === "Design Approved");
 
   const isOrderClosed = order.stage === "Completed" || order.stage === "Closed";
-  const effectiveAdminOverrideUnlocked = isOrderClosed ? false : adminOverrideUnlocked;
+  const effectiveAdminOverrideUnlocked = resolveEffectiveAdminOverride(
+    isOrderClosed,
+    adminOverrideUnlocked
+  );
   // God Mode unlock only after that stage is done and the order has moved past it.
   const godModeSetterForTab = (tabIndex: number) =>
     !isOrderClosed && currentStageIndex > tabIndex ? setAdminOverrideUnlocked : undefined;
@@ -1372,7 +1376,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
               gpsLocation: location.gpsLocation,
               landmark: SKIPPED_SITE_VISIT_LANDMARK,
             };
-            const result = await updateSiteVisitDetailsAction(order.id, newDetails);
+            const result = await updateSiteVisitDetailsAction(order.id, newDetails, effectiveAdminOverrideUnlocked);
             const saved = (result?.siteVisitDetails || newDetails) as SiteVisitDetails;
             const merged = mergeIncomingSiteVisitDetails(
               siteVisitDetailsRef.current,

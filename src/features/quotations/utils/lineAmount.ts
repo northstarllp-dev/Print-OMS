@@ -42,6 +42,7 @@ export interface QuotationTotals {
   discount: number;
   tax: number;
   shipping: number;
+  installation_charges: number;
   grand_total: number;
 }
 
@@ -49,7 +50,8 @@ export interface QuotationTotals {
 export function computeQuotationTotals(
   signageOptions: Array<{ lines?: Array<Record<string, unknown>> }> | null | undefined,
   discount: number,
-  shipping: number
+  shipping: number,
+  installationCharges: number = 0
 ): QuotationTotals {
   const sections = signageOptions ?? [];
   const subtotal = sections.reduce((sum, sec) => {
@@ -67,8 +69,16 @@ export function computeQuotationTotals(
       ? Math.round(totalGst * (1 - clampedDiscount / subtotal) * 100) / 100
       : 0;
   const ship = Math.max(0, Number(shipping) || 0);
-  const grand_total = Math.round((subtotal - clampedDiscount + tax + ship) * 100) / 100;
-  return { subtotal, discount: clampedDiscount, tax, shipping: ship, grand_total };
+  const install = Math.max(0, Number(installationCharges) || 0);
+  const grand_total = Math.round((subtotal - clampedDiscount + tax + install + ship) * 100) / 100;
+  return {
+    subtotal,
+    discount: clampedDiscount,
+    tax,
+    shipping: ship,
+    installation_charges: install,
+    grand_total,
+  };
 }
 
 export function normalizeLineItem<T extends Record<string, any>>(line: T): T & {
