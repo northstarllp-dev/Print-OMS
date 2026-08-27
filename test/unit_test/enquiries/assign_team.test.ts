@@ -158,7 +158,7 @@ describe("assign team (after convert)", () => {
   });
 
   describe("5. Security", () => {
-    it("assign UI follows convert path — only enquiry editors reach it in normal flow", () => {
+    it("assign UI follows convert path only enquiry editors reach it in normal flow", () => {
       expect(
         resolveStagePermission("enquiry", { role: "staff", staff_role: "Marketer" }).canEdit
       ).toBe(true);
@@ -184,7 +184,7 @@ describe("assign team (after convert)", () => {
         selected = toggleEmployeeSelection(selected, `e-${i % 200}`);
         buildOrderAssignmentRows("ord", selected);
       }
-      // Wall-clock budget — keep loose enough for busy CI hosts; still catches O(n²) blowups.
+      // Wall-clock budget keep loose enough for busy CI hosts; still catches O(n²) blowups.
       expect(performance.now() - start).toBeLessThan(1000);
     });
 

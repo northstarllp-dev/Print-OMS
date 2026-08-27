@@ -123,7 +123,7 @@ export async function testWhatsAppHelloWorldAction(
     } else if (/template|132000|132001/i.test(err)) {
       hint = "hello_world should work on test WABA; check Phone Number ID and token.";
     } else if (/expired|190|OAuth/i.test(err)) {
-      hint = "Access token expired — generate a new token in Meta Developer Console.";
+      hint = "Access token expired generate a new token in Meta Developer Console.";
     }
     return { ok: false, to: normalized, error: err, hint };
   }

@@ -76,7 +76,7 @@ export class OrderWorkspacePage {
       .click();
   }
 
-  /** Admin: Job Done pending — open the payments-and-complete modal. */
+  /** Admin: Job Done pending open the payments-and-complete modal. */
   async clickReviewPaymentsAndComplete() {
     await this.page
       .getByRole("button", { name: /Review Payments & Complete/i })

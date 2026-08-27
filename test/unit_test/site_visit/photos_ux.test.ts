@@ -19,7 +19,7 @@ describe("site visit photo UX contract", () => {
   const orderId = "11111111-1111-1111-1111-111111111111";
   const bucket = "site-visit-photos";
 
-  it("does not write DB on upload — only local state until Save Draft", () => {
+  it("does not write DB on upload only local state until Save Draft", () => {
     expect(shouldPersistLinkAfterUpload("site_visit_photo")).toBe(false);
     expect(stageLifecycle("site_visit_photo").persistMode).toBe("deferred_until_save");
     expect(stageLifecycle("site_visit_photo").dbTarget).toEqual({

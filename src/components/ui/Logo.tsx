@@ -12,6 +12,11 @@ interface LogoProps {
   align?: "left" | "center" | "right";
   /** When false, skip client.logoScale (use for loaders so size stays predictable). */
   applyScale?: boolean;
+  /**
+   * fixed  fill a width×height box (sidebars).
+   * hug  image keeps its aspect ratio; parent can wrap tightly around it.
+   */
+  fit?: "fixed" | "hug";
 }
 
 function tryLoadClientConfig(): ClientConfig | null {
@@ -33,6 +38,7 @@ export function Logo({
   height = 48,
   align = "center",
   applyScale = true,
+  fit = "fixed",
 }: LogoProps) {
   // Resolve sync when NEXT_PUBLIC_CLIENT_SLUG is available so loaders show the logo immediately.
   const [client, setClient] = useState<ClientConfig | null>(() => tryLoadClientConfig());
@@ -52,6 +58,19 @@ export function Logo({
     const finalWidth = width * scale;
     const finalHeight = height * scale;
     const src = logoSrc(client.logoUrl);
+
+    if (fit === "hug") {
+      const hugScale = applyScale ? Math.min(client.logoScale || 1, 1.45) : 1;
+      const hugHeight = Math.round(height * hugScale);
+      return (
+        <img
+          src={src}
+          alt={`${client.name} Logo`}
+          className={`block h-auto w-auto max-w-[min(78vw,360px)] object-contain object-left ${className}`}
+          style={{ height: hugHeight }}
+        />
+      );
+    }
 
     return (
       <div

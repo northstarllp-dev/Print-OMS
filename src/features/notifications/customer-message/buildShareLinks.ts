@@ -1,4 +1,4 @@
-/** Normalize a raw phone for wa.me — 10-digit Indian numbers get a 91 prefix. */
+/** Normalize a raw phone for wa.me 10-digit Indian numbers get a 91 prefix. */
 export function normalizeWhatsAppShareNumber(rawPhone: string): string {
   const digits = rawPhone.replace(/[^0-9]/g, "");
   return digits.length === 10 ? `91${digits}` : digits;

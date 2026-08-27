@@ -50,10 +50,10 @@ describe("formatInr", () => {
 
 describe("formatQuoteDate", () => {
   it("returns em dash for empty/invalid values", () => {
-    expect(formatQuoteDate(null)).toBe("—");
-    expect(formatQuoteDate("")).toBe("—");
-    expect(formatQuoteDate("not-a-date")).toBe("—");
-    expect(formatQuoteDate(new Date(Number.NaN))).toBe("—");
+    expect(formatQuoteDate(null)).toBe("");
+    expect(formatQuoteDate("")).toBe("");
+    expect(formatQuoteDate("not-a-date")).toBe("");
+    expect(formatQuoteDate(new Date(Number.NaN))).toBe("");
   });
 
   it("formats Date and ISO strings in en-IN style", () => {

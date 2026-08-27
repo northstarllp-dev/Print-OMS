@@ -16,7 +16,7 @@ import {
 import { stageProgressPatch } from "@/features/orders/lib/orderHealth";
 
 describe("order workflow / timeline / assignment", () => {
-  describe("1. Business Operations — workflow", () => {
+  describe("1. Business Operations workflow", () => {
     it("uses quote_first pipeline by default and design_first when set", () => {
       expect(getPipelineStageOrder("quote_first")[3]).toBe("Quotation In Progress");
       expect(getPipelineStageOrder("design_first")[3]).toBe("Design In Progress");

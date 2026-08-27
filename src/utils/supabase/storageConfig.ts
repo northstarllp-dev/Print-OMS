@@ -109,7 +109,7 @@ export const stageFileErrors = {
     return `"${fileName}" is empty. Choose a valid file and try again.`;
   },
   itemLimitReachedInline(): string {
-    return "500 MB limit reached for this item — delete a file to upload more";
+    return "500 MB limit reached for this item delete a file to upload more";
   },
 };
 

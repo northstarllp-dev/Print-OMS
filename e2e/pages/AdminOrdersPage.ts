@@ -109,7 +109,7 @@ export class AdminOrdersPage {
 
     await this.page.getByRole("button", { name: /Create Order/i }).click();
 
-    // Convert is a server action — wait for the success popup before navigating
+    // Convert is a server action wait for the success popup before navigating
     // away, otherwise the request is aborted and the enquiry stays Pending.
     const customerMsg = this.page.getByRole("heading", {
       name: /Customer Message/i,

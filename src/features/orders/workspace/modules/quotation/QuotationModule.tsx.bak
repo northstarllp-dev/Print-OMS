@@ -720,7 +720,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
             <span className="text-[10px] text-slate-400 font-bold uppercase">Quote No:</span>
             <input
               type="text"
-              value={quotationId || "—"}
+              value={quotationId || ""}
               readOnly={true}
               className="text-xs font-mono text-slate-700 bg-slate-100/50 border border-slate-200 cursor-not-allowed rounded px-2 py-1"
               style={{ width: "90px" }}
@@ -941,7 +941,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                           <option value="per_sqft">Per Sq.Ft</option>
                         </select>
 
-                        {/* Qty / Measurement — same field for unit and sqft */}
+                        {/* Qty / Measurement same field for unit and sqft */}
                         <input
                           type="number"
                           min="0.01"

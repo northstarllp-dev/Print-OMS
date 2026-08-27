@@ -755,7 +755,7 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
                     <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-3">Fabrication Requirements</p>
                     <div className="space-y-2">
                       {[
-                        { label: "Extra Angles Required", value: sv.extraAnglesRequired, note: sv.extraAnglesRequired && sv.extraAnglesLength ? ` — ${sv.extraAnglesLength}` : "" },
+                        { label: "Extra Angles Required", value: sv.extraAnglesRequired, note: sv.extraAnglesRequired && sv.extraAnglesLength ? ` ${sv.extraAnglesLength}` : "" },
                         { label: "Extra ACP Sheet to Cover Gap", value: sv.extraAcpSheetRequired },
                         { label: "Old Board Removal", value: sv.oldBoardRemovalRequired },
                         { label: "Extra Wire Required", value: sv.extraWireRequired },

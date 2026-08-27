@@ -1,6 +1,6 @@
 import type { Libraries } from "@react-google-maps/api";
 
-/** Shared loader id — must stay identical across every useJsApiLoader call. */
+/** Shared loader id must stay identical across every useJsApiLoader call. */
 export const GOOGLE_MAPS_SCRIPT_ID = "google-map-script";
 
 /** Prefer weekly channel so Places Autocomplete (New) APIs are available. */

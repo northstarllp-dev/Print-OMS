@@ -196,7 +196,7 @@ test.describe("Installation: Approval Layer (full workflow)", () => {
           const adminWs = new OrderWorkspacePage(adminPage);
           await adminWs.openAdminControls();
           await adminWs.adminRequestChanges(
-            "The fascia is not level — please remount and send after-photos."
+            "The fascia is not level please remount and send after-photos."
           );
 
           await expectStageStatus(order.friendlyOrderId, "Normal");
@@ -231,7 +231,7 @@ test.describe("Installation: Approval Layer (full workflow)", () => {
     });
   });
 
-  test.describe("Auto-approval — toggle ON in Settings", () => {
+  test.describe("Auto-approval toggle ON in Settings", () => {
     test("job-done auto-completes when payment is settled; admin sees no pending", async ({
       browser,
       baseURL,

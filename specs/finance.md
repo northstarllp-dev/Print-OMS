@@ -2,7 +2,7 @@
 
 ## Overview
 
-- Purpose: full accounting layer on top of orders/invoices — incoming receipts, outgoing payments, expenses, other income, and a profit/cash dashboard.
+- Purpose: full accounting layer on top of orders/invoices incoming receipts, outgoing payments, expenses, other income, and a profit/cash dashboard.
 - Extends the existing invoices module (`specs/invoice.md`) rather than replacing it.
 - Company-scoped via RLS; applied on PrintOMS-dev-db and PrintOMS-prod-db.
 

@@ -12,13 +12,13 @@ export const REPORT_REGISTRY: Record<ReportType, ReportRegistryEntry> = {
   PIPELINE_BOTTLENECK: {
     id: "PIPELINE_BOTTLENECK",
     title: "Pipeline Bottlenecks",
-    desc: "Where active orders are stuck — bar = count, label = avg days open",
+    desc: "Where active orders are stuck bar = count, label = avg days open",
     dataKey: "pipelineBottleneck",
   },
   ORDER_AGING: {
     id: "ORDER_AGING",
     title: "Order Aging Risk",
-    desc: "Active orders by how long they have been open — chase 8+ day jobs first",
+    desc: "Active orders by how long they have been open chase 8+ day jobs first",
     dataKey: "orderAging",
   },
   CASH_POSITION: {
@@ -30,13 +30,13 @@ export const REPORT_REGISTRY: Record<ReportType, ReportRegistryEntry> = {
   SOURCE_CONVERSION: {
     id: "SOURCE_CONVERSION",
     title: "Lead Source Conversion",
-    desc: "Which enquiry sources actually convert to orders — double down here",
+    desc: "Which enquiry sources actually convert to orders double down here",
     dataKey: "sourceConversion",
   },
   TEAM_WORKLOAD: {
     id: "TEAM_WORKLOAD",
     title: "Team Workload",
-    desc: "Open work vs completed per assignee — spot overload",
+    desc: "Open work vs completed per assignee spot overload",
     dataKey: "teamWorkload",
   },
   COLLECTION_TREND: {
@@ -54,13 +54,13 @@ export const REPORT_REGISTRY: Record<ReportType, ReportRegistryEntry> = {
   TOP_CUSTOMERS: {
     id: "TOP_CUSTOMERS",
     title: "Top Customers by Revenue",
-    desc: "Highest value accounts — protect and upsell",
+    desc: "Highest value accounts protect and upsell",
     dataKey: "topCustomersByRevenue",
   },
   CUSTOMERS_TO_CHASE: {
     id: "CUSTOMERS_TO_CHASE",
     title: "Customers to Chase",
-    desc: "Largest outstanding balances — call these first",
+    desc: "Largest outstanding balances call these first",
     dataKey: "customersToChase",
   },
   OPEN_TICKETS: {

@@ -23,7 +23,7 @@ export interface UseOrderDetailSyncOptions {
   companyId?: string | null;
   siteVisitId?: string | null;
   enabled?: boolean;
-  /** Current order snapshot — used to merge site-visit locations. */
+  /** Current order snapshot used to merge site-visit locations. */
   getOrderSnapshot: () => Record<string, unknown>;
   onPatch: (patch: OrderDetailPatch) => void;
   /** Optional: order_activity events for comms timeline in OrderWorksheetModal. */
@@ -100,7 +100,7 @@ export function useOrderDetailSync({
     };
   }, [orderId, siteVisitId]);
 
-  // Core order / site-visit / stage tables — stable for the open order.
+  // Core order / site-visit / stage tables stable for the open order.
   useEffect(() => {
     if (!enabled || !orderId) return;
 
@@ -299,7 +299,7 @@ export function useOrderDetailSync({
     };
   }, [orderId, businessOrderId, companyId, enabled]);
 
-  // Measurements — separate channel so siteVisitId resolution doesn't drop schedule events.
+  // Measurements separate channel so siteVisitId resolution doesn't drop schedule events.
   useEffect(() => {
     if (!enabled || !orderId || !resolvedSiteVisitId) return;
 

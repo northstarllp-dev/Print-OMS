@@ -14,7 +14,7 @@ async function expectCustomerMessageFabFlow(page: Page) {
   await workspace.openCustomerMessageFab();
   await workspace.pickCustomerMessageTemplate(/Order Created/);
   await expect(
-    page.getByRole("heading", { name: /Order Created — Customer Message/i })
+    page.getByRole("heading", { name: /Order Created Customer Message/i })
   ).toBeVisible();
   await expect(page.getByRole("button", { name: /WhatsApp/i })).toBeVisible();
   await expect(page.getByRole("button", { name: /Copy/i })).toBeVisible();

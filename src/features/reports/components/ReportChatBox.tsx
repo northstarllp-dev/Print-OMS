@@ -29,7 +29,7 @@ export function ReportChatBox({ reportData }: ReportChatBoxProps) {
     {
       id: "welcome",
       sender: "bot",
-      text: "Ask what to do next — bottlenecks, cash to collect, lead sources that convert, customers to chase, or team overload.",
+      text: "Ask what to do next bottlenecks, cash to collect, lead sources that convert, customers to chase, or team overload.",
     },
   ]);
   const [input, setInput] = useState("");

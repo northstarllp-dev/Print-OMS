@@ -25,19 +25,19 @@ function paramValue(param: CustomerMessageParam, vars: CustomerMessageVars): str
     case "ClientName":
       return vars.clientName || "our team";
     case "EnquiryNo":
-      return vars.enquiryNo || "—";
+      return vars.enquiryNo || "";
     case "OrderNo":
-      return vars.orderNo || "—";
+      return vars.orderNo || "";
     case "Date":
-      return vars.date || "—";
+      return vars.date || "";
     case "Time":
-      return vars.time || "—";
+      return vars.time || "";
     case "TicketNo":
-      return vars.ticketNo || "—";
+      return vars.ticketNo || "";
   }
 }
 
-/** WhatsApp emphasis — bold for all filled params (names, IDs, date, time). */
+/** WhatsApp emphasis bold for all filled params (names, IDs, date, time). */
 function formatParam(_param: CustomerMessageParam, value: string): string {
   // Strip markers that would break WhatsApp formatting.
   const clean = value.replace(/[*_~`]/g, "").trim() || value;

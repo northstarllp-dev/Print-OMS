@@ -45,7 +45,7 @@ export type EnquiryFormErrors = Partial<
 export function formatPhoneNumber(value: string): string {
   let digits = value.replace(/\D/g, "");
   // Only strip +91 / leading 0 when a full local number was pasted with the prefix
-  // (e.g. 919876543210). Do NOT strip while typing — "91…" is a valid start of a 10-digit mobile.
+  // (e.g. 919876543210). Do NOT strip while typing "91…" is a valid start of a 10-digit mobile.
   if (digits.length > 10 && digits.startsWith("91")) digits = digits.slice(2);
   if (digits.length === 11 && digits.startsWith("0")) digits = digits.slice(1);
   digits = digits.slice(0, 10);
@@ -65,7 +65,7 @@ export function validateEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
-/** Client-side Create Enquiry gate — mirrors AddEnquiryModal submit checks. */
+/** Client-side Create Enquiry gate mirrors AddEnquiryModal submit checks. */
 export function validateEnquiryForm(data: EnquiryFormData): EnquiryFormErrors {
   const errors: EnquiryFormErrors = {};
   if (!data.businessName.trim()) errors.businessName = "Business name is required";

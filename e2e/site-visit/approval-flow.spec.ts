@@ -23,7 +23,7 @@ import { SiteVisitPage } from "../pages/SiteVisitPage";
  * auto-approval flow (toggle ON → defaults to Quotation, no admin action).
  */
 test.describe("Site Visit: Approval Layer (full workflow)", () => {
-  test.describe("Manual approval — staff request → admin approves", () => {
+  test.describe("Manual approval staff request → admin approves", () => {
     test("admin approves with Quote First → Quotation In Progress", async ({
       browser,
       baseURL,
@@ -187,7 +187,7 @@ test.describe("Site Visit: Approval Layer (full workflow)", () => {
     });
   });
 
-  test.describe("Admin reject — request changes back to staff", () => {
+  test.describe("Admin reject request changes back to staff", () => {
     test("admin sends the order back to staff for revision", async ({
       browser,
       baseURL,
@@ -285,7 +285,7 @@ test.describe("Site Visit: Approval Layer (full workflow)", () => {
     });
   });
 
-  test.describe("Auto-approval — toggle ON skips admin", () => {
+  test.describe("Auto-approval toggle ON skips admin", () => {
     test("staff request auto-advances to Quotation; admin sees no pending", async ({
       browser,
       baseURL,
@@ -322,7 +322,7 @@ test.describe("Site Visit: Approval Layer (full workflow)", () => {
           await marketerCtx.close();
         }
 
-        // Admin opens the order — no pending banner should appear.
+        // Admin opens the order no pending banner should appear.
         const adminCtx = await browser.newContext({
           baseURL,
           storageState: "e2e/.auth/admin.json",

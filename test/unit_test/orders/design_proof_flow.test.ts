@@ -129,7 +129,7 @@ describe("proof version append / delete", () => {
   });
 });
 
-describe("Send to Customer — status visibility", () => {
+describe("Send to Customer status visibility", () => {
   it("Draft and Pending Admin are hidden from customer; Sent/Changes Requested/Approved visible", () => {
     const design: DesignRecord = {
       id: "d1",

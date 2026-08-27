@@ -9,7 +9,7 @@ import type { OrderStage } from "./shared/types";
 
 /**
  * OrderWorkspace composes the new order workspace architecture.
- * This is a purely structural placeholder — it is not wired up to any
+ * This is a purely structural placeholder it is not wired up to any
  * routes, data, or business logic yet.
  */
 export const OrderWorkspace: React.FC = () => {

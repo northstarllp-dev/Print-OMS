@@ -131,7 +131,7 @@ describe("product CRUD, search & filters", () => {
     });
   });
 
-  describe("Business Functions — pricing", () => {
+  describe("Business Functions pricing", () => {
     it("disables unrelated price fields for single pricing type", () => {
       expect(isPricingFieldDisabled("price_per_sqft", "Per Sq.Ft")).toBe(false);
       expect(isPricingFieldDisabled("price_per_unit", "Per Sq.Ft")).toBe(true);

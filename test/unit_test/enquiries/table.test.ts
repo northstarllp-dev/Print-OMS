@@ -207,7 +207,7 @@ describe("table", () => {
       const start = performance.now();
       const out = filterEnquiries(rows, { search: "Biz 42", selectedKpi: "pending" });
       expect(out.length).toBeGreaterThan(0);
-      // Wall-clock budget — loose for busy hosts; still catches O(n²) blowups.
+      // Wall-clock budget loose for busy hosts; still catches O(n²) blowups.
       expect(performance.now() - start).toBeLessThan(500);
     });
   });

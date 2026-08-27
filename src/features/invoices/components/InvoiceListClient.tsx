@@ -15,9 +15,9 @@ function formatINR(n: number) {
 }
 
 function formatDate(iso: string | null) {
-  if (!iso) return "—";
+  if (!iso) return "";
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
+  if (Number.isNaN(d.getTime())) return "";
   return d.toLocaleDateString("en-IN", {
     day: "numeric",
     month: "short",
@@ -133,7 +133,7 @@ export function InvoiceListClient({
                       {inv.invoiceId}
                     </div>
                     <div className="mt-1 text-sm font-semibold text-slate-800 truncate">
-                      {inv.businessName || inv.customerName || "—"}
+                      {inv.businessName || inv.customerName || ""}
                     </div>
                     {inv.clientName ? (
                       <div className="text-xs text-slate-500 truncate">{inv.clientName}</div>
@@ -200,7 +200,7 @@ export function InvoiceListClient({
                       </td>
                       <td className="px-4 py-3">
                         <div className="font-semibold text-slate-800">
-                          {inv.businessName || inv.customerName || "—"}
+                          {inv.businessName || inv.customerName || ""}
                         </div>
                         {inv.clientName && (
                           <div className="text-xs text-slate-500">{inv.clientName}</div>

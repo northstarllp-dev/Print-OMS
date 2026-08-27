@@ -27,7 +27,7 @@ interface ConvertEnquiryModalProps {
   defaultRequirements?: string;
   /** Business operation label from the enquiry (read-only). */
   businessOperationLabel?: string;
-  /** Business operation id — used to filter / tag products. */
+  /** Business operation id used to filter / tag products. */
   businessOperationId?: string;
 }
 
@@ -89,7 +89,7 @@ export function ConvertEnquiryModal({
   }, []);
 
   // Show every active product in search; tags come from products.business_operations.
-  // (Do not hide products by enquiry op — users still need to pick freely.)
+  // (Do not hide products by enquiry op users still need to pick freely.)
   const filteredProducts = filterProductsByName(products, productType);
 
   const formatOpTags = (ops?: string[] | null) => {

@@ -168,7 +168,7 @@ export function ProductionAdvanceModal({
                 <p className="text-xs text-slate-500 font-semibold truncate">{orderLabel}</p>
               )}
               <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                Installation deadline is required only when starting fabrication — after design
+                Installation deadline is required only when starting fabrication after design
                 and quote are done.
               </p>
             </div>
@@ -291,7 +291,7 @@ export function ProductionAdvanceModal({
                     {productionDeadline ? (
                       <>
                         {" "}
-                        — <span className="font-bold">{formatDisplayDate(productionDeadline)}</span>
+                        <span className="font-bold">{formatDisplayDate(productionDeadline)}</span>
                       </>
                     ) : (
                       "."

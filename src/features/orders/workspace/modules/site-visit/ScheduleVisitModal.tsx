@@ -307,7 +307,7 @@ export const ScheduleVisitModal: React.FC<ScheduleVisitModalProps> = ({
               </label>
               {locationOnly && (
                 <p className="text-xs text-slate-500 mb-2 leading-relaxed">
-                  Site visit is skipped — pin the place where installation will happen.
+                  Site visit is skipped pin the place where installation will happen.
                 </p>
               )}
               {isLoaded ? (

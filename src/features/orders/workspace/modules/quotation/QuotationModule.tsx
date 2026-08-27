@@ -77,7 +77,7 @@ interface LineItem {
   id: string;
   productId?: string;
   description: string;
-  /** Optional HSN/SAC — stored in signage_options JSON only. */
+  /** Optional HSN/SAC stored in signage_options JSON only. */
   hsn?: string;
   quantity: number;
   pricingType: PricingType;
@@ -148,7 +148,7 @@ interface QuotationModuleProps {
   externalRealtime?: boolean;
   adminOverrideUnlocked?: boolean;
   setAdminOverrideUnlocked?: (val: boolean) => void;
-  /** RBAC — when canEdit is false the module renders read-only. */
+  /** RBAC when canEdit is false the module renders read-only. */
   permission?: StagePermission;
 }
 
@@ -197,7 +197,7 @@ function ProductSearch({
   onSelect: (p: Product) => void;
   onChange: (val: string) => void;
   disabled?: boolean;
-  /** Current line/site measurement — drives dual-price preview (≤10 unit, >10 sqft). */
+  /** Current line/site measurement drives dual-price preview (≤10 unit, >10 sqft). */
   measurement?: number;
   businessOperationId?: string | null;
 }) {
@@ -860,7 +860,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
         <div className="flex items-center gap-2.5 min-w-0">
           <ClipboardList size={16} className="text-blue-600 shrink-0" />
           <h3 className="text-sm font-bold text-slate-800">Quotation</h3>
-          <span className="text-xs font-mono text-slate-400 truncate">{quotationId || "—"}</span>
+          <span className="text-xs font-mono text-slate-400 truncate">{quotationId || ""}</span>
         </div>
         <div className="flex items-center gap-2 md:gap-3 flex-wrap">
           <button
@@ -978,7 +978,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                 </div>
               </div>
 
-              {/* Line Items Table — wide horizontal scroll on phone/tablet */}
+              {/* Line Items Table wide horizontal scroll on phone/tablet */}
               <div
                 className="overflow-x-auto overscroll-x-contain -mx-px scrollbar-none"
                 style={{ WebkitOverflowScrolling: "touch" }}
@@ -1105,7 +1105,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                           <option value="per_sqft">Per Sq.Ft</option>
                         </select>
 
-                        {/* Qty / Measurement — same field for unit and sqft */}
+                        {/* Qty / Measurement same field for unit and sqft */}
                         <input
                           type="number"
                           min="0.01"
@@ -1661,7 +1661,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                 quoteDate={quoteCreatedAt || new Date().toISOString()}
                 status={status}
                 showStatus
-                billToName={[order.businessName, order.clientName].filter(Boolean).join(" - ") || "—"}
+                billToName={[order.businessName, order.clientName].filter(Boolean).join(" - ") || ""}
                 billToAddress={null}
                 placeOfSupply={invoiceProfile.placeOfSupplyDefault}
                 sections={sections}

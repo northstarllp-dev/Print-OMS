@@ -28,7 +28,7 @@ export const InstallationScheduleModule: React.FC<InstallationScheduleModuleProp
   locationLink = "",
   onScheduled,
 }) => {
-  // confirmedDate/Time track the *saved* value — updated after a successful save
+  // confirmedDate/Time track the *saved* value updated after a successful save
   const [confirmedDate, setConfirmedDate] = useState(initialScheduledDate);
   const [confirmedTime, setConfirmedTime] = useState(initialScheduledTime);
   
@@ -87,7 +87,7 @@ export const InstallationScheduleModule: React.FC<InstallationScheduleModuleProp
     const current = new Date();
     while (days.length < count) {
       current.setDate(current.getDate() + 1);
-      // Skip Sundays (0) — keep Saturdays for installation work
+      // Skip Sundays (0) keep Saturdays for installation work
       if (current.getDay() !== 0) {
         days.push(current.toISOString().split("T")[0]);
       }

@@ -256,7 +256,7 @@ export function ProductionLayoutClient({ children, profile }: ProductionLayoutCl
           })}
         </nav>
 
-        {/* Collapse — desktop only */}
+        {/* Collapse desktop only */}
         <div
           className="hidden lg:block"
           style={{

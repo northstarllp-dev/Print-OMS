@@ -71,7 +71,7 @@ function printLabel(row: InventoryStockRow) {
   const code = row.barcode || row.product_code;
   const w = window.open("", "_blank", "width=420,height=280");
   if (!w) return;
-  w.document.write(`<!DOCTYPE html><html><head><title>Label — ${row.product_code}</title>
+  w.document.write(`<!DOCTYPE html><html><head><title>Label ${row.product_code}</title>
     <style>
       body { font-family: ui-monospace, monospace; padding: 16px; text-align: center; }
       .name { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
@@ -152,7 +152,7 @@ export function InventoryDashboard({
         <div>
           <h1 className="m-0 text-2xl font-extrabold text-slate-900">Inventory &amp; Warehouse</h1>
           <p className="m-0 mt-1 text-sm text-slate-500">
-            Stock levels, movement ledger, and warehouses — products are the material master.
+            Stock levels, movement ledger, and warehouses products are the material master.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

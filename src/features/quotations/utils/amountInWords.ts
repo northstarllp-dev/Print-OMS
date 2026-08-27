@@ -68,9 +68,9 @@ export function amountToIndianWords(amount: number): string {
 }
 
 export function formatQuoteDate(iso?: string | Date | null): string {
-  if (iso == null || iso === "") return "—";
+  if (iso == null || iso === "") return "";
   if (iso instanceof Date) {
-    if (Number.isNaN(iso.getTime())) return "—";
+    if (Number.isNaN(iso.getTime())) return "";
     return iso.toLocaleDateString("en-IN", {
       day: "2-digit",
       month: "short",
@@ -87,7 +87,7 @@ export function formatQuoteDate(iso?: string | Date | null): string {
   const d = new Date(normalized);
   if (Number.isNaN(d.getTime())) {
     const fallback = new Date(iso);
-    if (Number.isNaN(fallback.getTime())) return "—";
+    if (Number.isNaN(fallback.getTime())) return "";
     return fallback.toLocaleDateString("en-IN", {
       day: "2-digit",
       month: "short",

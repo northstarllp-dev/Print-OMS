@@ -36,9 +36,9 @@ function formatMoneyInput(n: number): string {
 }
 
 function formatDate(iso: string | null) {
-  if (!iso) return "—";
+  if (!iso) return "";
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
+  if (Number.isNaN(d.getTime())) return "";
   return d.toLocaleDateString("en-IN", {
     day: "numeric",
     month: "short",
@@ -215,7 +215,7 @@ export function PaymentsCollectionsClient({ data }: PaymentsCollectionsClientPro
         </div>
       </div>
 
-      {/* KPIs — clickable */}
+      {/* KPIs clickable */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
         <KpiClickable
           label="Collected"
@@ -567,7 +567,7 @@ function KpiClickable({
 }
 
 function InvoiceBadge({ invoiceId, invoiceStatus }: { invoiceId: string | null; invoiceStatus: string | null }) {
-  if (!invoiceId || !invoiceStatus) return <span className="text-slate-300">—</span>;
+  if (!invoiceId || !invoiceStatus) return <span className="text-slate-300"></span>;
   const meta = INVOICE_STATUS_META[invoiceStatus] ?? INVOICE_STATUS_META.Draft;
   return (
     <Link
@@ -603,7 +603,7 @@ function OrderTableRow({
       </td>
       <td className="px-3 py-3 text-slate-600 font-medium whitespace-nowrap">{row.stage}</td>
       <td className="px-3 py-3 text-right tabular-nums font-semibold text-slate-700">
-        {row.quoteTotal > 0 ? formatINR(row.quoteTotal) : "—"}
+        {row.quoteTotal > 0 ? formatINR(row.quoteTotal) : ""}
       </td>
       <td className="px-3 py-3 text-right tabular-nums font-semibold text-emerald-700">
         {formatINR(row.receivedTotal)}
@@ -617,13 +617,13 @@ function OrderTableRow({
         </span>
       </td>
       <td className="px-3 py-3 tabular-nums text-slate-600 font-medium">
-        {row.outstanding > 0 ? `${row.agingDays}d` : "—"}
+        {row.outstanding > 0 ? `${row.agingDays}d` : ""}
       </td>
       <td className="px-3 py-3">
         <InvoiceBadge invoiceId={row.invoiceId} invoiceStatus={row.invoiceStatus} />
       </td>
       <td className="px-3 py-3 text-slate-500">
-        <div className="font-medium truncate max-w-[8rem]">{row.lastPaymentName || "—"}</div>
+        <div className="font-medium truncate max-w-[8rem]">{row.lastPaymentName || ""}</div>
         <div className="text-[10px]">{formatDate(row.lastPaidAt)}</div>
       </td>
       <td className="px-3 py-3">
@@ -681,7 +681,7 @@ function OrderCard({
         <div>
           <div className="font-bold uppercase text-slate-400 tracking-wide">Quote</div>
           <div className="font-semibold text-slate-700 tabular-nums mt-0.5">
-            {row.quoteTotal > 0 ? formatINR(row.quoteTotal) : "—"}
+            {row.quoteTotal > 0 ? formatINR(row.quoteTotal) : ""}
           </div>
         </div>
         <div>
@@ -699,7 +699,7 @@ function OrderCard({
         <div>
           <div className="font-bold uppercase text-slate-400 tracking-wide">Aging</div>
           <div className="font-semibold text-slate-600 tabular-nums mt-0.5">
-            {row.outstanding > 0 ? `${row.agingDays}d` : "—"}
+            {row.outstanding > 0 ? `${row.agingDays}d` : ""}
           </div>
         </div>
       </div>

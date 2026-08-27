@@ -29,7 +29,7 @@ function firstMatch(url: string, patterns: RegExp[]): MapsLatLng | null {
   return null;
 }
 
-/** Place pin from Google data params — more accurate than map viewport `@lat,lng`. */
+/** Place pin from Google data params more accurate than map viewport `@lat,lng`. */
 export function parsePlacePinCoordsFromMapsUrl(rawUrl: string): MapsLatLng | null {
   let url: string;
   try {
@@ -45,7 +45,7 @@ export function parsePlacePinCoordsFromMapsUrl(rawUrl: string): MapsLatLng | nul
   ]);
 }
 
-/** Map camera center — fallback only when no place pin exists. */
+/** Map camera center fallback only when no place pin exists. */
 export function parseViewportCoordsFromMapsUrl(rawUrl: string): MapsLatLng | null {
   let url: string;
   try {

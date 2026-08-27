@@ -260,7 +260,7 @@ export function InstallationModule({
     try {
       const newUrls = afterPhotos.filter(u => u !== urlToRemove);
       setAfterPhotos(newUrls);
-      // DB first — if this fails, the photo is still in storage (no broken link).
+      // DB first if this fails, the photo is still in storage (no broken link).
       await updateInstallationDetails(order.id, { afterPhotos: newUrls, photos: newUrls });
       // Then best-effort storage cleanup.
       const parsed = parseStoredRef(urlToRemove);
@@ -340,7 +340,7 @@ export function InstallationModule({
         </div>
       )}
 
-      {/* Top Navigation — portal only */}
+      {/* Top Navigation portal only */}
       {!embedded && (
         <div className="flex items-center gap-4 mb-6">
           <button
@@ -453,7 +453,7 @@ export function InstallationModule({
       ) : (
       <div className={embedded ? "space-y-8" : "grid grid-cols-1 lg:grid-cols-3 gap-8 items-start"}>
 
-        {/* Work column — full width when embedded */}
+        {/* Work column full width when embedded */}
         <div className={embedded ? "space-y-8" : "lg:col-span-2 space-y-8"}>
           <div className="bg-rose-50 border border-rose-200 rounded-xl p-4">
             <div className="text-[10px] font-bold uppercase tracking-wider text-rose-700 mb-1">
@@ -707,7 +707,7 @@ export function InstallationModule({
 
         </div>
 
-        {/* RIGHT COLUMN — portal only (customer already in worksheet chrome) */}
+        {/* RIGHT COLUMN portal only (customer already in worksheet chrome) */}
         {!embedded && (
           <div className="space-y-6 lg:sticky lg:top-24 transition-all duration-300">
             {client && (

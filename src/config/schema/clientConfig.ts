@@ -23,7 +23,7 @@ export interface PrintOMSClientConfig {
   /** Client slug (matches companies.slug / CLIENT_SLUG). Never use as DB company_id. */
   id: string;
   name: string;
-  /** Primary tenant UUID in public.companies — use this for all company_id DB/API values */
+  /** Primary tenant UUID in public.companies use this for all company_id DB/API values */
   companyId: string;
   /** Optional extra company UUIDs for this deploy (defaults to [companyId]) */
   companyIds?: string[];

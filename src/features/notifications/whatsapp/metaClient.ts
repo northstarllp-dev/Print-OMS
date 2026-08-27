@@ -111,7 +111,7 @@ export async function sendWhatsAppTemplateMessage(
           "Access token expired. Refresh WHATSAPP_ACCESS_TOKEN in .env.local (Meta Developer Console → WhatsApp → API Setup → Generate access token), then restart the dev server.";
       } else if (notAllowed) {
         error =
-          `Recipient ${input.to} is not on Meta's allowed list. In Meta Developer Console → WhatsApp → API Setup, add your real WhatsApp number under "To", verify the code Meta sends, set WHATSAPP_TEST_PHONE to that number (digits only, e.g. 9198XXXXXXXX), then restart the dev server. Do not use 15556275106 — that is Meta's docs example, not a real recipient.`;
+          `Recipient ${input.to} is not on Meta's allowed list. In Meta Developer Console → WhatsApp → API Setup, add your real WhatsApp number under "To", verify the code Meta sends, set WHATSAPP_TEST_PHONE to that number (digits only, e.g. 9198XXXXXXXX), then restart the dev server. Do not use 15556275106 that is Meta's docs example, not a real recipient.`;
       }
 
       return { success: false, error, raw: data };

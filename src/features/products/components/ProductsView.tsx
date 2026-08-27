@@ -314,7 +314,7 @@ function PricingSection({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-1">
           <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-2.5 space-y-2">
             <div style={{ fontSize: 10, fontWeight: 700, color: "#475569" }}>
-              Up to {Number.isFinite(Number(threshold)) ? threshold : "—"} sq.ft
+              Up to {Number.isFinite(Number(threshold)) ? threshold : ""} sq.ft
             </div>
             <PriceAmountInput
               label="Price *"
@@ -333,7 +333,7 @@ function PricingSection({
 
           <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-2.5 space-y-2">
             <div style={{ fontSize: 10, fontWeight: 700, color: "#475569" }}>
-              Above {Number.isFinite(Number(threshold)) ? threshold : "—"} sq.ft
+              Above {Number.isFinite(Number(threshold)) ? threshold : ""} sq.ft
             </div>
             <PriceAmountInput
               label="Price *"
@@ -351,7 +351,7 @@ function PricingSection({
           </div>
         </div>
         <p style={{ margin: "6px 0 0", fontSize: 10, color: "#64748b", fontWeight: 600, lineHeight: 1.4 }}>
-          Each band can be Per Unit or Per Sq.Ft — any combination.
+          Each band can be Per Unit or Per Sq.Ft any combination.
         </p>
       </div>
     );
@@ -515,7 +515,7 @@ function ProductFormModal({
             </div>
             <div>
               <h3 style={{ fontSize: 16, fontWeight: 800, color: "#0f172a", margin: 0 }}>{isEdit ? "Edit Product" : "Add Product"}</h3>
-              <p style={{ fontSize: 11, color: "#64748b", margin: 0 }}>Product Master — Quotation Catalogue</p>
+              <p style={{ fontSize: 11, color: "#64748b", margin: 0 }}>Product Master Quotation Catalogue</p>
             </div>
           </div>
           <button onClick={handleClose} style={{ width: 32, height: 32, borderRadius: 8, background: "#f1f5f9", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>

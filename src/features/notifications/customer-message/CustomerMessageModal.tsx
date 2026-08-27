@@ -59,9 +59,9 @@ function renderPreviewNodes(text: string): React.ReactNode[] {
 }
 
 export type CustomerMessageInfo = {
-  /** Customer id (uuid or friendly) — required for portal link generation. */
+  /** Customer id (uuid or friendly) required for portal link generation. */
   customerId?: string;
-  /** Order id (uuid or friendly) — scopes the portal link to the order. */
+  /** Order id (uuid or friendly) scopes the portal link to the order. */
   orderId?: string;
   businessName: string;
   phone?: string;
@@ -100,7 +100,7 @@ export function CustomerMessageModal({
   const markShared = (channel: CustomerMessageShareChannel) => {
     const shareOrderId = info.orderNo || info.orderId;
     if (!shareOrderId) return;
-    // Optimistic UI — tick updates even if network is slow.
+    // Optimistic UI tick updates even if network is slow.
     onShared?.(templateKey);
     void recordCustomerMessageShare({
       orderId: shareOrderId,
@@ -121,7 +121,7 @@ export function CustomerMessageModal({
 
     let cancelled = false;
 
-    // Feedback message uses the Google review link from settings — not portal.
+    // Feedback message uses the Google review link from settings not portal.
     if (templateKey === "feedback_request") {
       setLoading(true);
       void getAppSettings()
@@ -139,7 +139,7 @@ export function CustomerMessageModal({
       };
     }
 
-    // Service tickets share the public ticket form link — not the order portal.
+    // Service tickets share the public ticket form link not the order portal.
     if (
       templateKey === "service_ticket_created" ||
       templateKey === "service_ticket_resolved"
@@ -201,7 +201,7 @@ export function CustomerMessageModal({
       setTimeout(() => setCopied(false), 2000);
       markShared("copy");
     } catch {
-      // Silent — copy may be blocked in restricted contexts.
+      // Silent copy may be blocked in restricted contexts.
     }
   };
 
@@ -265,7 +265,7 @@ export function CustomerMessageModal({
         >
           <div style={{ minWidth: 0 }}>
             <h2 style={{ fontSize: "16px", fontWeight: "700", color: "#0f172a", margin: 0 }}>
-              {template.title} — Customer Message
+              {template.title} Customer Message
             </h2>
             <p style={{ fontSize: "12px", color: "#64748b", margin: "4px 0 0 0" }}>
               Review and send this update to {info.businessName || "the customer"}.

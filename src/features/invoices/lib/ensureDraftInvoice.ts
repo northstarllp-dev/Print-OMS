@@ -24,7 +24,7 @@ function revalidateInvoicePaths(invoiceId?: string | null, orderCode?: string | 
 /**
  * Idempotent: creates a Draft invoice from an approved quotation if none exists.
  * Safe to call from customer portal (admin client) or staff approve paths.
- * Not a server action — accepts a live Supabase client.
+ * Not a server action accepts a live Supabase client.
  */
 export async function ensureDraftInvoiceFromQuotation(
   orderUuid: string,

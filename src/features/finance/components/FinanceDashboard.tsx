@@ -85,7 +85,7 @@ export function FinanceDashboard({
         <div>
           <h1 className="m-0 text-2xl font-extrabold text-slate-900">Finance</h1>
           <p className="m-0 mt-1 text-sm text-slate-500">
-            Sales income, PO / purchase payments, operating expenses, and other income — synced from Orders &amp; Purchases.
+            Sales income, PO / purchase payments, operating expenses, and other income synced from Orders &amp; Purchases.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

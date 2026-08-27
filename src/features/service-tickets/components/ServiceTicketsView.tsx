@@ -119,7 +119,7 @@ export function ServiceTicketsView({
 
       {/* ─── Table Card ─── */}
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-        {/* Search & Filter Bar — Orders-style */}
+        {/* Search & Filter Bar Orders-style */}
         <div className="p-3 sm:p-4 border-b border-slate-200">
           <div className="lg:hidden flex items-center gap-2">
             <div className="relative flex-1 min-w-0">
@@ -300,7 +300,7 @@ export function ServiceTicketsView({
                             </span>
                           </div>
                           <div className="text-[13px] font-semibold text-slate-800 truncate mt-1">
-                            {ticket.customer_name || ticket.customer_business_name || "—"}
+                            {ticket.customer_name || ticket.customer_business_name || ""}
                           </div>
                           {ticket.customer_name && ticket.customer_business_name ? (
                             <div className="text-[11px] text-slate-500 truncate">{ticket.customer_business_name}</div>

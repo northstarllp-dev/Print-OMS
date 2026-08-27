@@ -309,7 +309,7 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
       pathname.startsWith("/staff/orders/") && pathname.replace(/\/$/, "") !== "/staff/orders";
 
     if (isOrderDetail) {
-      // My Orders opens worksheets without entryStage — highlight My Orders.
+      // My Orders opens worksheets without entryStage highlight My Orders.
       if (item.href === "/staff/my-orders") {
         return !entryStage;
       }
@@ -492,7 +492,7 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
           })}
         </nav>
 
-        {/* Collapse — desktop only */}
+        {/* Collapse desktop only */}
         <div
           className="hidden lg:block"
           style={{
@@ -540,7 +540,7 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
           </button>
         </div>
 
-        {/* Logout + Close — mobile drawer only */}
+        {/* Logout + Close mobile drawer only */}
         {isMobileMenuOpen && (
           <div className="lg:hidden p-3 shrink-0 border-t border-white/10 space-y-2">
             <button
@@ -571,7 +571,7 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
       {/* ── MAIN WORKSPACE ── */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0, overflow: "hidden" }}>
 
-        {/* Top Bar — hidden on worksheet pages */}
+        {/* Top Bar hidden on worksheet pages */}
         {!isWorksheetPage && (
           <header
             className="flex items-center w-full h-[56px] bg-white border-b border-slate-200 px-4 md:px-6 sticky top-0 z-40 gap-3 shrink-0"
@@ -625,7 +625,7 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2, flexWrap: "wrap" }}>
                                   <span style={{ fontSize: 10, fontWeight: 700, color: "#0F172A", background: "#F1F5F9", padding: "1px 6px", borderRadius: 4, flexShrink: 0 }}>
-                                    {act.order_id || "—"}
+                                    {act.order_id || ""}
                                   </span>
                                   {act.orders?.status && (
                                     <span style={{ fontSize: 10, fontWeight: 700, color: "#2563eb", background: "#dbeafe", padding: "1px 6px", borderRadius: 4, flexShrink: 0, textTransform: "uppercase" }}>

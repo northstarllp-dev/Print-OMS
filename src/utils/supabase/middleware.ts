@@ -70,7 +70,7 @@ export const updateSession = async (request: NextRequest) => {
       data: { user },
     } = await supabase.auth.getUser();
 
-    // Note: with basePath, Next strips the prefix before middleware — paths are
+    // Note: with basePath, Next strips the prefix before middleware paths are
     // like /admin/... not /printoms/admin/...
     const path = request.nextUrl.pathname;
     const isAdminRoute = path.startsWith("/admin");
@@ -105,7 +105,7 @@ export const updateSession = async (request: NextRequest) => {
       role = profile?.role as string | undefined;
       const slug = (profile as { companies?: { slug?: string } } | null)?.companies
         ?.slug;
-      // Same tenant gate as getCurrentUser() — mismatch must not bounce login↔dashboard.
+      // Same tenant gate as getCurrentUser() mismatch must not bounce login↔dashboard.
       tenantOk = !!slug && slug === clientId;
     }
 
@@ -132,7 +132,7 @@ export const updateSession = async (request: NextRequest) => {
       if (tenantOk && canAccessPath(homePathForLogin(path), role)) {
         return redirectTo(homePathForLogin(path));
       }
-      // Wrong tenant/role (or staff on admin login): stay on login — breaks the loop.
+      // Wrong tenant/role (or staff on admin login): stay on login breaks the loop.
     }
   } catch (error) {
     console.error("Failed to update supabase session in middleware:", error);

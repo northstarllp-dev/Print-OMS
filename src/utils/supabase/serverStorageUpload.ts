@@ -62,7 +62,7 @@ function guessContentType(fileName: string, mimeType?: string): string {
   return MIME_BY_EXT[ext] || "application/octet-stream";
 }
 
-/** Flat order-scoped key: {orderId}/{stamp}.{ext} — stage is the bucket. */
+/** Flat order-scoped key: {orderId}/{stamp}.{ext} stage is the bucket. */
 function buildStoragePath(
   orderId: string,
   _purpose: StorageUploadPurpose,

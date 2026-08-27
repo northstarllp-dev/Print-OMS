@@ -6,7 +6,7 @@ export const MAX_PRODUCT_IMAGES = 5;
 /** Catalog images share the same 50 MB image-pipeline ceiling as other stage photos. */
 export const MAX_PRODUCT_IMAGE_BYTES = 50 * 1024 * 1024;
 export const PRODUCT_IMAGE_BUCKET = "product-images";
-/** Public catalog bucket — reads use public URLs (not signed). Writes remain admin-gated. */
+/** Public catalog bucket reads use public URLs (not signed). Writes remain admin-gated. */
 export const PRODUCT_IMAGE_PIPELINE = "image" as const;
 export const PRODUCT_IMAGE_ACCEPT = [
   "image/jpeg",
@@ -54,7 +54,7 @@ export function productsForTenant(
   return existing.filter((p) => p.company_id === companyId);
 }
 
-/** Next PRD-### — max+1, never reuses deleted gaps (audit-safe). */
+/** Next PRD-### max+1, never reuses deleted gaps (audit-safe). */
 export function generateProductId(
   existing: Array<Pick<Product, "company_id" | "product_id">>,
   companyId?: string | null

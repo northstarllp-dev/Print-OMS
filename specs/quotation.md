@@ -87,7 +87,7 @@ Admin: Move to Design/Production (one click, advances stage)
 
 | From | Action | To |
 |------|--------|-----|
-| — | First `upsertQuotation` | `Draft` (default) |
+| | First `upsertQuotation` | `Draft` (default) |
 | `Draft` / legacy `Pending Approval` / `Rejected` | Staff or Admin **Send to Customer** (`sendQuotationToCustomer`) | `Sent` |
 | `Sent` | Customer approve | `Approved` |
 | `Sent` | Customer decline | `Rejected` |
@@ -106,7 +106,7 @@ Admin: Move to Design/Production (one click, advances stage)
 | `customerRequestRevision` | `Quotation Negotiation` | `Rejected` |
 | `adminMarkQuotationApprovedAction` | `Quotation Approved` | `Approved` |
 | `adminApproveStageAction` from `Quotation Approved` | Design or Production (workflow map) | unchanged |
-| `adminApproveStageAction` from `Quotation In Progress`, `Quotation Sent`, or `Quotation Negotiation` | **Blocked** — throws error; use quotation-specific actions |
+| `adminApproveStageAction` from `Quotation In Progress`, `Quotation Sent`, or `Quotation Negotiation` | **Blocked** throws error; use quotation-specific actions |
 
 ### `stage_status` (admin queue)
 
@@ -119,27 +119,27 @@ Admin: Move to Design/Production (one click, advances stage)
 
 ## Business Rules
 
-1. **One quotation per order** — `upsertQuotation` upserts by `order_id` (`maybeSingle`).
-2. **Friendly ID** — `QT-NNN` per tenant (`company_id`); DB trigger `generate_quotation_id()` on insert. App does not generate IDs.
-3. **Pricing types** — `per_unit` or `per_sqft` only.
-4. **Qty / measurement** — Single logical field; `quantity` and `totalSqFt` kept in sync in UI. Formula: `amount = measurement × unitPrice`.
-5. **Legacy lines** — If `quantity === 1` and `totalSqFt > 1`, measurement reads from `totalSqFt`.
-6. **GST** — Per line item (0, 5, 12, 18, 28). Section totals show line amount **including** GST in UI.
-7. **Discount** — Flat ₹ subtracted from subtotal; tax scaled proportionally on server and client.
-8. **Shipping** — Optional flat ₹ after discount and tax.
-9. **Grand total** — `round((subtotal - discount + tax + shipping) × 100) / 100`.
-10. **Site measurements** — Section headers use `formatSiteMeasurementLabel()`; product select pre-fills `width × height` when both exist.
-11. **Edit lock** — Staff and admin cannot edit when status is `Sent` or `Approved`. Editable when `Draft`, `Rejected`, or legacy `Pending Approval`.
-12. **Send to customer** — `sendQuotationToCustomer` allowed from `Draft`, legacy `Pending Approval`, or `Rejected` (`assertCanSendQuotationToCustomer`).
-13. **Customer visibility** — Only `Sent`, `Approved`, `Rejected` (`isQuotationVisibleToCustomer` / `getCustomerVisibleQuotationForOrder`).
-14. **Customer actions** — Only when `status === "Sent"`; via `customerApproveQuotation` / `customerRequestRevision`.
-15. **Workflow fork** — `quote_first`: Quotation → Design → Production. `design_first`: Design → Quotation → Production.
-16. **Approve without customer** — Admin button when `status === "Sent"` calls `handleQuotationAdvance` → `adminMarkQuotationApprovedAction` then `adminApproveStageAction`.
-17. **Move to next stage** — Requires `status === "Approved"` **and** `orders.stage === "Quotation Approved"`. Staff button label: **Request Advance to {Design/Production}** (flags `stage_status` only). Admin button: **Move to {Design/Production}** (advances immediately).
-18. **WhatsApp on send** — `quotation_ready` on first send; `revised_quotation_ready` when resending from `Rejected`.
-19. **Confirm modal** — `QuotationConfirmModal` before Send to Customer.
-20. **Bill To** — Read-only display of `order.businessName - order.clientName` (not persisted on quotation row).
-21. **Quotation tab footer** — `OrderWorksheetModal` delegates footer actions to `QuotationModule` via `#modal-footer-portal` (shell Save/Push buttons hidden on quote tab).
+1. **One quotation per order** `upsertQuotation` upserts by `order_id` (`maybeSingle`).
+2. **Friendly ID** `QT-NNN` per tenant (`company_id`); DB trigger `generate_quotation_id()` on insert. App does not generate IDs.
+3. **Pricing types** `per_unit` or `per_sqft` only.
+4. **Qty / measurement** Single logical field; `quantity` and `totalSqFt` kept in sync in UI. Formula: `amount = measurement × unitPrice`.
+5. **Legacy lines** If `quantity === 1` and `totalSqFt > 1`, measurement reads from `totalSqFt`.
+6. **GST** Per line item (0, 5, 12, 18, 28). Section totals show line amount **including** GST in UI.
+7. **Discount** Flat ₹ subtracted from subtotal; tax scaled proportionally on server and client.
+8. **Shipping** Optional flat ₹ after discount and tax.
+9. **Grand total** `round((subtotal - discount + tax + shipping) × 100) / 100`.
+10. **Site measurements** Section headers use `formatSiteMeasurementLabel()`; product select pre-fills `width × height` when both exist.
+11. **Edit lock** Staff and admin cannot edit when status is `Sent` or `Approved`. Editable when `Draft`, `Rejected`, or legacy `Pending Approval`.
+12. **Send to customer** `sendQuotationToCustomer` allowed from `Draft`, legacy `Pending Approval`, or `Rejected` (`assertCanSendQuotationToCustomer`).
+13. **Customer visibility** Only `Sent`, `Approved`, `Rejected` (`isQuotationVisibleToCustomer` / `getCustomerVisibleQuotationForOrder`).
+14. **Customer actions** Only when `status === "Sent"`; via `customerApproveQuotation` / `customerRequestRevision`.
+15. **Workflow fork** `quote_first`: Quotation → Design → Production. `design_first`: Design → Quotation → Production.
+16. **Approve without customer** Admin button when `status === "Sent"` calls `handleQuotationAdvance` → `adminMarkQuotationApprovedAction` then `adminApproveStageAction`.
+17. **Move to next stage** Requires `status === "Approved"` **and** `orders.stage === "Quotation Approved"`. Staff button label: **Request Advance to {Design/Production}** (flags `stage_status` only). Admin button: **Move to {Design/Production}** (advances immediately).
+18. **WhatsApp on send** `quotation_ready` on first send; `revised_quotation_ready` when resending from `Rejected`.
+19. **Confirm modal** `QuotationConfirmModal` before Send to Customer.
+20. **Bill To** Read-only display of `order.businessName - order.clientName` (not persisted on quotation row).
+21. **Quotation tab footer** `OrderWorksheetModal` delegates footer actions to `QuotationModule` via `#modal-footer-portal` (shell Save/Push buttons hidden on quote tab).
 
 ---
 
@@ -292,7 +292,7 @@ grandTotal = round((subtotal - discount + tax + shipping) × 100) / 100
 |--------|----------------|
 | `setWorkflowTypeAction` | Enters `Quotation In Progress` (quote_first) |
 | `requestStageAdvancementAction` | Sets `stage_status` for admin queue |
-| `adminApproveStageAction` | Generic stage++ map — **blocked** for `Quotation In Progress`, `Quotation Sent`, `Quotation Negotiation`; allowed from `Quotation Approved` |
+| `adminApproveStageAction` | Generic stage++ map **blocked** for `Quotation In Progress`, `Quotation Sent`, `Quotation Negotiation`; allowed from `Quotation Approved` |
 | `revalidateOrderPathsAction` | Portal cache after customer mutations |
 
 ### Revalidation (`revalidateOrderPaths.ts`)
@@ -335,7 +335,7 @@ src/features/orders/actions/
   siteVisitMapper.ts
 src/features/orders/workspace/modules/quotation/
   QuotationModule.tsx
-  QuotationModule.tsx.bak          # dead backup — remove in cleanup
+  QuotationModule.tsx.bak          # dead backup remove in cleanup
   types.ts
   components/
     QuotationConfirmModal.tsx      # extracted but unused by main module
@@ -368,7 +368,7 @@ specs/quotation.md
     ↓
 [Client] QuotationModule state (sections, discount, shipping, notes, terms)
     ↓ calc on change
-[Client] upsertQuotation — server recomputes totals
+[Client] upsertQuotation server recomputes totals
     ↓
 [DB] quotations upsert + revalidateStaffOrderDetailPaths
     ↓
@@ -439,30 +439,30 @@ specs/quotation.md
 - **No anon RLS** on `quotations`.
 
 **Portal realtime (other tables):**
-- Migration `20260706130000_order_detail_realtime.sql` adds broad anon `SELECT` on `orders`, `site_visits`, etc. for browser realtime — see `docs/portal-and-storage-security-plan.md` (known exposure; quotations table excluded).
+- Migration `20260706130000_order_detail_realtime.sql` adds broad anon `SELECT` on `orders`, `site_visits`, etc. for browser realtime see `docs/portal-and-storage-security-plan.md` (known exposure; quotations table excluded).
 
 ---
 
 ## Edge Cases
 
-1. **No site visit measurements** — “General Signage” fallback section or saved `signage_options` only.
-2. **Re-send after rejection** — Staff or admin edits when `Rejected`, Send to Customer; WhatsApp `revised_quotation_ready`.
-3. **Admin skip customer** — “Approve without Customer & Advance” when `Sent`.
-4. **design_first** — Portal CTA mentions Production instead of Design.
-5. **`order_activity.order_id`** — Friendly `order_id` string (e.g. `A002-001`).
-6. **Placeholder quote ID** — UI shows `—` until first save; DB assigns `QT-NNN` on insert.
-7. **Staff realtime** — Parent owns channel when `externalRealtime`; module keeps fallback internal subscription when false.
-8. **Portal quotation line realtime** — Unlikely via anon (no quotations RLS); stage changes on `orders` still sync.
-9. **Tab follow stage** — Portal auto-switches tab/step forward only when pipeline advances (`didStageAdvance`).
-10. **`adminApproveStageAction` on mid-quotation stages** — Throws error for `Quotation In Progress`, `Quotation Sent`, `Quotation Negotiation`. Use Send to Customer or quotation tab actions instead.
-11. **Saving `Rejected` via upsert** — Allowed when quote is already `Rejected` (revision edits). Cannot newly set `Rejected` via upsert.
-12. **Discount > subtotal** — Server clamps to `subtotal`.
+1. **No site visit measurements** “General Signage” fallback section or saved `signage_options` only.
+2. **Re-send after rejection** Staff or admin edits when `Rejected`, Send to Customer; WhatsApp `revised_quotation_ready`.
+3. **Admin skip customer** “Approve without Customer & Advance” when `Sent`.
+4. **design_first** Portal CTA mentions Production instead of Design.
+5. **`order_activity.order_id`** Friendly `order_id` string (e.g. `A002-001`).
+6. **Placeholder quote ID** UI shows `` until first save; DB assigns `QT-NNN` on insert.
+7. **Staff realtime** Parent owns channel when `externalRealtime`; module keeps fallback internal subscription when false.
+8. **Portal quotation line realtime** Unlikely via anon (no quotations RLS); stage changes on `orders` still sync.
+9. **Tab follow stage** Portal auto-switches tab/step forward only when pipeline advances (`didStageAdvance`).
+10. **`adminApproveStageAction` on mid-quotation stages** Throws error for `Quotation In Progress`, `Quotation Sent`, `Quotation Negotiation`. Use Send to Customer or quotation tab actions instead.
+11. **Saving `Rejected` via upsert** Allowed when quote is already `Rejected` (revision edits). Cannot newly set `Rejected` via upsert.
+12. **Discount > subtotal** Server clamps to `subtotal`.
 
 ---
 
 ## Future Improvements
 
-- Finish `QuotationModule` extraction — import `components/QuotationConfirmModal`, `ProductInfoModal`; delete inline duplicates and `.bak`.
+- Finish `QuotationModule` extraction import `components/QuotationConfirmModal`, `ProductInfoModal`; delete inline duplicates and `.bak`.
 - Remove dead `assertQuotationEditable` or wire it into `upsertQuotation`.
 - Portal-scoped JWT instead of anon `using (true)` realtime policies.
 - Replace `alert()` in `useQuotationActions` with inline error UI.

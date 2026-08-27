@@ -186,7 +186,7 @@ export async function clearAllNotifications() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthorized");
 
-  // Use admin client to bypass RLS — DELETE policy is not granted to authenticated users
+  // Use admin client to bypass RLS DELETE policy is not granted to authenticated users
   const admin = createAdminClient();
   if (!admin) throw new Error("Admin client not available");
 

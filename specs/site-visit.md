@@ -21,26 +21,26 @@ The Site Visit workflow collects scheduling information, on-site measurements, p
 
 ### End-to-end (implemented)
 
-1. **Order enters Site Visit Pending** — created from enquiry conversion (`enquiryActions`) or manual order creation with `stage: "Site Visit Pending"`. No `site_visits` row exists until scheduling or first save.
+1. **Order enters Site Visit Pending** created from enquiry conversion (`enquiryActions`) or manual order creation with `stage: "Site Visit Pending"`. No `site_visits` row exists until scheduling or first save.
 
-2. **Schedule visit** — Customer (portal) or Staff (`SiteVisitModule` → “Schedule by yourself”) calls `scheduleSiteVisitAction`:
+2. **Schedule visit** Customer (portal) or Staff (`SiteVisitModule` → “Schedule by yourself”) calls `scheduleSiteVisitAction`:
    - Upserts `site_visits` with `audit_date`, `audit_time`, `customer_address`, `gps_location`, `review_status: "Pending"`, `completed: false`.
    - Sets `orders.stage = "Site Visit Scheduled"`, `orders.stage_status = "Normal"`.
    - Writes timeline activity and sends WhatsApp `site_visit_scheduled`.
    - **No staff approval step. No admin approval for scheduling.**
 
-3. **Optional: Skip visit** — Staff clicks “Skip Visit & Add Values” (`OrderWorksheetModal`):
+3. **Optional: Skip visit** Staff clicks “Skip Visit & Add Values” (`OrderWorksheetModal`):
    - `updateSiteVisitDetailsAction` with synthetic address `"Skipped - Direct Measurement (Manual Entry)"`, current date/time, `gpsLocation: "N/A"`.
    - `updateOrderStageAction` → `Site Visit Scheduled`.
    - UI shows amber “Site Visit Skipped” banner when address starts with `"Skipped"`.
 
-4. **Field audit & data entry** — Staff on `Site Visit Scheduled` (stage name does not change during audit):
+4. **Field audit & data entry** Staff on `Site Visit Scheduled` (stage name does not change during audit):
    - Edits flow through local React state (`onUpdate` → parent `setOrder`); persisted on **Save Draft** via `updateSiteVisitDetailsAction`.
    - Per-location measurements, electrical, structural, and photos are stored on `site_visit_measurements`.
-   - Order-level installation/fabrication/design-input flags stored on `site_visits` (mapper fields — see Database Tables).
+   - Order-level installation/fabrication/design-input flags stored on `site_visits` (mapper fields see Database Tables).
    - Photos upload client-side to Supabase Storage bucket `site-visit-photos`.
 
-5. **Freeze / request completion** — Staff clicks **Push for Approval** on Site Visit tab:
+5. **Freeze / request completion** Staff clicks **Push for Approval** on Site Visit tab:
    - Opens `SiteVisitReviewModal` (does **not** call `requestStageAdvancementAction`).
    - On confirm: `freezeSiteVisitAction`:
      - `site_visits.completed = true`
@@ -49,7 +49,7 @@ The Site Visit workflow collects scheduling information, on-site measurements, p
      - Timeline + WhatsApp `site_visit_completed`
    - Module becomes read-only (`isFrozen`) unless admin unlocks “God Mode”.
 
-6. **Admin approval & workflow choice** — `AdminControlModule` shows pending approval when `stage_status !== "Normal"`:
+6. **Admin approval & workflow choice** `AdminControlModule` shows pending approval when `stage_status !== "Normal"`:
    - For orders in any `Site Visit*` stage: **Choose Workflow & Approve** opens `WorkflowChoiceModal`.
    - `setWorkflowTypeAction("quote_first" | "design_first")`:
      - Persists `orders.workflow_type`
@@ -57,14 +57,14 @@ The Site Visit workflow collects scheduling information, on-site measurements, p
      - Sets `orders.stage_status = "Normal"`
    - Does **not** use `adminApproveStageAction` for this path.
 
-7. **Downstream** — `site_visit_measurements` rows are passed as `siteVisitItems` into Quotation, Design, Production, and portal views.
+7. **Downstream** `site_visit_measurements` rows are passed as `siteVisitItems` into Quotation, Design, Production, and portal views.
 
 ### Alternate / unused paths (present in code, not wired in UI)
 
 | Action | Behavior | Status |
 |--------|----------|--------|
-| `approveSiteVisitAction` | Sets `review_status: "Staff Approved"`, `stage_status: "Pending Admin Approval: Site Visit Schedule"` | **Dead code** — imported in `OrderWorksheetModal` but never called |
-| `requestStageAdvancementAction` (Site Visit stages) | Would set `stage_status: "Pending Admin Approval: Site Visit Completed"` without freezing | **Bypassed** — Site Visit tab uses review modal + `freezeSiteVisitAction` instead |
+| `approveSiteVisitAction` | Sets `review_status: "Staff Approved"`, `stage_status: "Pending Admin Approval: Site Visit Schedule"` | **Dead code** imported in `OrderWorksheetModal` but never called |
+| `requestStageAdvancementAction` (Site Visit stages) | Would set `stage_status: "Pending Admin Approval: Site Visit Completed"` without freezing | **Bypassed** Site Visit tab uses review modal + `freezeSiteVisitAction` instead |
 | `orders.stage = "Site Visit Completed"` | Referenced in stage maps and queue filters | **Never assigned** by any server mutation |
 
 ## Workflow States
@@ -75,13 +75,13 @@ The Site Visit workflow collects scheduling information, on-site measurements, p
 |-------|---------------------|-------------|
 | `Site Visit Pending` | Awaiting schedule | Enquiry conversion / new order |
 | `Site Visit Scheduled` | Schedule set (or skipped); audit in progress or frozen pending admin | `scheduleSiteVisitAction`, skip flow, or `updateOrderStageAction` |
-| `Site Visit Completed` | Listed in UI/maps/queues | **Not set by current mutations** — legacy label only |
+| `Site Visit Completed` | Listed in UI/maps/queues | **Not set by current mutations** legacy label only |
 
 ### `orders.stage_status` (approval lock)
 
 | Value | Meaning | How reached | Cleared by |
 |-------|---------|-------------|------------|
-| `Normal` | No pending admin lock | Default; after scheduling | — |
+| `Normal` | No pending admin lock | Default; after scheduling | |
 | `Pending Admin Approval: Site Visit Schedule` | Staff approved customer schedule | `approveSiteVisitAction` only | **Unused in UI** |
 | `Pending Admin Approval: Site Visit Completed` | Audit frozen, awaiting admin | `freezeSiteVisitAction` | `setWorkflowTypeAction` |
 
@@ -94,16 +94,16 @@ The Site Visit workflow collects scheduling information, on-site measurements, p
 
 ### `site_visits.review_status`
 
-Values used: `"Pending"` (on schedule), `"Staff Approved"` (`approveSiteVisitAction` only — unused in UI).
+Values used: `"Pending"` (on schedule), `"Staff Approved"` (`approveSiteVisitAction` only unused in UI).
 
 ## Business Rules
 
 - Customer/staff scheduling requires date, time slot, and address (portal form + `ScheduleVisitModal`).
 - **Push for Approval** on Site Visit tab requires `auditDate` + `auditTime` and at least one location in `locations[]` (`OrderWorksheetModal` validation).
-- Scheduling moves stage to `Site Visit Scheduled` immediately with `stage_status: Normal` — no internal review gate.
+- Scheduling moves stage to `Site Visit Scheduled` immediately with `stage_status: Normal` no internal review gate.
 - Freezing sets `completed = true` and pending admin lock; does **not** change `orders.stage`.
 - Admin must choose `quote_first` or `design_first` before leaving Site Visit phase (via `setWorkflowTypeAction`).
-- Removed measurement rows are **not** deleted from DB on save — only upsert of current array; orphans possible.
+- Removed measurement rows are **not** deleted from DB on save only upsert of current array; orphans possible.
 - Queue list pages display `Site Visit Pending` when stage is `Site Visit Scheduled`/`Completed` but `auditDate` is missing (display-only heuristic).
 - Staff site-visit queue (`/staff/site-visit`) shows orders assigned to the logged-in user in Site Visit stages only.
 
@@ -126,7 +126,7 @@ Values used: `"Pending"` (on schedule), `"Staff Approved"` (`approveSiteVisitAct
 | Designer | Yes |
 | Marketer | Yes |
 | Installation (default tenant) | Yes |
-| Installation (Printec tenant override) | No — installation only |
+| Installation (Printec tenant override) | No installation only |
 | Recce & Installation (Board tenant) | Yes |
 
 **Server mutations with `assertStageEditPermission("site_visit")`:**
@@ -148,7 +148,7 @@ Values used: `"Pending"` (on schedule), `"Staff Approved"` (`approveSiteVisitAct
 - Approve frozen site visit via **Choose Workflow & Approve** → `setWorkflowTypeAction`.
 - `adminApproveStageAction` available for other stages; on Site Visit tab with `stage_status: Normal`, admin **Approve & Advance** opens review modal (same freeze path as staff).
 
-**Note:** `adminApproveStageAction` and `setWorkflowTypeAction` do not call `assertAdminOnly()` — authorization is UI-only today.
+**Note:** `adminApproveStageAction` and `setWorkflowTypeAction` do not call `assertAdminOnly()` authorization is UI-only today.
 
 ## Database Tables
 
@@ -169,7 +169,7 @@ One row per order (`UNIQUE(order_id)`). Created on first schedule or first `upda
 | `internal_notes` | jsonb | Mapper only; **no UI section** (removed from module) |
 | `review_status` | text | Schedule / unused approve action |
 | `completed` | boolean | Freeze flag |
-| `scaffolding_required` | boolean | **Mapper + UI — no migration in repo** |
+| `scaffolding_required` | boolean | **Mapper + UI no migration in repo** |
 | `crane_required` | boolean | Same |
 | `overnight_installation` | boolean | Same |
 | `extra_angles_required` / `extra_angles_length` | boolean / text | Same |
@@ -207,8 +207,8 @@ Child rows per signage item/location.
 |--------|------|
 | `stage` | Pipeline position |
 | `stage_status` | Admin approval lock |
-| `workflow_type` | `"quote_first"` \| `"design_first"` — set at admin approval |
-| `assigned_employees` | Via `order_assignments` — queue filtering |
+| `workflow_type` | `"quote_first"` \| `"design_first"` set at admin approval |
+| `assigned_employees` | Via `order_assignments` queue filtering |
 
 ### RLS
 
@@ -229,7 +229,7 @@ Child rows per signage item/location.
 | Access | Public URL via `getPublicUrl` |
 | MIME / size | All types allowed, 50MB limit (`20260704000000_update_site_visit_photos_bucket.sql`) |
 | Upload | Client-side (`SiteVisitModule`); also used by Design module for proofs |
-| Delete | On photo remove in UI — storage `remove` + URL removed from measurement `photos` jsonb |
+| Delete | On photo remove in UI storage `remove` + URL removed from measurement `photos` jsonb |
 | Orphans | No server-side cleanup when measurement rows deleted |
 
 ## Server Actions
@@ -243,11 +243,11 @@ All in `src/features/orders/actions/orderActions.ts` unless noted.
 | `approveSiteVisitAction(orderId)` | `assertStageEditPermission("site_visit")` | Upsert `review_status: Staff Approved`; `stage_status → Pending Admin Approval: Site Visit Schedule` | Timeline; **unused in UI** |
 | `freezeSiteVisitAction(orderId)` | `assertStageEditPermission("site_visit")` | `site_visits.completed → true`; `stage_status → Pending Admin Approval: Site Visit Completed` | Timeline, WhatsApp, revalidate |
 | `setWorkflowTypeAction(orderId, workflowType)` | **None** | `workflow_type`, `stage → Quotation/Design In Progress`, `stage_status → Normal` | Timeline, WhatsApp |
-| `adminApproveStageAction(orderId)` | **None** | Generic stage map advance, `stage_status → Normal` | Timeline, WhatsApp — not used for site-visit freeze approval |
+| `adminApproveStageAction(orderId)` | **None** | Generic stage map advance, `stage_status → Normal` | Timeline, WhatsApp not used for site-visit freeze approval |
 | `updateOrderStageAction(id, stage)` | **None** | Manual stage change | Timeline if changed; used by skip flow |
 | `requestStageAdvancementAction(orderId)` | **None** | Sets `stage_status` by current stage | Site Visit tab bypasses this |
 
-**Mapper:** `src/features/orders/actions/siteVisitMapper.ts` — `mapSiteVisitFromDb`, `mapSiteVisitToDb`, `mapSiteVisitMeasurementFromDb`, `formatSiteMeasurementLabel`.
+**Mapper:** `src/features/orders/actions/siteVisitMapper.ts` `mapSiteVisitFromDb`, `mapSiteVisitToDb`, `mapSiteVisitMeasurementFromDb`, `formatSiteMeasurementLabel`.
 
 ## UI Components
 
@@ -388,7 +388,7 @@ useOrderDetailSync
   → orderDetailPatch merge into local order state
 ```
 
-List/queue pages: SSR + `revalidatePath` + manual Refresh — **no queue realtime**.
+List/queue pages: SSR + `revalidatePath` + manual Refresh **no queue realtime**.
 
 ## Timeline Events
 
@@ -429,13 +429,13 @@ No Zod/schema validation on server payloads.
 
 - Staff mutations (`update`, `freeze`) require authenticated user with `site_visit` stage grant.
 - RLS tenant isolation on `site_visits` / `site_visit_measurements` for authenticated users.
-- Portal anon `SELECT` policies for realtime (permissive — same pattern as quotations).
+- Portal anon `SELECT` policies for realtime (permissive same pattern as quotations).
 
 **Gaps (see audit):**
 
 - `scheduleSiteVisitAction` has no portal session or staff auth check.
 - `setWorkflowTypeAction`, `adminApproveStageAction`, `updateOrderStageAction` have no `assertAdminOnly`.
-- Storage uploads use client Supabase anon key — bucket policies must restrict writes.
+- Storage uploads use client Supabase anon key bucket policies must restrict writes.
 - No server-side validation of file type/size (bucket limit only).
 
 ## Edge Cases
@@ -444,7 +444,7 @@ No Zod/schema validation on server payloads.
 - **Staff schedules without customer:** Same action as portal; no differentiation in timeline message (“by client” always).
 - **Reschedule:** Portal `isRescheduling` re-calls `scheduleSiteVisitAction`; overwrites visit row.
 - **No site_visits row:** Order can sit in `Site Visit Pending` with null details until first schedule/save.
-- **`Site Visit Completed` stage:** Appears in enums/UI but never written — orders stay `Site Visit Scheduled` through freeze.
+- **`Site Visit Completed` stage:** Appears in enums/UI but never written orders stay `Site Visit Scheduled` through freeze.
 - **Removed locations:** DB rows remain orphaned.
 - **Admin God Mode:** Unlocks frozen module for edit; requires explicit Save Draft.
 - **Display stage heuristic:** Lists show `Site Visit Pending` when scheduled stage lacks `auditDate`.

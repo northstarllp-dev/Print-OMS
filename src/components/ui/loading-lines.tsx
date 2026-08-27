@@ -18,7 +18,7 @@ function resolveLoadingLabel(): string {
   }
 }
 
-/** Canonical branded loader — centered logo + spinner ring. Use via PrintomsLoading for layout. */
+/** Canonical branded loader centered logo + spinner ring. Use via PrintomsLoading for layout. */
 export default function LoadingLines({
   className = "",
   logoWidth = 160,

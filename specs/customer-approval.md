@@ -18,7 +18,7 @@
    * Customer reviews proofs, adds comments if necessary.
    * Customer clicks "Approve Design" for all items.
    * System transitions order to the next phase (Production) when all items are approved.
-3. **Payments** (financial tracking only — not part of approval gates):
+3. **Payments** (financial tracking only not part of approval gates):
    * Staff record expected/received amounts on the order **Payment** tab.
    * Customers view the same records on the portal **Payments** tab (read-only).
    * Payments never block stage progression. See `specs/payments.md`.
@@ -51,8 +51,8 @@ Permissions:
 ### Admin
 
 Permissions:
-* Override customer approval for Quotation (`adminMarkQuotationApprovedAction` — "Approve without Customer & Advance" when quote is `Sent`).
-* Override customer approval for Design (`adminMarkDesignApprovedAction` — "Approve without Customer & Advance" on the Design tab while `Design In Progress` and proofs are not yet customer-approved). Marks latest versions Approved, sets stage to `Design Approved`, then advances to the next pipeline stage. Admin portal only.
+* Override customer approval for Quotation (`adminMarkQuotationApprovedAction` "Approve without Customer & Advance" when quote is `Sent`).
+* Override customer approval for Design (`adminMarkDesignApprovedAction` "Approve without Customer & Advance" on the Design tab while `Design In Progress` and proofs are not yet customer-approved). Marks latest versions Approved, sets stage to `Design Approved`, then advances to the next pipeline stage. Admin portal only.
 * Record payments and mark them received.
 * Transition order stages after customer approval (payments do not block).
 

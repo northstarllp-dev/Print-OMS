@@ -7,7 +7,7 @@ import { ensureRealtimeAuth } from "@/utils/supabase/ensureRealtimeAuth";
 
 interface OrderCommunicationCenterProps {
   orderId: string;
-  /** Required for tenant isolation — friendly order_id collides across companies. */
+  /** Required for tenant isolation friendly order_id collides across companies. */
   companyId: string;
   onClose?: () => void;
 }
@@ -103,7 +103,7 @@ export function OrderCommunicationCenter({
   useEffect(() => {
     const el = listRef.current;
     if (!el || loading) return;
-    // Scroll the list container only — avoid scrollIntoView, which fights the drawer slide.
+    // Scroll the list container only avoid scrollIntoView, which fights the drawer slide.
     el.scrollTop = el.scrollHeight;
   }, [events.length, loading]);
 

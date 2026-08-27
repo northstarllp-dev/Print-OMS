@@ -1,4 +1,4 @@
-/** Shared seed credentials — must match supabase/seed.sql */
+/** Shared seed credentials must match supabase/seed.sql */
 
 export const PRINTOMS_COMPANY_ID = "11111111-1111-1111-1111-111111111111";
 export const PRINTEC_COMPANY_ID = "33333333-3333-3333-3333-333333333333";

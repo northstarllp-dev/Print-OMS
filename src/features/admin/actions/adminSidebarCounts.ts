@@ -28,7 +28,7 @@ async function getSupabase() {
 }
 
 /**
- * Lightweight sidebar badge counts — avoids loading full nested order/enquiry
+ * Lightweight sidebar badge counts avoids loading full nested order/enquiry
  * graphs on every admin navigation.
  */
 export async function getAdminSidebarCounts(): Promise<{

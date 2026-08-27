@@ -119,7 +119,7 @@ export const CustomerDetailsDrawer: React.FC<CustomerDetailsDrawerProps> = ({
         style={{ animation: "fadeIn 0.2s ease-out" }}
       />
 
-      {/* Drawer — full screen on mobile/tablet, side panel on desktop */}
+      {/* Drawer full screen on mobile/tablet, side panel on desktop */}
       <div
         className="fixed inset-0 lg:inset-y-0 lg:right-0 lg:left-auto w-full lg:max-w-[420px] bg-[#F8FAFC] shadow-2xl z-[1000] lg:border-l border-slate-200 flex flex-col"
         style={{ animation: "slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1)" }}
@@ -265,7 +265,7 @@ export const CustomerDetailsDrawer: React.FC<CustomerDetailsDrawerProps> = ({
                   ) : (
                     <div className="text-xs font-medium text-slate-700 leading-relaxed">
                       {customer.shippingAddress ||
-                        "Installation address pending — schedule or skip site visit to set map location."}
+                        "Installation address pending schedule or skip site visit to set map location."}
                     </div>
                   )}
                 </div>

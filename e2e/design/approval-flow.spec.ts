@@ -274,7 +274,7 @@ test.describe("Design: Approval Layer (full workflow)", () => {
     });
   });
 
-  test.describe("Auto-approval — toggle ON in Settings", () => {
+  test.describe("Auto-approval toggle ON in Settings", () => {
     test("staff request auto-advances to Production; admin sees no pending", async ({
       browser,
       baseURL,

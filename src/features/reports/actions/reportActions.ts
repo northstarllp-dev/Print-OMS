@@ -20,7 +20,7 @@ function monthKey(dateStr: string) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
-/** e.g. "Jul 2026" — avoids "Jul 26" looking like a day */
+/** e.g. "Jul 2026" avoids "Jul 26" looking like a day */
 function monthLabel(key: string) {
   const [y, m] = key.split("-");
   return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString("en-US", {

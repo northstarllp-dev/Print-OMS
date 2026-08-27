@@ -110,7 +110,7 @@ export async function resolveMapsUrlToLocation(
   const viewport = parseViewportCoordsFromMapsUrl(finalUrl);
   const pin = parsePlacePinCoordsFromMapsUrl(finalUrl);
 
-  // Prefer place pin (!3d/!4d) — exact drop pin. @lat,lng is camera center and often nearby-only.
+  // Prefer place pin (!3d/!4d) exact drop pin. @lat,lng is camera center and often nearby-only.
   const coords: MapsLatLng | null = pin || viewport;
   if (!coords) return null;
 

@@ -1,7 +1,7 @@
 import { expect, type Page } from "@playwright/test";
 
 /**
- * Staff/admin Site Visit worksheet — locators match the live UI labels.
+ * Staff/admin Site Visit worksheet locators match the live UI labels.
  */
 export class SiteVisitPage {
   constructor(private readonly page: Page) {}

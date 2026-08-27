@@ -22,7 +22,7 @@ const view = (...stages: Stage[]) => {
   return map;
 };
 
-/** Print Squirel — light green / black / white brand. */
+/** Print Squirel light green / black / white brand. */
 export const printsquirelConfig: Partial<PrintOMSClientConfig> = {
   id: "printsquirel",
   name: "Print Squirel",

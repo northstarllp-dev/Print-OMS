@@ -10,7 +10,7 @@ import { APP_BASE_PATH } from "@/lib/appBasePath";
 // Legacy HMAC tokens (payload.sig) are still accepted until they expire.
 // ============================================================
 
-/** Short code length — fits WhatsApp CTA URL button dynamic params. */
+/** Short code length fits WhatsApp CTA URL button dynamic params. */
 export const PORTAL_TOKEN_LENGTH = 12;
 
 const DEFAULT_SCOPES = [
@@ -121,7 +121,7 @@ function verifyLegacyHmacToken(tokenString: string): PortalTokenPayload | null {
  */
 export function verifyPortalToken(tokenString: string): PortalTokenPayload | null {
   if (isShortOpaqueToken(tokenString)) {
-    // Short tokens require DB lookup — cannot verify sync.
+    // Short tokens require DB lookup cannot verify sync.
     return null;
   }
   return verifyLegacyHmacToken(tokenString);

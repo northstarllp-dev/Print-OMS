@@ -8,7 +8,7 @@ const DEFAULT_CHECKLIST = [
 ] as const;
 
 /**
- * Production / fabrication worksheet — locators match the live UI labels.
+ * Production / fabrication worksheet locators match the live UI labels.
  */
 export class ProductionPage {
   constructor(private readonly page: Page) {}

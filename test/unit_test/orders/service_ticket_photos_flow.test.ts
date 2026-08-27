@@ -342,7 +342,7 @@ describe("service ticket photo - delete error handling (DB first)", () => {
 
   it("if DB fails, photo is NOT deleted from storage (no broken link)", () => {
     const photos = [photoRef("service-ticket-photos", "a.jpg")];
-    // DB write fails — we do NOT delete storage. Local state is restored.
+    // DB write fails we do NOT delete storage. Local state is restored.
     const restored = photos;
     expect(restored).toEqual([photoRef("service-ticket-photos", "a.jpg")]);
     expect(planStorageDelete(photoRef("service-ticket-photos", "a.jpg"))?.bucket).toBe(

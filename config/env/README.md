@@ -4,8 +4,8 @@ This directory contains templates for deploying one Next.js codebase to **multip
 
 ## Per project
 
-1. **Shared** — copy [`/.env.shared.example`](./.env.shared.example) (Supabase keys only).
-2. **Client** — copy `{slug}.env.example` and fill secrets (`CLIENT_SLUG`, WhatsApp, unique `PORTAL_SECRET`).
+1. **Shared** copy [`/.env.shared.example`](./.env.shared.example) (Supabase keys only).
+2. **Client** copy `{slug}.env.example` and fill secrets (`CLIENT_SLUG`, WhatsApp, unique `PORTAL_SECRET`).
 
 Use a **unique `PORTAL_SECRET` per Vercel project** (never share across clients). A leak of one secret must not forge portal tokens on other deploys.
 

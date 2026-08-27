@@ -132,7 +132,7 @@ export async function getQuotationByOrderId(orderId: string) {
 }
 
 /**
- * Portal SSR only — caller MUST verify portal token and order ownership before calling.
+ * Portal SSR only caller MUST verify portal token and order ownership before calling.
  * Returns null for Draft / Pending Approval quotations.
  */
 export async function getCustomerVisibleQuotationForOrder(orderUuid: string) {
@@ -174,7 +174,7 @@ export async function getSiteVisitMeasurementsForOrder(orderId: string) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// WRITE — Quotation Core
+// WRITE Quotation Core
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface QuotationPayload {
@@ -199,7 +199,7 @@ async function revalidateQuotationPaths(orderId: string, scope: "staff" | "detai
   }
 }
 
-/** Upsert quotation — creates if not exists, updates if already there */
+/** Upsert quotation creates if not exists, updates if already there */
 export async function upsertQuotation(orderId: string, payload: QuotationPayload) {
   await assertStageEditPermission("quotation");
   const supabase = await getSupabase();
@@ -278,10 +278,10 @@ export async function upsertQuotation(orderId: string, payload: QuotationPayload
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// WRITE — Quotation Status Actions (Admin)
+// WRITE Quotation Status Actions (Admin)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Admin sends quotation to customer — marks Sent and moves order to Quotation Sent.
+/** Admin sends quotation to customer marks Sent and moves order to Quotation Sent.
  *  Returns whether this was a resend after customer revision (for the message popup).
  */
 export async function sendQuotationToCustomer(
@@ -299,7 +299,7 @@ export async function sendQuotationToCustomer(
 
   assertCanSendQuotationToCustomer(qt.status);
 
-  // After customer "request changes", status may still be Rejected — or admin may
+  // After customer "request changes", status may still be Rejected or admin may
   // have saved a Draft while rejection_reason / customer_response remain set.
   const isRevisionResend =
     qt.status === "Rejected" ||
@@ -356,7 +356,7 @@ export async function sendQuotationToCustomer(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// WRITE — Customer Actions (portal session + service role)
+// WRITE Customer Actions (portal session + service role)
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function adminMarkQuotationApprovedAction(orderId: string) {
@@ -405,7 +405,7 @@ export async function customerApproveQuotation(
   const { uuid: portalOrderUuid } = await resolveOrderId(supabase, orderId);
   await assertPortalOrderOwnership(portalOrderUuid, portalToken);
 
-  // Portal/anon RLS cannot read company_id — resolve via service role after ownership check.
+  // Portal/anon RLS cannot read company_id resolve via service role after ownership check.
   const admin = requireAdminClient();
   const { uuid, friendly, companyId, health } = await resolveOrderId(admin, portalOrderUuid);
   if (!companyId) throw new Error("company_id is required to log quotation activity");
@@ -464,7 +464,7 @@ export async function customerRequestRevision(
   const { uuid: portalOrderUuid } = await resolveOrderId(supabase, orderId);
   await assertPortalOrderOwnership(portalOrderUuid, portalToken);
 
-  // Portal/anon RLS cannot read company_id — resolve via service role after ownership check.
+  // Portal/anon RLS cannot read company_id resolve via service role after ownership check.
   const admin = requireAdminClient();
   const { uuid, friendly, companyId, health } = await resolveOrderId(admin, portalOrderUuid);
   if (!companyId) throw new Error("company_id is required to log quotation activity");

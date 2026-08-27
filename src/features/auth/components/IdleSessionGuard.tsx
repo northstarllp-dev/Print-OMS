@@ -5,7 +5,7 @@ import { signOut } from "@/features/auth/actions/authActions";
 import { withBasePath } from "@/lib/appBasePath";
 
 const IDLE_MS = 10 * 60 * 1000; // 10 minutes
-/** Ignore noisy mousemove — only count deliberate interaction. */
+/** Ignore noisy mousemove only count deliberate interaction. */
 const ACTIVITY_EVENTS: (keyof WindowEventMap)[] = [
   "mousedown",
   "keydown",
@@ -23,7 +23,7 @@ type IdleSessionGuardProps = {
 
 /**
  * Signs the user out after 10 minutes with no deliberate activity.
- * Does not react to navigation/request volume — only user input idle time.
+ * Does not react to navigation/request volume only user input idle time.
  */
 export function IdleSessionGuard({ loginPath }: IdleSessionGuardProps) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -34,7 +34,7 @@ export function IdleSessionGuard({ loginPath }: IdleSessionGuardProps) {
     const logout = async () => {
       if (loggingOutRef.current) return;
       if (typeof document !== "undefined" && document.visibilityState === "hidden") {
-        // Tab in background — re-arm; logout only while the tab is visible.
+        // Tab in background re-arm; logout only while the tab is visible.
         armTimer();
         return;
       }

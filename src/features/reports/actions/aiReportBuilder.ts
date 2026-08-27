@@ -54,7 +54,7 @@ export async function resolveReportRequest(query: string): Promise<ResolveReport
 
   const google = createGoogleGenerativeAI({ apiKey });
   const catalog = Object.values(REPORT_REGISTRY)
-    .map((r) => `- ${r.id}: ${r.title} — ${r.desc}`)
+    .map((r) => `- ${r.id}: ${r.title} ${r.desc}`)
     .join("\n");
 
   try {

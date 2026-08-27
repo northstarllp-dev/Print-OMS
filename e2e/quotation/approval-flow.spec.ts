@@ -244,7 +244,7 @@ test.describe("Quotation: Approval Layer (full workflow)", () => {
           const adminWs = new OrderWorkspacePage(adminPage);
           await adminWs.openAdminControls();
           await adminWs.adminRequestChanges(
-            "Please revise the letter rate — it is above the agreed budget."
+            "Please revise the letter rate it is above the agreed budget."
           );
 
           await expectStageStatus(order.friendlyOrderId, "Normal");
@@ -278,7 +278,7 @@ test.describe("Quotation: Approval Layer (full workflow)", () => {
     });
   });
 
-  test.describe("Auto-approval — toggle ON in Settings", () => {
+  test.describe("Auto-approval toggle ON in Settings", () => {
     test("staff request auto-advances to Design; admin sees no pending", async ({
       browser,
       baseURL,

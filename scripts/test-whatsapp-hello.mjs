@@ -73,5 +73,5 @@ if (!res.ok) {
   process.exit(1);
 }
 
-console.log("OK — message id:", data.messages?.[0]?.id);
+console.log("OK message id:", data.messages?.[0]?.id);
 console.log("Check WhatsApp on the test recipient phone.");

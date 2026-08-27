@@ -179,7 +179,7 @@ function tabIndexToOrderStage(
   return (mod as OrderStage | null) ?? null;
 }
 
-/** Reverse of tabIndexToOrderStage — used to land on the entryStage's tab when queue-scoped. */
+/** Reverse of tabIndexToOrderStage used to land on the entryStage's tab when queue-scoped. */
 function orderStageToTabIndex(
   stage: OrderStage,
   businessOp?: string | null,
@@ -292,14 +292,14 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   const [orderTab, setOrderTab] = useState<"all" | "active" | "pending">("all");
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Customer update popup (copy / wa.me / mailto) — admin only
+  // Customer update popup (copy / wa.me / mailto) admin only
   const [customerMsg, setCustomerMsg] = useState<{
     key: CustomerMessageKey;
     date?: string;
     time?: string;
     followUpKey?: CustomerMessageKey;
   } | null>(null);
-  // Catch-up template picker (FAB) — when admin skipped the auto popup
+  // Catch-up template picker (FAB) when admin skipped the auto popup
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   const [sentMessageKeys, setSentMessageKeys] = useState<CustomerMessageKey[]>([]);
 
@@ -512,7 +512,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   const client = customers.find((c) => c.id === order.customerId);
   const isEmployee = currentUserRole === "Employee";
 
-  /* Customer message popup — staff and admin (Meta WhatsApp is off; this is the share path). */
+  /* Customer message popup staff and admin (Meta WhatsApp is off; this is the share path). */
   const openCustomerMessage = (
     key: CustomerMessageKey,
     extra?: { date?: string; time?: string }
@@ -569,7 +569,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   /**
    * Workflow progression gate (Phase 6): separate from resolveStagePermission (RBAC).
    * A stage only becomes accessible once the order has actually reached (or passed)
-   * it — for staff AND admins. Later stages are fully locked (no tab click, lock
+   * it for staff AND admins. Later stages are fully locked (no tab click, lock
    * screen, no footer actions) until the order advances into them. Past stages stay
    * open and retain their God Mode (adminOverrideUnlocked) override behavior.
    */
@@ -589,7 +589,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
       } as SiteVisitDetails;
       siteVisitDetailsRef.current = merged;
       const next: Order = { ...prev, siteVisitDetails: merged };
-      // Local schedule mirror — server also sets stage; realtime covers other clients.
+      // Local schedule mirror server also sets stage; realtime covers other clients.
       if (
         (details.auditDate || details.preferredDate) &&
         prev.stage === "Site Visit Pending"
@@ -721,7 +721,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   const handleAdminApprove = async () => {
     setIsProcessing(true);
     try {
-      // Don't draft-save Admin/Payments tabs — they aren't stage worksheets.
+      // Don't draft-save Admin/Payments tabs they aren't stage worksheets.
       if (activeStepTab !== ADMIN_TAB && activeStepTab !== PAYMENTS_TAB) {
         await handleSaveDraft({ suppressCustomerPopup: true, silent: true });
       }
@@ -772,7 +772,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
         setIsProcessing(false);
         return;
       }
-      // Completing installation always goes through payment review — including Admin Controls
+      // Completing installation always goes through payment review including Admin Controls
       // (not only when the Installation stage tab is active).
       if (
         order.stage === "Installation Scheduled" &&
@@ -868,7 +868,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
       if (designTab < 0 || activeStepTab !== designTab) {
         await handleSaveDraft({ silent: true });
       }
-      // Site Visit: show summary confirmation first (push only — no lock).
+      // Site Visit: show summary confirmation first (push only no lock).
       if (siteVisitTab >= 0 && activeStepTab === siteVisitTab) {
         setSiteVisitReviewMode("staff_push");
         setIsReviewModalOpen(true);
@@ -1009,7 +1009,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     );
     const goesToQuote = Boolean(nextAfterDesign?.startsWith("Quotation"));
     const confirmMsg = goesToQuote
-      ? "Approve this design without waiting for the customer?\n\nThis only marks the design approved so you can continue to Quotation. The installation deadline is set later — just before fabrication starts."
+      ? "Approve this design without waiting for the customer?\n\nThis only marks the design approved so you can continue to Quotation. The installation deadline is set later just before fabrication starts."
       : "Approve this design without waiting for the customer?\n\nThis only marks the design approved. Next: upload production files, then use “Set deadline & start fabrication” when you are ready for the workshop.";
 
     if (!window.confirm(confirmMsg)) {
@@ -1122,7 +1122,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           }
           break;
         }
-        case quoteTab: // Quotation — saved directly from QuotationModule
+        case quoteTab: // Quotation saved directly from QuotationModule
           break;
         case designTab: // Design
           if (order.design) {
@@ -1200,7 +1200,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     (siteVisitTab >= 0 && activeStepTab === siteVisitTab && isSiteVisitFrozen) ||
     (designTab >= 0 && activeStepTab === designTab && isDesignFrozen);
 
-  // Strict Site Visit Validations — must schedule or skip (+ locations) before advance.
+  // Strict Site Visit Validations must schedule or skip (+ locations) before advance.
   const siteVisitAdvanceGate = canAdvanceSiteVisitAudit(sv);
   const productionChecklistItems = getChecklistForBusinessOp(
     productionChecklistsByOp,
@@ -1294,7 +1294,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
       order.business_operation,
       workflowType
     );
-    if (activeStage == null) return false; // Admin/Payments tabs — handled separately
+    if (activeStage == null) return false; // Admin/Payments tabs handled separately
     return !isTimelineStageAccessible(activeStage, actor, entryStage) || !hasStageBeenReached(activeStage);
   })();
 
@@ -1367,7 +1367,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
             const { SKIPPED_SITE_VISIT_LANDMARK } = await import(
               "@/features/orders/workspace/modules/site-visit/siteVisitUiLogic"
             );
-            // Clear schedule fields — auditTime must not store "skipped at HH:MM" (looks like an appointment).
+            // Clear schedule fields auditTime must not store "skipped at HH:MM" (looks like an appointment).
             const previous = siteVisitDetailsRef.current || order.siteVisitDetails || {};
             const newDetails = {
               ...previous,
@@ -1505,7 +1505,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
               }));
               setActiveStepTab(installationTab);
               router.refresh();
-              triggerLocalAlert("Installation scheduled — stage advanced.", "success");
+              triggerLocalAlert("Installation scheduled stage advanced.", "success");
               openCustomerMessage("installation_scheduled", {
                 date: scheduledDate,
                 time: scheduledTime,
@@ -1533,7 +1533,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
               alert(gate.tooltip);
               return;
             }
-            // Staff push may leave site visit unlocked — lock before workflow choice / approve.
+            // Staff push may leave site visit unlocked lock before workflow choice / approve.
             if (order.stage.startsWith("Site Visit") && !sv.completed) {
               setIsProcessing(true);
               try {
@@ -1660,7 +1660,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
       {/* ── 3 PANELS ── */}
       <div style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
 
-        {/* ══ PANEL 1: ORDER LIST (desktop/tablet only — frees width on phones) ══ */}
+        {/* ══ PANEL 1: ORDER LIST (desktop/tablet only frees width on phones) ══ */}
         {allOrders.length > 0 && (
           <aside className="hidden lg:flex" style={{ width: "280px", flexShrink: 0, borderRight: "1px solid #E2E8F0", background: "white", flexDirection: "column", overflow: "hidden" }}>
 
@@ -1750,7 +1750,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                       />
                     </div>
                     <div style={{ fontSize: "11px", color: "#94A3B8", marginBottom: "6px" }}>
-                      {o.orderCode} • {o.businessName || o.customerName || "—"}
+                      {o.orderCode} • {o.businessName || o.customerName || ""}
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px" }}>
                       <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: stageInfo.color, flexShrink: 0 }} />
@@ -1799,7 +1799,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
 
                   <div className="min-w-0 flex-1">
                     <div className="text-[15px] sm:text-lg font-extrabold text-slate-900 leading-tight truncate">
-                      {order.businessName || "—"}
+                      {order.businessName || ""}
                     </div>
                     <div className="mt-0.5 flex items-center gap-1.5 min-w-0 text-[11px] text-slate-500">
                       <span className="font-semibold tracking-wide text-slate-400 uppercase shrink-0">
@@ -2001,7 +2001,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
               );
               return (
                 <div className="py-2">
-                  {/* Workflow stages — toggleable bar like site-visit items */}
+                  {/* Workflow stages toggleable bar like site-visit items */}
                   <div
                     key={`timeline-${order.id}-${workflowType || "default"}-${worksheetModules.join("-")}`}
                     className="flex items-center gap-1 overflow-x-auto p-1 bg-slate-100 border border-slate-200/60 rounded-xl w-full max-w-full"
@@ -2106,7 +2106,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
 
 
-              {/* Stage / payment lock status — changes-requested only on the stage tab that was rejected */}
+              {/* Stage / payment lock status changes-requested only on the stage tab that was rejected */}
               {order.stageStatus && order.stageStatus !== "Normal" ? (
                 <span style={{ fontSize: "11px", fontWeight: "800", color: "#EA580C", background: "#FFF7ED", border: "1px solid #FED7AA", padding: "4px 12px", borderRadius: "6px" }}>
                   Pending Approval
@@ -2119,7 +2119,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
             </div>
           </div>
 
-          {/* Module body (scrollable) — pull down on mobile to refresh */}
+          {/* Module body (scrollable) pull down on mobile to refresh */}
           <PullToRefresh
             ref={moduleBodyScrollRef}
             onRefresh={handleRefreshOrder}
@@ -2172,7 +2172,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
             </div>
           </PullToRefresh>
 
-          {/* Sticky footer actions — hidden entirely when the active stage is inaccessible */}
+          {/* Sticky footer actions hidden entirely when the active stage is inaccessible */}
           <div className="px-3 sm:px-5 py-3 flex flex-row flex-wrap items-stretch sm:items-center justify-end gap-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] touch-manipulation" style={{ background: "#F8FAFC", borderTop: "1px solid #E2E8F0", flexShrink: 0, boxShadow: "0 -2px 10px rgba(0,0,0,0.05)" }}>
             {isActiveStageInaccessible ? (
               <span style={{ fontSize: "12px", fontWeight: "700", color: "#94A3B8", display: "flex", alignItems: "center", gap: "6px" }}>
@@ -2206,7 +2206,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                   <>
                     {isStaffQueueReadOnly && (
                       <span style={{ fontSize: "12px", fontWeight: "700", color: "#64748B", display: "flex", alignItems: "center", gap: "6px" }}>
-                        <Lock size={13} /> View only — completed in your queue
+                        <Lock size={13} /> View only completed in your queue
                       </span>
                     )}
                     {!isCurrentTabFrozen && (
@@ -2569,7 +2569,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
         />
       )}
       
-      {/* Timeline Drawer — same overlay pattern as CustomerDetailsDrawer */}
+      {/* Timeline Drawer same overlay pattern as CustomerDetailsDrawer */}
       {activeRightPanel === "timeline" && (
         <>
           <div
@@ -2628,7 +2628,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
         />
       )}
 
-      {/* Catch-up WhatsApp FAB — when auto popup was skipped */}
+      {/* Catch-up WhatsApp FAB when auto popup was skipped */}
       {isStaffOrAdmin && !customerMsg && !templatePickerOpen && (
         <button
           type="button"

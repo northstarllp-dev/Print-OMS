@@ -354,7 +354,7 @@ export function workloadBucket(jobsAssigned: number): "idle" | "normal" | "overl
   return "normal";
 }
 
-/** Config-driven stage roles — Roles UI “coming soon”; grants already live in stageGrants. */
+/** Config-driven stage roles Roles UI “coming soon”; grants already live in stageGrants. */
 export function rolesUiIsImplemented(): boolean {
   return false;
 }

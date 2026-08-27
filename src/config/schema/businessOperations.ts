@@ -12,7 +12,7 @@ export type BusinessStageKey =
 export interface BusinessOperation {
   id: string;
   label: string;
-  /** Ordered stages — stages not listed are skipped entirely. */
+  /** Ordered stages stages not listed are skipped entirely. */
   stages: BusinessStageKey[];
   /** Optional feature overrides applied when this op is active. */
   features?: Partial<FeaturesConfig>;

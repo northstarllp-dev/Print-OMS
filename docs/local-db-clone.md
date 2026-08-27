@@ -77,4 +77,4 @@ This runs `scripts/seed-e2e-users.mjs`, which safely inserts or updates standard
 
 - **Destructive:** `db:restore:local` drops the local `public` schema and replaces auth users.
 - **`npm run db:reset` vs `db:clone:dev`**: `db:reset` re-applies the local repository migrations + `seed.sql`, which will **overwrite** the clone from remote. If you want remote parity, stick to `db:clone:dev`.
-- **Data Privacy**: Dumps under `supabase/remote-dump/` contain real customer data — never commit them.
+- **Data Privacy**: Dumps under `supabase/remote-dump/` contain real customer data never commit them.

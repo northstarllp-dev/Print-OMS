@@ -144,4 +144,4 @@ Summary: Initial specification for the Production Workflow.
 
 Version: 1.1
 Date: 2026-07-30
-Summary: Added inventory integration — material consumption with usage kinds and final yield into stock; order material cost accumulation.
+Summary: Added inventory integration material consumption with usage kinds and final yield into stock; order material cost accumulation.

@@ -2,7 +2,7 @@ import { getCurrentUser } from "@/features/auth/actions/authActions";
 import { getDeployCompanyId } from "@/config/loadClientConfig";
 
 /**
- * Resolve company_id for inserts. Requires an authenticated user — mutations must
+ * Resolve company_id for inserts. Requires an authenticated user mutations must
  * never silently fall back to the deploy company id, since that would let an
  * unauthenticated request write data scoped to this tenant.
  */

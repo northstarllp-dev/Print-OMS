@@ -1,4 +1,4 @@
-/** App basePath from next.config.ts — Playwright paths must include this. */
+/** App basePath from next.config.ts Playwright paths must include this. */
 export const APP_BASE_PATH = "/printoms";
 
 /** Join app basePath with a route like `/admin/login`. */

@@ -23,7 +23,7 @@ describe("product categories", () => {
     });
 
     it("never silently deletes products with the category", () => {
-      // Contract: delete is blocked — products stay intact
+      // Contract: delete is blocked products stay intact
       const products = [{ category: "Flex" }, { category: "Flex" }];
       const gate = canDeleteCategory("Flex", products);
       expect(gate.ok).toBe(false);

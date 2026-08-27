@@ -99,7 +99,7 @@ interface SiteVisitModuleProps {
     key: "site_visit_scheduled",
     extra?: { date?: string; time?: string }
   ) => void;
-  /** RBAC — when canEdit is false the module renders read-only. */
+  /** RBAC when canEdit is false the module renders read-only. */
   permission?: StagePermission;
 }
 
@@ -195,7 +195,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
     };
   });
   
-  // Freeze flag — read-only if not in Site Visit stage, or if completed and pending admin approval.
+  // Freeze flag read-only if not in Site Visit stage, or if completed and pending admin approval.
   // It unfreezes if the admin requests changes (stageStatus becomes "Normal" while still in Site Visit stage).
   const baseFrozen = !order.stage.startsWith("Site Visit") || (!!siteVisit.completed && order.stageStatus !== "Normal");
   // Effective lock also includes RBAC read-only grants (e.g. Designer viewing Site Visit).
@@ -537,7 +537,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
               </div>
             )}
 
-            {/* Location & Navigation — spans remaining columns after Visit Schedule */}
+            {/* Location & Navigation spans remaining columns after Visit Schedule */}
             {scheduledAddress && (
               <div className={`${scheduledDate || scheduledTime ? "md:col-span-2" : "md:col-span-3"} bg-gradient-to-br from-indigo-50/80 to-blue-50/60 rounded-xl p-3 border border-indigo-100 shadow-sm flex flex-col justify-between gap-2`}>
                 <div>
@@ -709,7 +709,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
               );
             })}
             
-            {/* New Item Button — hidden when frozen */}
+            {/* New Item Button hidden when frozen */}
             {!isFrozen && (
               <button
                 type="button"
@@ -1413,7 +1413,7 @@ const SitePhotoUploader: React.FC<{
     void onFiles(files);
   };
 
-  /** Visually hidden but still activatable — `display:none` / `.hidden` breaks iOS Safari file pickers. */
+  /** Visually hidden but still activatable `display:none` / `.hidden` breaks iOS Safari file pickers. */
   const fileInputClassName =
     "absolute w-px h-px p-0 -m-px overflow-hidden whitespace-nowrap border-0 [clip:rect(0,0,0,0)]";
 
@@ -1426,7 +1426,7 @@ const SitePhotoUploader: React.FC<{
 
   return (
     <div className="pt-4 space-y-4">
-      {/* Upload buttons — native <label for> so iPhone/Android open camera/gallery reliably */}
+      {/* Upload buttons native <label for> so iPhone/Android open camera/gallery reliably */}
       {!disabled && (
         <div className="relative flex flex-wrap gap-3">
           <input

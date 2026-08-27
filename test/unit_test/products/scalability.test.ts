@@ -51,7 +51,7 @@ describe("product scalability & edge cases", () => {
       const b = generateProductId(existing);
       expect(a).toBe(b);
       expect(a).toBe("PRD-011");
-      // Backend must retry on 23505 — covered as contract: next after collision is max+1
+      // Backend must retry on 23505 covered as contract: next after collision is max+1
       expect(generateProductId([{ product_id: a }, ...existing])).toBe("PRD-012");
     });
 

@@ -19,7 +19,7 @@
 
 #### Admin design approve without customer
 * Admin Design tab: amber **Approve design (skip customer)** when `Design In Progress` and proofs are not yet customer-approved (`adminMarkDesignApprovedAction` → **Design Approved** only). Does **not** jump to Production or ask for installation deadline.
-* Installation deadline popup opens **only** when advancing **into Production** (quote-first: from Design Approved; design-first: from Quotation Approved — including Quotation admin advance). Primary CTA **Confirm & start fabrication**.
+* Installation deadline popup opens **only** when advancing **into Production** (quote-first: from Design Approved; design-first: from Quotation Approved including Quotation admin advance). Primary CTA **Confirm & start fabrication**.
 
 ## [Unreleased] - 2026-08-01
 
@@ -32,7 +32,7 @@
 
 ### Changed
 
-#### Meta WhatsApp off — admin customer message popup
+#### Meta WhatsApp off admin customer message popup
 * **Meta Cloud API dispatch disabled**: `dispatchWhatsAppNotification` early-returns (skipped) so no Graph API sends occur; call sites and outbox stay intact for a later re-enable.
 * **Admin customer message popup**: New shared `CustomerMessageModal` (`src/features/notifications/customer-message/`) with 19 Meta-ready utility templates (`{{n}}` body params, portal link appended for share channels). Variables (business name, client brand, enquiry/order/ticket numbers, date/time, portal link) auto-fill from context; actions: Copy, WhatsApp (`wa.me/91…`), Email (`mailto:`).
 * **Wired triggers**: create enquiry, convert-to-order (replaces the old Printoms welcome modal), site visit schedule/complete, quotation send (ready/revised) + manual Follow-Up and Final Quotation buttons, design send (ready/revision), stage advances (Design In Progress / Production / Ready For Installation / Completed), installation schedule (worksheet + calendar reschedule), service ticket create/resolve, and a feedback request offered after Installation Completed.
@@ -52,9 +52,9 @@
 
 #### Inventory & Warehouse Management
 * **Products = inventory master**: Added inventory attribute columns to `products` (unit, brand, supplier, purchase price, min/max stock, HSN, GST rate, barcode/QR, default warehouse, `track_inventory`).
-* **Final Product cleanup**: Final Product designation always available — removed the Settings toggle and dropped `app_settings.enable_final_product`; finals keep pricing and appear in quotation search. No by-product concept.
+* **Final Product cleanup**: Final Product designation always available removed the Settings toggle and dropped `app_settings.enable_final_product`; finals keep pricing and appear in quotation search. No by-product concept.
 * **Multi-warehouse stock**: New `warehouses` (Main / Production Floor seeded per company), `stock_balances`, and immutable `stock_movements` ledger with full incoming/outgoing txn types. Migrated on PrintOMS-dev-db and PrintOMS-prod-db.
-* **Inventory dashboard**: Replaced the `/admin/inventory` Coming Soon stub — stock list with search (name/SKU/barcode/supplier/category/brand) and low-stock / final-vs-regular filters, stock ledger, warehouse CRUD, Receive / Issue / Transfer, and Code39 barcode label printing.
+* **Inventory dashboard**: Replaced the `/admin/inventory` Coming Soon stub stock list with search (name/SKU/barcode/supplier/category/brand) and low-stock / final-vs-regular filters, stock ledger, warehouse CRUD, Receive / Issue / Transfer, and Code39 barcode label printing.
 * **Production material consumption**: Consume Materials (with usage kinds normal/wastage/damaged/returned/scrap) deducts stock and accumulates `orders.material_cost`; Record Final Yield adds finished Final Products into stock. Order cost columns (`labour_cost`, `transport_cost`, `installation_cost`, `overhead_cost`) added for later P&L.
 * **Spec**: `specs/inventory.md`.
 
@@ -74,11 +74,11 @@
 * **Finance dashboard**: `/admin/finance` with Overview (revenue, received, receivables, payables, expenses, net position, GST output vs input), per-category tabs, and a Reports tab (P&L-style + GST summary). Migrated on PrintOMS-dev-db and PrintOMS-prod-db.
 * **Spec**: `specs/finance.md`.
 
-#### Order Health — Needs Attention after stalled stage
+#### Order Health Needs Attention after stalled stage
 * **Four health values only**: Active, Needs Attention, On Hold, Lost (Cancelled/Completed removed as health filters).
 * **Auto-flag**: Active orders with no pipeline stage change for `features.needsAttentionAfterDays` (default 6, per client slug) become Needs Attention when admin opens dashboard or orders list.
 * **`orders.stage_changed_at`**: New column; updated on every real stage advance; stage progress clears Needs Attention → Active. Migrated on PrintOMS-dev-db and PrintOMS-prod-db.
-* **Admin review UI**: AdminControlModule health panel — set Active / On Hold / Lost (Lost requires reason) with optional call remarks on the order timeline.
+* **Admin review UI**: AdminControlModule health panel set Active / On Hold / Lost (Lost requires reason) with optional call remarks on the order timeline.
 * **Dashboard KPI**: Needs Attention count chip on admin dashboard.
 * Specs: `admin-dashboard.md`, `reporting.md`, `customer-enquiry.md`.
 
@@ -109,7 +109,7 @@
 #### Short Portal Tokens
 * Portal tokens are now 12-character opaque codes (stored as `jti` in `portal_access_tokens`) instead of long HMAC blobs. Ideal for WhatsApp template URL-button variables. Legacy HMAC tokens are still accepted until they expire.
 * All portal link generation resolves customer/order to UUIDs to prevent multi-tenant ambiguity.
-* Removed dependency on `NEXT_PUBLIC_SITE_URL` env var — portal URLs now derive from request host headers.
+* Removed dependency on `NEXT_PUBLIC_SITE_URL` env var portal URLs now derive from request host headers.
 
 #### Invoice Builder Module
 * **Invoices table**: New `public.invoices` table with automated configurable invoice numbers (per-company prefix / FY / start / reset), one invoice per order, company-scoped RLS; migrated on PrintOMS-dev-db and PrintOMS-prod-db.

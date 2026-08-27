@@ -156,7 +156,7 @@ export async function listInvoices(statusFilter?: string): Promise<InvoiceListIt
 
   return (data || []).map((row: any) => ({
     id: row.id,
-    invoiceId: row.invoice_id || "—",
+    invoiceId: row.invoice_id || "",
     status: row.status,
     invoiceDate: row.invoice_date,
     dueDate: row.due_date,
@@ -257,7 +257,7 @@ export async function getInvoiceByOrderId(orderId: string) {
 }
 
 /**
- * Portal SSR only — caller MUST verify portal token and order ownership before calling.
+ * Portal SSR only caller MUST verify portal token and order ownership before calling.
  * Returns null for Draft / Void invoices.
  */
 export async function getCustomerVisibleInvoiceForOrder(orderUuid: string) {

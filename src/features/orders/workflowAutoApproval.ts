@@ -31,7 +31,7 @@ export const PENDING_LABEL_TO_STAGE_KEY: Record<
  * Map a `Pending Admin Approval: …` label (or a raw stage string) to the
  * stage key the auto-approval setting is keyed on.
  *
- * Returns `null` for `"Normal"` or unknown labels — caller should treat
+ * Returns `null` for `"Normal"` or unknown labels caller should treat
  * null as "no auto-approval path" and fall back to pending behavior.
  */
 export function stageKeyForPendingLabel(

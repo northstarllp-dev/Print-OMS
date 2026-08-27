@@ -122,7 +122,7 @@ export function getViewableStages(actor: StageActor): OrderStage[] {
   return ALL_STAGES.filter((s) => map[s]?.canView === true);
 }
 
-/** Available staff_role labels for a tenant — used by EmployeeModal dropdown. */
+/** Available staff_role labels for a tenant used by EmployeeModal dropdown. */
 export function getStaffRolesForTenant(companyId?: string | null): string[] {
   if (companyId) {
     const tenantMap = TENANT_ROLE_STAGE_GRANTS[companyId];
@@ -143,7 +143,7 @@ export function getStaffRolesForTenant(companyId?: string | null): string[] {
 }
 
 /**
- * Floor/kiosk production portal — not the default staff entry path.
+ * Floor/kiosk production portal not the default staff entry path.
  * Requires tenant opt-in; stage grants alone are not enough.
  */
 export function canAccessProductionPortal(actor: StageActor): boolean {
@@ -153,7 +153,7 @@ export function canAccessProductionPortal(actor: StageActor): boolean {
 }
 
 /**
- * Floor/kiosk installation portal — not the default staff entry path.
+ * Floor/kiosk installation portal not the default staff entry path.
  * Requires tenant opt-in; stage grants alone are not enough.
  */
 export function canAccessInstallationPortal(actor: StageActor): boolean {
@@ -182,7 +182,7 @@ export function getMyOrdersStages(actor: StageActor): PipelineQueueStage[] {
   return getEditableStages(actor).filter(isPipelineNavStage);
 }
 
-/** Post-login redirect for staff — first grant-based queue tab. */
+/** Post-login redirect for staff first grant-based queue tab. */
 export function getStaffHomePath(actor: StageActor): string {
   if (actor.role === "admin") return "/admin/dashboard";
   const items = getNavItemsForActor(actor);

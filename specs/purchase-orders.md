@@ -2,7 +2,7 @@
 
 ## Overview
 
-- Purpose: manage vendor purchases that feed inventory — from purchase request through PO, goods receipt, and payment.
+- Purpose: manage vendor purchases that feed inventory from purchase request through PO, goods receipt, and payment.
 - Company-scoped via RLS; applied on PrintOMS-dev-db and PrintOMS-prod-db.
 
 ## Workflow

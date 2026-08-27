@@ -108,7 +108,7 @@ export function formatSiteMeasurementLabel(item: {
   const wUnit = (item.widthUnit || item.width_unit || "ft").toUpperCase();
   const hUnit = (item.heightUnit || item.height_unit || "ft").toUpperCase();
   const dUnit = (item.depthUnit || item.depth_unit || "ft").toUpperCase();
-  let label = `Site Measurement: ${item.width ?? "—"} ${wUnit} × ${item.height ?? "—"} ${hUnit}`;
+  let label = `Site Measurement: ${item.width ?? ""} ${wUnit} × ${item.height ?? ""} ${hUnit}`;
   if (item.depth != null && item.depth !== 0) {
     label += ` - Depth: ${item.depth} ${dUnit}`;
   }
@@ -154,7 +154,7 @@ export function buildGoogleMapsSearchUrl(query?: string | null): string | null {
 
 /**
  * Location link for list/table cells.
- * Never uses legacy "Skipped…" placeholder text as the link label — prefers real
+ * Never uses legacy "Skipped…" placeholder text as the link label prefers real
  * address, then GPS, then an explicit gmap link.
  */
 export function resolveSiteVisitMapLink(

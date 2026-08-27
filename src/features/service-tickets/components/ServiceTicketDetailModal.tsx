@@ -58,7 +58,7 @@ export function ServiceTicketDetailModal({
   );
   const [showCompleteConfirm, setShowCompleteConfirm] = React.useState(false);
   const [showSaveConfirm, setShowSaveConfirm] = React.useState(false);
-  // Ticket resolved — show the customer message popup before closing
+  // Ticket resolved show the customer message popup before closing
   const [showResolvedMsg, setShowResolvedMsg] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [uploadingResolution, setUploadingResolution] = React.useState(false);
@@ -103,7 +103,7 @@ export function ServiceTicketDetailModal({
     const newPhotos = prevPhotos.filter((_, i) => i !== index);
     setResolutionPhotos(newPhotos);
     try {
-      // DB first — if this fails, the photo is still in storage (no broken link).
+      // DB first if this fails, the photo is still in storage (no broken link).
       await updateTicketResolutionAction(ticketId, {
         resolutionPhotos: newPhotos,
       });

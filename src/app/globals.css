@@ -365,7 +365,7 @@ button, a, input, select, textarea, [role="button"] {
   margin-right: 16px;
 }
 
-/* Platform "Made with ♥ by Polaris" — shine on glyphs/logo, text never hidden */
+/* Platform "Made with ♥ by Polaris" shine on glyphs/logo, text never hidden */
 @keyframes polaris-mwl-shine {
   0%   { background-position: 120% center; }
   100% { background-position: -120% center; }
@@ -423,7 +423,7 @@ button, a, input, select, textarea, [role="button"] {
   animation: polaris-mwl-heart 2.8s ease-in-out 0.2s infinite;
 }
 
-/* Shine masked to Polaris footer logo pixels — never a rectangle */
+/* Shine masked to Polaris footer logo pixels never a rectangle */
 .polaris-mwl-logo-wrap {
   position: relative;
   display: inline-flex;

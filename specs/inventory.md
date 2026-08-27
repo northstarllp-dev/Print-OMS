@@ -3,7 +3,7 @@
 ## Overview
 
 - Purpose: track stock for all catalog products (regular and Final Products) across multiple warehouses, with an immutable movement ledger and production material consumption.
-- Products are the inventory master — every material exists once in `products`; stock is keyed by `products.id`.
+- Products are the inventory master every material exists once in `products`; stock is keyed by `products.id`.
 - Company-scoped via RLS (`company_id = current_company_id()`); applied on PrintOMS-dev-db and PrintOMS-prod-db.
 
 ## Product inventory attributes
@@ -35,8 +35,8 @@ Selling price maps to existing `price_per_sqft` / `price_per_unit`.
 
 ## Stock model
 
-- `stock_balances` — one row per `(company_id, product_id, warehouse_id)`, holds current `quantity`.
-- `stock_movements` — immutable ledger. Every change writes a row with:
+- `stock_balances` one row per `(company_id, product_id, warehouse_id)`, holds current `quantity`.
+- `stock_movements` immutable ledger. Every change writes a row with:
   - `direction` (`in` | `out`), `txn_type`, `qty`, `balance_after`, `unit_cost`, `reference`, `actor_id`, optional `order_id` / `warehouse_id`.
 - Incoming txn types: `purchase`, `customer_return`, `adjustment_in`, `transfer_in`, `production_return`, `production_yield`.
 - Outgoing txn types: `production_consumption`, `damage`, `scrap`, `sample_usage`, `adjustment_out`, `transfer_out`.
@@ -46,9 +46,9 @@ Selling price maps to existing `price_per_sqft` / `price_per_unit`.
 
 Tabs:
 
-1. **Stock** — search by name / SKU / barcode / supplier / category / brand; filters for low stock, out of stock, Final vs Regular; per-warehouse quantities; barcode label print (Code39 SVG, no external dependency).
-2. **Stock Ledger** — movement history with direction, type, qty, balance after, reference, actor.
-3. **Warehouses** — CRUD + active toggle.
+1. **Stock** search by name / SKU / barcode / supplier / category / brand; filters for low stock, out of stock, Final vs Regular; per-warehouse quantities; barcode label print (Code39 SVG, no external dependency).
+2. **Stock Ledger** movement history with direction, type, qty, balance after, reference, actor.
+3. **Warehouses** CRUD + active toggle.
 
 Actions: **Receive**, **Issue**, **Transfer** (between warehouses), barcode lookup (`findProductByBarcodeAction`) for scanner workflows.
 
@@ -56,8 +56,8 @@ Actions: **Receive**, **Issue**, **Transfer** (between warehouses), barcode look
 
 In the order Production module (`ProductionMaterialsPanel`):
 
-- **Consume Materials** — search or scan a product, set qty + usage kind (`normal` | `wastage` | `damaged` | `returned` | `scrap`), deducts stock (ledger `production_consumption`), and accumulates `orders.material_cost`.
-- **Record Final Yield** — for `final_prdt` products only, adds finished goods to stock (ledger `production_yield`). No by-product concept exists.
+- **Consume Materials** search or scan a product, set qty + usage kind (`normal` | `wastage` | `damaged` | `returned` | `scrap`), deducts stock (ledger `production_consumption`), and accumulates `orders.material_cost`.
+- **Record Final Yield** for `final_prdt` products only, adds finished goods to stock (ledger `production_yield`). No by-product concept exists.
 - Both write order timeline notes.
 
 ## Costing

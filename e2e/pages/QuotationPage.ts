@@ -1,7 +1,7 @@
 import { expect, type Page } from "@playwright/test";
 
 /**
- * Staff/admin Quote worksheet — locators match the live UI labels.
+ * Staff/admin Quote worksheet locators match the live UI labels.
  */
 export class QuotationPage {
   constructor(private readonly page: Page) {}

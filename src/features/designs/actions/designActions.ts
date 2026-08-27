@@ -277,7 +277,7 @@ export async function updateDesignDetailsAction(
   try {
     await revalidateDesignPaths(orderId, fromPortal);
   } catch (revalidateErr) {
-    // DB write already succeeded — never fail the upload because a page revalidate blew up.
+    // DB write already succeeded never fail the upload because a page revalidate blew up.
     console.error("Design revalidate failed:", revalidateErr);
   }
   return mapDesignFromDb(data);

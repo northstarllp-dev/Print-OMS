@@ -23,7 +23,7 @@ export async function ensureRealtimeAuth(
       if (!error && refreshed.session) {
         session = refreshed.session;
       } else if (expiresAtMs <= Date.now()) {
-        // Token already dead and refresh failed — fall back to anon rather than
+        // Token already dead and refresh failed fall back to anon rather than
         // feeding Realtime an expired JWT (which triggers InvalidJWTToken / 1006).
         session = null;
       }

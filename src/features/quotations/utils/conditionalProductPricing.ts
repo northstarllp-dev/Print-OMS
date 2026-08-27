@@ -44,7 +44,7 @@ export function resolveUnitPriceMaxSqft(p: ProductPricingSource): number {
   return DEFAULT_UNIT_PRICE_MAX_SQFT;
 }
 
-/** @deprecated Prefer resolvePricingForMeasurement — kept for tests of threshold side. */
+/** @deprecated Prefer resolvePricingForMeasurement kept for tests of threshold side. */
 export function pricingTypeForArea(
   measurement: number,
   maxSqftForUnit: number = DEFAULT_UNIT_PRICE_MAX_SQFT

@@ -14,7 +14,7 @@ export function mergeConfig(override: Partial<PrintOMSClientConfig>): PrintOMSCl
       ...defaultConfig.features,
       ...(override.features || {}),
     },
-    // Array replace (not deep merge) — client fully owns its operations list.
+    // Array replace (not deep merge) client fully owns its operations list.
     businessOperations:
       override.businessOperations ??
       defaultConfig.businessOperations ??

@@ -34,7 +34,7 @@ export async function resolveGoogleMapsLocation(
   return { lat: data.lat, lng: data.lng, address };
 }
 
-/** Ensure schedule payload never stores a Maps link — resolves first if needed. */
+/** Ensure schedule payload never stores a Maps link resolves first if needed. */
 export async function ensureResolvedSiteLocation(input: {
   customerAddress: string;
   gpsLocation: string;

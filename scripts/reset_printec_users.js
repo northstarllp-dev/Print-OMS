@@ -76,7 +76,7 @@ const PRINTEC_DEMO_USERS = [
     staff_role: "Marketer",
     phone: "9000000002",
     password: "9000000002",
-    // Legacy email from older seeds — migrate if present
+    // Legacy email from older seeds migrate if present
     legacyEmails: ["marketer@printec.in"],
   },
   {
@@ -110,7 +110,7 @@ async function ensureCompanySlug(supabase, id, slug, name) {
     .from("companies")
     .upsert({ id, slug, name }, { onConflict: "id" });
   if (error) {
-    // older schemas may not allow upsert name — try update slug only
+    // older schemas may not allow upsert name try update slug only
     const { error: updErr } = await supabase.from("companies").update({ slug }).eq("id", id);
     if (updErr) console.warn(`  company slug ${slug}: ${updErr.message}`);
     else console.log(`  company slug set: ${slug}`);

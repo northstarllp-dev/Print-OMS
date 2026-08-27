@@ -13,7 +13,7 @@ function localDatePlusDays(days: number): string {
 }
 
 /**
- * Staff/admin Design worksheet — locators match the live UI labels.
+ * Staff/admin Design worksheet locators match the live UI labels.
  */
 export class DesignPage {
   constructor(private readonly page: Page) {}
@@ -153,7 +153,7 @@ export class DesignPage {
 
   /**
    * Admin: mark the design approved without waiting for the customer.
-   * Does not start fabrication — production files still need uploading.
+   * Does not start fabrication production files still need uploading.
    */
   async adminSkipCustomerApproval() {
     await this.dismissCustomerMessageIfPresent();

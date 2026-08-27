@@ -1,6 +1,6 @@
 # Adding a client
 
-After the multi-client kit is in place, a new tenant should need **config + DB + env + Vercel only** — not edits under `src/features/**` or portal auth helpers.
+After the multi-client kit is in place, a new tenant should need **config + DB + env + Vercel only** not edits under `src/features/**` or portal auth helpers.
 
 ## Prerequisites
 

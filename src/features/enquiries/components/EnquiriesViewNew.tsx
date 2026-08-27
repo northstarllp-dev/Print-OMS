@@ -608,7 +608,7 @@ export function EnquiriesViewNew({
 
       {/* Table Section */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-visible">
-        {/* Search & Filter Bar — Orders-style */}
+        {/* Search & Filter Bar Orders-style */}
         <div className="p-3 sm:p-4 border-b border-slate-200">
           {/* Mobile / tablet: search + Filters chip + icon reset */}
           <div className="lg:hidden flex items-center gap-2">
@@ -884,7 +884,7 @@ export function EnquiriesViewNew({
               const statusColor = getStatusColor(enq.status);
               const dateStr = enq.dateReceived
                 ? new Date(enq.dateReceived).toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" })
-                : "—";
+                : "";
               return (
                 <div
                   key={enq.id}

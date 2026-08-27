@@ -171,7 +171,7 @@ describe("photo append / remove (local state + DB)", () => {
   });
 });
 
-describe("photo delete — storage cleanup", () => {
+describe("photo delete storage cleanup", () => {
   it("plans delete for modern bucket/path refs", () => {
     const ref = photoRef("a.jpg");
     expect(planStorageDelete(ref)).toEqual({
@@ -238,7 +238,7 @@ describe("delete error handling (DB first, then storage)", () => {
     const photos = [photoRef("a.jpg")];
     const remaining = removePhotoUrl(photos, photoRef("a.jpg"));
     expect(remaining).toEqual([]);
-    // DB write would use `remaining` (empty) — succeeds.
+    // DB write would use `remaining` (empty) succeeds.
     // Storage cleanup may fail but DB is already committed.
     const plan = planStorageDelete(photoRef("a.jpg"));
     expect(plan).toEqual({
@@ -250,7 +250,7 @@ describe("delete error handling (DB first, then storage)", () => {
 
   it("if DB fails, photo is NOT deleted from storage (no broken link)", () => {
     const photos = [photoRef("a.jpg")];
-    // DB write fails — we do NOT delete storage.
+    // DB write fails we do NOT delete storage.
     // Local state is restored to original.
     const restored = photos; // setAfterPhotos(afterPhotos) restores closure value
     expect(restored).toEqual([photoRef("a.jpg")]);

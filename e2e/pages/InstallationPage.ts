@@ -8,7 +8,7 @@ const DEFAULT_CHECKLIST = [
 ] as const;
 
 /**
- * Installation worksheet — locators match the live UI labels.
+ * Installation worksheet locators match the live UI labels.
  */
 export class InstallationPage {
   constructor(private readonly page: Page) {}
@@ -97,7 +97,7 @@ export class InstallationPage {
 
   /**
    * Tick the field checklist when it rendered. Job-done does not require
-   * ticks — an empty `installation.checklist` array leaves the heading with
+   * ticks an empty `installation.checklist` array leaves the heading with
    * no items, which is how the live worksheet behaves after scheduling.
    */
   async completeChecklist() {
@@ -130,7 +130,7 @@ export class InstallationPage {
   }
 
   /**
-   * Admin: Review Payments & Complete modal — tick the confirmation
+   * Admin: Review Payments & Complete modal tick the confirmation
    * checkbox (records outstanding as received) then mark completed.
    */
   async confirmPaymentsAndComplete() {

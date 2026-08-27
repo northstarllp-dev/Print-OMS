@@ -40,7 +40,7 @@ interface DesignModuleProps {
   setAdminOverrideUnlocked?: (val: boolean) => void;
   stageAdminNotes?: string;
   currentUserRole?: "Admin" | "Employee";
-  /** RBAC — when canEdit is false the module renders read-only (uploads/disabled). */
+  /** RBAC when canEdit is false the module renders read-only (uploads/disabled). */
   permission?: StagePermission;
 }
 
@@ -416,7 +416,7 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
         await updateDesignDetailsAction(order.id, details, dd.updated_at, undefined, adminOverrideUnlocked);
       }
 
-      // Best-effort storage cleanup — DB record is already removed.
+      // Best-effort storage cleanup DB record is already removed.
       const storagePlan = planProductionFileDelete(removed);
       if (storagePlan.storage) {
         try {
@@ -769,7 +769,7 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
                   : "bg-slate-100 border border-slate-200"
               }`}>
                 <span className="absolute top-3 left-3 z-50 rounded-md bg-white/90 px-2 py-1 text-[10px] font-semibold text-slate-600 border border-slate-200">
-                  Preview only — grey is not part of the design
+                  Preview only grey is not part of the design
                 </span>
                 
                 {/* Image Controls (Enlarge & Download) */}
@@ -870,7 +870,7 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
               </div>
             )}
 
-            {/* Design Source Files Upload (Per Item) — gated behind proof approval */}
+            {/* Design Source Files Upload (Per Item) gated behind proof approval */}
             {activeItem && isProofApproved && (
               <div className="mt-8 border-t border-slate-200 pt-8 space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
@@ -959,7 +959,7 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
               </div>
             )}
 
-            {/* Final Production Files Upload (Per Item) — gated behind handoff (or legacy productionFiles) */}
+            {/* Final Production Files Upload (Per Item) gated behind handoff (or legacy productionFiles) */}
             {activeItem && isProofApproved && isHandedOffToProduction && (
               <div className="mt-8 border-t border-slate-200 pt-8 space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">

@@ -398,7 +398,7 @@ export function isPortalTokenRevoked(revokedAt?: string | Date | null): boolean 
   return revokedAt != null && String(revokedAt).length > 0;
 }
 
-/** Portal token must bind to one customer — no cross-customer access. */
+/** Portal token must bind to one customer no cross-customer access. */
 export function portalTokenMatchesCustomer(
   tokenCustomerId: string,
   requestedCustomerId: string

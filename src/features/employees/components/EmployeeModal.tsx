@@ -8,7 +8,7 @@ interface EmployeeModalProps {
   onClose: () => void;
   onSubmit: (employee: Omit<Employee, "id">) => void;
   initialData?: Employee;
-  /** Tenant id — drives the available staff_role options. */
+  /** Tenant id drives the available staff_role options. */
   companyId?: string | null;
 }
 

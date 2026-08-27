@@ -332,7 +332,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
     };
   }, [mountedStepKeys, products.length]);
 
-  // Reset viewed step only when switching orders — not on every stage/key change
+  // Reset viewed step only when switching orders not on every stage/key change
   // (that remounted Design and looked like a constant refresh).
   useEffect(() => {
     setViewedStep(null);
@@ -531,7 +531,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                   className="text-xs border border-slate-200 rounded-lg px-3 py-2 text-slate-600 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
                 >
                   {orders.map(o => (
-                    <option key={o.id} value={o.id}>{o.orderCode || o.id} — {o.stage}</option>
+                    <option key={o.id} value={o.id}>{o.orderCode || o.id} {o.stage}</option>
                   ))}
                 </select>
               </div>
@@ -548,9 +548,9 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3 sm:py-5">
           <div className="flex items-start gap-0 sm:gap-1 sm:justify-between relative stepper-scroll overflow-x-auto pb-1">
-            {/* Background line — sm and up */}
+            {/* Background line sm and up */}
             <div className="hidden sm:block absolute top-[18px] left-0 right-0 h-[2px] bg-slate-100 z-0" />
-            {/* Progress fill — sm and up */}
+            {/* Progress fill sm and up */}
             <div
               className="hidden sm:block absolute top-[18px] left-0 h-[2px] bg-emerald-500 z-0 portal-stepper-line"
               style={{ width: `${(currentStep / Math.max(STEPS.filter(s => s.key !== "payments").length - 1, 1)) * 100}%` }}
@@ -924,7 +924,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                             </h3>
                             <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
                               {[
-                                { label: "Extra Angles Required", value: sv.extraAnglesRequired, note: sv.extraAnglesRequired && sv.extraAnglesLength ? ` — ${sv.extraAnglesLength}` : "" },
+                                { label: "Extra Angles Required", value: sv.extraAnglesRequired, note: sv.extraAnglesRequired && sv.extraAnglesLength ? ` ${sv.extraAnglesLength}` : "" },
                                 { label: "Extra ACP Sheet to Cover Gap", value: sv.extraAcpSheetRequired },
                                 { label: "Old Board Removal Required", value: sv.oldBoardRemovalRequired },
                                 { label: "Extra Wire Required", value: sv.extraWireRequired },

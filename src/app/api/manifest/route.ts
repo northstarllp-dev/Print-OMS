@@ -5,7 +5,7 @@ export async function GET() {
   const config = loadClientConfig();
 
   // Prefer dedicated favicon_io set; fall back to a single logo PNG for install icons.
-  // Chrome requires at least 192 + 512 icons — empty icons blocks PWA install.
+  // Chrome requires at least 192 + 512 icons empty icons blocks PWA install.
   const iconFolder = config.faviconUrl
     ? config.faviconUrl.replace(/\/[^/]+$/, "")
     : null;
@@ -49,7 +49,7 @@ export async function GET() {
   const manifest = {
     name: config.name,
     short_name: config.name,
-    description: `${config.name} — Operations Management`,
+    description: `${config.name} Operations Management`,
     // start_url and scope should match the Next.js basePath exactly
     start_url: "/printoms",
     scope: "/printoms",
@@ -62,7 +62,7 @@ export async function GET() {
   return NextResponse.json(manifest, {
     headers: {
       "Content-Type": "application/manifest+json",
-      // No caching — manifest reflects live client config
+      // No caching manifest reflects live client config
       "Cache-Control": "no-cache, no-store, must-revalidate",
     },
   });

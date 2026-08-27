@@ -79,7 +79,7 @@ export async function createOrderViaEnquiry(
       phone: customer.phone,
       email: customer.email,
       location: customer.location,
-      notes: `${customer.productType} — E2E enquiry`,
+      notes: `${customer.productType} E2E enquiry`,
     });
 
     await expectEnquiryExists({ email: customer.email, status: "Pending" });

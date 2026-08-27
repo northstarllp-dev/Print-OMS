@@ -37,7 +37,7 @@ test.describe("Installation: Auto-Approval", () => {
         await workspace.openStageTab("Installation");
 
         // The installation tab uses a native window.confirm (handled above),
-        // not a UI confirm modal — click the request button directly.
+        // not a UI confirm modal click the request button directly.
         await staffPage
           .getByRole("button", { name: /Request Admin Approval/i })
           .first()

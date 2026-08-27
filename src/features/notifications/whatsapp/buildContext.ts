@@ -194,22 +194,22 @@ export async function buildNotificationContext(
       bodyParameters.push(
         businessName!,
         clientName,
-        input.enquiryRow?.enquire_id || input.enquiryId || "—"
+        input.enquiryRow?.enquire_id || input.enquiryId || ""
       );
       break;
     case "order_created":
-      bodyParameters.push(businessName!, clientName, friendlyOrderId || "—");
+      bodyParameters.push(businessName!, clientName, friendlyOrderId || "");
       break;
     case "site_visit_scheduled":
     case "installation_scheduled":
-      bodyParameters.push(businessName!, input.date || "—", input.time || "—");
+      bodyParameters.push(businessName!, input.date || "", input.time || "");
       break;
     case "installation_completed":
     case "feedback_request":
       bodyParameters.push(businessName!, clientName);
       break;
     case "service_ticket_created":
-      bodyParameters.push(businessName!, input.ticketNo || "—");
+      bodyParameters.push(businessName!, input.ticketNo || "");
       break;
     default:
       bodyParameters.push(businessName!);

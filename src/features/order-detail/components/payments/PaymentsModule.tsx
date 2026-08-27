@@ -280,7 +280,7 @@ export const PaymentsModule: React.FC<PaymentsModuleProps> = ({
                 onChange={(e) => {
                   const raw = e.target.value;
                   if (newType === "percentage" && !restOfAmount) {
-                    // Allow empty, digits, optional one decimal — never coerce to float mid-type
+                    // Allow empty, digits, optional one decimal never coerce to float mid-type
                     if (raw === "" || /^\d{0,3}(\.\d{0,2})?$/.test(raw)) {
                       const num = parseFloat(raw);
                       if (raw !== "" && Number.isFinite(num) && num > 100) return;

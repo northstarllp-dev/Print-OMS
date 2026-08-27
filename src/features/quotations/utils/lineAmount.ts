@@ -1,6 +1,6 @@
 export type PricingType = "per_unit" | "per_sqft";
 
-/** Qty/Measurement for a line — works for both per-unit and per-sqft. */
+/** Qty/Measurement for a line works for both per-unit and per-sqft. */
 export function getLineMeasurement(item: {
   quantity?: number | null;
   totalSqFt?: number | null;
@@ -13,7 +13,7 @@ export function getLineMeasurement(item: {
   return sqft > 0 ? sqft : 0;
 }
 
-/** Amount before GST: measurement × rate (unit or sqft — same formula). */
+/** Amount before GST: measurement × rate (unit or sqft same formula). */
 export function calcLineAmount(item: {
   quantity?: number | null;
   totalSqFt?: number | null;

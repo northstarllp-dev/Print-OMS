@@ -4,7 +4,7 @@ export type InvoiceNumberReset = "never" | "yearly" | "monthly";
 export type InvoiceYearPart = "none" | "calendar" | "financial";
 
 export interface InvoiceNumberingConfig {
-  /** e.g. INV or PRT/INV — never a UUID */
+  /** e.g. INV or PRT/INV never a UUID */
   prefix: string;
   /** Separator between parts, e.g. "-" or "/" */
   separator: string;

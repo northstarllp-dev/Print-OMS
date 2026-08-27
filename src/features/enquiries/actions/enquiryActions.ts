@@ -66,7 +66,7 @@ export async function getEnquiries() {
       staff_role: profile.staff_role ?? null,
       company_id: profile.company_id ?? null,
     });
-    // Soft-deny for incidental callers (staff queues, reports) — return empty
+    // Soft-deny for incidental callers (staff queues, reports) return empty
     if (!canView && !canEdit) return [];
   }
 
@@ -159,7 +159,7 @@ export async function createEnquiry(formData: any) {
   let addedBy = "System";
   // Authenticated mutations resolve company from the user profile (strict).
   // The public /quote form has no session, so use the service-role client with
-  // the deploy company id — anon RLS no longer permits direct enquiry inserts.
+  // the deploy company id anon RLS no longer permits direct enquiry inserts.
   let writeClient = supabase;
   let companyId: string;
   if (user) {
@@ -506,7 +506,7 @@ export async function convertEnquiryToOrderAction(enquiryId: string, clientName:
     }
   );
 
-  // 6. Revalidate cache (all staff queues — not only /staff/orders)
+  // 6. Revalidate cache (all staff queues not only /staff/orders)
   revalidateEnquiryPaths();
   await revalidateStaffQueuePaths();
   revalidatePath(`/admin/orders/${friendlyOrderId}`);

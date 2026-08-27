@@ -2,7 +2,7 @@
 
 ## Overview
 
-* Purpose: Simple **financial tracking** for orders — expected amounts, amounts received, and outstanding balances.
+* Purpose: Simple **financial tracking** for orders expected amounts, amounts received, and outstanding balances.
 * Payments are **not** workflow stages and **do not** block stage progression.
 * All payment communication happens **outside** the OMS (phone, WhatsApp, bank transfer, UPI, cash, etc.).
 * The OMS only **records** payment information.
@@ -74,10 +74,10 @@ Installment names auto-number: `1st installment`, `2nd installment`, …
 
 ### Migrations
 
-* `20260704000003_create_payments.sql` — original table
-* `20260704000004_payments_portal_policies.sql` — portal read access
-* `20260704000009_simplify_payments_tracking.sql` — statuses + drop gates
-* `20260704000010_drop_unused_payment_columns.sql` — drop unused columns/tables
+* `20260704000003_create_payments.sql` original table
+* `20260704000004_payments_portal_policies.sql` portal read access
+* `20260704000009_simplify_payments_tracking.sql` statuses + drop gates
+* `20260704000010_drop_unused_payment_columns.sql` drop unused columns/tables
 
 ## Server actions
 

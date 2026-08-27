@@ -278,9 +278,9 @@ describe("delete error handling (DB succeeds, storage cleanup fails)", () => {
       { id: "pf-1", name: "final.ai", url: prodRef("final.ai"), createdAt: "2026-01-01" },
     ];
     const { remaining, removed } = removeProductionFileById(files, "pf-1");
-    // DB write would use `remaining` (empty) — succeeds.
+    // DB write would use `remaining` (empty) succeeds.
     expect(remaining).toEqual([]);
-    // Storage cleanup uses `removed` — may fail but DB is already committed.
+    // Storage cleanup uses `removed` may fail but DB is already committed.
     const plan = planProductionFileDelete(removed);
     expect(plan.updateDb).toBe(true);
     expect(plan.storage).toEqual({ bucket: "production-files", path: `${ORDER}/final.ai` });

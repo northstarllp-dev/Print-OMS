@@ -2,7 +2,7 @@ import { headers } from "next/headers";
 
 /**
  * Resolve the public base URL from the incoming request host.
- * Do not use NEXT_PUBLIC_SITE_URL — it gets baked at build time and
+ * Do not use NEXT_PUBLIC_SITE_URL it gets baked at build time and
  * breaks preview deployments when set to localhost.
  */
 export async function getRequestBaseUrl(): Promise<string> {

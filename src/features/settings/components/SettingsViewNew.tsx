@@ -589,7 +589,7 @@ export function SettingsViewNew({ initialAppSettings, companyDetails }: Settings
                     onClick={() => toggleWorkflowAutoApproval(key)}
                     aria-pressed={enabled}
                     aria-label={`Toggle auto-approval for ${WORKFLOW_AUTO_APPROVAL_STAGE_LABELS[key]}`}
-                    title={enabled ? "Auto-approval ON — click to require admin approval" : "Admin approval required — click to enable auto-approval"}
+                    title={enabled ? "Auto-approval ON click to require admin approval" : "Admin approval required click to enable auto-approval"}
                     style={{
                       position: "relative",
                       flexShrink: 0,
@@ -800,8 +800,8 @@ export function SettingsViewNew({ initialAppSettings, companyDetails }: Settings
                       }
                       title={
                         item.required === false
-                          ? "Optional — this step does not block stage advancement. Click to make it required."
-                          : "Required — must be checked before stage advancement. Click to make it optional."
+                          ? "Optional this step does not block stage advancement. Click to make it required."
+                          : "Required must be checked before stage advancement. Click to make it optional."
                       }
                       style={{
                         display: "inline-flex",
@@ -1030,7 +1030,7 @@ export function SettingsViewNew({ initialAppSettings, companyDetails }: Settings
               : invoiceSaveStatus === "saved"
                 ? "Letterhead saved"
                 : invoiceSaveStatus === "error"
-                  ? "Save failed — retry"
+                  ? "Save failed retry"
                   : "Save letterhead"}
           </button>
         </div>
@@ -1054,7 +1054,7 @@ export function SettingsViewNew({ initialAppSettings, companyDetails }: Settings
                 Invoice Number
               </div>
               <div style={{ fontSize: "12px", color: "#64748b", marginTop: "2px" }}>
-                Configurable numbering for this company — never uses UUIDs. Applies to newly created invoices.
+                Configurable numbering for this company never uses UUIDs. Applies to newly created invoices.
               </div>
               {companyDetails?.id && (
                 <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "4px", fontFamily: "ui-monospace, monospace" }}>
@@ -1224,7 +1224,7 @@ export function SettingsViewNew({ initialAppSettings, companyDetails }: Settings
               : numberingSaveStatus === "saved"
                 ? "Numbering saved"
                 : numberingSaveStatus === "error"
-                  ? "Save failed — retry"
+                  ? "Save failed retry"
                   : "Save invoice numbering"}
           </button>
         </div>

@@ -423,7 +423,7 @@ export async function updateSiteVisitDetailsAction(orderId: string, details: any
     .eq("id", orderUuid)
     .single();
   if (!order?.company_id) {
-    throw new Error("Order is missing company_id — cannot save site visit.");
+    throw new Error("Order is missing company_id cannot save site visit.");
   }
   const companyId = order.company_id;
 
@@ -535,7 +535,7 @@ export async function updateSiteVisitDetailsAction(orderId: string, details: any
     await revalidateStaffQueuePaths();
   }
 
-  // Revalidate this order only — queues refresh when stage/status changes.
+  // Revalidate this order only queues refresh when stage/status changes.
   const orderCode = order?.order_id;
   revalidateOrderDetailPaths(orderId);
   if (orderCode && orderCode !== orderId) {
@@ -591,7 +591,7 @@ export async function updateProductionDetailsAction(orderId: string, details: an
     if (insertError) throw new Error(insertError.message);
   }
   
-  // Client owns checklist UI — only refresh this order's detail pages.
+  // Client owns checklist UI only refresh this order's detail pages.
   revalidateOrderDetailPaths(orderId);
   revalidateOrderDetailPaths(orderUuid);
 
@@ -642,7 +642,7 @@ export async function requestStageAdvancementAction(orderId: string) {
   const businessOp =
     (current.business_operation as string) || "signage";
 
-  // Permission is for the stage being advanced FROM — not the destination stage.
+  // Permission is for the stage being advanced FROM not the destination stage.
   const stageToPermission: Record<string, "site_visit" | "quotation" | "design" | "production" | "installation"> = {
     "Site Visit Pending": "site_visit",
     "Site Visit Scheduled": "site_visit",
@@ -778,7 +778,7 @@ export async function requestStageAdvancementAction(orderId: string) {
  * Shared advancement planner for `adminApproveStageAction` and
  * `autoAdvanceStageAction`. Runs all readiness gates and returns the
  * computed next stage (and workflow_type for site-visit transitions) plus
- * the timeline message. Does NOT perform the order update — callers own
+ * the timeline message. Does NOT perform the order update callers own
  * that step so they can use the appropriate client (user vs service-role).
  *
  * `siteVisitWorkflowOverride`:
@@ -1180,7 +1180,7 @@ export async function setWorkflowTypeAction(
     .single();
   if (fetchError) throw new Error(fetchError.message);
 
-  // Orders default to quote_first in DB — only treat as conflict once stage has left Site Visit.
+  // Orders default to quote_first in DB only treat as conflict once stage has left Site Visit.
   if (!(o.stage || "").startsWith("Site Visit")) {
     const conflict = resolveConcurrentWorkflowChoice({
       attempted: workflowType,
@@ -1252,7 +1252,7 @@ export async function updateOrderStageAction(id: string, stage: string) {
   }
 
   const isChanged = stage !== o.stage;
-  // Bypass updateOrder()'s admin-only gate — permission already checked above.
+  // Bypass updateOrder()'s admin-only gate permission already checked above.
   const { stageProgressPatch } = await import("@/features/orders/lib/orderHealth");
   const patch = {
     stage,
@@ -1308,7 +1308,7 @@ export async function addChatMessageAction(orderId: string, sender: string, mess
     .single();
   if (fetchError) throw new Error(fetchError.message);
 
-  // Timeline-only — internal/customer chat was removed.
+  // Timeline-only internal/customer chat was removed.
   await insertOrderActivity(supabase, {
     order_id: o.order_id || orderId,
     company_id: o.company_id,
@@ -1323,7 +1323,7 @@ export async function assignEmployeesToOrderAction(orderId: string, employeeIds:
 }
 
 /**
- * Server action for portal client mutations. Scoped to the affected order —
+ * Server action for portal client mutations. Scoped to the affected order 
  * does not invalidate every staff queue page.
  */
 export async function revalidateOrderPathsAction(orderId?: string) {
@@ -1583,7 +1583,7 @@ export async function flagStalledOrdersAction(): Promise<{ flagged: number }> {
       company_id: o.company_id,
       actor_name: "System",
       actor_role: "System",
-      content: `Order health set to "Needs Attention" — no stage progress for ${days}+ days.`,
+      content: `Order health set to "Needs Attention" no stage progress for ${days}+ days.`,
       metadata: {
         action: "health_changed",
         health: "Needs Attention",
@@ -1648,7 +1648,7 @@ async function assertPortalCanScheduleVisit(
 
 /**
  * Staff (cookie auth + RLS) or customer portal (token/session + service role).
- * Portal customers have no Supabase Auth session — anon RLS cannot update site_visits.
+ * Portal customers have no Supabase Auth session anon RLS cannot update site_visits.
  */
 export async function scheduleSiteVisitAction(
   orderId: string,
@@ -1679,10 +1679,10 @@ export async function scheduleSiteVisitAction(
 
   if (fetchError || !order) throw new Error(fetchError?.message || "Order not found");
   if (!order.company_id) {
-    throw new Error("Order is missing company_id — cannot schedule site visit.");
+    throw new Error("Order is missing company_id cannot schedule site visit.");
   }
 
-  // Never persist a pasted Maps URL — store resolved address + coordinates only.
+  // Never persist a pasted Maps URL store resolved address + coordinates only.
   const { isGoogleMapsUrl, formatGpsCoords } = await import("@/components/maps/mapsUrl");
   let sanitizedSchedule = { ...scheduleData };
   if (
@@ -1720,7 +1720,7 @@ export async function scheduleSiteVisitAction(
     completed: false,
     reviewStatus: "Pending" as const,
   };
-  // Always use the order's tenant — never invent a default company id.
+  // Always use the order's tenant never invent a default company id.
   const dbPayload = mapSiteVisitToDb(orderUuid, order.company_id, updatedSiteVisit);
 
   const { data: siteVisit, error: svError } = await supabase
@@ -1804,7 +1804,7 @@ export async function approveSiteVisitAction(orderId: string) {
   const { data: existingSv } = await supabase.from("site_visits").select("*").eq("order_id", orderUuid).maybeSingle();
   const mappedExisting = mapSiteVisitFromDb(existingSv) || {};
   if (!order.company_id) {
-    throw new Error("Order is missing company_id — cannot approve site visit.");
+    throw new Error("Order is missing company_id cannot approve site visit.");
   }
   const companyId = order.company_id;
   const dbPayload = mapSiteVisitToDb(orderUuid, companyId, { ...mappedExisting, reviewStatus: "Staff Approved" as const });

@@ -62,7 +62,7 @@ function buildMeasurementUpsertPayload(
 }
 
 describe("site visit form & measurements", () => {
-  describe("UI / config — standard + dynamic fields", () => {
+  describe("UI / config standard + dynamic fields", () => {
     it("standard fields include customer/address/gps/measurements/photos/power/wall/budget/requirements/notes", () => {
       const ids = standardSiteVisitFormFields().map((f) => f.id);
       expect(ids).toEqual(
@@ -135,7 +135,7 @@ describe("site visit form & measurements", () => {
     });
   });
 
-  describe("backend — DB mapping + upsert contract", () => {
+  describe("backend DB mapping + upsert contract", () => {
     it("maps snake_case and camelCase with unit defaults", () => {
       const mapped = mapSiteVisitMeasurementFromDb({
         id: "m1",

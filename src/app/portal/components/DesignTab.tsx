@@ -157,7 +157,7 @@ export function DesignTab({ order, customer, siteVisitItems = [], portalToken, o
     const updated = await updateDesignDetailsAction(order.id, { items: updatedItems }, dd.updated_at, portalToken);
     onDesignUpdated?.(toCustomerVisibleDesign(updated) || updated);
 
-    // Skip no-op stage writes — they revalidate the portal and can wipe local design state.
+    // Skip no-op stage writes they revalidate the portal and can wipe local design state.
     if (updateStage && order.stage !== updateStage) {
       await transitionDesignOrderStageAction(order.id, updateStage, portalToken);
     }
@@ -305,7 +305,7 @@ export function DesignTab({ order, customer, siteVisitItems = [], portalToken, o
     setSavingComment(true);
     try {
       await handleUpdateItemVersions(updatedVersions, "Design In Progress");
-      // Clear only after a successful save — early clear made first attempts look broken.
+      // Clear only after a successful save early clear made first attempts look broken.
       setCommentingOn(null);
       setCommentText("");
     } catch (err: unknown) {
@@ -528,7 +528,7 @@ export function DesignTab({ order, customer, siteVisitItems = [], portalToken, o
               activeVersion.status === "Approved" ? "ring-2 ring-emerald-500/50" : ""
             }`}>
               <span className="absolute top-3 left-3 z-50 rounded-md bg-white/90 px-2 py-1 text-[10px] font-semibold text-slate-600 border border-slate-200">
-                Preview only — grey is not part of the design
+                Preview only grey is not part of the design
               </span>
               
               {/* Image Controls (Enlarge & Download) */}
@@ -574,7 +574,7 @@ export function DesignTab({ order, customer, siteVisitItems = [], portalToken, o
                   style={{ cursor: isLocked || activeVersion.status === "Approved" ? "default" : "crosshair", display: 'block' }}
                 />
                 
-                {/* Existing pin markers only — composer lives outside scale() so clicks aren't eaten */}
+                {/* Existing pin markers only composer lives outside scale() so clicks aren't eaten */}
                 {allComments.map((comment: any) => (
                   !comment.isGeneral && (
                     <div key={comment.id} className="absolute z-10 hover:z-50 w-0 h-0 group/pin" style={{ left: `${comment.x}%`, top: `${comment.y}%` }}>
@@ -727,7 +727,7 @@ export function DesignTab({ order, customer, siteVisitItems = [], portalToken, o
           </div>
         )}
       </div>
-      {/* Approve Confirmation Modal — portaled so it isn't clipped by overflow/transform parents */}
+      {/* Approve Confirmation Modal portaled so it isn't clipped by overflow/transform parents */}
       {showApproveModal && (
         <OverlayPortal>
           <div

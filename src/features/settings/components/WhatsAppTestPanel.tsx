@@ -97,20 +97,20 @@ export function WhatsAppTestPanel({ initialStatus }: Props) {
           <dl style={{ display: "grid", gridTemplateColumns: "140px 1fr", gap: "10px 16px", margin: 0, fontSize: "13px" }}>
             <dt style={{ color: "#64748b" }}>API configured</dt>
             <dd style={{ margin: 0, fontWeight: 600, color: status.configured ? "#16a34a" : "#dc2626" }}>
-              {status.configured ? "Yes" : "No — add env vars"}
+              {status.configured ? "Yes" : "No add env vars"}
             </dd>
             <dt style={{ color: "#64748b" }}>Test mode</dt>
             <dd style={{ margin: 0, fontWeight: 600, color: status.testMode ? "#d97706" : "#64748b" }}>
               {status.testMode
-                ? "ON — lifecycle sends hello_world (WHATSAPP_TEST_MODE=true)"
-                : "OFF — uses approved printec_* templates"}
+                ? "ON lifecycle sends hello_world (WHATSAPP_TEST_MODE=true)"
+                : "OFF uses approved printec_* templates"}
             </dd>
             <dt style={{ color: "#64748b" }}>Sending enabled</dt>
             <dd style={{ margin: 0, fontWeight: 600 }}>{status.enabled ? "Yes" : "No"}</dd>
             <dt style={{ color: "#64748b" }}>Phone Number ID</dt>
-            <dd style={{ margin: 0, fontFamily: "monospace" }}>{status.phoneNumberId || "—"}</dd>
+            <dd style={{ margin: 0, fontFamily: "monospace" }}>{status.phoneNumberId || ""}</dd>
             <dt style={{ color: "#64748b" }}>WABA ID</dt>
-            <dd style={{ margin: 0, fontFamily: "monospace" }}>{status.wabaId || "—"}</dd>
+            <dd style={{ margin: 0, fontFamily: "monospace" }}>{status.wabaId || ""}</dd>
             <dt style={{ color: "#64748b" }}>Graph API</dt>
             <dd style={{ margin: 0 }}>{status.graphVersion}</dd>
           </dl>

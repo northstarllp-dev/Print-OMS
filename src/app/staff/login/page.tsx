@@ -1,15 +1,6 @@
 import React from "react";
 import { StaffLoginForm } from "./StaffLoginForm";
-import { getEmployees } from "@/features/employees/actions/employeeActions";
 
-export default async function StaffLoginPage() {
-  const employeesData = await getEmployees();
-  
-  const mappedEmployees = employeesData?.map(e => ({
-    id: e.id,
-    name: e.name,
-    email: e.email || ""
-  })) || [];
-
-  return <StaffLoginForm employees={mappedEmployees} />;
+export default function StaffLoginPage() {
+  return <StaffLoginForm />;
 }

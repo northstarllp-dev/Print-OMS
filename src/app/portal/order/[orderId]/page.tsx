@@ -35,7 +35,7 @@ export default async function OrderDetailPage({
     );
   }
 
-  // ── Rate limiting (per IP + token — never a shared "anonymous" bucket) ──
+  // ── Rate limiting (per IP + token never a shared "anonymous" bucket) ──
   const headersList = await headers();
   const clientIp = clientIpFromHeaders(headersList);
   const rate = checkRateLimit(`portal-order-${clientIp}-${tokenParam.slice(0, 16)}`);
@@ -100,7 +100,7 @@ export default async function OrderDetailPage({
     );
   }
 
-  // Fetch the specific order — prefer route param, then token orderId; scope by tenant
+  // Fetch the specific order prefer route param, then token orderId; scope by tenant
   const orderRef = orderId || payload.orderId;
   if (!orderRef) {
     return (

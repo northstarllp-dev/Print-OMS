@@ -54,7 +54,7 @@ Grant key: `enquiry` with `{ canView, canEdit }` in client `stageGrantsByRole` (
 * Public `/quote` create remains open without a staff session.
 * Server: `createEnquiry` (authenticated), `updateEnquiry`, `convertEnquiryToOrderAction` assert `assertStageEditPermission("enquiry")`.
 
-### Sales Representative (Staff) — order pipeline
+### Sales Representative (Staff) order pipeline
 
 Permissions:
 * View orders assigned to them.

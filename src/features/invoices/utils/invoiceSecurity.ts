@@ -26,7 +26,7 @@ export function assertUpsertStatusTransition(
 ): void {
   if (nextStatus === "Paid" || nextStatus === "Void") {
     throw new Error(
-      `Status "${nextStatus}" cannot be set via save — use the workflow action`
+      `Status "${nextStatus}" cannot be set via save use the workflow action`
     );
   }
   if (existingStatus && UPSERT_LOCKED_STATUSES.has(existingStatus)) {

@@ -149,7 +149,7 @@ export function normalizeProductionChecklistsByOp(
   if (Array.isArray(raw)) {
     const shared = normalizeProductionChecklistItems(raw);
     for (const opId of ids) {
-      // Legacy single list was the signage workshop checklist — keep other ops on their defaults.
+      // Legacy single list was the signage workshop checklist keep other ops on their defaults.
       result[opId] =
         opId === "signage" || ids.length === 1
           ? cloneItems(shared)

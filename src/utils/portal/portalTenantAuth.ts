@@ -32,7 +32,7 @@ export function assertCompanyMatchesDeploy(companyId: string | null | undefined)
 export async function resolvePortalOrderUuid(idOrOrderId: string): Promise<string> {
   if (uuidPattern.test(idOrOrderId)) return idOrOrderId;
   const admin = requireAdmin();
-  // Friendly order_id collides across tenants — always scope to deploy company.
+  // Friendly order_id collides across tenants always scope to deploy company.
   const { data, error } = await admin
     .from("orders")
     .select("id")
@@ -92,7 +92,7 @@ export async function assertCustomerTenantAccess(customerIdOrFriendly: string): 
     customer = data;
   }
   if (!customer) {
-    // Friendly customer_id collides across tenants — scope to deploy company.
+    // Friendly customer_id collides across tenants scope to deploy company.
     const { data } = await admin
       .from("customers")
       .select("id, customer_id, company_id")
@@ -153,7 +153,7 @@ export async function assertPortalTenantAccess(opts: {
       opts.requiredScope &&
       (!session.scopes || !session.scopes.includes(opts.requiredScope))
     ) {
-      // Cookie present but missing scope — try token fallback below
+      // Cookie present but missing scope try token fallback below
     } else {
       authenticated = true;
     }

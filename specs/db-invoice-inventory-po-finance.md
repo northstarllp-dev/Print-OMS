@@ -202,7 +202,7 @@ Order `payments` rows are written by the **Payments** module; Finance syncs from
 
 `entry_type`, `entry_no`, `amount`, `gst_amount`, `category`, `mode`, `status`, `entry_date`, `due_date`, `paid_at`, `customer_id`, `order_id`, `invoice_id`, `vendor_id`, `po_id`, `payee`, `attachment_url`, `attachments`, `notes`, `source_ref` (`order_payment:…` / `po_payment:…`), `created_by`, `approved_by`
 
-Also: `invoices.invoice_type` — `GST Invoice` | `Tax Invoice` | `Actual Invoice` | `Proforma Invoice` | `Credit Note` | `Debit Note`
+Also: `invoices.invoice_type` `GST Invoice` | `Tax Invoice` | `Actual Invoice` | `Proforma Invoice` | `Credit Note` | `Debit Note`
 
 ---
 

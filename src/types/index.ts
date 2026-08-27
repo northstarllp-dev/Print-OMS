@@ -90,7 +90,7 @@ export interface SignLocation {
 
 // Extended Site Visit Details
 export interface SiteVisitDetails {
-  /** site_visits.id — needed for realtime measurement subscriptions */
+  /** site_visits.id needed for realtime measurement subscriptions */
   id?: string;
   completed: boolean;
   
@@ -182,7 +182,7 @@ export interface DesignItem {
     sizeBytes?: number;
     downloadCount?: number;
   }[];
-  /** Set when the designer clicks "Move to Production Files" — reveals the production files upload area. */
+  /** Set when the designer clicks "Move to Production Files" reveals the production files upload area. */
   designFilesReady?: boolean;
 }
 
@@ -258,7 +258,7 @@ export interface Order {
   pickup_confirmed_at?: string | null;
 }
 
-/** Payment tracking statuses (financial record only — no workflow). */
+/** Payment tracking statuses (financial record only no workflow). */
 export type PaymentStatus = "expected" | "received";
 
 export type PaymentAmountType = "fixed" | "percentage";

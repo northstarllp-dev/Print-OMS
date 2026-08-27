@@ -1,4 +1,4 @@
-# Production Readiness Audit — PrintOMS
+# Production Readiness Audit PrintOMS
 
 **Date:** 2026-08-05  
 **Scope:** Static analysis of `src/`, `supabase/migrations/`, config, and tests. No dynamic penetration testing or `EXPLAIN ANALYZE` against production.
@@ -7,16 +7,16 @@
 
 ## Assessment: ~65–70% production-grade
 
-This is a **real, deployable multi-tenant SaaS** (Next.js 16 + Supabase) — not a prototype. The architecture is thoughtful, but operational hardening is incomplete.
+This is a **real, deployable multi-tenant SaaS** (Next.js 16 + Supabase) not a prototype. The architecture is thoughtful, but operational hardening is incomplete.
 
 - **Already strong:** multi-tenancy, RLS/migrations, domain feature modules, specs, unit tests, white-label client config.
 - **Still weak:** CI/E2E, env validation, generated DB types, consistent auth on mutations, security headers, hot-path overfetch, no pagination, in-memory rate limiter, no job queue.
-- **Remaining effort (rough):** ~7–12 weeks of focused engineering to reach fully production-grade enterprise standards — hardening and standardization, not a rewrite.
+- **Remaining effort (rough):** ~7–12 weeks of focused engineering to reach fully production-grade enterprise standards hardening and standardization, not a rewrite.
 
 | Verdict | Detail |
 |---------|--------|
-| Beyond MVP | Yes — actively deployed (Vercel, multi-client) |
-| Fully production-hardened | No — hygiene, scale, and security High items remain |
+| Beyond MVP | Yes actively deployed (Vercel, multi-client) |
+| Fully production-hardened | No hygiene, scale, and security High items remain |
 | Rewrite needed | No |
 
 ---
@@ -35,17 +35,17 @@ This is a **real, deployable multi-tenant SaaS** (Next.js 16 + Supabase) — not
 ## What's already strong
 
 1. Multi-tenant isolation (deploy slug → company UUID → middleware → actions → RLS)
-2. Database discipline — 32+ migrations, RLS on 43/43 tables, `current_company_id()`
+2. Database discipline 32+ migrations, RLS on 43/43 tables, `current_company_id()`
 3. Domain-driven features (23 modules); mature `orders/` workspace + RBAC
 4. Specs folder (26 files) and unit tests (55 Vitest files / 500+ tests)
 5. White-label client registry (5 clients), env templates, scaffold scripts
-6. Real product surface — admin, staff, production, installation, portal, finance, inventory
+6. Real product surface admin, staff, production, installation, portal, finance, inventory
 
 ---
 
-## P0 Critical security — DONE (2026-08-05)
+## P0 Critical security DONE (2026-08-05)
 
-Commit: `aac3700` — `fix(security): P0 critical security fixes`  
+Commit: `aac3700` `fix(security): P0 critical security fixes`  
 Migration: `supabase/migrations/20260805140000_p0_security_lockdown.sql`  
 **Apply migration to Supabase before relying on these fixes in production** (`supabase db push` or SQL editor).
 
@@ -61,26 +61,26 @@ Migration: `supabase/migrations/20260805140000_p0_security_lockdown.sql`
 
 ---
 
-## Security — remaining (High / Medium / Low)
+## Security remaining (High / Medium / Low)
 
 ### High
 
 | # | Issue | Location / notes |
 |---|--------|------------------|
 | S1 | Server actions mutate without explicit `getCurrentUser` / role checks (rely on RLS only) | `customerActions` CRUD; `productActions` CRUD/categories; `employeeActions` create/update; `portalAdminActions.revokePortalAccessAction`; `orderActions.addChatMessageAction` / `flagStalledOrdersAction`; `enquiryActions.flagStalledEnquiriesAction`; `installationActions.scheduleInstallationAction` |
-| S2 | No security headers (CSP, HSTS, X-Frame-Options, X-Content-Type-Options) | `next.config.ts` — headers not configured |
+| S2 | No security headers (CSP, HSTS, X-Frame-Options, X-Content-Type-Options) | `next.config.ts` headers not configured |
 | S3 | Upload routes have no file size limits; MIME/extension only (SVG allowed) | `api/storage/upload`, `api/portal/upload`, `api/public/service-ticket` |
 | S4 | Public service-ticket lookup by phone returns customer name + orders (enumeration / PII) | `api/public/service-ticket/lookup` |
 | S5 | Unauthenticated / weakly gated APIs | `api/maps/resolve` (SSRF/abuse); `api/whatsapp/test` (secret header or staff) |
-| S6 | Portal short tokens ~72 bits (9 random bytes) — weak without strict rate limits | `portal-tokens.ts` |
-| S7 | Reports / AI builders may lack admin gate | `getReportData`, `aiReportBuilder` — verify auth |
+| S6 | Portal short tokens ~72 bits (9 random bytes) weak without strict rate limits | `portal-tokens.ts` |
+| S7 | Reports / AI builders may lack admin gate | `getReportData`, `aiReportBuilder` verify auth |
 
 ### Medium
 
 | # | Issue | Location / notes |
 |---|--------|------------------|
 | S8 | Zod used in ~2/28 server action files (~7%); most accept `any` / FormData | Widespread |
-| S9 | In-memory rate limiter — broken across Vercel instances | `src/utils/rate-limiter.ts` (8 call sites) |
+| S9 | In-memory rate limiter broken across Vercel instances | `src/utils/rate-limiter.ts` (8 call sites) |
 | S10 | Portal session cookie `secure` only when `NODE_ENV === "production"`; Supabase cookie flags implicit | Portal session route; SSR client |
 | S11 | PostgREST filter injection risk if phone not sanitized | `service-ticket/lookup` `.or(\`phone.eq.${phone}…\`)` |
 | S12 | Middleware catch may proceed with stale session on error | `utils/supabase/middleware.ts` |
@@ -90,7 +90,7 @@ Migration: `supabase/migrations/20260805140000_p0_security_lockdown.sql`
 
 | # | Issue | Notes |
 |---|--------|-------|
-| S14 | `dangerouslySetInnerHTML` ×2 — static CSS only | Low XSS risk today |
+| S14 | `dangerouslySetInnerHTML` ×2 static CSS only | Low XSS risk today |
 | S15 | Generic `signIn` without role/tenant gate (unlike portal-specific sign-ins) | `authActions` |
 | S16 | Rate limiter disabled in development | By design; don't ship that pattern to prod |
 
@@ -111,19 +111,19 @@ Migration: `supabase/migrations/20260805140000_p0_security_lockdown.sql`
 |---|--------|----------|--------------|
 | P1 | Admin layout loads full `getOrders()` + enquiries + customers for sidebar badges | `admin/(dashboard)/layout.tsx:24` | Every navigation; only needs counts |
 | P2 | Orders page loads full graph again + sequential awaits | `orders/page.tsx` | Double-fetch with layout |
-| P3 | `getOrders()` — `select *` + 6 nested `*` embeds, no LIMIT | `orderActions.ts:177-193` | DB + serialize + browser cost |
+| P3 | `getOrders()` `select *` + 6 nested `*` embeds, no LIMIT | `orderActions.ts:177-193` | DB + serialize + browser cost |
 | P4 | `flagStalledOrdersAction` on every orders page load; N sequential `insertOrderActivity` | `orderActions.ts:1193+`, `orders/page.tsx:9` | Write amplification |
 | P5 | ~10+ missing indexes on hot columns | `orders.stage`, `health`, `stage_changed_at`, `date_created`; `order_assignments.employee_id`; `notifications(user_id, created_at)`; etc. | Seq scans as data grows |
 | P6 | No read caching (`unstable_cache` / tags = 0); ~80+ broad `revalidatePath` | Actions across features | Every page = full Supabase round-trips |
 | P7 | Realtime: up to 4 channels / 9+ listeners per order view; duplicate quotation + activity channels | `useOrderDetailSync`, `QuotationModule`, `OrderCommunicationCenter` | Connection + CPU waste |
-| P8 | Notification Realtime with no `user_id` filter | `AdminLayoutClient.tsx` | Broadcast storm — all events to all clients |
+| P8 | Notification Realtime with no `user_id` filter | `AdminLayoutClient.tsx` | Broadcast storm all events to all clients |
 
 ### Medium impact
 
 | # | Issue | Notes |
 |---|--------|-------|
 | P9 | ~45 `select("*")` call sites | Overfetch |
-| P10 | 111/319 files `"use client"` (~35%); large modules not dynamic-imported | QuotationModule ~1932 lines, SiteVisitModule ~1445 — static on order detail |
+| P10 | 111/319 files `"use client"` (~35%); large modules not dynamic-imported | QuotationModule ~1932 lines, SiteVisitModule ~1445 static on order detail |
 | P11 | 0 `React.memo`; Customers/Products lists weak memoization | Keystroke re-renders |
 | P12 | 12 raw `<img>` vs 2 `next/image`; logos up to ~170KB | No WebP/srcset |
 | P13 | Portal page re-fetches site_visits after embed | Redundant work |
@@ -144,7 +144,7 @@ Migration: `supabase/migrations/20260805140000_p0_security_lockdown.sql`
 
 ## Scalability
 
-**Today's practical envelope:** one busy tenant, &lt;~300 orders, &lt;~50 concurrent staff — before UX/timeouts degrade.
+**Today's practical envelope:** one busy tenant, &lt;~300 orders, &lt;~50 concurrent staff before UX/timeouts degrade.
 
 | # | Issue | Breaks around | Fix direction |
 |---|--------|---------------|---------------|
@@ -181,9 +181,9 @@ Migration: `supabase/migrations/20260805140000_p0_security_lockdown.sql`
 
 | # | Issue | Notes |
 |---|--------|-------|
-| H1 | No CI (`.github/workflows`) — lint/tests not enforced on merge | P0 for ship safety |
+| H1 | No CI (`.github/workflows`) lint/tests not enforced on merge | P0 for ship safety |
 | H2 | No E2E (Playwright/Cypress); empty `integration_test/` | Critical journeys unverified |
-| H3 | No coverage thresholds | — |
+| H3 | No coverage thresholds | |
 | H4 | No runtime env validation (zod / t3-env) | Fail-fast at boot |
 | H5 | No Supabase-generated `database.types.ts` | Manual types + ~170 `any` matches |
 | H6 | `getSupabase()` duplicated in ~35 action files | Prefer `utils/supabase/server.ts` |
@@ -198,7 +198,7 @@ Migration: `supabase/migrations/20260805140000_p0_security_lockdown.sql`
 
 ## Recommended fix order
 
-### Tier A — Ship safety (1–2 weeks)
+### Tier A Ship safety (1–2 weeks)
 
 1. ~~P0 Critical security (anon RLS, seed_app_user, test-db, resolveWriteCompanyId)~~ **DONE**
 2. Apply migration `20260805140000_p0_security_lockdown.sql` to all environments
@@ -207,7 +207,7 @@ Migration: `supabase/migrations/20260805140000_p0_security_lockdown.sql`
 5. CI: lint + vitest on PR
 6. Guard or remove weak public APIs (S4, S5)
 
-### Tier B — Scale past 300 orders / 50 users (1–2 weeks)
+### Tier B Scale past 300 orders / 50 users (1–2 weeks)
 
 1. Layout `getOrderCounts()` instead of `getOrders()` (P1 / X1)
 2. Paginate + slim `getOrders()` list path (P2, P3 / X2)
@@ -215,7 +215,7 @@ Migration: `supabase/migrations/20260805140000_p0_security_lockdown.sql`
 4. Dedupe Realtime + `user_id` filter on notifications (P7, P8 / X6)
 5. Upstash (or equivalent) rate limiter (S9 / X4)
 
-### Tier C — Quality bar (2–4 weeks)
+### Tier C Quality bar (2–4 weeks)
 
 1. Supabase typegen; reduce `any`
 2. Zod on server actions
@@ -223,7 +223,7 @@ Migration: `supabase/migrations/20260805140000_p0_security_lockdown.sql`
 4. Move reports / PDF / stall-flagging off request path
 5. Prettier, husky, root README, error boundaries
 
-### Tier D — Multi-tenant scale (when approaching 30+ tenants)
+### Tier D Multi-tenant scale (when approaching 30+ tenants)
 
 1. Per-client Supabase projects (already one Vercel project per slug)
 2. Signed storage URLs

@@ -298,7 +298,7 @@ export function QuotationDocument({
                 type="button"
                 onClick={handlePrint}
                 className="inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-lg border border-slate-800 bg-slate-900 px-3 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-slate-800"
-                title="Opens print dialog — choose Save as PDF"
+                title="Opens print dialog choose Save as PDF"
               >
                 <Download size={14} />
                 Download PDF
@@ -365,7 +365,7 @@ export function QuotationDocument({
                       {documentTitle}
                     </p>
                     <p className="mt-1 text-sm font-mono font-bold text-slate-700 break-all">
-                      {quotationId || "—"}
+                      {quotationId || ""}
                     </p>
                     {showStatus && status && (
                       <p className="mt-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 quotation-no-print">
@@ -426,7 +426,7 @@ export function QuotationDocument({
                   </div>
                 </section>
 
-                {/* Mobile / tablet line cards — screen only */}
+                {/* Mobile / tablet line cards screen only */}
                 <div className="quotation-mobile-only lg:hidden print:hidden px-4 py-4 space-y-3 border-b border-slate-200">
                   {lines.length === 0 ? (
                     <p className="py-6 text-center text-sm text-slate-400">No line items</p>
@@ -457,7 +457,7 @@ export function QuotationDocument({
                         <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-slate-600">
                           <p>
                             <span className="text-slate-400">HSN: </span>
-                            {line.hsn || "—"}
+                            {line.hsn || ""}
                           </p>
                           <p className="text-right tabular-nums">
                             <span className="text-slate-400">Qty: </span>
@@ -598,7 +598,7 @@ export function QuotationDocument({
                               ))}
                             </td>
                             <td className="px-2.5 py-2.5 text-slate-700">
-                              {line.hsn || "—"}
+                              {line.hsn || ""}
                             </td>
                             <td className="px-2.5 py-2.5 text-right tabular-nums text-slate-800">
                               {formatQty(line.qty)}
@@ -727,7 +727,7 @@ export function QuotationDocument({
                 </div>
 
 
-                {/* Bank — sample uses "FULL NAME OF ACCOUNT" */}
+                {/* Bank sample uses "FULL NAME OF ACCOUNT" */}
                 {hasBankDetails(bank) && (
                   <section className="quotation-sheet-section px-4 sm:px-6 lg:px-8 py-4 sm:py-5 border-t border-slate-200">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">

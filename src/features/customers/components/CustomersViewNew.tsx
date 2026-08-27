@@ -255,7 +255,7 @@ export function CustomersViewNew({
         
         {/* Left Hand: Customers List Table */}
         <div className={`min-w-0 bg-white rounded-xl border border-slate-200 overflow-hidden transition-all ${selectedCustomerId ? "lg:flex-[7]" : "lg:flex-[10]"} ${selectedCustomer ? "hidden lg:block" : "w-full"}`}>
-          {/* Search & Filter Bar — Orders-style */}
+          {/* Search & Filter Bar Orders-style */}
           <div className="p-3 sm:p-4 border-b border-slate-200">
             <div className="lg:hidden flex items-center gap-2">
               <div className="relative flex-1 min-w-0">
@@ -658,7 +658,7 @@ export function CustomersViewNew({
                           {isClosedOrderStage(o.stage) ? (
                             <span
                               className="text-[10px] font-semibold text-slate-500 bg-slate-100 border border-slate-200 rounded px-1.5 py-0.5"
-                              title="Order completed — portal link expired"
+                              title="Order completed portal link expired"
                             >
                               Link expired
                             </span>

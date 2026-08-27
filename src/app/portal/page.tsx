@@ -102,7 +102,7 @@ export default async function PortalPage({
       customerData = tenantMatches[0];
     }
   } catch {
-    /* continue — assert below */
+    /* continue assert below */
   }
 
   // Deploy slug + company_id must match (prevent cross-tenant portal access)
@@ -356,7 +356,7 @@ export default async function PortalPage({
     };
   });
 
-  // Fetch app settings using customer's company ID (admin client — portal has no staff session)
+  // Fetch app settings using customer's company ID (admin client portal has no staff session)
   const { data: settingsRow } = await admin
     .from("app_settings")
     .select(

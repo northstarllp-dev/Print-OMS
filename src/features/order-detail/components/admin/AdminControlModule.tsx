@@ -26,7 +26,7 @@ interface AdminControlModuleProps {
 
 const HEALTH_HINT: Record<OrderHealth, string> = {
   Active: "Order is progressing normally.",
-  "Needs Attention": "No stage progress for too long — review and call the customer.",
+  "Needs Attention": "No stage progress for too long review and call the customer.",
   "On Hold": "Temporarily paused.",
   Lost: "Soft-cancelled; approvals are blocked.",
 };
@@ -276,11 +276,11 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
           <div className="p-5 space-y-3">
             <div className={`rounded-xl border p-3 text-xs font-medium ${healthBannerClass}`}>
               Current: <span className="font-bold">{currentHealth}</span>
-              {order.lost_reason && currentHealth === "Lost" ? ` — ${order.lost_reason}` : ""}
+              {order.lost_reason && currentHealth === "Lost" ? ` ${order.lost_reason}` : ""}
               {currentHealth === "On Hold" && ((order as any).reach_out_at || (order as any).reachOutAt) ? (
                 <span>
                   {" "}
-                  — reach out {(order as any).reach_out_at || (order as any).reachOutAt}
+                  reach out {(order as any).reach_out_at || (order as any).reachOutAt}
                   {(order as any).hold_note || (order as any).holdNote
                     ? `: ${(order as any).hold_note || (order as any).holdNote}`
                     : ""}

@@ -258,7 +258,7 @@ export function InstallationLayoutClient({ children, profile }: InstallationLayo
           })}
         </nav>
 
-        {/* Collapse Button — desktop only */}
+        {/* Collapse Button desktop only */}
         <div className="hidden lg:block" style={{ padding: "12px", flexShrink: 0 }}>
           <button
             onClick={() => setCollapsed((c) => !c)}
@@ -330,7 +330,7 @@ export function InstallationLayoutClient({ children, profile }: InstallationLayo
       {/* ── MAIN WORKSPACE ── */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0, overflow: "hidden" }}>
 
-        {/* Top Bar — hidden on worksheet pages */}
+        {/* Top Bar hidden on worksheet pages */}
         {!isWorksheetPage && (
           <header
             className="flex items-center w-full h-[56px] bg-white border-b border-slate-200 px-4 md:px-6 sticky top-0 z-40 gap-3 shrink-0"

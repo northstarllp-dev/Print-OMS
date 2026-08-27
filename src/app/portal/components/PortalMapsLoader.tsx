@@ -10,7 +10,7 @@ import {
 
 /**
  * Loads the Google Maps JS SDK only while mounted.
- * Mount this solely on Site Visit scheduling UI — not on every portal tab.
+ * Mount this solely on Site Visit scheduling UI not on every portal tab.
  */
 export function PortalMapsLoader({
   children,

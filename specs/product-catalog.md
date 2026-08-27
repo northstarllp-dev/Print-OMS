@@ -106,7 +106,7 @@ Admin edits price in Product Modal
 
 ## Final Products
 
-* `final_prdt` designation is **always available** — there is no settings toggle (`app_settings.enable_final_product` was dropped).
+* `final_prdt` designation is **always available** there is no settings toggle (`app_settings.enable_final_product` was dropped).
 * Final products are priced like regular products (category + pricing UI shown) and appear in quotation / enquiry search.
 * There is **no by-product** concept anywhere.
 * ID prefixes: `FP###` for finals, `PRD-###` for regular.
@@ -131,4 +131,4 @@ Summary: Added `final_prdt` property to distinguish final packaged products.
 
 Version: 1.3
 Date: 2026-07-30
-Summary: Final Product always available (settings toggle and `app_settings.enable_final_product` removed); finals keep pricing and quote search. Added inventory attribute columns (unit, brand, supplier, purchase price, min/max stock, HSN, GST, barcode/QR, default warehouse, track_inventory). Products are the inventory master — see `specs/inventory.md`.
+Summary: Final Product always available (settings toggle and `app_settings.enable_final_product` removed); finals keep pricing and quote search. Added inventory attribute columns (unit, brand, supplier, purchase price, min/max stock, HSN, GST, barcode/QR, default warehouse, track_inventory). Products are the inventory master see `specs/inventory.md`.

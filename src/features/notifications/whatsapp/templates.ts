@@ -26,7 +26,7 @@ export type WhatsAppTemplateDef = {
   hasUrlButton: boolean;
 };
 
-/** Suffix after client prefix — matches historically approved Meta names for printec_*. */
+/** Suffix after client prefix matches historically approved Meta names for printec_*. */
 const TEMPLATE_SUFFIXES: Record<WhatsAppTemplateKey, string> = {
   enquiry_received: "enquiry_received",
   order_created: "order_created",

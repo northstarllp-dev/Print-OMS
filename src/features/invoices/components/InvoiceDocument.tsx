@@ -14,7 +14,7 @@ export type InvoiceDocumentProps = Omit<
   invoiceDate?: string | Date | null;
 };
 
-/** Printable tax invoice — same layout as QuotationDocument with invoice labels. */
+/** Printable tax invoice same layout as QuotationDocument with invoice labels. */
 export function InvoiceDocument({
   invoiceId,
   invoiceDate,

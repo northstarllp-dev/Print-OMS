@@ -163,7 +163,7 @@ function getOrderMenuHost(): HTMLElement | null {
   return host;
 }
 
-/** Fixed menu in a singleton body host — one menu only, never clipped by table overflow. */
+/** Fixed menu in a singleton body host one menu only, never clipped by table overflow. */
 function PortaledDropdown({
   open,
   anchorEl,
@@ -349,7 +349,7 @@ export function OrdersManagementDashboard({
   const [endDate, setEndDate] = useState("");
   const [page, setPage] = useState(1);
 
-  // Debounce search — 220 ms
+  // Debounce search 220 ms
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(searchTerm.trim().toLowerCase()), 220);
     return () => clearTimeout(t);
@@ -523,7 +523,7 @@ export function OrdersManagementDashboard({
   const assignEmployeesToOrderLocal = async (orderId: string, assigned: string[]) => {
     // Optimistic UI update
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, assignedEmployees: assigned } : o));
-    // Server mutation — write to order_assignments table
+    // Server mutation write to order_assignments table
     try {
       await assignTeamToOrder(orderId, assigned);
     } catch (err) {
@@ -532,7 +532,7 @@ export function OrdersManagementDashboard({
     }
   };
 
-  /** Shared toolbar filters (search / dates / stage / health / assignment) — used by KPIs + list */
+  /** Shared toolbar filters (search / dates / stage / health / assignment) used by KPIs + list */
   const toolbarFilteredOrders = useMemo(
     () =>
       filterOrders(queueScopedOrders, {
@@ -604,7 +604,7 @@ export function OrdersManagementDashboard({
     {
       label: "ON HOLD",
       value: onHoldOrders.toString(),
-      change: "Paused — follow up later",
+      change: "Paused follow up later",
       filterKey: "onHold",
       icon: Pause,
       color: "#64748b",
@@ -736,7 +736,7 @@ export function OrdersManagementDashboard({
           </div>
         )}
 
-        {/* Mobile: compact filter chips — admin KPIs only (hide staff Assigned/My Completed) */}
+        {/* Mobile: compact filter chips admin KPIs only (hide staff Assigned/My Completed) */}
         {currentUserRole !== "Employee" && (
           <div className="lg:hidden flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
             {stats.map((stat: any) => {
@@ -826,7 +826,7 @@ export function OrdersManagementDashboard({
         <div className="w-full lg:flex-1 bg-white rounded-xl border border-slate-200 overflow-visible min-w-0">
           {/* Search & Filter Bar */}
         <div className="p-3 sm:p-4 border-b border-slate-200">
-          {/* Mobile: Airbnb-style — search + Filters chip + icon reset */}
+          {/* Mobile: Airbnb-style search + Filters chip + icon reset */}
           <div className="lg:hidden flex items-center gap-2">
             <div className="relative flex-1 min-w-0">
               <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
@@ -874,7 +874,7 @@ export function OrdersManagementDashboard({
             </button>
           </div>
 
-          {/* Mobile filter sheet — portaled so layout footer z-index can't cover it */}
+          {/* Mobile filter sheet portaled so layout footer z-index can't cover it */}
           {mobileFiltersOpen &&
             createPortal(
             <div className="lg:hidden fixed inset-0 z-[200]">

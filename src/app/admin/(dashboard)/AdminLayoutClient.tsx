@@ -489,7 +489,7 @@ export function AdminLayoutClient({
           })}
         </nav>
 
-        {/* Collapse Button — desktop only */}
+        {/* Collapse Button desktop only */}
         <div
           className="hidden lg:block"
           style={{
@@ -575,7 +575,7 @@ export function AdminLayoutClient({
       {/* ── MAIN WORKSPACE ── */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0, overflow: "hidden" }}>
 
-        {/* Top Bar — hidden on worksheet pages (except mobile menu) */}
+        {/* Top Bar hidden on worksheet pages (except mobile menu) */}
         {!isWorksheetPage && (
           <header
             style={{
@@ -643,7 +643,7 @@ export function AdminLayoutClient({
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2, flexWrap: "wrap" }}>
                                   <span style={{ fontSize: 10, fontWeight: 700, color: "#0F172A", background: "#F1F5F9", padding: "1px 6px", borderRadius: 4, flexShrink: 0 }}>
-                                    {act.order_id || "—"}
+                                    {act.order_id || ""}
                                   </span>
                                   <span style={{ fontSize: 10, color: "#64748B", fontWeight: 600 }}>{act.actor_name}</span>
                                   <span style={{ fontSize: 10, color: "#94A3B8", marginLeft: "auto", flexShrink: 0 }}>{dateStr} · {timeStr}</span>

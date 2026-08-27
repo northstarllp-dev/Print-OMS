@@ -4,7 +4,7 @@ import { getRequestBaseUrl } from "@/features/notifications/whatsapp/requestBase
 
 /**
  * Customer portal link previews (WhatsApp / iMessage / Slack) scrape this route.
- * Must NOT inherit root "Admin Operations Dashboard" title — that confuses customers.
+ * Must NOT inherit root "Admin Operations Dashboard" title that confuses customers.
  */
 export async function generateMetadata(): Promise<Metadata> {
   const config = loadClientConfig();

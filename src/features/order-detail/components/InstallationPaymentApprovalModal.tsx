@@ -283,7 +283,7 @@ export function InstallationPaymentApprovalModal({
                 <span className="text-sm font-semibold text-slate-700 leading-snug">
                   {addingPayment
                     ? "Recording remaining payment…"
-                    : "Payment completed — I confirm all dues for this order have been received or reconciled."}
+                    : "Payment completed I confirm all dues for this order have been received or reconciled."}
                   {outstanding > 0 && !paymentConfirmed && !addingPayment && (
                     <span className="block text-xs text-amber-600 font-bold mt-1">
                       This will record ₹{outstanding.toLocaleString("en-IN")} as received.

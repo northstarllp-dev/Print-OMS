@@ -54,7 +54,7 @@ export interface OrderFilterOptions {
 export function mapDbOrderToListRow(o: Record<string, any>): OrderListRow {
   const stage = o.stage;
   let health = o.health || "Active";
-  // Completed/Closed are inactive — never surface Needs Attention there.
+  // Completed/Closed are inactive never surface Needs Attention there.
   if (isTerminalOrderStage(stage) && health === "Needs Attention") {
     health = "Active";
   }
@@ -530,7 +530,7 @@ export function validateOrderCreateInput(input: {
   return errors;
 }
 
-/** Soft-delete is not used for orders today — delete is hard. */
+/** Soft-delete is not used for orders today delete is hard. */
 export function orderDeleteMode(): "hard" {
   return "hard";
 }

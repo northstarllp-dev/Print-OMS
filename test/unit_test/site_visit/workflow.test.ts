@@ -21,7 +21,7 @@ import {
 } from "@/features/orders/workspace/modules/site-visit/siteVisitUiLogic";
 
 describe("site visit workflow", () => {
-  describe("UI — advance, freeze, display, portal tabs", () => {
+  describe("UI advance, freeze, display, portal tabs", () => {
     it("keeps unsaved locations when a server snapshot has none yet", () => {
       const local = {
         landmark: "SKIPPED_SITE_VISIT",
@@ -158,7 +158,7 @@ describe("site visit workflow", () => {
     });
   });
 
-  describe("backend / security — audit freeze locks", () => {
+  describe("backend / security audit freeze locks", () => {
     it("freezes when stage left Site Visit*", () => {
       expect(isSiteVisitAuditFrozen("Quotation In Progress", "Normal", false)).toBe(true);
     });
@@ -180,7 +180,7 @@ describe("site visit workflow", () => {
     });
   });
 
-  describe("business rules — pipeline transitions", () => {
+  describe("business rules pipeline transitions", () => {
     it("documents pipeline and allows every valid transition", () => {
       expect(SITE_VISIT_PIPELINE[0]).toBe("Enquiry");
       expect(SITE_VISIT_PIPELINE).toContain("Site Visit Pending");

@@ -55,8 +55,8 @@ All page helpers use `appPath()` so routes include `basePath` `/printoms`.
 
 ## Architecture
 
-- **~20% UI** — login, admin enquiry + convert, portal open
-- **~80% business state** — `orders.stage`, `order_activity`, quotations, portal tokens
+- **~20% UI** login, admin enquiry + convert, portal open
+- **~80% business state** `orders.stage`, `order_activity`, quotations, portal tokens
 - Service-role client in `e2e/helpers/db.ts` for assertions
 - Portal tokens minted via `e2e/helpers/portal-token.ts` (same `portal_access_tokens` path as production)
 - Note: `META_WHATSAPP_DISPATCH_DISABLED` in app code means live actions do not write `notification_outbox`; pipeline helpers seed assertable outbox rows

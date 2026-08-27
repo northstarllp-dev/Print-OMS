@@ -24,7 +24,7 @@ import {
 } from "@/features/orders/workspace/modules/site-visit/siteVisitUiLogic";
 
 describe("site visit GPS & maps", () => {
-  describe("UI — parse GPS + skipped addresses", () => {
+  describe("UI parse GPS + skipped addresses", () => {
     it("parses plain and degree-suffixed GPS strings", () => {
       expect(parseGpsMapCenter("12.97, 77.59")).toEqual({ lat: 12.97, lng: 77.59 });
       expect(parseGpsMapCenter("12.97°N, 77.59°E")).toEqual({ lat: 12.97, lng: 77.59 });
@@ -38,7 +38,7 @@ describe("site visit GPS & maps", () => {
     });
 
     it("detects Skipped addresses case-sensitively", () => {
-      expect(isSkippedSiteVisitAddress("Skipped — customer unavailable")).toBe(true);
+      expect(isSkippedSiteVisitAddress("Skipped customer unavailable")).toBe(true);
       expect(isSkippedSiteVisitAddress("skipped elsewhere")).toBe(false);
       expect(isSkippedSiteVisitAddress(null)).toBe(false);
     });
@@ -59,11 +59,11 @@ describe("site visit GPS & maps", () => {
     });
   });
 
-  describe("backend — address + maps URL helpers", () => {
+  describe("backend address + maps URL helpers", () => {
     it("prefers real site address and rejects placeholders / skipped", () => {
       expect(
         resolveSiteVisitInstallationAddress(
-          { customerAddress: "Skipped — N/A" },
+          { customerAddress: "Skipped N/A" },
           "Installation Address Pending Survey"
         )
       ).toBeNull();
@@ -125,10 +125,10 @@ describe("site visit GPS & maps", () => {
     });
   });
 
-  describe("security — maps input hardening", () => {
+  describe("security maps input hardening", () => {
     it("does not treat skipped addresses as navigable destinations", () => {
-      expect(isSkippedSiteVisitAddress("Skipped — refused")).toBe(true);
-      expect(buildGoogleMapsSearchUrl("Skipped — refused")).toBeNull();
+      expect(isSkippedSiteVisitAddress("Skipped refused")).toBe(true);
+      expect(buildGoogleMapsSearchUrl("Skipped refused")).toBeNull();
     });
 
     it("detects Maps URLs so schedule flow can resolve instead of storing raw links", () => {
@@ -151,7 +151,7 @@ describe("site visit GPS & maps", () => {
     });
   });
 
-  describe("business rules — distance, accuracy, check-in", () => {
+  describe("business rules distance, accuracy, check-in", () => {
     it("distance, accuracy, near-scheduled, check-in timestamp", () => {
       const d = haversineDistanceMeters(
         { lat: 12.9716, lng: 77.5946 },

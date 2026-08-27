@@ -110,7 +110,7 @@ export function QuotationTab({
               new Date().toISOString()
             }
             showStatus={false}
-            billToName={billToName || "—"}
+            billToName={billToName || ""}
             billToAddress={billingAddress}
             placeOfSupply={
               invoiceProfile?.placeOfSupplyDefault || customerCity || undefined
@@ -204,7 +204,7 @@ export function QuotationTab({
             <div className="quotation-no-print rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
               {qd.status === "Approved"
                 ? "You approved this quotation."
-                : "Changes requested — our team will revise and resend."}
+                : "Changes requested our team will revise and resend."}
             </div>
           )}
         </div>

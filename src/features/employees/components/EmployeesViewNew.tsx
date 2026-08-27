@@ -29,10 +29,10 @@ import { ListPagination, LIST_PAGE_SIZE } from "@/components/ui/ListPagination";
 
 interface EmployeesViewNewProps {
   initialEmployees: Employee[];
-  /** Tenant id — drives the available staff_role options in EmployeeModal. */
+  /** Tenant id drives the available staff_role options in EmployeeModal. */
   companyId?: string | null;
   /**
-   * Roles & permissions UI — keep false until the Roles editor ships.
+   * Roles & permissions UI keep false until the Roles editor ships.
    * @deprecated placeholder tab only
    */
   showRolesTab?: boolean;
@@ -707,7 +707,7 @@ export function EmployeesViewNew({
                     </div>
 
                     <div className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-500">
-                      <span>{emp.phone || "—"}</span>
+                      <span>{emp.phone || ""}</span>
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-semibold">
                         {emp.jobsAssigned || 0} jobs
                       </span>

@@ -250,7 +250,7 @@ export async function updateInvoiceNumbering(
 /**
  * Service-role read of the workflow-auto-approval map for a company.
  * Used by `requestStageAdvancementAction` to decide whether to auto-advance.
- * No auth context required — caller must already be authenticated.
+ * No auth context required caller must already be authenticated.
  */
 export async function getWorkflowAutoApprovalForCompany(
   companyId: string

@@ -1,5 +1,5 @@
 /**
- * Site Visit checklist rules — pure helpers for unit tests.
+ * Site Visit checklist rules pure helpers for unit tests.
  * Encodes shipped behavior where it exists, and recommended multi-tenant
  * defaults (config) for gaps so nothing in the review checklist is untested.
  */

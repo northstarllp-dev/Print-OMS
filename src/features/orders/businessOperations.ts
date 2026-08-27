@@ -1,5 +1,5 @@
 /**
- * Business operation helpers — pure stage-order / skip logic.
+ * Business operation helpers pure stage-order / skip logic.
  * Ops are defined in client config; this module resolves them and maps
  * module keys → pipeline stage strings.
  */
@@ -286,7 +286,7 @@ export function firstStageAfterSiteVisitModule(
       }
     }
   }
-  // Op has no site visit — first non-terminal stage
+  // Op has no site visit first non-terminal stage
   const first = order.find(
     (s) => !TERMINAL_STAGES.includes(s as (typeof TERMINAL_STAGES)[number])
   );
@@ -303,7 +303,7 @@ export function inferWorkflowTypeForBusinessOp(
 }
 
 /**
- * True when the op includes site visit AND both quotation + design afterward —
+ * True when the op includes site visit AND both quotation + design afterward 
  * admin should pick Quote First vs Design First (legacy workflow modal).
  */
 export function canChooseQuoteOrDesignAfterSiteVisit(

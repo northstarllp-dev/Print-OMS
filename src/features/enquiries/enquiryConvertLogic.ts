@@ -15,7 +15,7 @@ export function canConvertEnquiry(status?: string | null): boolean {
 }
 
 /**
- * Server-side duplicate guard — block if already converted or already linked
+ * Server-side duplicate guard block if already converted or already linked
  * to an order (friendly id or uuid).
  */
 export function shouldBlockConvert(enq: {

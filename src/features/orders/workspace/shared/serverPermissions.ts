@@ -61,7 +61,7 @@ export async function assertDesignStageUnlocked(orderId: string): Promise<void> 
 }
 
 /**
- * Server-side authority check (Layer 2 of RBAC — see plan).
+ * Server-side authority check (Layer 2 of RBAC see plan).
  * Mirrors the UI's resolveStagePermission so both layers stay in sync.
  *
  * Only call this from mutation actions that are exclusively staff/admin-authored.
@@ -135,7 +135,7 @@ export async function assertStageEditOrPortalOrder(
 
 /**
  * Server-side admin-only check (Phase 6) for actions outside the stage RBAC
- * model, e.g. Payments — admin-only regardless of staff_role stage grants.
+ * model, e.g. Payments admin-only regardless of staff_role stage grants.
  */
 export async function assertAdminOnly(): Promise<void> {
   const profile = await getCurrentUser();

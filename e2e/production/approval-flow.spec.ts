@@ -190,7 +190,7 @@ test.describe("Production: Approval Layer (full workflow)", () => {
           const adminWs = new OrderWorkspacePage(adminPage);
           await adminWs.openAdminControls();
           await adminWs.adminRequestChanges(
-            "Quality check photos are missing — please recut the ACP edge and re-QC."
+            "Quality check photos are missing please recut the ACP edge and re-QC."
           );
 
           await expectStageStatus(order.friendlyOrderId, "Normal");
@@ -225,7 +225,7 @@ test.describe("Production: Approval Layer (full workflow)", () => {
     });
   });
 
-  test.describe("Auto-approval — toggle ON in Settings", () => {
+  test.describe("Auto-approval toggle ON in Settings", () => {
     test("staff request auto-advances to Ready For Installation; admin sees no pending", async ({
       browser,
       baseURL,

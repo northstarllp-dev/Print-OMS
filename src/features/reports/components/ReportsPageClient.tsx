@@ -150,7 +150,7 @@ export function ReportsPageClient({ reportData, initialFrom, initialTo }: Report
             <div>
               <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: "#0f172a" }}>Decision Reports</h1>
               <p style={{ margin: 0, fontSize: 13, color: "#64748b", marginTop: 2 }}>
-                Actionable views — what to chase, unblock, and invest in
+                Actionable views what to chase, unblock, and invest in
               </p>
             </div>
           </div>
@@ -204,7 +204,7 @@ export function ReportsPageClient({ reportData, initialFrom, initialTo }: Report
             <ReportCard
               type="PIPELINE_BOTTLENECK"
               title="Pipeline Bottlenecks"
-              description="Where active work is stuck — label shows average days open (red = 14d+)"
+              description="Where active work is stuck label shows average days open (red = 14d+)"
               data={reportData.pipelineBottleneck}
             />
             <ReportCard
@@ -224,7 +224,7 @@ export function ReportsPageClient({ reportData, initialFrom, initialTo }: Report
             <ReportCard
               type="CUSTOMERS_TO_CHASE"
               title="Customers to Chase"
-              description="Largest outstanding balances — call these first"
+              description="Largest outstanding balances call these first"
               data={reportData.customersToChase}
             />
             <ReportCard
@@ -237,7 +237,7 @@ export function ReportsPageClient({ reportData, initialFrom, initialTo }: Report
           <ReportCard
             type="TEAM_WORKLOAD"
             title="Team Workload"
-            description="Open vs completed load — rebalance overloaded staff"
+            description="Open vs completed load rebalance overloaded staff"
             data={reportData.teamWorkload}
           />
         </div>
@@ -276,7 +276,7 @@ export function ReportsPageClient({ reportData, initialFrom, initialTo }: Report
           <ReportCard
             type="CONVERSION_BY_MONTH"
             title="Monthly Conversion"
-            description="Enquiries vs orders — is win-rate improving?"
+            description="Enquiries vs orders is win-rate improving?"
             data={reportData.conversionByMonth}
           />
         </div>

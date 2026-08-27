@@ -15,7 +15,7 @@ export function InstallPwaButton() {
   const deferredPrompt = useRef<BeforeInstallPromptEvent | null>(null);
 
   useEffect(() => {
-    // Never register (or keep) a service worker on localhost — it fights
+    // Never register (or keep) a service worker on localhost it fights
     // Next.js / Turbopack HMR and causes "module factory is not available".
     const isLocalDev =
       typeof window !== "undefined" &&
@@ -40,7 +40,7 @@ export function InstallPwaButton() {
       return;
     }
 
-    // iOS — doesn't support beforeinstallprompt, needs manual "Add to Home Screen"
+    // iOS doesn't support beforeinstallprompt, needs manual "Add to Home Screen"
     const isIos =
       /iphone|ipad|ipod/.test(navigator.userAgent.toLowerCase()) &&
       !(window as any).MSStream;
@@ -71,7 +71,7 @@ export function InstallPwaButton() {
 
   const handleInstall = async () => {
     if (!deferredPrompt.current) {
-      // Prompt not captured yet — browser may show its own install UI via address bar
+      // Prompt not captured yet browser may show its own install UI via address bar
       return;
     }
     await deferredPrompt.current.prompt();
@@ -108,7 +108,7 @@ export function InstallPwaButton() {
     );
   }
 
-  // iOS — show instructions
+  // iOS show instructions
   if (state === "ios") {
     return (
       <div

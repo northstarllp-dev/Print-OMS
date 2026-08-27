@@ -897,7 +897,7 @@ function CreatePoModal({
               </div>
             ))}
             {lines.length === 0 ? (
-              <p className="m-0 text-xs text-slate-400">No lines yet — add materials to order.</p>
+              <p className="m-0 text-xs text-slate-400">No lines yet add materials to order.</p>
             ) : null}
           </div>
         </div>
@@ -1370,7 +1370,7 @@ function ReceivePoModal({
   };
 
   return (
-    <ModalShell title={`Receive — ${po.po_number}`} onClose={onClose}>
+    <ModalShell title={`Receive ${po.po_number}`} onClose={onClose}>
       {error ? (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
           {error}
@@ -1738,7 +1738,7 @@ function UploadVendorPoModal({
                 {vendorMode === "existing" ? (
                   vendors.length === 0 ? (
                     <p className="m-0 text-xs text-amber-700 font-semibold">
-                      No vendors yet — switch to Create new vendor.
+                      No vendors yet switch to Create new vendor.
                     </p>
                   ) : (
                     <select

@@ -13,7 +13,7 @@
 3. **Dashboard View**: Customer is presented with `PortalClient`, which displays all active and past orders associated with their `customer_id`.
 4. **Order Tracking**: Customer selects an active order to view its timeline and progress bar.
 5. **Interactive Tabs**: Depending on the current stage of the order, specific tabs unlock:
-   * **Quotation Tab**: Shared `QuotationTab` component — read quotes when `Sent`/`Approved`/`Rejected`; approve/decline via server actions when `Sent`. Draft/Pending Approval shows “being prepared”.
+   * **Quotation Tab**: Shared `QuotationTab` component read quotes when `Sent`/`Approved`/`Rejected`; approve/decline via server actions when `Sent`. Draft/Pending Approval shows “being prepared”.
    * **Design Tab**: View proofs, add feedback comments on the canvas, upload inspiration, approve proofs.
    * **Payments Tab**: View payment milestones, submit UTR/reference, mark as paid (Pay Online placeholder for gateways). Always available; not a pipeline stage.
    * **Installation Tab**: View scheduled dates, and later see "After Photos" once completed.

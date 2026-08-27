@@ -33,7 +33,7 @@ const ICONS: Record<ComingSoonIconName, LucideIcon> = {
 interface ComingSoonPageProps {
   title: string;
   description: string;
-  /** String key — Lucide components cannot be passed from Server Components. */
+  /** String key Lucide components cannot be passed from Server Components. */
   icon: ComingSoonIconName;
   /** Real module UI shown after password unlock. */
   children?: React.ReactNode;
@@ -74,7 +74,7 @@ export function ComingSoonPage({
     try {
       window.localStorage.setItem(DEV_ACCESS_STORAGE_KEY, "1");
     } catch {
-      // ignore storage failures — still unlock this session
+      // ignore storage failures still unlock this session
     }
     setUnlocked(true);
     setError("");
@@ -94,7 +94,7 @@ export function ComingSoonPage({
     try {
       window.localStorage.removeItem(DEV_ACCESS_STORAGE_KEY);
     } catch {
-      // ignore storage failures — still lock this session
+      // ignore storage failures still lock this session
     }
     setUnlocked(false);
     setShowPassword(false);

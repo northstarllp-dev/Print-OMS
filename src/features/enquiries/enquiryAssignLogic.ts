@@ -168,7 +168,7 @@ export function canAccessStaffEnquiriesPage(perm: {
   return perm.canView || perm.canEdit;
 }
 
-/** Sidebar Enquiries tab — same rule as getNavItemsForActor for enquiry. */
+/** Sidebar Enquiries tab same rule as getNavItemsForActor for enquiry. */
 export function shouldShowEnquiriesNavItem(perm: {
   canView: boolean;
   canEdit: boolean;
@@ -191,7 +191,7 @@ export function doesAssignmentGrantStageEdit(): boolean {
   return false;
 }
 
-/** Enquiries list is company-wide for permitted staff — not filtered by assignment. */
+/** Enquiries list is company-wide for permitted staff not filtered by assignment. */
 export function isEnquiryListFilteredByAssignment(): boolean {
   return false;
 }

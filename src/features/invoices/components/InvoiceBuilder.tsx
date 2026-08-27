@@ -329,7 +329,7 @@ export function InvoiceBuilder({
   const [invoiceType, setInvoiceType] = useState<InvoiceType>(
     (initial.invoice_type as InvoiceType) || "Tax Invoice"
   );
-  const [invoiceId, setInvoiceId] = useState(initial.invoice_id || "—");
+  const [invoiceId, setInvoiceId] = useState(initial.invoice_id || "");
   const [showPreview, setShowPreview] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
@@ -483,7 +483,7 @@ export function InvoiceBuilder({
               {invoiceId}
             </h1>
             <p className="text-sm text-slate-500">
-              {billToName || "—"} ·{" "}
+              {billToName || ""} ·{" "}
               <Link
                 href={`${orderBasePath}/${order.order_id || order.id}`}
                 className="text-[var(--color-primary)] hover:underline font-mono text-xs"
@@ -1050,7 +1050,7 @@ export function InvoiceBuilder({
                 invoiceDate={invoiceDate}
                 dueDate={dueDate || null}
                 status={status}
-                billToName={billToName || customer.name || "—"}
+                billToName={billToName || customer.name || ""}
                 billToAddress={customer.billing_address}
                 placeOfSupply={
                   invoiceProfile?.placeOfSupplyDefault || customer.city

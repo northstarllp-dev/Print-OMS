@@ -218,7 +218,7 @@ export function CustomerPickupModule({
               ) : (
                 <Package size={18} />
               )}
-              {confirming ? "Confirming..." : "Confirm Pickup — Customer Has Collected"}
+              {confirming ? "Confirming..." : "Confirm Pickup Customer Has Collected"}
             </button>
           </div>
         )}

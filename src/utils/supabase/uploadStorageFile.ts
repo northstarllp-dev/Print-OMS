@@ -33,7 +33,7 @@ function assertNonEmptyFile(file: File | Blob): void {
   }
 }
 
-/** FileReader arrayBuffer — reliable on iOS Safari when file.arrayBuffer() returns empty. */
+/** FileReader arrayBuffer reliable on iOS Safari when file.arrayBuffer() returns empty. */
 function readFileViaFileReader(file: File | Blob): Promise<ArrayBuffer> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -195,7 +195,7 @@ async function postFileUpload(
   }
 }
 
-/** Server-side upload for customer portal — reliable on iOS Safari. */
+/** Server-side upload for customer portal reliable on iOS Safari. */
 export async function uploadFileViaPortalApi(
   file: File | Blob,
   orderId: string,
@@ -206,7 +206,7 @@ export async function uploadFileViaPortalApi(
   return postFileUpload("/api/portal/upload", file, orderId, purpose, fileName, portalToken);
 }
 
-/** Server-side upload for authenticated staff — reliable on iOS Safari. */
+/** Server-side upload for authenticated staff reliable on iOS Safari. */
 export async function uploadFileViaStaffApi(
   file: File | Blob,
   orderId: string,

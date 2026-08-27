@@ -49,10 +49,10 @@ export function assertUpsertStatusTransition(
   adminOverride = false
 ): void {
   if (nextStatus === "Approved") {
-    throw new Error(`Status "${nextStatus}" cannot be set via save — use the workflow action`);
+    throw new Error(`Status "${nextStatus}" cannot be set via save use the workflow action`);
   }
   if (nextStatus === "Rejected" && existingStatus !== "Rejected") {
-    throw new Error(`Status "${nextStatus}" cannot be set via save — use the workflow action`);
+    throw new Error(`Status "${nextStatus}" cannot be set via save use the workflow action`);
   }
   if (existingStatus && UPSERT_LOCKED_STATUSES.has(existingStatus) && !adminOverride) {
     throw new Error("Quotation is locked and cannot be edited");

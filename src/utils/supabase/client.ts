@@ -5,7 +5,7 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 /**
- * Browser Supabase client — must be a singleton.
+ * Browser Supabase client must be a singleton.
  * Creating a new client per call/render opens extra Realtime sockets and
  * breaks postgres_changes subscriptions (common with @supabase/ssr).
  */

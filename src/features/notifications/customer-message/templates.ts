@@ -199,7 +199,7 @@ Open your customer portal using the button below.`,
   },
   design_approved: {
     title: "Design Approved",
-    emailSubject: "Design approved — moving to production",
+    emailSubject: "Design approved moving to production",
     params: ["BusinessName"],
     body: `Hello {{1}},
 

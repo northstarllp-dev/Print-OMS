@@ -277,7 +277,7 @@ export function ProductionModule({
 
   return (
     <div className={embedded ? "space-y-6" : "p-8 bg-slate-50/50 min-h-screen"}>
-      {/* Top Navigation — portal only */}
+      {/* Top Navigation portal only */}
       {!embedded && (
         <div className="flex items-center gap-4 mb-6">
           <button
@@ -484,11 +484,11 @@ export function ProductionModule({
               </div>
               <div>
                 <div className="text-[10px] text-slate-500 font-medium mb-1">Client Name</div>
-                <div className="font-bold text-slate-800">{order.clientName || "—"}</div>
+                <div className="font-bold text-slate-800">{order.clientName || ""}</div>
               </div>
               <div>
                 <div className="text-[10px] text-slate-500 font-medium mb-1">Business Name</div>
-                <div className="font-bold text-slate-800">{order.businessName || "—"}</div>
+                <div className="font-bold text-slate-800">{order.businessName || ""}</div>
               </div>
               <div>
                 <div className="text-[10px] text-slate-500 font-medium mb-1">Priority</div>
@@ -546,7 +546,7 @@ export function ProductionModule({
         </>
       )}
 
-      {/* View-Only Site Visit Banner — staff portals only (admins already have full Site Visit access) */}
+      {/* View-Only Site Visit Banner staff portals only (admins already have full Site Visit access) */}
       {currentUserRole !== "Admin" && (
         <div className="mb-6 bg-indigo-50/80 border border-indigo-100 text-indigo-700 p-4 rounded-xl text-xs font-semibold flex items-center gap-3 shadow-sm">
           <Sparkles size={16} className="text-indigo-600 flex-shrink-0" />

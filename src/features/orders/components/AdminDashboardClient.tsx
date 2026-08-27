@@ -275,7 +275,7 @@ export function AdminDashboardClient({
     {
       label: "Needs Attention",
       value: needsAttentionOrders,
-      sub: "Stalled — no stage progress",
+      sub: "Stalled no stage progress",
       filterKey: "needsAttention",
       icon: AlertCircle,
       iconBg: "#FFFBEB",
@@ -407,7 +407,7 @@ export function AdminDashboardClient({
           </p>
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto min-w-0">
-          {/* Date range — compact, clearly labeled */}
+          {/* Date range compact, clearly labeled */}
           <div
             className="flex items-center gap-1 sm:gap-1.5 bg-white px-2 py-1.5 rounded-lg border border-slate-200 min-w-0 flex-1 sm:flex-initial"
             title="Filter by date range"

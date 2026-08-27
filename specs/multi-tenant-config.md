@@ -34,7 +34,7 @@ src/config/
 
 ## Adding a client
 
-See **[docs/printoms/ADD_CLIENT.md](../docs/printoms/ADD_CLIENT.md)** — config + DB row + env + Vercel only; no core feature edits.
+See **[docs/printoms/ADD_CLIENT.md](../docs/printoms/ADD_CLIENT.md)** config + DB row + env + Vercel only; no core feature edits.
 
 ## Schema (high level)
 
@@ -56,6 +56,6 @@ interface PrintOMSClientConfig {
 
 ## Security notes
 
-- Never fall back to a hardcoded Printoms UUID when writing rows — use profile `company_id` or `getDeployCompanyId()`.
+- Never fall back to a hardcoded Printoms UUID when writing rows use profile `company_id` or `getDeployCompanyId()`.
 - Portal admin-client reads/writes must go through `assertPortalTenantAccess` / `assertCompanyMatchesDeploy`.
 - RLS remains the DB boundary; slug + companyId checks are application defense-in-depth.

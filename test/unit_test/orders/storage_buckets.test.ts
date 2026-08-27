@@ -139,7 +139,7 @@ describe("order stage storage buckets (5 stages)", () => {
         expect(path).toMatch(
           new RegExp(`^${orderId}/\\d+-[a-z0-9]+\\.png$`)
         );
-        // No stage subfolders — bucket is the stage.
+        // No stage subfolders bucket is the stage.
         expect(path).not.toMatch(/\/(resources|designs|production)\//);
         expect(opts).toMatchObject({ contentType: "image/png", upsert: false });
         expect(result.bucket).toBe(stage.bucket);

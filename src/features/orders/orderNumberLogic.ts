@@ -5,7 +5,7 @@
  *
  * Deleting an order does not soft-delete; hard delete removes the row.
  * The next generated number is always MAX(remaining sequence) + 1 for that
- * customer+company — middle gaps are NOT reused; only a trailing max gap is.
+ * customer+company middle gaps are NOT reused; only a trailing max gap is.
  */
 
 export function parseOrderSequence(orderId: string | null | undefined): number | null {

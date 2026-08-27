@@ -33,7 +33,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: `${config.name} Admin Operations Dashboard`,
     description: "Operations dashboard for custom signage and order management.",
-    // Use the full URL including basePath — Next.js does NOT auto-prepend basePath for manifest
+    // Use the full URL including basePath Next.js does NOT auto-prepend basePath for manifest
     manifest: "/printoms/api/manifest",
     icons: {
       ...(config.faviconUrl || config.logoUrl
@@ -60,7 +60,7 @@ export default function RootLayout({
         <style>{`
           .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
         `}</style>
-        {/* Explicit manifest link — required for PWA installability. Metadata API alone is unreliable with basePath. */}
+        {/* Explicit manifest link required for PWA installability. Metadata API alone is unreliable with basePath. */}
         <link rel="manifest" href="/printoms/api/manifest" />
       </head>
       <body suppressHydrationWarning className={`${inter.variable} font-sans min-h-full bg-[var(--color-background)] antialiased`}>

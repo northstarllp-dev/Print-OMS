@@ -62,8 +62,8 @@ function formatSizeDetail(sv: {
     const hUnit = (sv.heightUnit || "ft").toUpperCase();
     return `Size : ${w}${wUnit} × ${h}${hUnit} = ${area} Sqft`;
   }
-  const wLabel = sv.width != null ? `${sv.width}${sv.widthUnit || "ft"}` : "—";
-  const hLabel = sv.height != null ? `${sv.height}${sv.heightUnit || "ft"}` : "—";
+  const wLabel = sv.width != null ? `${sv.width}${sv.widthUnit || "ft"}` : "";
+  const hLabel = sv.height != null ? `${sv.height}${sv.heightUnit || "ft"}` : "";
   return `Size: ${wLabel} × ${hLabel}`;
 }
 

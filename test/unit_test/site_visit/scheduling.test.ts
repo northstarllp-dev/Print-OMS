@@ -38,7 +38,7 @@ function makeOrders(n: number) {
 }
 
 describe("site visit scheduling", () => {
-  describe("UI — submit gates, business days, slots, calendar", () => {
+  describe("UI submit gates, business days, slots, calendar", () => {
     it("requires date, time, and non-blank address to submit schedule", () => {
       expect(
         canSubmitSiteVisitSchedule({
@@ -142,7 +142,7 @@ describe("site visit scheduling", () => {
     });
   });
 
-  describe("business rules — hours, holidays, conflicts, reschedule, approval", () => {
+  describe("business rules hours, holidays, conflicts, reschedule, approval", () => {
     const cfg = defaultSiteVisitConfig({
       holidays: ["2026-08-15"],
       workingHoursStart: "09:00",

@@ -287,7 +287,7 @@ export async function advanceQuoteFirstPipeline(orderUuid: string) {
   );
 
   await setOrderStage(orderUuid, "Ready For Installation");
-  await logTimeline(friendly, "Production complete — ready for installation");
+  await logTimeline(friendly, "Production complete ready for installation");
   await queueNotification("ready_for_installation", friendly);
 
   // Installation
@@ -305,7 +305,7 @@ export async function advanceQuoteFirstPipeline(orderUuid: string) {
   );
 
   await setOrderStage(orderUuid, "Completed");
-  await logTimeline(friendly, "Installation completed — order Completed");
+  await logTimeline(friendly, "Installation completed order Completed");
   await queueNotification("installation_completed", friendly);
 
   return { friendly, quoteId: quote!.id, customerId };
