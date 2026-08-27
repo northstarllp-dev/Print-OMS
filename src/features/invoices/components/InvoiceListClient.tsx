@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Search,
@@ -9,6 +9,7 @@ import {
   Filter,
 } from "lucide-react";
 import type { InvoiceListItem } from "@/features/invoices/actions/invoiceActions";
+import { ListPagination, LIST_PAGE_SIZE } from "@/components/ui/ListPagination";
 
 function formatINR(n: number) {
   return `₹${n.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
@@ -45,6 +46,7 @@ export function InvoiceListClient({
 }: InvoiceListClientProps) {
   const [statusFilter, setStatusFilter] = useState("all");
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -56,6 +58,17 @@ export function InvoiceListClient({
       return haystack.includes(q);
     });
   }, [invoices, statusFilter, search]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / LIST_PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageItems = useMemo(() => {
+    const start = (safePage - 1) * LIST_PAGE_SIZE;
+    return filtered.slice(start, start + LIST_PAGE_SIZE);
+  }, [filtered, safePage]);
 
   const counts = useMemo(() => {
     const c = { all: invoices.length, Draft: 0, Sent: 0, Paid: 0, Void: 0 };
@@ -119,7 +132,7 @@ export function InvoiceListClient({
             No invoices found. They appear here when a quotation is approved.
           </div>
         ) : (
-          filtered.map((inv) => {
+          pageItems.map((inv) => {
             const meta = STATUS_META[inv.status] || STATUS_META.Draft;
             return (
               <Link
@@ -163,6 +176,18 @@ export function InvoiceListClient({
             );
           })
         )}
+        {filtered.length > 0 && (
+          <div className="rounded-2xl border border-slate-200 overflow-hidden">
+            <ListPagination
+              page={safePage}
+              totalPages={totalPages}
+              total={filtered.length}
+              pageSize={LIST_PAGE_SIZE}
+              onPageChange={setPage}
+              itemLabel="invoices"
+            />
+          </div>
+        )}
       </div>
 
       {/* Desktop table */}
@@ -188,7 +213,7 @@ export function InvoiceListClient({
                   </td>
                 </tr>
               ) : (
-                filtered.map((inv) => {
+                pageItems.map((inv) => {
                   const meta = STATUS_META[inv.status] || STATUS_META.Draft;
                   return (
                     <tr
@@ -242,6 +267,14 @@ export function InvoiceListClient({
             </tbody>
           </table>
         </div>
+        <ListPagination
+          page={safePage}
+          totalPages={totalPages}
+          total={filtered.length}
+          pageSize={LIST_PAGE_SIZE}
+          onPageChange={setPage}
+          itemLabel="invoices"
+        />
       </div>
     </div>
   );

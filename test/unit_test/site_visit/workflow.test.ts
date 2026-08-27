@@ -129,6 +129,12 @@ describe("site visit workflow", () => {
       expect(resolveDisplaySiteVisitStage(null)).toBe("");
     });
 
+    it("keeps Scheduled when the visit was skipped without an audit date", () => {
+      expect(
+        resolveDisplaySiteVisitStage("Site Visit Scheduled", null, true)
+      ).toBe("Site Visit Scheduled");
+    });
+
     it("siteVisitReviewCopy differs for staff push vs admin lock", () => {
       expect(siteVisitReviewCopy("staff_push")).toEqual({
         confirmLabel: "Request Admin Approval",

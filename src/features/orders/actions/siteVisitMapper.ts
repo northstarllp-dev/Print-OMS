@@ -120,6 +120,26 @@ const PLACEHOLDER_INSTALLATION_ADDRESSES = new Set([
   "Not Provided",
 ]);
 
+/** Enquiry/customer placeholders that must not seed schedule address fields. */
+export function isPlaceholderInstallationAddress(value?: string | null): boolean {
+  if (typeof value !== "string") return false;
+  const trimmed = value.trim();
+  return !trimmed || PLACEHOLDER_INSTALLATION_ADDRESSES.has(trimmed);
+}
+
+/**
+ * Address safe to prefill into schedule/skip location inputs.
+ * Drops placeholders, blank, and legacy "Skipped…" strings.
+ */
+export function usableSiteAddressHint(value?: string | null): string {
+  if (typeof value !== "string") return "";
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.startsWith("Skipped") || PLACEHOLDER_INSTALLATION_ADDRESSES.has(trimmed)) {
+    return "";
+  }
+  return trimmed;
+}
+
 /** Site visit address is the source of truth for installation location when available. */
 export function resolveSiteVisitInstallationAddress(
   siteVisit?: Partial<SiteVisitDetails> | Record<string, unknown> | null,
@@ -135,14 +155,12 @@ export function resolveSiteVisitInstallationAddress(
 
   for (const value of candidates) {
     if (typeof value !== "string") continue;
-    const trimmed = value.trim();
-    if (!trimmed || trimmed.startsWith("Skipped")) continue;
-    return trimmed;
+    const usable = usableSiteAddressHint(value);
+    if (!usable) continue;
+    return usable;
   }
 
-  const fb = typeof fallback === "string" ? fallback.trim() : "";
-  if (!fb || PLACEHOLDER_INSTALLATION_ADDRESSES.has(fb)) return null;
-  return fb;
+  return usableSiteAddressHint(fallback) || null;
 }
 
 /** Open address or "lat, lng" in Google Maps. */

@@ -59,8 +59,67 @@ import {
   resolveOrderDetailHref,
 } from "@/features/orders/orderListLogic";
 import { resolveSiteVisitMapLink } from "@/features/orders/actions/siteVisitMapper";
-import { isSkippedSiteVisit } from "@/features/orders/workspace/modules/site-visit/siteVisitUiLogic";
+import {
+  isSkippedSiteVisit,
+  resolveDisplaySiteVisitStage,
+  resolveSiteVisitQueueVisitKind,
+} from "@/features/orders/workspace/modules/site-visit/siteVisitUiLogic";
 import { ListPagination, LIST_PAGE_SIZE } from "@/components/ui/ListPagination";
+
+function SiteVisitColumnCell({
+  skipped,
+  visitDate,
+  visitTime,
+  mapHref,
+  mapLabel,
+}: {
+  skipped: boolean;
+  visitDate?: string | null;
+  visitTime?: string | null;
+  mapHref?: string | null;
+  mapLabel?: string | null;
+}) {
+  const kind = resolveSiteVisitQueueVisitKind({ skipped, visitDate, visitTime });
+  const locationLink =
+    mapHref && mapLabel ? (
+      <a
+        href={mapHref}
+        target="_blank"
+        rel="noopener noreferrer"
+        title={mapLabel}
+        className="block text-[10px] text-slate-500 mt-0.5 truncate underline-offset-2 hover:underline"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {mapLabel}
+      </a>
+    ) : mapLabel ? (
+      <div className="text-[10px] text-slate-500 mt-0.5 truncate" title={mapLabel}>
+        {mapLabel}
+      </div>
+    ) : null;
+
+  if (kind === "skipped") {
+    return (
+      <div className="text-left max-w-[220px]">
+        <div className="text-[12px] font-bold text-amber-700">Skipped</div>
+        {locationLink}
+      </div>
+    );
+  }
+  if (kind === "booked") {
+    return (
+      <div className="text-left max-w-[220px]">
+        <div className="text-[12px] font-semibold text-slate-900">
+          {visitDate} • {visitTime}
+        </div>
+        {locationLink}
+      </div>
+    );
+  }
+  return (
+    <span className="text-[12px] text-slate-400 italic">Not yet booked</span>
+  );
+}
 
 const getStatusColor = (status: string) => {
   const colors: Record<string, { bg: string; text: string; label: string }> = {
@@ -1106,14 +1165,17 @@ export function OrdersManagementDashboard({
             </div>
           ) : (
             pageOrders.map((order) => {
-              const isSiteVisitStage = order.stage === "Site Visit Scheduled" || order.stage === "Site Visit Completed";
-              const hasNoDate = !order.siteVisitDetails || !order.siteVisitDetails.auditDate;
-              const displayStage = (isSiteVisitStage && hasNoDate) ? "Site Visit Pending" : order.stage;
+              const isInstallQueue = parsedEntryStage === "installation";
+              const sv = order.siteVisitDetails;
+              const siteVisitSkipped = !isInstallQueue && isSkippedSiteVisit(sv);
+              const displayStage = resolveDisplaySiteVisitStage(
+                order.stage,
+                sv?.auditDate,
+                siteVisitSkipped
+              );
               const statusColor = getStatusColor(displayStage);
               const dateStr = new Date(order.dateCreated).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
-              const isInstallQueue = parsedEntryStage === "installation";
               const inst = order.installationDetails;
-              const sv = order.siteVisitDetails;
               const visitDate = isInstallQueue ? inst?.scheduledDate : sv?.auditDate;
               const visitTime = isInstallQueue ? inst?.scheduledTime : sv?.auditTime;
               const siteMap = resolveSiteVisitMapLink(sv);
@@ -1122,7 +1184,6 @@ export function OrdersManagementDashboard({
                 ? installMapLink || siteMap?.href || null
                 : siteMap?.href || null;
               const mapLabel = siteMap?.label || (mapHref ? "Open map location" : null);
-              const siteVisitSkipped = !isInstallQueue && isSkippedSiteVisit(sv);
               const title = order.businessName || order.clientName || "Order";
 
               return (
@@ -1197,27 +1258,20 @@ export function OrdersManagementDashboard({
                           </div>
                         </div>
 
-                        {(visitDate && visitTime) ? (
-                          <div className="mt-2 rounded-lg bg-slate-50 border border-slate-100 px-2.5 py-1.5">
-                            <div className="text-[11px] font-bold text-slate-800">{visitDate} • {visitTime}</div>
-                            {siteVisitSkipped ? (
-                              <div className="text-[10px] font-semibold text-amber-700 mt-0.5">
-                                Site visit skipped
-                              </div>
-                            ) : null}
-                            {mapHref && mapLabel ? (
-                              <a
-                                href={mapHref}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                title={mapLabel}
-                                className="block text-[10px] text-slate-500 mt-0.5 truncate underline-offset-2 hover:underline"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                {mapLabel}
-                              </a>
-                            ) : null}
-                          </div>
+                        {resolveSiteVisitQueueVisitKind({
+                          skipped: siteVisitSkipped,
+                          visitDate,
+                          visitTime,
+                        }) !== "unbooked" ? (
+                        <div className="mt-2 rounded-lg bg-slate-50 border border-slate-100 px-2.5 py-1.5">
+                          <SiteVisitColumnCell
+                            skipped={siteVisitSkipped}
+                            visitDate={visitDate}
+                            visitTime={visitTime}
+                            mapHref={mapHref}
+                            mapLabel={mapLabel}
+                          />
+                        </div>
                         ) : null}
                       </button>
                     </div>
@@ -1261,9 +1315,14 @@ export function OrdersManagementDashboard({
             </thead>
             <tbody>
               {pageOrders.map((order, idx) => {
-                const isSiteVisitStage = order.stage === "Site Visit Scheduled" || order.stage === "Site Visit Completed";
-                const hasNoDate = !order.siteVisitDetails || !order.siteVisitDetails.auditDate;
-                const displayStage = (isSiteVisitStage && hasNoDate) ? "Site Visit Pending" : order.stage;
+                const isInstallQueue = parsedEntryStage === "installation";
+                const sv = order.siteVisitDetails;
+                const siteVisitSkipped = !isInstallQueue && isSkippedSiteVisit(sv);
+                const displayStage = resolveDisplaySiteVisitStage(
+                  order.stage,
+                  sv?.auditDate,
+                  siteVisitSkipped
+                );
                 const statusColor = getStatusColor(displayStage);
                 
                 const customerName = customers.find(c => c.id === order.customerId)?.name || "Unknown";
@@ -1302,9 +1361,7 @@ export function OrdersManagementDashboard({
                     </td>
                     <td style={{ padding: "16px 20px", textAlign: "left" }}>
                       {(() => {
-                        const isInstallQueue = parsedEntryStage === "installation";
                         const inst = order.installationDetails;
-                        const sv = order.siteVisitDetails;
                         const visitDate = isInstallQueue ? inst?.scheduledDate : sv?.auditDate;
                         const visitTime = isInstallQueue ? inst?.scheduledTime : sv?.auditTime;
                         const siteMap = resolveSiteVisitMapLink(sv);
@@ -1313,58 +1370,15 @@ export function OrdersManagementDashboard({
                           ? installMapLink || siteMap?.href || null
                           : siteMap?.href || null;
                         const mapLabel = siteMap?.label || (mapHref ? "Open map location" : null);
-                        const siteVisitSkipped = !isInstallQueue && isSkippedSiteVisit(sv);
-
-                        if (visitDate && visitTime) {
-                          return (
-                            <div style={{ textAlign: "left" }}>
-                              <div style={{ fontSize: "12px", fontWeight: "600", color: "#0f172a" }}>
-                                {visitDate} • {visitTime}
-                              </div>
-                              {siteVisitSkipped && (
-                                <div
-                                  style={{
-                                    fontSize: "10px",
-                                    fontWeight: 700,
-                                    color: "#b45309",
-                                    marginTop: "2px",
-                                  }}
-                                >
-                                  Site visit skipped
-                                </div>
-                              )}
-                              {mapHref && mapLabel && (
-                                <div style={{ fontSize: "11px", marginTop: "2px", maxWidth: 220 }}>
-                                  <a
-                                    href={mapHref}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    title={mapLabel}
-                                    style={{
-                                      color: "#64748b",
-                                      textDecoration: "none",
-                                      cursor: "pointer",
-                                      display: "block",
-                                      overflow: "hidden",
-                                      textOverflow: "ellipsis",
-                                      whiteSpace: "nowrap",
-                                    }}
-                                    onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
-                                    onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    {mapLabel}
-                                  </a>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        }
 
                         return (
-                          <span style={{ fontSize: "12px", color: "#94a3b8", fontStyle: "italic" }}>
-                            Not yet booked
-                          </span>
+                          <SiteVisitColumnCell
+                            skipped={siteVisitSkipped}
+                            visitDate={visitDate}
+                            visitTime={visitTime}
+                            mapHref={mapHref}
+                            mapLabel={mapLabel}
+                          />
                         );
                       })()}
                     </td>

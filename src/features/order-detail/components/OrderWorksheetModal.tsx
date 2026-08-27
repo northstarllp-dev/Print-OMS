@@ -20,7 +20,9 @@ import { SiteVisitModule } from "@/features/orders/workspace/modules/site-visit/
 import { SiteVisitReviewModal } from "@/features/orders/workspace/modules/site-visit/SiteVisitReviewModal";
 import {
   canAdvanceSiteVisitAudit,
+  isSkippedSiteVisit,
   mergeIncomingSiteVisitDetails,
+  resolveDisplaySiteVisitStage,
 } from "@/features/orders/workspace/modules/site-visit/siteVisitUiLogic";
 import { resolveEffectiveAdminOverride } from "@/features/orders/workspace/shared/adminGodMode";
 import {
@@ -1702,9 +1704,11 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
               {filteredOrders.map((o) => {
                 const isSelected = o.id === order.id;
                 
-                const isSiteVisitStage = o.stage === "Site Visit Scheduled" || o.stage === "Site Visit Completed";
-                const hasNoDate = !o.siteVisitDetails || !o.siteVisitDetails.auditDate;
-                const displayStage = (isSiteVisitStage && hasNoDate) ? "Site Visit Pending" : o.stage;
+                const displayStage = resolveDisplaySiteVisitStage(
+                  o.stage,
+                  o.siteVisitDetails?.auditDate,
+                  isSkippedSiteVisit(o.siteVisitDetails)
+                );
                 const stageInfo = STAGE_LABEL[displayStage] || { label: displayStage, color: "#94A3B8" };
 
                 const progress = Math.round(

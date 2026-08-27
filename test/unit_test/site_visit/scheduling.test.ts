@@ -19,6 +19,8 @@ import {
   canSubmitSiteVisitSchedule,
   getNextBusinessDays,
   isSiteVisitSlotBooked,
+  resolveSiteVisitQueueVisitKind,
+  toLocalDateKey,
 } from "@/features/orders/workspace/modules/site-visit/siteVisitUiLogic";
 
 function makeOrders(n: number) {
@@ -63,12 +65,46 @@ describe("site visit scheduling", () => {
       ).toBe(false);
     });
 
-    it("returns next N non-Sunday days starting tomorrow", () => {
-      const from = new Date(2026, 7, 1);
-      const days = getNextBusinessDays(3, from);
+    it("returns next N non-Sunday days starting today", () => {
+      const saturday = new Date(2026, 7, 1);
+      const days = getNextBusinessDays(3, saturday);
       expect(days).toHaveLength(3);
       expect(days.every((d) => d.getDay() !== 0)).toBe(true);
-      expect(days[0].getDate()).toBe(3);
+      expect(days.map((d) => d.getDate())).toEqual([1, 3, 4]);
+    });
+
+    it("skips today when it is Sunday", () => {
+      const sunday = new Date(2026, 7, 2);
+      const days = getNextBusinessDays(3, sunday);
+      expect(days.map((d) => d.getDate())).toEqual([3, 4, 5]);
+    });
+
+    it("formats local calendar dates without UTC shift", () => {
+      expect(toLocalDateKey(new Date(2026, 7, 1, 0, 30))).toBe("2026-08-01");
+    });
+
+    it("treats skipped visits as skipped even without a booked date", () => {
+      expect(
+        resolveSiteVisitQueueVisitKind({
+          skipped: true,
+          visitDate: null,
+          visitTime: null,
+        })
+      ).toBe("skipped");
+      expect(
+        resolveSiteVisitQueueVisitKind({
+          skipped: false,
+          visitDate: "2026-08-27",
+          visitTime: "10 AM - 11 AM",
+        })
+      ).toBe("booked");
+      expect(
+        resolveSiteVisitQueueVisitKind({
+          skipped: false,
+          visitDate: null,
+          visitTime: null,
+        })
+      ).toBe("unbooked");
     });
 
     it("detects conflicting portal slots and excludes self", () => {

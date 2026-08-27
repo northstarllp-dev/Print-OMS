@@ -9,6 +9,7 @@ import {
   buildGoogleMapsSearchUrl,
   resolveSiteVisitInstallationAddress,
   resolveSiteVisitMapLink,
+  usableSiteAddressHint,
 } from "@/features/orders/actions/siteVisitMapper";
 import {
   gpsCheckInPayload,
@@ -76,6 +77,13 @@ describe("site visit GPS & maps", () => {
       expect(
         resolveSiteVisitInstallationAddress(null, "Customer shipping lane")
       ).toBe("Customer shipping lane");
+      expect(
+        resolveSiteVisitInstallationAddress({
+          customerAddress: "Installation Address Pending Survey",
+        })
+      ).toBeNull();
+      expect(usableSiteAddressHint("Installation Address Pending Survey")).toBe("");
+      expect(usableSiteAddressHint("  Real Lane  ")).toBe("Real Lane");
     });
 
     it("buildGoogleMapsSearchUrl encodes query and rejects N/A / Skipped", () => {

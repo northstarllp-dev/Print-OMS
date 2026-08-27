@@ -28,7 +28,12 @@ import {
 import { createClient } from "@/utils/supabase/client";
 import { establishPortalSession } from "../../establishPortalSession";
 import { scheduleSiteVisitAction } from "@/features/orders/actions/orderActions";
-import { isSkippedSiteVisit } from "@/features/orders/workspace/modules/site-visit/siteVisitUiLogic";
+import { usableSiteAddressHint } from "@/features/orders/actions/siteVisitMapper";
+import {
+  getNextBusinessDays,
+  isSkippedSiteVisit,
+  toLocalDateKey,
+} from "@/features/orders/workspace/modules/site-visit/siteVisitUiLogic";
 import {
   mergeOrderDetailPatch,
   useOrderDetailSync,
@@ -298,7 +303,9 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
   // Site Visit scheduling states
   const [selectedDate, setSelectedDate] = useState("");
   const [selectedTime, setSelectedTime] = useState("");
-  const [siteAddress, setSiteAddress] = useState(customer.shippingAddress || "");
+  const [siteAddress, setSiteAddress] = useState(
+    () => usableSiteAddressHint(customer.shippingAddress)
+  );
   const [gpsCoords, setGpsCoords] = useState("12.9716, 77.5946");
   const [isRescheduling, setIsRescheduling] = useState(false);
   const [schedulingLoading, setSchedulingLoading] = useState(false);
@@ -342,20 +349,13 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
       const sv = order.siteVisitDetails;
       setSelectedDate(sv.auditDate || "");
       setSelectedTime(sv.auditTime || "");
-      setSiteAddress(sv.customerAddress || customer.shippingAddress || "");
+      setSiteAddress(
+        usableSiteAddressHint(sv.customerAddress) ||
+          usableSiteAddressHint(customer.shippingAddress)
+      );
       setGpsCoords(sv.gpsLocation || "12.9716° N, 77.5946° E");
     }
   }, [order.id, order.siteVisitDetails]);
-
-  const getBusinessDays = () => {
-    const days: Date[] = [];
-    const cur = new Date();
-    while (days.length < 7) {
-      cur.setDate(cur.getDate() + 1);
-      if (cur.getDay() !== 0) days.push(new Date(cur));
-    }
-    return days;
-  };
 
   const isSlotBooked = (date: string, time: string) => false;
 
@@ -556,8 +556,8 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
                       Pick a Date
                     </label>
                     <div className="flex gap-2 overflow-x-auto pb-1">
-                      {getBusinessDays().map((day, idx) => {
-                        const ds = day.toISOString().split("T")[0];
+                      {getNextBusinessDays().map((day, idx) => {
+                        const ds = toLocalDateKey(day);
                         const dayName = day.toLocaleDateString("en-US", { weekday: "short" });
                         const monthName = day.toLocaleDateString("en-US", { month: "short" });
                         const selected = selectedDate === ds;

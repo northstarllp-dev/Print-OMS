@@ -125,29 +125,50 @@ export function canAdvanceSiteVisitAudit(details: {
 }
 
 /**
- * List cards: Scheduled/Completed without auditDate still display as Pending.
+ * List cards: Scheduled/Completed without auditDate still display as Pending,
+ * unless the visit was explicitly skipped (date is cleared on skip).
  */
 export function resolveDisplaySiteVisitStage(
   stage: string | null | undefined,
-  auditDate?: string | null
+  auditDate?: string | null,
+  skipped?: boolean
 ): string {
   const s = stage || "";
   const isSiteVisitStage =
     s === "Site Visit Scheduled" || s === "Site Visit Completed";
-  if (isSiteVisitStage && !auditDate) return "Site Visit Pending";
+  if (isSiteVisitStage && !auditDate && !skipped) return "Site Visit Pending";
   return s;
 }
 
-/** Next N non-Sunday calendar days starting tomorrow (schedule modal). */
+/** Queue SITE VISIT column: skip has no appointment date, so it is not "unbooked". */
+export function resolveSiteVisitQueueVisitKind(input: {
+  skipped: boolean;
+  visitDate?: string | null;
+  visitTime?: string | null;
+}): "skipped" | "booked" | "unbooked" {
+  if (input.skipped) return "skipped";
+  if (input.visitDate && input.visitTime) return "booked";
+  return "unbooked";
+}
+
+/** Local calendar date as YYYY-MM-DD (avoids UTC off-by-one from toISOString). */
+export function toLocalDateKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/** Next N non-Sunday calendar days starting today (schedule modal). */
 export function getNextBusinessDays(
   count = 7,
   from: Date = new Date()
 ): Date[] {
   const days: Date[] = [];
-  const cur = new Date(from);
+  const cur = new Date(from.getFullYear(), from.getMonth(), from.getDate());
   while (days.length < count) {
-    cur.setDate(cur.getDate() + 1);
     if (cur.getDay() !== 0) days.push(new Date(cur));
+    cur.setDate(cur.getDate() + 1);
   }
   return days;
 }

@@ -22,11 +22,16 @@ import { scheduleSiteVisitAction } from "@/features/orders/actions/orderActions"
 import { getAppSettings } from "@/features/settings/actions/settingsActions";
 import {
   DEFAULT_PRODUCTION_CHECKLIST_ITEMS,
-  resolveChecklistProgress,
-  type ProductionChecklistItem,
+  getChecklistForBusinessOp,
+  portalProductionChecklistRows,
+  type ProductionChecklistsByOp,
 } from "@/features/settings/productionChecklist";
-import { formatSiteMeasurementLabel } from "@/features/orders/actions/siteVisitMapper";
-import { isSkippedSiteVisit } from "@/features/orders/workspace/modules/site-visit/siteVisitUiLogic";
+import { formatSiteMeasurementLabel, usableSiteAddressHint } from "@/features/orders/actions/siteVisitMapper";
+import {
+  getNextBusinessDays,
+  isSkippedSiteVisit,
+  toLocalDateKey,
+} from "@/features/orders/workspace/modules/site-visit/siteVisitUiLogic";
 import {
   mergeOrderDetailPatch,
   useOrderDetailSync,
@@ -250,7 +255,9 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
   // Site Visit scheduling states
   const [selectedDate, setSelectedDate] = useState("");
   const [selectedTime, setSelectedTime] = useState("");
-  const [siteAddress, setSiteAddress] = useState(customer.shippingAddress || "");
+  const [siteAddress, setSiteAddress] = useState(
+    () => usableSiteAddressHint(customer.shippingAddress)
+  );
   const [gpsCoords, setGpsCoords] = useState("12.9716, 77.5946");
   const [isRescheduling, setIsRescheduling] = useState(false);
   const [schedulingLoading, setSchedulingLoading] = useState(false);
@@ -355,20 +362,13 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
       const sv = activeOrder.siteVisitDetails;
       setSelectedDate(sv.auditDate || "");
       setSelectedTime(sv.auditTime || "");
-      setSiteAddress(sv.customerAddress || customer.shippingAddress || "");
+      setSiteAddress(
+        usableSiteAddressHint(sv.customerAddress) ||
+          usableSiteAddressHint(customer.shippingAddress)
+      );
       setGpsCoords(sv.gpsLocation || "12.9716° N, 77.5946° E");
     }
   }, [activeOrderId, activeOrder?.siteVisitDetails]);
-
-  const getBusinessDays = () => {
-    const days: Date[] = [];
-    const cur = new Date();
-    while (days.length < 7) {
-      cur.setDate(cur.getDate() + 1);
-      if (cur.getDay() !== 0) days.push(new Date(cur));
-    }
-    return days;
-  };
 
   const isSlotBooked = (date: string, time: string) =>
     orders.some(o => o.id !== activeOrder?.id && o.siteVisitDetails?.auditDate === date && o.siteVisitDetails?.auditTime === time);
@@ -417,9 +417,8 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
 
   const pd = activeOrder?.productionDetails || {};
   const inst = activeOrder?.installationDetails || {};
-  const [productionChecklistItems, setProductionChecklistItems] = useState<ProductionChecklistItem[]>(
-    DEFAULT_PRODUCTION_CHECKLIST_ITEMS
-  );
+  const [productionChecklistsByOp, setProductionChecklistsByOp] =
+    useState<ProductionChecklistsByOp | null>(null);
 
   // Checklist settings only needed on Production step.
   useEffect(() => {
@@ -427,8 +426,13 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
     let cancelled = false;
     getAppSettings()
       .then((settings) => {
-        if (!cancelled && settings?.productionChecklistItems?.length) {
-          setProductionChecklistItems(settings.productionChecklistItems);
+        if (cancelled) return;
+        if (settings?.productionChecklistsByOp) {
+          setProductionChecklistsByOp(settings.productionChecklistsByOp);
+        } else if (settings?.productionChecklistItems?.length) {
+          setProductionChecklistsByOp({
+            signage: settings.productionChecklistItems,
+          });
         }
       })
       .catch(() => {});
@@ -437,7 +441,19 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
     };
   }, [mountedStepKeys]);
 
-  const productionChecklistProgress = resolveChecklistProgress(pd, productionChecklistItems);
+  const productionChecklistItems = useMemo(
+    () =>
+      getChecklistForBusinessOp(
+        productionChecklistsByOp,
+        activeOrder?.business_operation
+      ) || DEFAULT_PRODUCTION_CHECKLIST_ITEMS,
+    [productionChecklistsByOp, activeOrder?.business_operation]
+  );
+
+  const portalChecklistRows = useMemo(
+    () => portalProductionChecklistRows(pd, productionChecklistItems),
+    [pd, productionChecklistItems]
+  );
 
   if (orders.length === 0) {
     return (
@@ -693,8 +709,8 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                                 Pick a Date
                               </label>
                               <div className="flex gap-2 date-scroll overflow-x-auto pb-2 snap-x snap-mandatory">
-                                {getBusinessDays().map((day, idx) => {
-                                  const ds = day.toISOString().split("T")[0];
+                                {getNextBusinessDays().map((day, idx) => {
+                                  const ds = toLocalDateKey(day);
                                   const dayName = day.toLocaleDateString("en-US", { weekday: "short" });
                                   const monthName = day.toLocaleDateString("en-US", { month: "short" });
                                   const selected = selectedDate === ds;
@@ -1032,12 +1048,19 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                       <p className="text-sm text-slate-500">Real-time checklist of production milestones.</p>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {productionChecklistItems.map((item) => {
-                        const done = !!productionChecklistProgress[item.id];
+                      {portalChecklistRows.map((item) => {
+                        const done = item.done;
                         return (
-                        <div key={item.id} className={`p-4 border rounded-xl flex items-center justify-between ${done ? "bg-emerald-50/50 border-emerald-200 text-emerald-800" : "bg-slate-50 border-slate-200 text-slate-500"}`}>
-                          <span className="text-xs font-semibold">{item.label}</span>
-                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${done ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-500"}`}>{done ? "Done" : "Pending"}</span>
+                        <div key={item.id} className={`p-4 border rounded-xl flex items-center justify-between gap-2 ${done ? "bg-emerald-50/50 border-emerald-200 text-emerald-800" : "bg-slate-50 border-slate-200 text-slate-500"}`}>
+                          <span className="text-xs font-semibold min-w-0 flex items-center gap-1.5 flex-wrap">
+                            <span>{item.label}</span>
+                            {item.extra ? (
+                              <span className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200">
+                                Extra
+                              </span>
+                            ) : null}
+                          </span>
+                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full shrink-0 ${done ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-500"}`}>{done ? "Done" : "Pending"}</span>
                         </div>
                         );
                       })}

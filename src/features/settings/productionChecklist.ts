@@ -265,6 +265,29 @@ export function readCustomProductionChecklistItems(
   return items;
 }
 
+/** Portal / customer-facing rows: settings template + floor-added Extra checks. */
+export function portalProductionChecklistRows(
+  productionDetails: object | null | undefined,
+  templateItems: ProductionChecklistItem[]
+): Array<{ id: string; label: string; done: boolean; extra: boolean }> {
+  const progress = resolveChecklistProgress(productionDetails, templateItems);
+  const rows = templateItems.map((item) => ({
+    id: item.id,
+    label: item.label,
+    done: !!progress[item.id],
+    extra: false,
+  }));
+  for (const custom of readCustomProductionChecklistItems(productionDetails)) {
+    rows.push({
+      id: custom.id,
+      label: custom.label,
+      done: custom.checked,
+      extra: true,
+    });
+  }
+  return rows;
+}
+
 export function createCustomProductionChecklistItemId(
   existingIds: string[]
 ): string {

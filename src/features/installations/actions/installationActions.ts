@@ -196,8 +196,9 @@ export async function markInstallationCompleted(orderId: string, checklist: any[
   return { success: true };
 }
 
-export async function scheduleInstallationAction(orderId: string, payload: { scheduledDate: string, scheduledTime: string }) {
+export async function scheduleInstallationAction(orderId: string, payload: { scheduledDate: string, scheduledTime?: string }) {
   const supabase = await getSupabase();
+  const scheduledTime = payload.scheduledTime || "";
   
   // Get current order
   const { data: order, error: fetchError } = await supabase.from("orders").select("stage, health, order_id, company_id").eq("id", orderId).single();
@@ -207,7 +208,7 @@ export async function scheduleInstallationAction(orderId: string, payload: { sch
   const { error: instError } = await supabase.from("installations").upsert({
     order_id: orderId,
     scheduledDate: payload.scheduledDate,
-    scheduledTime: payload.scheduledTime
+    scheduledTime,
   }, { onConflict: "order_id" });
   if (instError) throw new Error(instError.message);
   
@@ -222,13 +223,16 @@ export async function scheduleInstallationAction(orderId: string, payload: { sch
   }
 
   // Activity Log
+  const scheduleLabel = scheduledTime
+    ? `${payload.scheduledDate} at ${scheduledTime}`
+    : payload.scheduledDate;
   await insertOrderActivity(supabase, {
     order_id: order.order_id || orderId,
     company_id: order.company_id,
     actor_name: "System",
     actor_role: "System",
-    content: `Installation scheduled for ${payload.scheduledDate} at ${payload.scheduledTime}.`,
-    metadata: { action: "schedule_installation", ...payload }
+    content: `Installation scheduled for ${scheduleLabel}.`,
+    metadata: { action: "schedule_installation", scheduledDate: payload.scheduledDate, scheduledTime },
   });
 
   const baseUrl = await getRequestBaseUrl();
@@ -236,8 +240,8 @@ export async function scheduleInstallationAction(orderId: string, payload: { sch
     templateKey: "installation_scheduled",
     orderUuid: orderId,
     date: payload.scheduledDate,
-    time: payload.scheduledTime,
-    idempotencyKey: `installation_scheduled:${orderId}:${payload.scheduledDate}:${payload.scheduledTime}`,
+    time: scheduledTime || "—",
+    idempotencyKey: `installation_scheduled:${orderId}:${payload.scheduledDate}:${scheduledTime || "date-only"}`,
     baseUrl,
   });
 

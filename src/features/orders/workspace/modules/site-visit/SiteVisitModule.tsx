@@ -41,7 +41,7 @@ import { updateSiteVisitDetailsAction } from "@/features/orders/actions/orderAct
 import { deleteStorageFilesAction } from "@/features/orders/actions/storageActions";
 import { scheduleSiteVisitAction } from "@/features/orders/actions/orderActions";
 import { isStageInOp } from "@/features/orders/businessOperations";
-import { buildGoogleMapsSearchUrl } from "@/features/orders/actions/siteVisitMapper";
+import { buildGoogleMapsSearchUrl, usableSiteAddressHint } from "@/features/orders/actions/siteVisitMapper";
 import {
   isSkippedSiteVisit,
 } from "@/features/orders/workspace/modules/site-visit/siteVisitUiLogic";
@@ -617,7 +617,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
       <ScheduleVisitModal
         isOpen={isScheduleModalOpen}
         onClose={() => setIsScheduleModalOpen(false)}
-        defaultAddress={client?.shippingAddress}
+        defaultAddress={usableSiteAddressHint(client?.shippingAddress)}
         onSchedule={async (date, time, location, coords) => {
           if (!canEdit) return;
           try {
@@ -653,9 +653,8 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
         onClose={() => setIsSkipLocationModalOpen(false)}
         mode="location_only"
         defaultAddress={
-          (scheduledAddress && !scheduledAddress.startsWith("Skipped")
-            ? scheduledAddress
-            : client?.shippingAddress) || ""
+          usableSiteAddressHint(scheduledAddress) ||
+          usableSiteAddressHint(client?.shippingAddress)
         }
         onSchedule={async (_date, _time, location, coords) => {
           if (!canEdit || !onSkipSiteVisit) return;

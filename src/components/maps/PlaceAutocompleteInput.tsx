@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { isGoogleMapsUrl } from "@/components/maps/mapsUrl";
+import { PoweredByGoogle } from "@/components/maps/PoweredByGoogle";
 
 export type PlaceSelection = {
   address: string;
@@ -65,6 +66,8 @@ export function PlaceAutocompleteInput({
   const sessionTokenCreatedAtRef = useRef<number>(0);
   const requestIdRef = useRef(0);
   const skipFetchRef = useRef(false);
+  const focusedRef = useRef(false);
+  const [focused, setFocused] = useState(false);
   const lastEmittedMapsUrlRef = useRef<string | null>(null);
   const regionKey = regionCodes.join(",");
 
@@ -116,8 +119,15 @@ export function PlaceAutocompleteInput({
       skipFetchRef.current = false;
       return;
     }
+    // Only search while the user is typing — never on mount / programmatic prefills.
+    if (!focused) {
+      clearSuggestions();
+      return;
+    }
     const q = value.trim();
-    if (q.length < 2 || isGoogleMapsUrl(q)) {
+    const isPlaceholder =
+      q === "Installation Address Pending Survey" || q === "Not Provided";
+    if (q.length < 2 || isGoogleMapsUrl(q) || isPlaceholder) {
       clearSuggestions();
       if (q.length === 0) {
         void refreshSessionToken();
@@ -145,6 +155,7 @@ export function PlaceAutocompleteInput({
             includedRegionCodes: regions,
           });
         if (requestId !== requestIdRef.current) return;
+        if (!focusedRef.current) return;
         const mapped: SuggestionRow[] = (rows || [])
           .map((s, i) => {
             const prediction = s.placePrediction;
@@ -172,7 +183,7 @@ export function PlaceAutocompleteInput({
     }, 280);
 
     return () => window.clearTimeout(timer);
-  }, [value, isLoaded, regionKey, updateMenuPosition, clearSuggestions]);
+  }, [value, focused, isLoaded, regionKey, updateMenuPosition, clearSuggestions, refreshSessionToken]);
 
   const emitMapsUrl = (url: string) => {
     if (!onMapsUrl) return;
@@ -211,74 +222,87 @@ export function PlaceAutocompleteInput({
   };
 
   return (
-    <div className="relative w-full">
-      <input
-        ref={inputRef}
-        type="text"
-        required={required}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onFocus={(e) => {
-          if (suggestions.length > 0) {
-            setOpen(true);
-            updateMenuPosition();
-          }
-          onFocus?.(e);
-        }}
-        onPaste={(e) => {
-          const pasted = e.clipboardData.getData("text");
-          if (onMapsUrl && isGoogleMapsUrl(pasted)) {
-            e.preventDefault();
-            onChange(pasted.trim());
-            emitMapsUrl(pasted);
-            setOpen(false);
-          }
-        }}
-        onBlur={(e) => {
-          // Delay so suggestion click registers first.
-          window.setTimeout(() => setOpen(false), 180);
-          if (isGoogleMapsUrl(value)) emitMapsUrl(value);
-          onBlur?.(e);
-        }}
-        placeholder={placeholder}
-        className={className}
-        style={style}
-        autoComplete="off"
-      />
-      {loading && (
-        <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">
-          …
-        </div>
-      )}
+    <div className="w-full">
+      <div className="relative w-full">
+        <input
+          ref={inputRef}
+          type="text"
+          required={required}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onFocus={(e) => {
+            focusedRef.current = true;
+            setFocused(true);
+            if (suggestions.length > 0) {
+              setOpen(true);
+              updateMenuPosition();
+            }
+            onFocus?.(e);
+          }}
+          onPaste={(e) => {
+            const pasted = e.clipboardData.getData("text");
+            if (onMapsUrl && isGoogleMapsUrl(pasted)) {
+              e.preventDefault();
+              onChange(pasted.trim());
+              emitMapsUrl(pasted);
+              setOpen(false);
+            }
+          }}
+          onBlur={(e) => {
+            focusedRef.current = false;
+            setFocused(false);
+            // Delay so suggestion click registers first.
+            window.setTimeout(() => setOpen(false), 180);
+            if (isGoogleMapsUrl(value)) emitMapsUrl(value);
+            onBlur?.(e);
+          }}
+          placeholder={placeholder}
+          className={className}
+          style={style}
+          autoComplete="off"
+        />
+        {loading && (
+          <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">
+            …
+          </div>
+        )}
+      </div>
       {error && (
         <p className="mt-1 text-[10px] font-semibold text-amber-700">{error}</p>
+      )}
+      {isLoaded && !error && (
+        <PoweredByGoogle className="mt-1.5 px-0.5" align="end" />
       )}
       {open &&
         menuBox &&
         typeof document !== "undefined" &&
         createPortal(
-          <ul
-            className="fixed z-[100000] max-h-56 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-2xl"
+          <div
+            className="fixed z-[100000] max-h-56 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl flex flex-col"
             style={{
               top: menuBox.top,
               left: menuBox.left,
               width: menuBox.width,
             }}
-            role="listbox"
           >
-            {suggestions.map((row) => (
-              <li key={row.id}>
-                <button
-                  type="button"
-                  className="w-full px-3 py-2.5 text-left text-xs font-semibold text-slate-700 hover:bg-blue-50"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => void pickSuggestion(row)}
-                >
-                  {row.label}
-                </button>
-              </li>
-            ))}
-          </ul>,
+            <ul className="overflow-y-auto py-1 flex-1 min-h-0" role="listbox">
+              {suggestions.map((row) => (
+                <li key={row.id}>
+                  <button
+                    type="button"
+                    className="w-full px-3 py-2.5 text-left text-xs font-semibold text-slate-700 hover:bg-blue-50"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => void pickSuggestion(row)}
+                  >
+                    {row.label}
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <div className="shrink-0 border-t border-slate-100 px-3 py-1.5 bg-slate-50/80">
+              <PoweredByGoogle align="end" />
+            </div>
+          </div>,
           document.body
         )}
     </div>

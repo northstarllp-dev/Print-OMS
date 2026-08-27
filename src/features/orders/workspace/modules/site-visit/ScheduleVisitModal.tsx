@@ -15,6 +15,8 @@ import {
   ensureResolvedSiteLocation,
   resolveGoogleMapsLocation,
 } from "@/components/maps/resolveGoogleMapsLocation";
+import { usableSiteAddressHint } from "@/features/orders/actions/siteVisitMapper";
+import { getNextBusinessDays, toLocalDateKey } from "./siteVisitUiLogic";
 
 const containerStyle = {
   width: "100%",
@@ -46,7 +48,7 @@ export const ScheduleVisitModal: React.FC<ScheduleVisitModalProps> = ({
   const locationOnly = mode === "location_only";
   const [selectedDate, setSelectedDate] = useState("");
   const [selectedTime, setSelectedTime] = useState("");
-  const [siteAddress, setSiteAddress] = useState(defaultAddress || "");
+  const [siteAddress, setSiteAddress] = useState(() => usableSiteAddressHint(defaultAddress));
   const [gpsCoords, setGpsCoords] = useState("12.9716, 77.5946");
   
   const [mapsSearching, setMapsSearching] = useState(false);
@@ -112,7 +114,7 @@ export const ScheduleVisitModal: React.FC<ScheduleVisitModalProps> = ({
 
   useEffect(() => {
     if (!isOpen) return;
-    setSiteAddress(defaultAddress || "");
+    setSiteAddress(usableSiteAddressHint(defaultAddress));
   }, [isOpen, defaultAddress]);
 
   const reverseGeocodeTimerRef = useRef<number | null>(null);
@@ -170,16 +172,6 @@ export const ScheduleVisitModal: React.FC<ScheduleVisitModalProps> = ({
   };
 
   if (!isOpen || typeof document === "undefined") return null;
-
-  const getBusinessDays = () => {
-    const days: Date[] = [];
-    const cur = new Date();
-    while (days.length < 7) {
-      cur.setDate(cur.getDate() + 1);
-      if (cur.getDay() !== 0) days.push(new Date(cur));
-    }
-    return days;
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -254,8 +246,8 @@ export const ScheduleVisitModal: React.FC<ScheduleVisitModalProps> = ({
                 Pick a Date
               </label>
               <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-slate-200">
-                {getBusinessDays().map((day, idx) => {
-                  const ds = day.toISOString().split("T")[0];
+                {getNextBusinessDays().map((day, idx) => {
+                  const ds = toLocalDateKey(day);
                   const dayName = day.toLocaleDateString("en-US", { weekday: "short" });
                   const monthName = day.toLocaleDateString("en-US", { month: "short" });
                   const selected = selectedDate === ds;
