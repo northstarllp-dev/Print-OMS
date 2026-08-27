@@ -52,11 +52,13 @@ export async function createOrderAtSiteVisit(
  */
 export async function createOrderViaEnquiry(
   browser: Browser,
-  baseURLOrCustomer: string | CustomerFixture,
+  baseURLOrCustomer: string | CustomerFixture | undefined,
   maybeCustomer?: CustomerFixture
 ): Promise<CreatedOrder> {
   const customer =
-    typeof baseURLOrCustomer === "string" ? maybeCustomer : baseURLOrCustomer;
+    typeof baseURLOrCustomer === "string" || baseURLOrCustomer === undefined
+      ? maybeCustomer
+      : baseURLOrCustomer;
   if (!customer) {
     throw new Error("createOrderViaEnquiry: customer fixture is required");
   }

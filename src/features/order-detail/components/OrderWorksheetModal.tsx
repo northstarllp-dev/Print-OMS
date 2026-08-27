@@ -159,7 +159,7 @@ const WORKFLOW_STEP_META: Record<
 };
 
 function stageToTabIndex(
-  stage: PipelineStage,
+  stage: string,
   businessOp?: string | null,
   workflowType?: string | null
 ): number {

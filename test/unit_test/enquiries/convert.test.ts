@@ -80,7 +80,6 @@ describe("convert", () => {
         product_type: "ACP Board",
         requirements: "Need fascia",
         assigned_admins: ["admin-1"],
-        business_operation: "signage",
       });
     });
 
