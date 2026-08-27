@@ -10,6 +10,7 @@ const ALLOWED_BUCKETS = new Set([
   "site-visit-photos",
   "order-resources",
   "design-proofs",
+  "design-files",
   "production-files",
   "installation-photos",
   "service-ticket-photos",

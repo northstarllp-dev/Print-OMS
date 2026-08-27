@@ -3,10 +3,12 @@
 import React, { useEffect, useState } from "react";
 import {
   ArrowLeft, CheckSquare, FileText,
-  AlertOctagon, Check, Image as ImageIcon, Sparkles, Loader2, Save, Timer, Shield, Plus, X
+  AlertOctagon, Check, Sparkles, Loader2, Save, Timer, Shield, Plus, X
 } from "lucide-react";
 import type { StageModuleProps } from "../../shared/types";
 import { getAppSettings } from "@/features/settings/actions/settingsActions";
+import { parseStoredRef } from "@/utils/storage/storageRef";
+import { getSignedReadUrl } from "@/utils/storage/signedReadCache";
 import {
   buildProductionChecklistUpdate,
   createCustomProductionChecklistItemId,
@@ -19,6 +21,7 @@ import {
 import { resolveSiteVisitInstallationAddress } from "@/features/orders/actions/siteVisitMapper";
 import { ProductionMaterialsPanel } from "@/features/inventory/components/ProductionMaterialsPanel";
 import { getInstallationDeadlineCountdown } from "./installationDeadlineUi";
+import { fileExtensionLabel, productionStageFileItems } from "./productionFilesUi";
 
 interface LocationMeasurement {
   id: string;
@@ -83,6 +86,48 @@ function maskEmail(email: string) {
   const [name, domain] = email.split("@");
   if (name.length <= 2) return `${name[0]}***@${domain}`;
   return `${name[0]}***${name[name.length - 1]}@${domain}`;
+}
+
+type StageFile = { id: string; name?: string; url: string };
+
+async function openStageFile(url: string) {
+  const parsed = parseStoredRef(url);
+  const href = parsed ? await getSignedReadUrl(parsed.bucket, parsed.path) : url;
+  window.open(href, "_blank", "noopener,noreferrer");
+}
+
+function StageFileCard({
+  file,
+  accent,
+}: {
+  file: StageFile;
+  accent: "violet" | "blue";
+}) {
+  const ext = fileExtensionLabel(file.name);
+  const isViolet = accent === "violet";
+  return (
+    <div className={`border border-slate-200 rounded-xl p-4 flex flex-col items-center justify-center bg-white shadow-sm text-center gap-2 transition-colors ${isViolet ? "hover:border-violet-300" : "hover:border-blue-300"}`}>
+      <div className={`w-12 h-12 rounded-lg flex items-center justify-center font-black text-xs mb-1 ${isViolet ? "bg-violet-50 text-violet-600" : "bg-blue-50 text-blue-600"}`}>
+        {ext}
+      </div>
+      <span className="text-xs font-bold text-slate-700 truncate w-full" title={file.name}>
+        {file.name || "Untitled file"}
+      </span>
+      <button
+        type="button"
+        onClick={async () => {
+          try {
+            await openStageFile(file.url);
+          } catch {
+            window.alert("Could not open file.");
+          }
+        }}
+        className={`mt-1 px-4 py-1.5 text-white rounded-lg text-xs font-bold transition-colors w-full shadow-sm ${isViolet ? "bg-violet-600 hover:bg-violet-700" : "bg-blue-600 hover:bg-blue-700"}`}
+      >
+        Download
+      </button>
+    </div>
+  );
 }
 
 export function ProductionModule({ 
@@ -221,8 +266,8 @@ export function ProductionModule({
   const svDetails = order.siteVisitDetails || {};
   const locations: LocationMeasurement[] = svDetails.locations || [];
 
-  const dd = order.designDetails || order.design || { proofUrl: "", status: "Draft" };
-  const mockImage = order.imageMockup || dd.proofUrl;
+  const dd = initialOrder.designDetails || initialOrder.design || order.designDetails || order.design || { items: [] };
+  const designItems = productionStageFileItems(dd.items || []);
 
   const progressWithCustom = () => {
     const next: Record<string, boolean> = { ...checklistProgress };
@@ -269,7 +314,6 @@ export function ProductionModule({
   };
 
   const signageOptions = quotation?.signage_options || [];
-  const designItems = dd.items || [];
 
   return (
     <div className={embedded ? "space-y-6" : "p-8 bg-slate-50/50 min-h-screen"}>
@@ -561,45 +605,67 @@ export function ProductionModule({
 
 
 
-          {/* FINAL PRODUCTION FILES (Per Item) */}
+          {/* DESIGN + PRODUCTION FILES (Per Item) */}
           <div className="prt-card p-6">
             <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
-              <ImageIcon size={18} className="text-emerald-600" />
+              <FileText size={18} className="text-emerald-600" />
               <h2 className="text-sm font-bold text-slate-800">
-                Design Files
+                Design &amp; Production Files
               </h2>
             </div>
 
-            {designItems.filter((item: any) => item.productionFiles && item.productionFiles.length > 0).length > 0 ? (
+            {designItems.length > 0 ? (
               <div className="space-y-6">
-                {designItems.filter((item: any) => item.productionFiles && item.productionFiles.length > 0).map((item: any) => (
-                  <div key={item.id} className="border border-slate-200 rounded-xl p-4 bg-slate-50/50">
-                    <h3 className="font-bold text-slate-800 mb-3 text-sm">{item.name}</h3>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                      {item.productionFiles.map((file: any) => {
-                        const fileExt = file.name.split('.').pop()?.toUpperCase() || 'FILE';
-                        return (
-                          <div key={file.id} className="border border-slate-200 rounded-xl p-4 flex flex-col items-center justify-center bg-white relative group shadow-sm text-center gap-2 hover:border-blue-300 transition-colors">
-                            <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center font-black text-xs mb-1">
-                              {fileExt}
-                            </div>
-                            <span className="text-xs font-bold text-slate-700 truncate w-full" title={file.name}>
-                              {file.name}
-                            </span>
-                            <a href={file.url} target="_blank" rel="noreferrer" className="mt-1 px-4 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 transition-colors w-full shadow-sm">
-                              Download
-                            </a>
+                {designItems.map((item: any) => {
+                  const designFiles: StageFile[] = item.designFiles || [];
+                  const productionFiles: StageFile[] = item.productionFiles || [];
+                  return (
+                    <div key={item.id} className="border border-slate-200 rounded-xl p-4 bg-slate-50/50 space-y-5">
+                      <h3 className="font-bold text-slate-800 text-sm">{item.name}</h3>
+
+                      <div>
+                        <h4 className="text-[11px] font-bold text-violet-700 uppercase tracking-wide mb-3">
+                          Design Source Files
+                        </h4>
+                        {designFiles.length > 0 ? (
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                            {designFiles.map((file) => (
+                              <StageFileCard key={file.id} file={file} accent="violet" />
+                            ))}
                           </div>
-                        );
-                      })}
+                        ) : (
+                          <div className="py-6 text-center text-xs text-slate-400 font-semibold flex flex-col items-center justify-center gap-2 border-2 border-dashed border-slate-200 rounded-xl bg-white">
+                            <FileText size={20} className="text-slate-300" />
+                            <span>No design source files for this item.</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div>
+                        <h4 className="text-[11px] font-bold text-blue-700 uppercase tracking-wide mb-3">
+                          Production Files
+                        </h4>
+                        {productionFiles.length > 0 ? (
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                            {productionFiles.map((file) => (
+                              <StageFileCard key={file.id} file={file} accent="blue" />
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="py-6 text-center text-xs text-slate-400 font-semibold flex flex-col items-center justify-center gap-2 border-2 border-dashed border-slate-200 rounded-xl bg-white">
+                            <FileText size={20} className="text-slate-300" />
+                            <span>No production files for this item.</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="py-12 text-center text-xs text-slate-400 font-semibold flex flex-col items-center justify-center gap-2 border-2 border-dashed border-slate-200 rounded-xl">
                 <FileText size={24} className="text-slate-300" />
-                <span>No production files uploaded yet.</span>
+                <span>No design or production files uploaded yet.</span>
               </div>
             )}
           </div>

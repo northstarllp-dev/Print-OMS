@@ -531,6 +531,10 @@ export async function seedOrderAtDesignApproved(
           productionFiles: [
             { id: "pf1", name: "final.pdf", url: "https://example.com/final.pdf", createdAt: new Date().toISOString() },
           ],
+          designFiles: [
+            { id: "df1", name: "source.cdr", url: "https://example.com/source.cdr", createdAt: new Date().toISOString() },
+          ],
+          designFilesReady: true,
         },
       ],
     },

@@ -15,6 +15,7 @@ const MIME_BY_EXT: Record<string, string> = {
 export type StorageUploadPurpose =
   | "design_resource"
   | "design_proof"
+  | "design_source_file"
   | "production_asset"
   | "site_visit_photo"
   | "installation_photo"
@@ -24,6 +25,7 @@ export type StorageUploadPurpose =
 const BUCKET_BY_PURPOSE: Record<StorageUploadPurpose, string> = {
   design_resource: "order-resources",
   design_proof: "design-proofs",
+  design_source_file: "design-files",
   production_asset: "production-files",
   site_visit_photo: "site-visit-photos",
   installation_photo: "installation-photos",

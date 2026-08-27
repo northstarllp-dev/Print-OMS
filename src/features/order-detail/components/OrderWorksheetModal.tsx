@@ -831,7 +831,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   };
   const handleRequestAdvancement = async () => {
     // Gate by order stage (not active tab) so Quote/other tabs cannot skip design readiness.
-    if (order.stage === "Design In Progress") {
+    if (order.stage === "Design In Progress" || order.stage === "Design Approved") {
       const itemsList = (order.design as DesignRecord)?.items || [];
       const allDesignItemsApproved = areAllDesignItemsApproved(itemsList as any);
       const hasProductionFiles = itemsList.some(
@@ -1273,7 +1273,10 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     (
       (
         effectiveStageStatus === "Normal" &&
-        !(order.stage === "Design In Progress" && !isDesignAdvanceReady) &&
+        !(
+          (order.stage === "Design In Progress" || order.stage === "Design Approved") &&
+          !isDesignAdvanceReady
+        ) &&
         (!isInstallationStageTab || order.stage === "Ready For Installation")
       ) ||
       showAdminInstallationComplete

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { FileText, ZoomIn, ZoomOut, UploadCloud, Upload, X, Trash, RefreshCw, Download, Maximize, RotateCw, Shield, AlertTriangle, CheckCircle } from "lucide-react";
+import { FileText, ZoomIn, ZoomOut, UploadCloud, Upload, X, Trash, RefreshCw, Download, Maximize, RotateCw, Shield, AlertTriangle, CheckCircle, ArrowRightCircle } from "lucide-react";
 import { Order, DesignRecord, DesignVersion } from "@/types";
 import { uploadFiles } from "@/utils/storage/uploadClient";
 import { parseStoredRef } from "@/utils/storage/storageRef";
@@ -11,6 +11,8 @@ import type { StorageUploadPurpose } from "@/utils/supabase/serverStorageUpload"
 import {
   planProductionFileDelete,
   removeProductionFileById,
+  planDesignFileDelete,
+  removeDesignFileById,
 } from "@/utils/supabase/storageLifecycleLogic";
 import { updateDesignDetailsAction } from "@/features/designs/actions/designActions";
 import { deleteStorageFilesAction } from "@/features/orders/actions/storageActions";
@@ -92,6 +94,13 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
   const isReadOnly =
     !canEdit ||
     (isFrozen && currentUserRole !== "Admin" && !adminOverrideUnlocked);
+  const isProofApproved =
+    activeItem?.versions[activeItem.versions.length - 1]?.status === "Approved";
+  // Existing orders already have productionFiles without the new handoff flag.
+  const isHandedOffToProduction = Boolean(
+    activeItem?.designFilesReady ||
+    (activeItem?.productionFiles && activeItem.productionFiles.length > 0)
+  );
 
   const handleUpdateItemVersions = async (newVersions: DesignVersion[]) => {
     const updatedItems = itemsList.map(item => {
@@ -360,6 +369,112 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
       }
     } catch (err: any) {
       alert("Delete failed: " + getServerActionErrorMessage(err));
+    }
+  };
+
+  const handleDesignFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!canEdit) return;
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0 || !activeItem) return;
+    setUploading(true);
+    try {
+      const { ok, failed } = await uploadFiles(files, {
+        orderId: order.id,
+        purpose: "design_source_file",
+        channel: "staff",
+        compress: false,
+        concurrency: 3,
+      });
+      if (failed.length) {
+        alert(`${failed.length} file(s) failed to upload: ${failed[0].error}`);
+      }
+      if (!ok.length) return;
+
+      const newFiles = ok.map((o) => ({
+        id: crypto.randomUUID(),
+        name: o.fileName,
+        url: `${o.bucket}/${o.path}`,
+        createdAt: new Date().toISOString()
+      }));
+      const newItems = itemsList.map(item => {
+        if (item.id === activeItem.id) {
+          return { ...item, designFiles: [...(item.designFiles || []), ...newFiles] };
+        }
+        return item;
+      });
+      const details: Partial<DesignRecord> = { items: newItems };
+      try {
+        if (updateDesignDetails) {
+          await updateDesignDetails(order.id, details);
+        } else {
+          await updateDesignDetailsAction(order.id, details, dd.updated_at, undefined, adminOverrideUnlocked);
+        }
+      } catch (dbErr) {
+        for (const o of ok) {
+          try { await deleteStorageFilesAction(o.bucket, [o.path]); } catch {}
+        }
+        throw dbErr;
+      }
+    } catch (err: any) {
+      alert("Upload failed: " + getServerActionErrorMessage(err));
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleDeleteDesignFile = async (fileId: string) => {
+    if (!canEdit || !confirm("Are you sure you want to delete this design source file?") || !activeItem) return;
+    try {
+      const currentFiles = activeItem.designFiles || [];
+      const { remaining, removed } = removeDesignFileById(currentFiles, fileId);
+      const newItems = itemsList.map(item => {
+        if (item.id === activeItem.id) {
+          return { ...item, designFiles: remaining };
+        }
+        return item;
+      });
+      const details: Partial<DesignRecord> = { items: newItems };
+      if (updateDesignDetails) {
+        await updateDesignDetails(order.id, details);
+      } else {
+        await updateDesignDetailsAction(order.id, details, dd.updated_at, undefined, adminOverrideUnlocked);
+      }
+
+      const storagePlan = planDesignFileDelete(removed);
+      if (storagePlan.storage) {
+        try {
+          await deleteStorageFilesAction(storagePlan.storage.bucket, [storagePlan.storage.path]);
+        } catch (cleanupErr) {
+          console.error("Storage cleanup failed (DB record already removed):", cleanupErr);
+        }
+      }
+    } catch (err: any) {
+      alert("Delete failed: " + getServerActionErrorMessage(err));
+    }
+  };
+
+  const handleMoveToProductionFiles = async () => {
+    if (!canEdit || !activeItem) return;
+    if (!(activeItem.designFiles && activeItem.designFiles.length > 0)) {
+      alert("Please upload at least one design source file before moving to production files.");
+      return;
+    }
+    try {
+      const newItems = itemsList.map(item => {
+        if (item.id === activeItem.id) {
+          return { ...item, designFilesReady: true };
+        }
+        return item;
+      });
+      const details: Partial<DesignRecord> = { items: newItems };
+      if (updateDesignDetails) {
+        await updateDesignDetails(order.id, details);
+      } else {
+        await updateDesignDetailsAction(order.id, details, dd.updated_at, undefined, adminOverrideUnlocked);
+      }
+    } catch (err: any) {
+      alert("Failed to move to production files: " + getServerActionErrorMessage(err));
     }
   };
 
@@ -684,8 +799,82 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
               </div>
             )}
 
-            {/* Final Production Files Upload (Per Item) */}
-            {activeItem && (activeItem.versions[activeItem.versions.length - 1]?.status === "Approved") && (
+            {/* Design Source Files Upload (Per Item) — gated behind proof approval */}
+            {activeItem && isProofApproved && (
+              <div className="mt-8 border-t border-slate-200 pt-8 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
+                  <div className="min-w-0">
+                    <h3 className="text-base md:text-lg font-bold text-slate-800">Design Source Files for {activeItem.name}</h3>
+                    <p className="text-xs text-slate-500">Upload designer source files (.cdr, .ai, .eps, .psd, .dxf, .plt, .pdf, .svg, .zip, .png, .jpg). The production designer will download these to create production files.</p>
+                  </div>
+                  {isEmployee && !isReadOnly && (
+                    <label className="cursor-pointer bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-sm w-full sm:w-auto shrink-0">
+                      {uploading ? <RefreshCw size={14} className="animate-spin" /> : <Upload size={14} />}
+                      {uploading ? "Uploading..." : "Upload File"}
+                      <input data-testid="design-source-file-input" type="file" multiple onChange={handleDesignFileUpload} accept=".cdr,.ai,.eps,.psd,.dxf,.plt,.pdf,.svg,.zip,.png,.jpg,.jpeg,.webp,.gif" className="hidden" disabled={uploading} />
+                    </label>
+                  )}
+                </div>
+
+                {(activeItem.designFiles && activeItem.designFiles.length > 0) ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mt-4">
+                    {activeItem.designFiles.map((file: any) => (
+                      <div key={file.id} className="border border-slate-200 rounded-xl p-4 flex flex-col items-center justify-center bg-white relative group shadow-sm">
+                        <FileText className="text-violet-500 mb-2" size={32} />
+                        <span className="text-xs font-bold text-slate-700 truncate w-full text-center" title={file.name}>
+                          {file.name}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => openStoredRef(file.url)}
+                          className="mt-3 px-3 py-1.5 bg-slate-100 text-slate-600 rounded text-[10px] font-bold hover:bg-slate-200 transition-colors"
+                        >
+                          Download
+                        </button>
+                        {isEmployee && !isReadOnly && (
+                          <button
+                            onClick={() => handleDeleteDesignFile(file.id)}
+                            className="absolute -top-2 -right-2 bg-white text-red-500 border border-slate-200 rounded-full p-2 md:p-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 shadow-sm hover:bg-red-50 hover:border-red-200 transition-all"
+                            title="Delete File"
+                          >
+                            <X size={14} />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="py-8 text-center text-xs text-slate-400 font-semibold flex flex-col items-center justify-center gap-2 border-2 border-dashed border-slate-200 rounded-xl bg-slate-50">
+                    <FileText size={24} className="text-slate-300" />
+                    <span>No design source files uploaded for this item yet.</span>
+                  </div>
+                )}
+
+                {/* Move to Production Files handoff button */}
+                {isEmployee && !isReadOnly && !isHandedOffToProduction && (
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-end pt-2">
+                    <button
+                      onClick={handleMoveToProductionFiles}
+                      disabled={uploading || !(activeItem.designFiles && activeItem.designFiles.length > 0)}
+                      className="bg-violet-600 hover:bg-violet-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white px-5 py-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-sm w-full sm:w-auto"
+                      title={activeItem.designFiles && activeItem.designFiles.length > 0 ? "Hand off to the production designer" : "Upload at least one design file first"}
+                    >
+                      <ArrowRightCircle size={14} />
+                      Move to Production Files
+                    </button>
+                  </div>
+                )}
+                {isHandedOffToProduction && (
+                  <div className="flex items-center gap-2 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+                    <CheckCircle size={14} />
+                    Design files handed off to production designer.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Final Production Files Upload (Per Item) — gated behind handoff (or legacy productionFiles) */}
+            {activeItem && isProofApproved && isHandedOffToProduction && (
               <div className="mt-8 border-t border-slate-200 pt-8 space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
                   <div className="min-w-0">
@@ -696,7 +885,7 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
                     <label className="cursor-pointer bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-sm w-full sm:w-auto shrink-0">
                       {uploading ? <RefreshCw size={14} className="animate-spin" /> : <Upload size={14} />}
                       {uploading ? "Uploading..." : "Upload File"}
-                      <input type="file" multiple onChange={handleProductionFileUpload} accept=".cdr,.ai,.eps,.psd,.dxf,.plt,.pdf,.svg,.zip,.png,.jpg,.jpeg,.webp,.gif" className="hidden" disabled={uploading} />
+                      <input data-testid="production-file-input" type="file" multiple onChange={handleProductionFileUpload} accept=".cdr,.ai,.eps,.psd,.dxf,.plt,.pdf,.svg,.zip,.png,.jpg,.jpeg,.webp,.gif" className="hidden" disabled={uploading} />
                     </label>
                   )}
                 </div>

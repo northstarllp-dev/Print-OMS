@@ -50,6 +50,14 @@ const LIFECYCLES: Record<StorageUploadPurpose, StageLifecycle> = {
     deleteOrder: "db_then_storage",
     cleansStorageOnDelete: true,
   },
+  design_source_file: {
+    purpose: "design_source_file",
+    bucket: "design-files",
+    persistMode: "immediate_after_upload",
+    dbTarget: { table: "designs", field: "items[].designFiles[].url" },
+    deleteOrder: "db_then_storage",
+    cleansStorageOnDelete: true,
+  },
   production_asset: {
     purpose: "production_asset",
     bucket: "production-files",
@@ -204,6 +212,39 @@ export function removeProductionFileById<T extends { id: string; url?: string }>
  * Full delete plan for a production file: strip DB link + remove storage object.
  */
 export function planProductionFileDelete(file: { url: string } | undefined): {
+  updateDb: true;
+  storage: { bucket: string; path: string } | null;
+} {
+  if (!file?.url) return { updateDb: true, storage: null };
+  const parsed = parseStoredRef(file.url);
+  return {
+    updateDb: true,
+    storage: parsed ? { bucket: parsed.bucket, path: parsed.path } : null,
+  };
+}
+
+/** Append design source files to an item's designFiles array. */
+export function appendDesignFiles<T extends ProductionFileLike>(
+  existing: T[],
+  uploaded: T[]
+): T[] {
+  return [...existing, ...uploaded];
+}
+
+/** Remove one design source file by id. */
+export function removeDesignFileById<T extends { id: string; url?: string }>(
+  files: T[],
+  fileId: string
+): { remaining: T[]; removed: T | undefined } {
+  const removed = files.find((f) => f.id === fileId);
+  return {
+    remaining: files.filter((f) => f.id !== fileId),
+    removed,
+  };
+}
+
+/** Full delete plan for a design source file: strip DB link + remove storage object. */
+export function planDesignFileDelete(file: { url: string } | undefined): {
   updateDb: true;
   storage: { bucket: string; path: string } | null;
 } {

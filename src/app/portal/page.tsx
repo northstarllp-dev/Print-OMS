@@ -350,6 +350,7 @@ export default async function PortalPage({
       stageAdminNotes: o.stage_admin_notes || null,
       orderCode: o.order_id || o.id,
       orderId: o.order_id || o.id,
+      companyId: o.company_id,
 
       siteVisitItems,
     };

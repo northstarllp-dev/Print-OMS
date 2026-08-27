@@ -236,6 +236,10 @@ describe("customer visibility (production files are staff-only)", () => {
             { id: "pf-1", name: "final.ai", url: prodRef("final.ai"), createdAt: "2026-01-02" },
             { id: "pf-2", name: "cut.dxf", url: prodRef("cut.dxf"), createdAt: "2026-01-03" },
           ],
+          designFiles: [
+            { id: "df-1", name: "source.cdr", url: "design-files/x/source.cdr", createdAt: "2026-01-02" },
+          ],
+          designFilesReady: true,
         },
       ],
       created_at: "2026-01-01",
@@ -244,6 +248,8 @@ describe("customer visibility (production files are staff-only)", () => {
 
     const visible = toCustomerVisibleDesign(design)!;
     expect(visible.items[0].productionFiles).toBeUndefined();
+    expect(visible.items[0].designFiles).toBeUndefined();
+    expect(visible.items[0].designFilesReady).toBeUndefined();
     // Versions are still visible (Approved is customer-visible).
     expect(visible.items[0].versions).toHaveLength(1);
   });

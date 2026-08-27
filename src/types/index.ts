@@ -167,6 +167,9 @@ export interface DesignItem {
   versions: DesignVersion[];
   currentVersion: number;
   productionFiles?: { id: string; name: string; url: string; createdAt: string }[];
+  designFiles?: { id: string; name: string; url: string; createdAt: string }[];
+  /** Set when the designer clicks "Move to Production Files" — reveals the production files upload area. */
+  designFilesReady?: boolean;
 }
 
 export interface DesignRecord {

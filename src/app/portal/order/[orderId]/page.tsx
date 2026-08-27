@@ -288,6 +288,7 @@ export default async function OrderDetailPage({
     stageAdminNotes: orderData.stage_admin_notes || null,
     orderCode: orderData.order_id || orderData.id,
     orderId: orderData.order_id || orderData.id,
+    companyId: orderData.company_id,
   };
 
   const { data: settingsRow } = await admin

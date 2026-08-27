@@ -7,7 +7,7 @@ export class QuotationPage {
   constructor(private readonly page: Page) {}
 
   async openTab() {
-    await this.dismissCustomerMessageIfPresent();
+    await this.dismissCustomerMessageIfPresent(1_000);
     await this.page.getByRole("button", { name: "Quote", exact: true }).click();
     await expect(
       this.page.getByRole("heading", { name: /Product Quote/i })
@@ -45,23 +45,32 @@ export class QuotationPage {
     ).toBeHidden({ timeout: 15_000 });
 
     await expect(
-      this.page.getByRole("heading", { name: /Customer Message/i })
+      this.page.getByText(/Quotation sent to customer successfully/i)
     ).toBeVisible({ timeout: 20_000 });
-    await this.dismissCustomerMessageIfPresent();
+
+    await this.dismissCustomerMessageIfPresent(8_000);
   }
 
   /** WhatsApp/customer-message overlay after sending a quote (staff and admin). */
-  async dismissCustomerMessageIfPresent() {
-    const heading = this.page.getByRole("heading", { name: /Customer Message/i });
-    if (!(await heading.isVisible({ timeout: 3_000 }).catch(() => false))) {
-      return;
-    }
+  async dismissCustomerMessageIfPresent(appearTimeoutMs = 3_000) {
+    // Case-sensitive "Customer Message" so we don't match the picker h2
+    // "Send customer message". OverlayPortal is not always exposed via getByRole.
+    const title = this.page.locator("h2").filter({ hasText: /Customer Message/ });
+    const visible = await title
+      .waitFor({ state: "visible", timeout: appearTimeoutMs })
+      .then(() => true)
+      .catch(() => false);
+    if (!visible) return;
+
     await this.page
       .getByText(/Generating secure customer link/i)
-      .waitFor({ state: "hidden", timeout: 20_000 })
+      .waitFor({ state: "hidden", timeout: 30_000 })
       .catch(() => {});
-    await this.page.getByRole("button", { name: /^Close$/i }).click();
-    await expect(heading).toBeHidden({ timeout: 10_000 });
+
+    await title.locator("xpath=../..").locator("button").filter({ hasText: "Close" }).click({
+      force: true,
+    });
+    await expect(title).toBeHidden({ timeout: 10_000 });
   }
 
   /** Staff: request admin approval to leave Quotation Approved. */
@@ -79,10 +88,7 @@ export class QuotationPage {
 
   /** Admin: mark the quote approved without waiting for the customer, then advance. */
   async adminApproveWithoutCustomer() {
-    await this.dismissCustomerMessageIfPresent();
-    await expect(
-      this.page.getByRole("heading", { name: /Customer Message/i })
-    ).toBeHidden({ timeout: 5_000 });
+    await this.dismissCustomerMessageIfPresent(8_000);
 
     const override = this.page.getByRole("button", {
       name: /Approve without Customer/i,

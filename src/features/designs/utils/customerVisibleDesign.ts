@@ -24,6 +24,8 @@ export function toCustomerVisibleDesign(
         isDesignVersionVisibleToCustomer(version.status)
       ),
       productionFiles: undefined,
+      designFiles: undefined,
+      designFilesReady: undefined,
     })
   );
 
@@ -61,6 +63,8 @@ export function mergePortalDesignItemsPreservingStaffDrafts(
       ...incoming,
       versions: mergedVersions,
       productionFiles: existing.productionFiles,
+      designFiles: existing.designFiles,
+      designFilesReady: existing.designFilesReady,
     };
   });
 
