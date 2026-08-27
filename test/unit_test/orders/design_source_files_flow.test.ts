@@ -21,7 +21,7 @@ import type { DesignRecord } from "@/types";
 
 /**
  * Design source files pipeline:
- * Designer uploads source files (.cdr, .ai, .psd, etc.) anytime → design-files bucket (TUS, 50MB)
+ * Designer uploads source files (.cdr, .ai, .psd, etc.) anytime → design-files bucket (TUS, 250MB)
  * → designs.items[].designFiles[].url → production team downloads via signed read
  */
 
@@ -44,9 +44,9 @@ describe("design source file lifecycle", () => {
     });
   });
 
-  it("uses the production pipeline (TUS resumable) with 50MB limit", () => {
+  it("uses the production pipeline (TUS resumable) with 250MB limit", () => {
     expect(configForPurpose("design_source_file").pipeline).toBe("production");
-    expect(configForPurpose("design_source_file").maxBytes).toBe(50 * 1024 * 1024);
+    expect(configForPurpose("design_source_file").maxBytes).toBe(250 * 1024 * 1024);
   });
 
   it("uses a private bucket (signed read for download)", () => {

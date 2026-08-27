@@ -28,6 +28,7 @@ export async function POST(req: NextRequest) {
 
   let body: {
     orderId?: string;
+    itemId?: string;
     purpose?: string;
     fileName?: string;
     size?: number;
@@ -40,6 +41,7 @@ export async function POST(req: NextRequest) {
   }
 
   const orderId = String(body.orderId || "").trim();
+  const itemId = String(body.itemId || "").trim() || undefined;
   const purpose = (body.purpose || "site_visit_photo") as StorageUploadPurpose;
   const fileName = String(body.fileName || "upload").trim() || "upload";
   const size = Number(body.size || 0);
@@ -65,6 +67,7 @@ export async function POST(req: NextRequest) {
       fileName,
       size,
       mime: body.mime,
+      itemId,
     });
     return NextResponse.json(issued);
   } catch (err: unknown) {

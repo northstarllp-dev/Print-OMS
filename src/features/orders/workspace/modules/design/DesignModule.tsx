@@ -19,6 +19,15 @@ import { deleteStorageFilesAction } from "@/features/orders/actions/storageActio
 import { getServerActionErrorMessage } from "@/lib/serverActionError";
 import { OverlayPortal } from "@/components/ui/OverlayPortal";
 import type { StagePermission } from "@/features/orders/workspace/shared/types";
+import {
+  STAGE_FILE_SECTION_HINT,
+  STAGE_FILE_ZIP_PREFERRED_NOTE,
+  isItemAtStageCapacity,
+  stageFileErrors,
+  sumStageFileBytes,
+} from "@/utils/supabase/storageConfig";
+import { StageFileCard, StageFileUsageBar } from "@/features/orders/workspace/modules/production/StageFileCard";
+import { validateStageFilesBeforeUpload } from "@/features/orders/workspace/modules/design/stageFileUploadValidation";
 
 interface DesignModuleProps {
   order: Order;
@@ -65,7 +74,7 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [rotationAngle, setRotationAngle] = useState(0);
 
-  const itemsList = React.useMemo(() => {
+  const baseItemsList = React.useMemo(() => {
     let items = dd.items ? [...dd.items] : [];
     if (siteVisitItems.length > 0) {
       siteVisitItems.forEach(svi => {
@@ -78,6 +87,15 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
     }
     return items;
   }, [dd.items, siteVisitItems]);
+
+  const [localItems, setLocalItems] = useState(baseItemsList);
+  const [stageUploadError, setStageUploadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLocalItems(baseItemsList);
+  }, [baseItemsList]);
+
+  const itemsList = localItems;
 
   const [selectedItemId, setSelectedItemId] = useState<string>(itemsList[0]?.id || "general");
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
@@ -288,21 +306,63 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
     };
   };
 
+  const handleStageFileDownloadCount = (
+    fileId: string,
+    kind: "design" | "production",
+    downloadCount: number
+  ) => {
+    setLocalItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== selectedItemId) return item;
+        const key = kind === "design" ? "designFiles" : "productionFiles";
+        const list = item[key] || [];
+        return {
+          ...item,
+          [key]: list.map((f) => (f.id === fileId ? { ...f, downloadCount } : f)),
+        };
+      })
+    );
+  };
+
+  const persistDesignItems = async (newItems: typeof itemsList) => {
+    const details: Partial<DesignRecord> = { items: newItems };
+    if (updateDesignDetails) {
+      await updateDesignDetails(order.id, details);
+    } else {
+      await updateDesignDetailsAction(order.id, details, dd.updated_at, undefined, adminOverrideUnlocked);
+    }
+    setLocalItems(newItems);
+  };
+
   const handleProductionFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!canEdit) return;
     const files = Array.from(e.target.files || []);
     if (files.length === 0 || !activeItem) return;
+
+    const preCheck = validateStageFilesBeforeUpload(files, activeItem, "production_asset");
+    if (preCheck) {
+      setStageUploadError(preCheck);
+      alert(preCheck);
+      e.target.value = "";
+      return;
+    }
+
+    setStageUploadError(null);
     setUploading(true);
     try {
+      const sizeByName = new Map(files.map((f) => [f.name, f.size]));
       const { ok, failed } = await uploadFiles(files, {
         orderId: order.id,
+        itemId: activeItem.id,
         purpose: "production_asset",
         channel: "staff",
         compress: false,
         concurrency: 3,
       });
       if (failed.length) {
-        alert(`${failed.length} file(s) failed to upload: ${failed[0].error}`);
+        const msg = failed[0].error;
+        setStageUploadError(msg);
+        alert(msg);
       }
       if (!ok.length) return;
 
@@ -310,33 +370,31 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
         id: crypto.randomUUID(),
         name: o.fileName,
         url: `${o.bucket}/${o.path}`,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        sizeBytes: sizeByName.get(o.fileName) ?? 0,
+        downloadCount: 0,
       }));
-      const newItems = itemsList.map(item => {
+      const newItems = itemsList.map((item) => {
         if (item.id === activeItem.id) {
           return { ...item, productionFiles: [...(item.productionFiles || []), ...newFiles] };
         }
         return item;
       });
-      const details: Partial<DesignRecord> = { items: newItems };
       try {
-        if (updateDesignDetails) {
-          await updateDesignDetails(order.id, details);
-        } else {
-          await updateDesignDetailsAction(order.id, details, dd.updated_at, undefined, adminOverrideUnlocked);
-        }
+        await persistDesignItems(newItems);
       } catch (dbErr) {
-        // Rollback: delete uploaded storage objects.
         for (const o of ok) {
           try { await deleteStorageFilesAction(o.bucket, [o.path]); } catch {}
         }
         throw dbErr;
       }
     } catch (err: any) {
-      alert("Upload failed: " + getServerActionErrorMessage(err));
+      const msg = getServerActionErrorMessage(err);
+      setStageUploadError(msg);
+      alert(msg);
     } finally {
       setUploading(false);
-      e.target.value = '';
+      e.target.value = "";
     }
   };
 
@@ -376,17 +434,31 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
     if (!canEdit) return;
     const files = Array.from(e.target.files || []);
     if (files.length === 0 || !activeItem) return;
+
+    const preCheck = validateStageFilesBeforeUpload(files, activeItem, "design_source_file");
+    if (preCheck) {
+      setStageUploadError(preCheck);
+      alert(preCheck);
+      e.target.value = "";
+      return;
+    }
+
+    setStageUploadError(null);
     setUploading(true);
     try {
+      const sizeByName = new Map(files.map((f) => [f.name, f.size]));
       const { ok, failed } = await uploadFiles(files, {
         orderId: order.id,
+        itemId: activeItem.id,
         purpose: "design_source_file",
         channel: "staff",
         compress: false,
         concurrency: 3,
       });
       if (failed.length) {
-        alert(`${failed.length} file(s) failed to upload: ${failed[0].error}`);
+        const msg = failed[0].error;
+        setStageUploadError(msg);
+        alert(msg);
       }
       if (!ok.length) return;
 
@@ -394,21 +466,18 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
         id: crypto.randomUUID(),
         name: o.fileName,
         url: `${o.bucket}/${o.path}`,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        sizeBytes: sizeByName.get(o.fileName) ?? 0,
+        downloadCount: 0,
       }));
-      const newItems = itemsList.map(item => {
+      const newItems = itemsList.map((item) => {
         if (item.id === activeItem.id) {
           return { ...item, designFiles: [...(item.designFiles || []), ...newFiles] };
         }
         return item;
       });
-      const details: Partial<DesignRecord> = { items: newItems };
       try {
-        if (updateDesignDetails) {
-          await updateDesignDetails(order.id, details);
-        } else {
-          await updateDesignDetailsAction(order.id, details, dd.updated_at, undefined, adminOverrideUnlocked);
-        }
+        await persistDesignItems(newItems);
       } catch (dbErr) {
         for (const o of ok) {
           try { await deleteStorageFilesAction(o.bucket, [o.path]); } catch {}
@@ -416,10 +485,12 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
         throw dbErr;
       }
     } catch (err: any) {
-      alert("Upload failed: " + getServerActionErrorMessage(err));
+      const msg = getServerActionErrorMessage(err);
+      setStageUploadError(msg);
+      alert(msg);
     } finally {
       setUploading(false);
-      e.target.value = '';
+      e.target.value = "";
     }
   };
 
@@ -805,32 +876,47 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
                   <div className="min-w-0">
                     <h3 className="text-base md:text-lg font-bold text-slate-800">Design Source Files for {activeItem.name}</h3>
-                    <p className="text-xs text-slate-500">Upload designer source files (.cdr, .ai, .eps, .psd, .dxf, .plt, .pdf, .svg, .zip, .png, .jpg). The production designer will download these to create production files.</p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Upload designer source files (.cdr, .ai, .eps, .psd, .dxf, .plt, .pdf, .svg, .zip, .png, .jpg). The production designer will download these to create production files.
+                    </p>
+                    <p className="text-[11px] text-amber-800 mt-2 font-semibold bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+                      {STAGE_FILE_ZIP_PREFERRED_NOTE}
+                    </p>
+                    <p className="text-[11px] text-slate-500 mt-2 font-medium">{STAGE_FILE_SECTION_HINT}</p>
                   </div>
                   {isEmployee && !isReadOnly && (
-                    <label className="cursor-pointer bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-sm w-full sm:w-auto shrink-0">
+                    <label
+                      title={isItemAtStageCapacity(activeItem) ? stageFileErrors.itemAtCapacity(activeItem.name) : undefined}
+                      className={`cursor-pointer bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-sm w-full sm:w-auto shrink-0 ${isItemAtStageCapacity(activeItem) || uploading ? "opacity-50 pointer-events-none" : ""}`}
+                    >
                       {uploading ? <RefreshCw size={14} className="animate-spin" /> : <Upload size={14} />}
                       {uploading ? "Uploading..." : "Upload File"}
-                      <input data-testid="design-source-file-input" type="file" multiple onChange={handleDesignFileUpload} accept=".cdr,.ai,.eps,.psd,.dxf,.plt,.pdf,.svg,.zip,.png,.jpg,.jpeg,.webp,.gif" className="hidden" disabled={uploading} />
+                      <input data-testid="design-source-file-input" type="file" multiple onChange={handleDesignFileUpload} accept=".cdr,.ai,.eps,.psd,.dxf,.plt,.pdf,.svg,.zip,.png,.jpg,.jpeg,.webp,.gif" className="hidden" disabled={uploading || isItemAtStageCapacity(activeItem)} />
                     </label>
                   )}
                 </div>
 
+                <StageFileUsageBar usedBytes={sumStageFileBytes(activeItem)} />
+
+                {stageUploadError && (
+                  <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-800">
+                    {stageUploadError}
+                  </div>
+                )}
+
                 {(activeItem.designFiles && activeItem.designFiles.length > 0) ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mt-4">
-                    {activeItem.designFiles.map((file: any) => (
-                      <div key={file.id} className="border border-slate-200 rounded-xl p-4 flex flex-col items-center justify-center bg-white relative group shadow-sm">
-                        <FileText className="text-violet-500 mb-2" size={32} />
-                        <span className="text-xs font-bold text-slate-700 truncate w-full text-center" title={file.name}>
-                          {file.name}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => openStoredRef(file.url)}
-                          className="mt-3 px-3 py-1.5 bg-slate-100 text-slate-600 rounded text-[10px] font-bold hover:bg-slate-200 transition-colors"
-                        >
-                          Download
-                        </button>
+                    {activeItem.designFiles.map((file) => (
+                      <div key={file.id} className="relative group">
+                        <StageFileCard
+                          file={file}
+                          accent="violet"
+                          orderId={order.id}
+                          kind="design"
+                          onDownloadCountChange={(fileId, count) =>
+                            handleStageFileDownloadCount(fileId, "design", count)
+                          }
+                        />
                         {isEmployee && !isReadOnly && (
                           <button
                             onClick={() => handleDeleteDesignFile(file.id)}
@@ -879,34 +965,49 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
                   <div className="min-w-0">
                     <h3 className="text-base md:text-lg font-bold text-slate-800">Final Production Files for {activeItem.name}</h3>
-                    <p className="text-xs text-slate-500">Upload final production files (.cdr, .ai, .eps, .psd, .dxf, .plt, .pdf, .svg, .zip, .png, .jpg) for fabrication.</p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Upload final production files (.cdr, .ai, .eps, .psd, .dxf, .plt, .pdf, .svg, .zip, .png, .jpg) for fabrication.
+                    </p>
+                    <p className="text-[11px] text-amber-800 mt-2 font-semibold bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+                      {STAGE_FILE_ZIP_PREFERRED_NOTE}
+                    </p>
+                    <p className="text-[11px] text-slate-500 mt-2 font-medium">{STAGE_FILE_SECTION_HINT}</p>
                   </div>
                   {isEmployee && !isReadOnly && (
-                    <label className="cursor-pointer bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-sm w-full sm:w-auto shrink-0">
+                    <label
+                      title={isItemAtStageCapacity(activeItem) ? stageFileErrors.itemAtCapacity(activeItem.name) : undefined}
+                      className={`cursor-pointer bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-sm w-full sm:w-auto shrink-0 ${isItemAtStageCapacity(activeItem) || uploading ? "opacity-50 pointer-events-none" : ""}`}
+                    >
                       {uploading ? <RefreshCw size={14} className="animate-spin" /> : <Upload size={14} />}
                       {uploading ? "Uploading..." : "Upload File"}
-                      <input data-testid="production-file-input" type="file" multiple onChange={handleProductionFileUpload} accept=".cdr,.ai,.eps,.psd,.dxf,.plt,.pdf,.svg,.zip,.png,.jpg,.jpeg,.webp,.gif" className="hidden" disabled={uploading} />
+                      <input data-testid="production-file-input" type="file" multiple onChange={handleProductionFileUpload} accept=".cdr,.ai,.eps,.psd,.dxf,.plt,.pdf,.svg,.zip,.png,.jpg,.jpeg,.webp,.gif" className="hidden" disabled={uploading || isItemAtStageCapacity(activeItem)} />
                     </label>
                   )}
                 </div>
 
+                <StageFileUsageBar usedBytes={sumStageFileBytes(activeItem)} />
+
+                {stageUploadError && (
+                  <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-800">
+                    {stageUploadError}
+                  </div>
+                )}
+
                 {(activeItem.productionFiles && activeItem.productionFiles.length > 0) ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mt-4">
-                    {activeItem.productionFiles.map((file: any) => (
-                      <div key={file.id} className="border border-slate-200 rounded-xl p-4 flex flex-col items-center justify-center bg-white relative group shadow-sm">
-                        <FileText className="text-blue-500 mb-2" size={32} />
-                        <span className="text-xs font-bold text-slate-700 truncate w-full text-center" title={file.name}>
-                          {file.name}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => openStoredRef(file.url)}
-                          className="mt-3 px-3 py-1.5 bg-slate-100 text-slate-600 rounded text-[10px] font-bold hover:bg-slate-200 transition-colors"
-                        >
-                          Download
-                        </button>
+                    {activeItem.productionFiles.map((file) => (
+                      <div key={file.id} className="relative group">
+                        <StageFileCard
+                          file={file}
+                          accent="blue"
+                          orderId={order.id}
+                          kind="production"
+                          onDownloadCountChange={(fileId, count) =>
+                            handleStageFileDownloadCount(fileId, "production", count)
+                          }
+                        />
                         {isEmployee && !isReadOnly && (
-                          <button 
+                          <button
                             onClick={() => handleDeleteProductionFile(file.id)}
                             className="absolute -top-2 -right-2 bg-white text-red-500 border border-slate-200 rounded-full p-2 md:p-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 shadow-sm hover:bg-red-50 hover:border-red-200 transition-all"
                             title="Delete File"

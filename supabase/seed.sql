@@ -157,7 +157,7 @@ VALUES
   ('site-visit-photos','site-visit-photos',false,52428800,ARRAY['image/jpeg','image/png','image/webp','image/heic','application/pdf']::text[]),
   ('order-resources','order-resources',false,52428800,ARRAY['image/jpeg','image/png','image/webp','image/gif','image/heic','image/svg+xml','application/pdf']::text[]),
   ('design-proofs','design-proofs',false,52428800,ARRAY['image/jpeg','image/png','image/webp','image/gif','image/heic','application/pdf']::text[]),
-  ('production-files','production-files',false,104857600,ARRAY['image/jpeg','image/png','image/webp','image/gif','image/heic','application/pdf','application/zip','application/x-zip-compressed','application/postscript','image/vnd.adobe.photoshop','application/octet-stream']::text[]),
+  ('production-files','production-files',false,262144000,ARRAY['image/jpeg','image/png','image/webp','image/gif','image/heic','application/pdf','application/zip','application/x-zip-compressed','application/postscript','image/vnd.adobe.photoshop','application/octet-stream']::text[]),
   ('installation-photos','installation-photos',false,52428800,ARRAY['image/jpeg','image/png','image/webp','image/heic']::text[])
 ON CONFLICT (id) DO NOTHING;
 

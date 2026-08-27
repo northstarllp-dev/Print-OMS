@@ -6,6 +6,7 @@ import {
   isValidOrderScopedPath,
   validateUploadForPurpose,
 } from "@/utils/supabase/storageConfig";
+import { assertStageItemUploadQuota } from "@/utils/supabase/stageFileQuota";
 import type { StorageUploadPurpose } from "@/utils/supabase/serverStorageUpload";
 
 export interface SignedUploadIssue {
@@ -41,11 +42,20 @@ export async function issueSignedUpload(
     fileName: string;
     size: number;
     mime?: string;
+    itemId?: string;
   }
 ): Promise<SignedUploadIssue> {
   const cfg = configForPurpose(purpose);
   const validation = validateUploadForPurpose(purpose, input);
   if (!validation.ok) throw new Error(validation.message);
+
+  await assertStageItemUploadQuota(
+    purpose,
+    orderId,
+    input.itemId,
+    input.fileName,
+    input.size
+  );
 
   const ext = extFromNameOrMime(input.fileName, input.mime);
   const path = buildOrderObjectPath(orderId, ext);

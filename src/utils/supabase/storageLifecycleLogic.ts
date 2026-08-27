@@ -188,6 +188,8 @@ export interface ProductionFileLike {
   name: string;
   url: string;
   createdAt: string;
+  sizeBytes?: number;
+  downloadCount?: number;
 }
 
 export function appendProductionFiles<T extends ProductionFileLike>(

@@ -166,8 +166,22 @@ export interface DesignItem {
   name: string;
   versions: DesignVersion[];
   currentVersion: number;
-  productionFiles?: { id: string; name: string; url: string; createdAt: string }[];
-  designFiles?: { id: string; name: string; url: string; createdAt: string }[];
+  productionFiles?: {
+    id: string;
+    name: string;
+    url: string;
+    createdAt: string;
+    sizeBytes?: number;
+    downloadCount?: number;
+  }[];
+  designFiles?: {
+    id: string;
+    name: string;
+    url: string;
+    createdAt: string;
+    sizeBytes?: number;
+    downloadCount?: number;
+  }[];
   /** Set when the designer clicks "Move to Production Files" — reveals the production files upload area. */
   designFilesReady?: boolean;
 }

@@ -46,9 +46,9 @@ describe("production asset lifecycle", () => {
     });
   });
 
-  it("uses the production pipeline with 100MB limit", () => {
+  it("uses the production pipeline with 250MB limit", () => {
     expect(configForPurpose("production_asset").pipeline).toBe("production");
-    expect(configForPurpose("production_asset").maxBytes).toBe(100 * 1024 * 1024);
+    expect(configForPurpose("production_asset").maxBytes).toBe(250 * 1024 * 1024);
   });
 
   it("uses a private bucket (signed read for download)", () => {

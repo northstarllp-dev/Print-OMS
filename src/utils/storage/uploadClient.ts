@@ -32,6 +32,8 @@ export interface PerFileProgress {
 export interface UploadFilesOptions {
   orderId: string;
   purpose: StorageUploadPurpose;
+  /** Required for design_source_file and production_asset (500 MB per-item cap). */
+  itemId?: string;
   /** "staff" uses /api/storage/sign-upload; "portal" uses /api/portal/sign-upload. */
   channel: "staff" | "portal";
   portalToken?: string;
@@ -216,6 +218,7 @@ async function uploadOne(
 
   const signed = await requestSignedUpload(opts.channel, {
     orderId: opts.orderId,
+    itemId: opts.itemId,
     purpose: opts.purpose,
     portalToken: opts.portalToken,
     fileName: toUpload.name,

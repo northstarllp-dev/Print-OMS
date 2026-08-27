@@ -20,7 +20,13 @@ export interface PurposeStorageConfig {
 }
 
 const IMAGE_50MB = 50 * 1024 * 1024;
-const PROD_100MB = 100 * 1024 * 1024;
+
+/** Design source + production files per-file ceiling. */
+export const LARGE_FILE_MAX_BYTES = 250 * 1024 * 1024;
+export const STAGE_FILE_MAX_MB = 250;
+export const STAGE_ITEM_TOTAL_MAX_BYTES = 500 * 1024 * 1024;
+export const STAGE_ITEM_TOTAL_MAX_MB = 500;
+export const STAGE_FILE_MAX_DOWNLOADS = 2;
 
 const IMAGE_MIMES = [
   "image/jpeg",
@@ -32,6 +38,80 @@ const IMAGE_MIMES = [
 ] as const;
 
 const IMAGE_EXTS = ["jpg", "jpeg", "png", "webp", "gif", "heic", "heif"] as const;
+
+export const STAGE_FILE_SECTION_HINT =
+  "Max 250 MB per file · 500 MB total per item (design + production combined) · Each file downloadable 2 times to limit bandwidth";
+
+/** Preferred upload guidance shown near design/production file uploads. */
+export const STAGE_FILE_ZIP_PREFERRED_NOTE =
+  "Preferred: compress or zip your files before uploading. A single .zip is faster and uses less storage.";
+
+export interface StageFileEntry {
+  id: string;
+  name: string;
+  url: string;
+  createdAt: string;
+  sizeBytes?: number;
+  downloadCount?: number;
+}
+
+export interface StageFileItemLike {
+  name?: string;
+  designFiles?: StageFileEntry[];
+  productionFiles?: StageFileEntry[];
+}
+
+export function isStageFilePurpose(purpose: StorageUploadPurpose): boolean {
+  return purpose === "design_source_file" || purpose === "production_asset";
+}
+
+/** Format bytes as MB with one decimal for user-facing messages. */
+export function formatStageFileMb(bytes: number): number {
+  return Math.round((bytes / (1024 * 1024)) * 10) / 10;
+}
+
+export function sumStageFileBytes(item: StageFileItemLike): number {
+  const files = [...(item.designFiles ?? []), ...(item.productionFiles ?? [])];
+  return files.reduce((sum, f) => sum + (f.sizeBytes ?? 0), 0);
+}
+
+export function wouldExceedItemTotal(item: StageFileItemLike, additionalBytes: number): boolean {
+  return sumStageFileBytes(item) + additionalBytes > STAGE_ITEM_TOTAL_MAX_BYTES;
+}
+
+export function isItemAtStageCapacity(item: StageFileItemLike): boolean {
+  return sumStageFileBytes(item) >= STAGE_ITEM_TOTAL_MAX_BYTES;
+}
+
+export const stageFileErrors = {
+  fileTooLarge(fileName: string, sizeMb: number): string {
+    return `"${fileName}" is ${sizeMb} MB. Each design or production file can be at most ${STAGE_FILE_MAX_MB} MB. Compress the file or split it into smaller parts.`;
+  },
+  itemTotalExceeded(params: {
+    itemName: string;
+    usedMb: number;
+    fileName: string;
+    fileMb: number;
+  }): string {
+    const { itemName, usedMb, fileName, fileMb } = params;
+    return `Cannot upload "${fileName}" (${fileMb} MB). "${itemName}" already uses ${usedMb} MB of the ${STAGE_ITEM_TOTAL_MAX_MB} MB limit for design + production files combined. Remove an existing file or use a smaller file.`;
+  },
+  itemAtCapacity(itemName: string): string {
+    return `"${itemName}" has reached the ${STAGE_ITEM_TOTAL_MAX_MB} MB limit for design + production files. Delete a file before uploading more.`;
+  },
+  downloadLimitReached(fileName: string): string {
+    return `Download limit reached for "${fileName}" (${STAGE_FILE_MAX_DOWNLOADS} of ${STAGE_FILE_MAX_DOWNLOADS} downloads used). Contact your admin if you need another copy.`;
+  },
+  fileTypeNotAllowed(fileName: string): string {
+    return `"${fileName}" is not an allowed file type. Use .cdr, .ai, .eps, .psd, .dxf, .plt, .pdf, .svg, .zip, or common image formats.`;
+  },
+  fileEmpty(fileName: string): string {
+    return `"${fileName}" is empty. Choose a valid file and try again.`;
+  },
+  itemLimitReachedInline(): string {
+    return "500 MB limit reached for this item — delete a file to upload more";
+  },
+};
 
 export const PURPOSE_STORAGE_CONFIG: Record<StorageUploadPurpose, PurposeStorageConfig> = {
   site_visit_photo: {
@@ -47,7 +127,6 @@ export const PURPOSE_STORAGE_CONFIG: Record<StorageUploadPurpose, PurposeStorage
     bucket: "order-resources",
     pipeline: "image",
     maxBytes: IMAGE_50MB,
-    // Logos / inspiration: images + PDF + common brand-asset formats customers send.
     allowedMime: [
       ...IMAGE_MIMES,
       "image/svg+xml",
@@ -69,7 +148,7 @@ export const PURPOSE_STORAGE_CONFIG: Record<StorageUploadPurpose, PurposeStorage
     purpose: "design_source_file",
     bucket: "design-files",
     pipeline: "production",
-    maxBytes: IMAGE_50MB,
+    maxBytes: LARGE_FILE_MAX_BYTES,
     allowedMime: [
       ...IMAGE_MIMES,
       "image/svg+xml",
@@ -88,7 +167,7 @@ export const PURPOSE_STORAGE_CONFIG: Record<StorageUploadPurpose, PurposeStorage
     purpose: "production_asset",
     bucket: "production-files",
     pipeline: "production",
-    maxBytes: PROD_100MB,
+    maxBytes: LARGE_FILE_MAX_BYTES,
     allowedMime: [
       ...IMAGE_MIMES,
       "image/svg+xml",
@@ -156,8 +235,6 @@ export function isValidOrderScopedPath(orderId: string, path: string): boolean {
 /** Derive a lowercase file extension from a name or MIME fallback. */
 export function extFromNameOrMime(fileName: string, mime?: string): string {
   const ext = (fileName.split(".").pop() || "").toLowerCase();
-  // Only trust the name's extension when a real "." separator exists
-  // (e.g. "noext" must not be treated as a .noext extension).
   if (ext && ext !== fileName.toLowerCase() && fileName.includes(".")) return ext;
   if (mime === "application/pdf") return "pdf";
   if (mime?.startsWith("image/")) return mime.split("/")[1]?.replace("jpeg", "jpg") || "jpg";
@@ -180,16 +257,25 @@ export function validateUploadForPurpose(
   input: { fileName: string; size: number; mime?: string }
 ): StorageValidationOk | StorageValidationError {
   const cfg = configForPurpose(purpose);
+  const stage = isStageFilePurpose(purpose);
 
   if (!input.size || input.size <= 0) {
-    return { ok: false, reason: "file_empty", message: "File is empty" };
+    return {
+      ok: false,
+      reason: "file_empty",
+      message: stage
+        ? stageFileErrors.fileEmpty(input.fileName)
+        : "File is empty",
+    };
   }
   if (input.size > cfg.maxBytes) {
-    const mb = Math.round(cfg.maxBytes / (1024 * 1024));
+    const mb = formatStageFileMb(input.size);
     return {
       ok: false,
       reason: "file_size",
-      message: `File exceeds ${mb} MB limit for ${purpose}`,
+      message: stage
+        ? stageFileErrors.fileTooLarge(input.fileName, mb)
+        : `File exceeds ${Math.round(cfg.maxBytes / (1024 * 1024))} MB limit`,
     };
   }
 
@@ -201,7 +287,9 @@ export function validateUploadForPurpose(
     return {
       ok: false,
       reason: "file_type",
-      message: `File type not allowed for ${purpose}`,
+      message: stage
+        ? stageFileErrors.fileTypeNotAllowed(input.fileName)
+        : `File type not allowed for ${purpose}`,
     };
   }
   return { ok: true };

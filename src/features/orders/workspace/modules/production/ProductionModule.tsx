@@ -7,8 +7,6 @@ import {
 } from "lucide-react";
 import type { StageModuleProps } from "../../shared/types";
 import { getAppSettings } from "@/features/settings/actions/settingsActions";
-import { parseStoredRef } from "@/utils/storage/storageRef";
-import { getSignedReadUrl } from "@/utils/storage/signedReadCache";
 import {
   buildProductionChecklistUpdate,
   createCustomProductionChecklistItemId,
@@ -21,7 +19,9 @@ import {
 import { resolveSiteVisitInstallationAddress } from "@/features/orders/actions/siteVisitMapper";
 import { ProductionMaterialsPanel } from "@/features/inventory/components/ProductionMaterialsPanel";
 import { getInstallationDeadlineCountdown } from "./installationDeadlineUi";
-import { fileExtensionLabel, productionStageFileItems } from "./productionFilesUi";
+import { productionStageFileItems } from "./productionFilesUi";
+import { StageFileCard, StageFileUsageBar } from "./StageFileCard";
+import { STAGE_FILE_SECTION_HINT, STAGE_FILE_ZIP_PREFERRED_NOTE, sumStageFileBytes, type StageFileEntry } from "@/utils/supabase/storageConfig";
 
 interface LocationMeasurement {
   id: string;
@@ -88,49 +88,9 @@ function maskEmail(email: string) {
   return `${name[0]}***${name[name.length - 1]}@${domain}`;
 }
 
-type StageFile = { id: string; name?: string; url: string };
+type StageFile = StageFileEntry;
 
-async function openStageFile(url: string) {
-  const parsed = parseStoredRef(url);
-  const href = parsed ? await getSignedReadUrl(parsed.bucket, parsed.path) : url;
-  window.open(href, "_blank", "noopener,noreferrer");
-}
-
-function StageFileCard({
-  file,
-  accent,
-}: {
-  file: StageFile;
-  accent: "violet" | "blue";
-}) {
-  const ext = fileExtensionLabel(file.name);
-  const isViolet = accent === "violet";
-  return (
-    <div className={`border border-slate-200 rounded-xl p-4 flex flex-col items-center justify-center bg-white shadow-sm text-center gap-2 transition-colors ${isViolet ? "hover:border-violet-300" : "hover:border-blue-300"}`}>
-      <div className={`w-12 h-12 rounded-lg flex items-center justify-center font-black text-xs mb-1 ${isViolet ? "bg-violet-50 text-violet-600" : "bg-blue-50 text-blue-600"}`}>
-        {ext}
-      </div>
-      <span className="text-xs font-bold text-slate-700 truncate w-full" title={file.name}>
-        {file.name || "Untitled file"}
-      </span>
-      <button
-        type="button"
-        onClick={async () => {
-          try {
-            await openStageFile(file.url);
-          } catch {
-            window.alert("Could not open file.");
-          }
-        }}
-        className={`mt-1 px-4 py-1.5 text-white rounded-lg text-xs font-bold transition-colors w-full shadow-sm ${isViolet ? "bg-violet-600 hover:bg-violet-700" : "bg-blue-600 hover:bg-blue-700"}`}
-      >
-        Download
-      </button>
-    </div>
-  );
-}
-
-export function ProductionModule({ 
+export function ProductionModule({
   data, 
   permission, 
   callbacks, 
@@ -614,6 +574,11 @@ export function ProductionModule({
               </h2>
             </div>
 
+            <p className="text-[11px] text-amber-800 font-semibold bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5 mb-2">
+              {STAGE_FILE_ZIP_PREFERRED_NOTE}
+            </p>
+            <p className="text-[11px] text-slate-500 font-medium mb-4">{STAGE_FILE_SECTION_HINT}</p>
+
             {designItems.length > 0 ? (
               <div className="space-y-6">
                 {designItems.map((item: any) => {
@@ -622,6 +587,7 @@ export function ProductionModule({
                   return (
                     <div key={item.id} className="border border-slate-200 rounded-xl p-4 bg-slate-50/50 space-y-5">
                       <h3 className="font-bold text-slate-800 text-sm">{item.name}</h3>
+                      <StageFileUsageBar usedBytes={sumStageFileBytes(item)} />
 
                       <div>
                         <h4 className="text-[11px] font-bold text-violet-700 uppercase tracking-wide mb-3">
@@ -630,7 +596,13 @@ export function ProductionModule({
                         {designFiles.length > 0 ? (
                           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                             {designFiles.map((file) => (
-                              <StageFileCard key={file.id} file={file} accent="violet" />
+                              <StageFileCard
+                                key={file.id}
+                                file={file}
+                                accent="violet"
+                                orderId={order.id}
+                                kind="design"
+                              />
                             ))}
                           </div>
                         ) : (
@@ -648,7 +620,13 @@ export function ProductionModule({
                         {productionFiles.length > 0 ? (
                           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                             {productionFiles.map((file) => (
-                              <StageFileCard key={file.id} file={file} accent="blue" />
+                              <StageFileCard
+                                key={file.id}
+                                file={file}
+                                accent="blue"
+                                orderId={order.id}
+                                kind="production"
+                              />
                             ))}
                           </div>
                         ) : (
