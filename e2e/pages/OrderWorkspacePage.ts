@@ -9,7 +9,14 @@ export class OrderWorkspacePage {
   }
 
   async gotoStaff(orderId: string) {
-    await this.page.goto(appPath(`/staff/orders/${orderId}`));
+    const url = appPath(`/staff/orders/${orderId}`);
+    await this.page.goto(url);
+    // Next can serve a compile-time 404 on the first hit of a new route.
+    const notFound = this.page.getByText("This page could not be found.");
+    if (await notFound.isVisible().catch(() => false)) {
+      await this.page.waitForTimeout(2_000);
+      await this.page.goto(url);
+    }
   }
 
   async gotoProduction(orderId: string) {

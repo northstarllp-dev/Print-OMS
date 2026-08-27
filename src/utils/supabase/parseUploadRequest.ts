@@ -4,6 +4,7 @@ import type { StorageUploadPurpose } from "@/utils/supabase/serverStorageUpload"
 export const VALID_PURPOSES = new Set<StorageUploadPurpose>([
   "design_resource",
   "design_proof",
+  "design_source_file",
   "production_asset",
   "site_visit_photo",
   "installation_photo",
@@ -82,6 +83,7 @@ export function portalScopeForPurpose(purpose: StorageUploadPurpose): string {
   if (
     purpose === "design_resource" ||
     purpose === "design_proof" ||
+    purpose === "design_source_file" ||
     purpose === "production_asset"
   ) {
     return "approve_design";

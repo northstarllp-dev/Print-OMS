@@ -360,26 +360,29 @@ export function DesignTab({ order, customer, siteVisitItems = [], portalToken, o
     
     await handleUpdateItemVersions(updatedVersions, nextStage);
 
-    const companyId = await resolveOrderCompanyId(supabase, order);
-
-    await insertOrderActivity(supabase, {
-      order_id: order.orderId || order.id,
-      company_id: companyId,
-      actor_name: "System",
-      actor_role: "System",
-      content: `Client approved the design proof for ${activeItem?.name || 'an item'}.`,
-      metadata: { action: "design_approved_by_customer", itemId: selectedItemId }
-    });
-
-    if (allApproved) {
+    try {
+      const companyId = await resolveOrderCompanyId(supabase, order);
       await insertOrderActivity(supabase, {
         order_id: order.orderId || order.id,
         company_id: companyId,
         actor_name: "System",
         actor_role: "System",
-        content: "All design proofs approved by client.",
-        metadata: { action: "all_designs_approved" }
+        content: `Client approved the design proof for ${activeItem?.name || "an item"}.`,
+        metadata: { action: "design_approved_by_customer", itemId: selectedItemId },
       });
+
+      if (allApproved) {
+        await insertOrderActivity(supabase, {
+          order_id: order.orderId || order.id,
+          company_id: companyId,
+          actor_name: "System",
+          actor_role: "System",
+          content: "All design proofs approved by client.",
+          metadata: { action: "all_designs_approved" },
+        });
+      }
+    } catch (err) {
+      console.error("Failed to log design approval activity:", err);
     }
   };
 
