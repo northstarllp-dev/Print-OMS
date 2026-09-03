@@ -17,6 +17,8 @@ interface LogoProps {
    * hug  image keeps its aspect ratio; parent can wrap tightly around it.
    */
   fit?: "fixed" | "hug";
+  /** Smaller logo below lg — for gateway / login headers on phone and tablet. */
+  compactBelowLg?: boolean;
 }
 
 function tryLoadClientConfig(): ClientConfig | null {
@@ -39,6 +41,7 @@ export function Logo({
   align = "center",
   applyScale = true,
   fit = "fixed",
+  compactBelowLg = false,
 }: LogoProps) {
   // Resolve sync when NEXT_PUBLIC_CLIENT_SLUG is available so loaders show the logo immediately.
   const [client, setClient] = useState<ClientConfig | null>(() => tryLoadClientConfig());
@@ -66,8 +69,16 @@ export function Logo({
         <img
           src={src}
           alt={`${client.name} Logo`}
-          className={`block h-auto w-auto max-w-[min(78vw,360px)] object-contain object-left ${className}`}
-          style={{ height: hugHeight }}
+          className={`block w-auto object-contain object-left ${
+            compactBelowLg
+              ? "h-10 max-w-[min(62vw,220px)] sm:h-11 sm:max-w-[min(68vw,260px)] md:h-12 md:max-w-[min(72vw,300px)] lg:h-[var(--logo-hug-height)] lg:max-w-[min(78vw,360px)]"
+              : "h-auto max-w-[min(78vw,360px)]"
+          } ${className}`}
+          style={
+            compactBelowLg
+              ? ({ ["--logo-hug-height" as string]: `${hugHeight}px` } as React.CSSProperties)
+              : { height: hugHeight }
+          }
         />
       );
     }

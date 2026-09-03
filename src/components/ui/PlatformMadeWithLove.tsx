@@ -4,7 +4,7 @@ import { Heart } from "lucide-react";
 import { withBasePath } from "@/lib/appBasePath";
 
 /** Platform branding identical on every CLIENT_SLUG. Do not white-label. */
-export const PLATFORM_HOME_URL = "https://www.printoms.thepolarislabs.com/";
+export const PLATFORM_HOME_URL = "https://www.printops.thepolarislabs.com/";
 export const PLATFORM_LOGO_SRC = withBasePath("/clients/light%20withoutbg.png");
 
 type PlatformMadeWithLoveProps = {

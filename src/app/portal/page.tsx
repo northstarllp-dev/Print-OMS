@@ -25,7 +25,7 @@ export default async function PortalPage({
     return (
       <PortalError
         title="Invalid Magic Link"
-        message="The magic link you clicked is incomplete or has expired. Please ask Printoms Admin to send it again."
+        message="The magic link you clicked is incomplete or has expired. Please ask PrintOps Admin to send it again."
       />
     );
   }
@@ -49,7 +49,7 @@ export default async function PortalPage({
     return (
       <PortalError
         title="Invalid or Expired Link"
-        message="This secure portal link is invalid or has expired. Please request a new link from Printoms."
+        message="This secure portal link is invalid or has expired. Please request a new link from PrintOps."
       />
     );
   }
@@ -385,7 +385,7 @@ export default async function PortalPage({
 }
 
 import { Logo } from "@/components/ui/Logo";
-import { loadClientConfig } from "@/config/loadClientConfig";
+import { portalDisplayName } from "@/app/portal/utils/portalBrandName";
 
 function PortalError({ title, message }: { title: string; message: string }) {
   return (
@@ -451,7 +451,7 @@ function PortalError({ title, message }: { title: string; message: string }) {
         </p>
         <div style={{ marginTop: 32 }}>
           <p style={{ fontSize: 12, color: "#737780", margin: 0, fontWeight: 700 }}>
-            {loadClientConfig().name} Signage Solutions
+            {portalDisplayName()} Signage Solutions
           </p>
         </div>
       </div>

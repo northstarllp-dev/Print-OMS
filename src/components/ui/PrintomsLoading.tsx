@@ -18,7 +18,7 @@ export function PrintomsLoading({ fullScreen = false, className = "" }: Printoms
   if (fullScreen) {
     return (
       <div
-        className={`fixed inset-0 z-[99999] flex items-center justify-center bg-white ${className}`}
+        className={`fixed inset-0 z-[99999] flex items-center justify-center overflow-hidden ${className}`}
         style={{
           minHeight: "100dvh",
           width: "100vw",
@@ -26,6 +26,8 @@ export function PrintomsLoading({ fullScreen = false, className = "" }: Printoms
           top: 0,
           right: 0,
           bottom: 0,
+          background:
+            "radial-gradient(ellipse 80% 60% at 50% 40%, color-mix(in srgb, var(--color-primary) 12%, #ffffff) 0%, #f8fafc 55%, #ffffff 100%)",
         }}
         role="status"
         aria-live="polite"

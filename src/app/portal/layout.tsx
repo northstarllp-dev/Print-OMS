@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { portalDisplayName } from "@/app/portal/utils/portalBrandName";
 import { loadClientConfig } from "@/config/loadClientConfig";
 import { getRequestBaseUrl } from "@/features/notifications/whatsapp/requestBaseUrl";
 
@@ -26,8 +27,9 @@ export async function generateMetadata(): Promise<Metadata> {
     ? `${origin}/printoms${ogImagePath}`
     : undefined;
 
-  const title = `${config.name} Customer Portal`;
-  const description = `Track your ${config.name} order, review site visits, quotations, designs, and payments in the customer portal.`;
+  const displayName = portalDisplayName();
+  const title = `${displayName} Customer Portal`;
+  const description = `Track your ${displayName} order, review site visits, quotations, designs, and payments in the customer portal.`;
 
   return {
     title,
@@ -36,7 +38,7 @@ export async function generateMetadata(): Promise<Metadata> {
       title,
       description,
       type: "website",
-      siteName: config.name,
+      siteName: displayName,
       ...(ogImageAbs
         ? {
             images: [
@@ -44,7 +46,7 @@ export async function generateMetadata(): Promise<Metadata> {
                 url: ogImageAbs,
                 width: 512,
                 height: 512,
-                alt: `${config.name} logo`,
+                alt: `${displayName} logo`,
               },
             ],
           }

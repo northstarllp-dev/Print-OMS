@@ -10,7 +10,7 @@ import { toCustomerVisibleQuotation } from "@/features/quotations/utils/quotatio
 import { toCustomerVisibleDesign } from "@/features/designs/utils/customerVisibleDesign";
 import { OrderDetailClient } from "./OrderDetailClient";
 import { normalizeInvoiceProfile } from "@/features/quotations/types/invoiceProfile";
-import { loadClientConfig } from "@/config/loadClientConfig";
+import { portalDisplayName } from "@/app/portal/utils/portalBrandName";
 import React from "react";
 
 export const dynamic = "force-dynamic";
@@ -370,7 +370,7 @@ function PortalError({ title, message }: { title: string; message: string }) {
         </p>
         <div style={{ marginTop: 32 }}>
           <p style={{ fontSize: 12, color: "#737780", margin: 0, fontWeight: 700 }}>
-            {loadClientConfig().name} Signage Solutions
+            {portalDisplayName()} Signage Solutions
           </p>
         </div>
       </div>

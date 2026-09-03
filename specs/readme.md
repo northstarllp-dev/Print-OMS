@@ -7,7 +7,7 @@ This document serves as the master, production-ready specification and technical
 ## 1. Executive Summary & Business Scope
 
 ### 1.1 Problem Statement & Solution Goal
-In the custom commercial signage industry, production is highly specialized. Standard CRM products cannot capture spatial layouts, physical material constraints, and custom pricing models. The Printec OMS is built to bridge this gap by mapping the entire journey of a custom signage project—from lead generation to physical installation check-off.
+In the custom commercial signage industry, production is highly specialized. Standard CRM products cannot capture spatial layouts, physical material constraints, and custom pricing models. The Printec OMS is built to bridge this gap by mapping the entire journey of a custom signage projectfrom lead generation to physical installation check-off.
 
 The solution provides:
 * **Multi-Tenant Isolation**: Ensuring data protection across multiple operational organizations.
@@ -402,7 +402,7 @@ When a customer declines a quotation:
    * Banner: `"Sent for Revision: We have received your feedback and are revising..."`
 4. **UI Updates (Staff)**: Order shows in `Quotation Negotiation` on the admin panel.
 
-Portal quotation reads and writes use **service role** after token/session validation — no anon RLS on `quotations`.
+Portal quotation reads and writes use **service role** after token/session validation  anon RLS on `quotations`.
 
 ---
 
@@ -655,10 +655,10 @@ Defined in `src/features/quotations/actions/quotationActions.ts`.
 | Action | Purpose |
 | ------ | ------- |
 | `getQuotationByOrderId` | Staff read single quotation by order |
-| `getCustomerVisibleQuotationForOrder` | Portal SSR — returns null for Draft / Pending Approval |
+| `getCustomerVisibleQuotationForOrder` | Portal SSR turns null for Draft / Pending Approval |
 | `getSiteVisitMeasurementsForOrder` | Site visit measurements for quotation sections |
 | `upsertQuotation` | Create/update quotation; server recomputes totals via `computeQuotationTotals` |
-| `sendQuotationToCustomer` | Admin send — requires `Pending Approval` or `Rejected` |
+| `sendQuotationToCustomer` | Admin send quires `Pending Approval` or `Rejected` |
 | `adminMarkQuotationApprovedAction` | Admin override approve without customer |
 | `customerApproveQuotation` | Portal approve when `Sent` (session + service role) |
 | `customerRequestRevision` | Portal decline/revise when `Sent` (session + service role) |

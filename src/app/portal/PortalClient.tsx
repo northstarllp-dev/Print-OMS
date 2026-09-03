@@ -16,7 +16,7 @@ import { Logo } from "@/components/ui/Logo";
 import { PlatformMadeWithLove } from "@/components/ui/PlatformMadeWithLove";
 import { OrderImage } from "@/components/storage/OrderImage";
 import { establishPortalSession } from "./establishPortalSession";
-import { loadClientConfig } from "@/config/loadClientConfig";
+import { portalDisplayName } from "@/app/portal/utils/portalBrandName";
 import { createClient } from "@/utils/supabase/client";
 import { scheduleSiteVisitAction } from "@/features/orders/actions/orderActions";
 import { getAppSettings } from "@/features/settings/actions/settingsActions";
@@ -462,7 +462,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
           <AlertCircle size={48} className="text-slate-300 mx-auto mb-4" />
           <h1 className="text-xl font-bold text-[#0b1c30] mb-2">No Active Orders</h1>
           <p className="text-sm text-slate-500">We couldn't find any active orders for your account.</p>
-          <p className="text-xs text-slate-400 mt-6 font-bold">{loadClientConfig().name} Signage Solutions</p>
+          <p className="text-xs text-slate-400 mt-6 font-bold">{portalDisplayName()} Signage Solutions</p>
         </div>
       </div>
     );

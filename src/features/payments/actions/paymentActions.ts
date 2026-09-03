@@ -484,7 +484,7 @@ function isReceivedPayment(p: { status?: unknown }): boolean {
   return status === "received" || status === "";
 }
 
-/** Prefer Approved quote; else highest grand_total (matches order Payment tab visibility). */
+/** Only Approved quotes count towards confirmed receivables and revenue. */
 function quoteTotalForOrder(quotations: unknown): number {
   const list = Array.isArray(quotations) ? quotations : quotations ? [quotations] : [];
   if (list.length === 0) return 0;
@@ -494,12 +494,7 @@ function quoteTotalForOrder(quotations: unknown): number {
     return Number(approved.grand_total) || 0;
   }
 
-  let max = 0;
-  for (const q of list as any[]) {
-    const total = Number(q.grand_total) || 0;
-    if (total > max) max = total;
-  }
-  return max;
+  return 0;
 }
 
 /** Company-wide collections rollup for /admin/payments (admin only). */

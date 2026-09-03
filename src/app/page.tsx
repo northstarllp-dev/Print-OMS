@@ -29,8 +29,8 @@ export default async function RootGateway() {
       <AuthAtmosphere intensity="rich" />
 
       <header className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-4 pb-2 pt-[max(1rem,env(safe-area-inset-top))] sm:px-6 lg:px-8">
-        <div className="inline-flex max-w-[min(100%,380px)] items-center rounded-2xl bg-white px-3 py-2 shadow-sm ring-1 ring-slate-200/80 sm:px-3.5 sm:py-2.5">
-          <Logo fit="hug" height={72} applyScale align="left" />
+        <div className="inline-flex max-w-[min(100%,380px)] items-center rounded-2xl bg-white px-2.5 py-1.5 shadow-sm ring-1 ring-slate-200/80 sm:px-3 sm:py-2 lg:px-3.5 lg:py-2.5">
+          <Logo fit="hug" height={72} applyScale align="left" compactBelowLg />
         </div>
         <div className="max-w-full shrink-0 [&_button]:max-w-full [&_button]:text-xs sm:[&_button]:text-[13px]">
           <InstallPwaButton />
@@ -43,7 +43,7 @@ export default async function RootGateway() {
             Print operations
           </p>
           <h1 className="text-[1.75rem] font-extrabold leading-[1.15] tracking-tight text-slate-900 sm:text-4xl lg:text-[2.75rem]">
-            Stop chasing jobs across chats, sheets, and the floor
+            Stop chasing jobs across Whatsapp chats, sheets, and shop floors
           </h1>
           <p className="mt-3 max-w-md text-sm leading-relaxed text-slate-600 sm:text-base">
             Signage work breaks in the handoffs  enquiry, site visit, design, production, install. PrintOMS keeps one order trail so proofs, files, and dates don’t go missing.

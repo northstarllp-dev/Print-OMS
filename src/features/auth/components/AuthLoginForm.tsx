@@ -119,8 +119,8 @@ export function AuthLoginForm({
           />
 
           <div className="relative z-10 flex items-center justify-between gap-3">
-            <div className="inline-flex max-w-[min(100%,360px)] items-center rounded-2xl bg-white px-3 py-2 sm:px-3.5 sm:py-2.5">
-              <Logo fit="hug" height={72} applyScale align="left" />
+            <div className="inline-flex max-w-[min(100%,360px)] items-center rounded-2xl bg-white px-2.5 py-1.5 sm:px-3 sm:py-2 lg:px-3.5 lg:py-2.5">
+              <Logo fit="hug" height={72} applyScale align="left" compactBelowLg />
             </div>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-2.5 py-1 text-[11px] font-semibold text-slate-100 lg:hidden">
               <Icon size={12} aria-hidden />
